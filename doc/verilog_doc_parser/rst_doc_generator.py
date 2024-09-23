@@ -66,6 +66,7 @@ def generate_rst_file(input_filename):
         doc_dir = __file__.split("/")[:-2]
         doc_dir.extend(["source", "verilog"])
         output_filename = "/".join(doc_dir) + f"/{doc.module_name}.rst"
+        os.makedirs(os.path.dirname(output_filename), exist_ok=True)
         with open(output_filename, "w") as f_output:
             f_output.write(rst) 
 
@@ -97,6 +98,7 @@ def generate_index_rst(files):
     doc_dir = __file__.split("/")[:-2]
     doc_dir.extend(["source", "verilog"])
     output_filename = "/".join(doc_dir) + "/index.rst"
+    os.makedirs(os.path.dirname(output_filename), exist_ok=True)
     with open(output_filename, "w") as f_output:
         f_output.write(docstring)
 
