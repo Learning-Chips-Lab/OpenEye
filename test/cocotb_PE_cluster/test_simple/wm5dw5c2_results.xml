@@ -1,0 +1,8 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1711634314" />
+    <testcase name="simple_test" classname="test_pe_cluster" file="/home/dlebold/openeye/test/cocotb_PE_cluster/test_pe_cluster.py" lineno="28" time="0.0005440711975097656" sim_time_ns="0.001" ratio_time="1.8379947414548643">
+      <failure message="Test failed with RANDOM_SEED=1711634314" />
+    </testcase>
+  </testsuite>
+</testsuites>

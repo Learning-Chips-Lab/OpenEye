@@ -1,0 +1,7 @@
+**/sim_build
+**/shm_db
+**/xrun.history
+**/xrun.log
+*/simulation/*
+*.fst
+*.fst.hier

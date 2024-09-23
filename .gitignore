@@ -1,0 +1,36 @@
+*.vcd
+.ipynb_checkpoints
+model.png
+OpenEyeV2
+test/nn_models/
+test/notebooks/TXTs
+lcl_env
+*.pyc
+results.xml
+*.txt
+cmds.f
+*.vvp
+*.csv
+
+openeye_env/*
+env/*
+
+!requirements.txt
+
+**/.temp
+**/.work/
+**/.simvision
+**/dma_stream*.txt
+**/parameters.vh
+
+# ignore the generated documentation files
+doc/build/*
+doc/source/verilog/*
+
+# VSCode settings
+.vscode/
+
+# ignore pretrained models
+*.tflite
+*.onnx
+*.h5

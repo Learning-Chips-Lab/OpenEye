@@ -1,0 +1,11 @@
+cocotb
+myst-parser
+pygobject
+pyparsing
+sphinx-autoapi
+sphinx-rtd-theme
+sphinx-verilog-domain
+sphinxcontrib-hdl-diagrams
+tensorflow
+git+https://github.com/hdl/symbolator
+git+https://github.com/hdl/pyHDLParser
