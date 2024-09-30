@@ -5,6 +5,7 @@ build:
   apt_packages:
     - libgirepository1.0-dev
     - libcairo2-dev
+    - gir1.2-pango-1.0
   tools:
     python: "3.12"
   jobs:
