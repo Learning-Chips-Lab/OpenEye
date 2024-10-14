@@ -11,7 +11,7 @@ results.xml
 cmds.f
 *.vvp
 *.csv
-
+*.gtkw
 openeye_env/*
 env/*
 
