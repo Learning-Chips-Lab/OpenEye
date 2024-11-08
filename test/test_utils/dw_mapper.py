@@ -74,7 +74,7 @@ class DWMapper(LayerMapper):
                 dma_storage.append(dma_line)
             storage[strdic.stream_serial_dict["status"]] = dma_storage
         else:
-            storage[strdic.status_dict["data_mode"]] = params.data_mode
+            storage[strdic.status_dict["data_mode"]] = 1
             storage[strdic.status_dict["realfactor"]] = layer_params.realfactor
             storage[strdic.status_dict["autofunction"]] = params.autofunction
             storage[strdic.status_dict["poolingmode"]] = params.poolingmode
@@ -95,9 +95,10 @@ class DWMapper(LayerMapper):
             storage[strdic.status_dict["skipWght"]] = layer_params.skipWght
             storage[strdic.status_dict["skipPsum"]] = layer_params.skipPsum
             storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
+            storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
 
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
-            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params)
+            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params, layer_params)
             storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
             return storage
 
@@ -158,7 +159,7 @@ class DWMapper(LayerMapper):
             line = 0
         return storage
 
-    def write_router_wght(self, params):
+    def write_router_wght(self, params, layer_params):
         line = 0
         if(params.SERIAL):
             storage = []
@@ -168,7 +169,7 @@ class DWMapper(LayerMapper):
         for cl_x in range(params.Clusters_X):
             for cl_y in range(params.Clusters_Y):   
                 for router in range(params.Wght_Routers):
-                    if(cl_x == 0):
+                    if((cl_x == 0) | (layer_params.single_cluster_computation == 1)):
                         if(params.SERIAL):
                             line = line + (0 << (params.Wght_Router_Bits * router_cycle))
                         else:

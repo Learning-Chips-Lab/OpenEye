@@ -49,7 +49,7 @@ class OpenEyeParameters(object):
         self.Iact_Routers = 3
         self.Wght_Routers = self.PEs_Y
         self.Psum_Routers = self.PEs_X
-        self.data_mode = 1
+        self.data_mode = 0
         self.autofunction = 0
         self.poolingmode = 1
         

@@ -99,6 +99,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
     
     dma_line = 0
     
+    output_order = []
     if "Depthwise" in str(layer):
         if(params.SERIAL):
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
@@ -130,16 +131,19 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
                     cluster_order.append(a+b)
 
             manager = mp.Manager()
+            return_dict = manager.dict()
             jobs = []
 
             for layer_repetition in range(layer_params.needed_total_transmissions):
                 p = mp.Process(target = calculate_dw_output_stream_mp, \
-                               args = (layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results))
+                               args = (layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results, return_dict))
                 p.start()
                 jobs.append(p)
             
             for proc in range(len(jobs)):
                 jobs[proc].join()
+            for layer_repetition in range(layer_params.needed_total_transmissions):
+                output_order.append(return_dict[layer_repetition])
     elif "Conv" in str(layer):
         cluster_order = []
         for a in range(layer_params.used_Y_cluster):
@@ -195,6 +199,8 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
                 file_dma_ref[layer_repetition].close()
     
     logger.info("Reference Output calculated.")
+
+    return output_order
 
 def write_weight_file(layer, layer_number, dram):
 
@@ -417,6 +423,7 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                     ((cl_y%layer_params.used_Y_cluster) + refresh*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
                                     / (layer.output.shape[2] + layer_params.add_up)))
+
                                     filter = 2 * psum_pe + counter
                                     try:
                                         if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
@@ -433,39 +440,49 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
 
     logger.info("Stream " + str(layer_repetition) + " / " + str(layer_params.needed_total_transmissions) + " calculated.")
 
-def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results):
+def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results,return_dict):
+    coordinates = []
+    filter_number = 0
     file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
-    layer_repetition_cycle = math.floor(layer_repetition/layer_params.iact_transmissions_pe)
-    for refresh in range(math.floor((layer_repetition_cycle/layer_params.needed_total_transmissions) * layer_params.Used_refreshes),
-                        math.floor(((layer_repetition_cycle+1)/layer_params.needed_total_transmissions) * layer_params.Used_refreshes)):
-        for psum_pe in range((layer_repetition%layer_params.iact_transmissions_pe)*math.ceil(layer_params.filters),\
-            ((layer_repetition%layer_params.iact_transmissions_pe)+1)*math.ceil(layer_params.filters)):
-            for cl_y in range(params.Clusters_Y):
-                for cl_x in range(params.Clusters_X):
-                    for router in range(params.Psum_Routers):
-                        if(layer_params.computing_mx[cl_x][cl_y][0][router] == 1):
-                            partial_result_a = gtu.to_twos_complement_string(0,20)
-                            partial_result_b = gtu.to_twos_complement_string(0,20)
-                            for counter in range(math.ceil(1)):  #TODO:Flexibel machen
-                                x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % (layer.output.shape[2] + layer_params.add_up)))
-                                y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / (layer.output.shape[2] + layer_params.add_up)))
-                                filter = psum_pe + counter
-                                try:
-                                    if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
-                                        if (counter == 0):
-                                            partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
-                                        else:
-                                            partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
-                                except:
-                                    partial_result_b = partial_result_b
-                                    partial_result_a = partial_result_a
+    max_refresh = math.floor(((layer_repetition+1)/layer_params.needed_total_transmissions) * layer_params.Used_refreshes) - math.floor((layer_repetition/layer_params.needed_total_transmissions) * layer_params.Used_refreshes)
+    max_refresh = math.ceil(max_refresh/math.floor(params.PSUM_Trans_Bitwidth/params.PSUM_Bitwidth))
+    for refresh in range(0,max_refresh):
+        for cl_y in range(params.Clusters_Y):
+            for cl_x in range(params.Clusters_X):
+                for router in range(params.Psum_Routers):
+                    if(layer_params.computing_mx[cl_x][cl_y][0][router] == 1):
+                        partial_result_a = gtu.to_twos_complement_string(0,params.PSUM_Bitwidth)
+                        partial_result_b = gtu.to_twos_complement_string(0,params.PSUM_Bitwidth)
+                        for counter in range(math.floor(params.PSUM_Trans_Bitwidth/params.PSUM_Bitwidth)):
+                            if (layer_params.single_cluster_computation == 0):
+                                x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + (2*refresh+counter) * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % (layer.output.shape[2] + layer_params.add_up)))
+                                y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + (2*refresh+counter) * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / (layer.output.shape[2] + layer_params.add_up))) + \
+                                    max_refresh * 2 * math.floor(layer_repetition/layer_params.iact_transmissions_pe)
+                                filter_number = math.floor(layer_repetition%layer_params.iact_transmissions_pe)
+                            else:
+                                x_cor= int(((router + (2*refresh+counter) * params.PEs_X ) % (layer.output.shape[2] + layer_params.add_up)))
+                                y_cor= int(((router + (2*refresh+counter) * params.PEs_X ) / (layer.output.shape[2] + layer_params.add_up))) + \
+                                    max_refresh * 2 * math.floor(layer_repetition/layer_params.iact_transmissions_pe)
 
-                            file_dma_ref.write(partial_result_a)
-                            file_dma_ref.write(partial_result_b)
-                            file_dma_ref.write("\n")
+                                filter_number = cl_x + (layer_repetition * params.Clusters) + (cl_y * params.Clusters_X) 
+                            coordinates.append([filter_number,x_cor,y_cor])
+                            try:
+                                if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[1])):
+                                    if (counter == 0):
+                                        partial_result_b = gtu.to_twos_complement_string(calculated_results[filter_number][x_cor][y_cor],params.PSUM_Bitwidth)
+                                    else:
+                                        partial_result_a = gtu.to_twos_complement_string(calculated_results[filter_number][x_cor][y_cor],params.PSUM_Bitwidth)
+                            except:
+                                partial_result_b = partial_result_b
+                                partial_result_a = partial_result_a
+
+                        file_dma_ref.write(partial_result_a)
+                        file_dma_ref.write(partial_result_b)
+                        file_dma_ref.write("\n")
     file_dma_ref.close()
 
     logger.info("Stream " + str(layer_repetition) + " / " + str(layer_params.needed_total_transmissions) + " calculated.")
+    return_dict[layer_repetition] = coordinates
 
 def calculate_conv_results_mp(f, layer, layer_number, layer_params, dram, calculated_results, return_dict, semaphore):
     with semaphore:

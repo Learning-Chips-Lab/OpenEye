@@ -147,6 +147,8 @@ genvar i,j,g;
           PE #(
             .IS_TOPLEVEL(0),
             .PARALLEL_MACS(PARALLEL_MACS),
+            .PE_X(i),
+            .PE_Y(j),
             .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
             .DATA_WGHT_BITWIDTH(DATA_WGHT_BITWIDTH),
             .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
@@ -272,7 +274,7 @@ genvar i,j,g;
     assign pe_iact_ready[g] = ((~iact_ready_temp[(g+1)*PES-1:g*PES]) == {PES{1'b0}});
   end
   for(g=0; g<PE_ROWS; g=g+1) begin
-    assign pe_wght_ready[g] = ((~wght_ready_temp[g*PE_ROWS+PE_COLUMNS-1:g*PE_ROWS]) == {PE_COLUMNS{1'b0}});
+    assign pe_wght_ready[g] = ((~wght_ready_temp[((g+1)*PE_COLUMNS)-1:g*PE_COLUMNS]) == {PE_COLUMNS{1'b0}});
   end
 
   endgenerate

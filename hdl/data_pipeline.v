@@ -42,10 +42,10 @@
 module data_pipeline 
 #(
     parameter DATA_WIDTH                = 1,
-    parameter FIRST_SPAD_ADDR           = 1,
-    parameter FIRST_SPAD_DATA           = 1,
-    parameter SECOND_SPAD_ADDR          = 1,
-    parameter SECOND_SPAD_DATA          = 1,
+    parameter FIRST_SPAD_ADDR           = 16,
+    parameter FIRST_SPAD_DATA           = 8,
+    parameter SECOND_SPAD_ADDR          = 96,
+    parameter SECOND_SPAD_DATA          = 24,
     parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
     parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
     parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
@@ -54,6 +54,7 @@ module data_pipeline
     input                                        clk_i,
     input                                        rst_ni,
     input                                        compute_i,
+    input                                        data_mode,
 
     input      [DATA_WIDTH-1 : 0]                data_i,
     input                                        enable_i,
@@ -112,7 +113,7 @@ module data_pipeline
         LOADING_ADDR : begin // First state, start loading the first SPAD
           second_spad_en_o  <= 0;
           second_spad_addr_o <= 0;
-          if (enable_i == 1) begin
+          if ((enable_i == 1) & (!data_mode)) begin
             first_spad_en_o   <= 1;
             first_spad_addr_o <= address_temp[FIRST_SPAD_ADDR_BITWIDTH-1:0];
             address_temp      <= address_temp + 1;

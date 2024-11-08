@@ -103,11 +103,9 @@ async def single_layer_test(dut):
 
     try:
         use_random = int((os.getenv("USE_RANDOM_VALUES")))
-        print("try use random")
     except:
         use_random = 1
         logger.debug("USE_RANDOM_VALUES set to one")
-        print("except use random")
     
     layer_es = les.LayerExecutionState()
     serial = 0
@@ -152,7 +150,6 @@ async def single_layer_test(dut):
 
     # Process the layers of the model one after another
     for layer_number, layer in enumerate(model.layers):
-
         # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
         # layer_parameters = ptu.LayerParameters(model.layers[layer_number], openeye_parameter)
         if("Pooling" in str(layer)):
@@ -164,7 +161,7 @@ async def single_layer_test(dut):
             time_printer.timestamp("Layer parameters created. ", logger)
             calculated_results = ptu.collect_results(layer, layer_number, layer_parameters, dram)
             if(logging.DEBUG >= log_level):
-                ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)
+                output_order = ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)
                 time_printer.timestamp("Reference data created. ", logger)
 
             dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
@@ -173,7 +170,7 @@ async def single_layer_test(dut):
             
             time_printer.timestamp("Streams set. ", logger)
             for layer_repetition in range(layer_parameters.needed_total_transmissions):
-                layer_thread = calculate_layer(ptp, dut, stream, openeye_parameter, layer_parameters, layer_repetition, model, layer_es, dram, log_level, layer_number, layer)
+                layer_thread = calculate_layer(ptp, dut, stream, openeye_parameter, layer_parameters, layer_repetition, model, layer_es, dram, log_level, layer_number, layer, output_order)
                 await layer_thread
                 if(logging.DEBUG >= log_level):
                     assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
@@ -183,34 +180,43 @@ async def single_layer_test(dut):
 
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"
 
-async def calculate_layer(ptp, dut, stream, oep, lp, layer_repetition, model, layer_es, dram, log_level, layer_number, layer):
+async def calculate_layer(ptp, dut, stream, oep, lp, layer_repetition, model, layer_es, dram, log_level, layer_number, layer, output_order):
     global status_thread, iact_thread, wght_thread, psum_thread
     logger.info("Send stream.")
     status_thread = cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], oep, lp, layer_repetition))
     await status_thread
-    # start the transmission of the data
-    if (layer_repetition == 0) :
-        iact_thread = cocotb.start_soon(rtl_test_utils.write_iact(ptp, dut, stream[layer_repetition][strdic.stream_parallel_dict["iact"]], oep, lp))
-        wght_thread = cocotb.start_soon(rtl_test_utils.write_wght(ptp, dut, stream[layer_repetition][strdic.stream_parallel_dict["wght"]], oep, lp))
     if(stream[layer_repetition][strdic.stream_parallel_dict["status"]][strdic.status_dict["skipPsum"]] != 1):
         psum_thread = cocotb.start_soon(rtl_test_utils.write_bias(ptp, dut, stream[layer_repetition][strdic.stream_parallel_dict["psum"]], oep, lp))
-        await psum_thread
+    if (layer_repetition != 0) :
+        await iact_thread
+        await wght_thread
+    # start the transmission of the data
+    else :
+        iact_thread = cocotb.start_soon(rtl_test_utils.write_iact(ptp, dut, stream[layer_repetition][strdic.stream_parallel_dict["iact"]], oep, lp))
+        wght_thread = cocotb.start_soon(rtl_test_utils.write_wght(ptp, dut, stream[layer_repetition][strdic.stream_parallel_dict["wght"]], oep, lp))
     # wait until all transmission is finished
     await iact_thread
     await wght_thread
+    if(stream[layer_repetition][strdic.stream_parallel_dict["status"]][strdic.status_dict["skipPsum"]] != 1):
+        await psum_thread
     logger.info("Stream is sent.")
-    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.compute_i), 1))
     await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.compute_i), 0))
+    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    if (layer_repetition != (lp.needed_total_transmissions-1)) :
+        wght_thread = cocotb.start_soon(rtl_test_utils.write_wght(ptp, dut, stream[layer_repetition + 1][strdic.stream_parallel_dict["wght"]], oep, lp))
+        iact_thread = cocotb.start_soon(rtl_test_utils.write_iact(ptp, dut, stream[layer_repetition + 1][strdic.stream_parallel_dict["iact"]], oep, lp))
     await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut, layer_number, model, layer_repetition, lp, oep, layer_es, dram, log_level, stream[layer_repetition]))
     
     
-    if (layer_repetition != (lp.needed_total_transmissions-1)) :
-        iact_thread = cocotb.start_soon(rtl_test_utils.write_iact(ptp, dut, stream[layer_repetition + 1][strdic.stream_parallel_dict["iact"]], oep, lp))
-        wght_thread = cocotb.start_soon(rtl_test_utils.write_wght(ptp, dut, stream[layer_repetition + 1][strdic.stream_parallel_dict["wght"]], oep, lp))
+    #if (layer_repetition != (lp.needed_total_transmissions-1)) :
+    #    iact_thread = cocotb.start_soon(rtl_test_utils.write_iact(ptp, dut, stream[layer_repetition + 1][strdic.stream_parallel_dict["iact"]], oep, lp))
     if("Depthwise" in str(layer)):
-        await cocotb.start_soon(rtl_test_utils.compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lp, oep, layer_es, dram, log_level, stream[layer_repetition]))
+        await cocotb.start_soon(rtl_test_utils.compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lp, oep, layer_es, dram, log_level, stream[layer_repetition], output_order))
     elif("Conv" in str(layer)):
         await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, lp, oep, layer_es, dram, log_level, stream[layer_repetition]))
     elif("Dense" in str(layer)):

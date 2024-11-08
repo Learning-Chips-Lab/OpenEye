@@ -169,7 +169,7 @@ module OpenEye_Parallel
   input                                                          data_mode_i,
   input      [$clog2(DATA_PSUM_BITWIDTH)-1:0]                    fraction_bit_i,
   input      [7:0]                                               needed_cycles_i,
-  input      [$clog2(CLUSTER_COLUMNS+1)-1:0]                      needed_x_cls_i,
+  input      [$clog2(CLUSTER_COLUMNS+1)-1:0]                     needed_x_cls_i,
   input      [$clog2(CLUSTER_ROWS+1)-1:0]                        needed_y_cls_i,
   input      [3:0]                                               needed_iact_cycles_i,
   input      [$clog2(PSUM_PER_PE+1)-1:0]                         filters_i,
@@ -184,6 +184,7 @@ module OpenEye_Parallel
   input      [3:0]                                               iact_write_data_t_i,
   input      [3:0]                                               stride_x_i,
   input      [3:0]                                               stride_y_i,
+  input      [$clog2(PE_ROWS)-1:0]                               kernel_per_pe_cluster_i,
   input      [CLUSTERS*PES-1:0]                                  compute_mask_i,
   input      [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]       router_mode_iact_i,
   input      [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]       router_mode_wght_i,
@@ -220,7 +221,7 @@ module OpenEye_Parallel
   reg                                           data_mode_reg;
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0]         fraction_bit_reg;
   reg  [7:0]                                    needed_cycles_reg;
-  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]           needed_x_cls_reg;
+  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]          needed_x_cls_reg;
   reg  [$clog2(CLUSTER_ROWS+1)-1:0]             needed_y_cls_reg;
   reg  [3:0]                                    needed_iact_cycles_reg;
   reg  [$clog2(PSUM_PER_PE+1)-1:0]              filters_reg;
@@ -252,6 +253,9 @@ module OpenEye_Parallel
   reg  [6:0]                           fsm_iact_cycle_div_cnt;
   reg  [$clog2(FSM_STATES)-1:0]        fsm_iact_last_state;
   reg  [$clog2(FSM_STATES)-1:0]        fsm_iact_current_state;
+
+  ///Register for the wght FSM
+  reg  [$clog2(FSM_STATES)-1:0]        fsm_wght_current_state;
 
   ///Register for the psum FSM
   reg  [32-1:0]                        fsm_psum_cycle;
@@ -301,15 +305,16 @@ module OpenEye_Parallel
 
   wire                                                  compute_i_w;
 
-  reg                                                  iact_transmitted;
-  reg                                                  psum_transmitted;
-  reg                                                  start_new_cycle;
+  reg                                                   iact_transmitted;
+  reg                                                   wght_transmitted;
+  reg                                                   psum_transmitted;
+  reg                                                   start_new_cycle;
 
   wire                                                  status_reg_enable_i_w;
   wire                                                  data_mode_i_w;
   wire  [$clog2(DATA_PSUM_BITWIDTH)-1:0]                fraction_bit_i_w;
   wire  [7:0]                                           needed_cycles_i_w;
-  wire  [$clog2(CLUSTER_COLUMNS+1)-1:0]                  needed_x_cls_i_w;
+  wire  [$clog2(CLUSTER_COLUMNS+1)-1:0]                 needed_x_cls_i_w;
   wire  [$clog2(CLUSTER_ROWS+1)-1:0]                    needed_y_cls_i_w;
   wire  [3:0]                                           needed_iact_cycles_i_w;
   wire  [$clog2(PSUM_PER_PE+1)-1:0]                     filters_i_w;
@@ -324,6 +329,7 @@ module OpenEye_Parallel
   wire  [3:0]                                           iact_write_data_t_i_w;
   wire  [3:0]                                           stride_x_i_w;
   wire  [3:0]                                           stride_y_i_w;
+  wire  [$clog2(PE_ROWS)-1:0]                           kernel_per_pe_cluster_i_w;
   wire  [CLUSTERS*PES-1:0]                              compute_mask_i_w;
   wire  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_i_w;
   wire  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]   router_mode_wght_i_w;
@@ -335,13 +341,15 @@ module OpenEye_Parallel
   reg  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i_reg;
   reg  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_enable_i_reg;
   reg  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_ready_o_reg;
+  reg                                                  wght_ready_reg;
 
   reg                                                  compute_i_reg;
   reg                                                  status_reg_enable_i_reg;
+  reg                                                  status_set_reg;
   reg                                                  data_mode_i_reg;
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0]                fraction_bit_i_reg;
   reg  [7:0]                                           needed_cycles_i_reg;
-  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]                  needed_x_cls_i_reg;
+  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]                 needed_x_cls_i_reg;
   reg  [$clog2(CLUSTER_ROWS+1)-1:0]                    needed_y_cls_i_reg;
   reg  [3:0]                                           needed_iact_cycles_i_reg;
   reg  [$clog2(PSUM_PER_PE+1)-1:0]                     filters_i_reg;
@@ -355,6 +363,7 @@ module OpenEye_Parallel
   reg  [3:0]                                           iact_write_data_t_i_reg;
   reg  [3:0]                                           stride_x_i_reg;
   reg  [3:0]                                           stride_y_i_reg;
+  reg  [$clog2(PE_ROWS)-1:0]                           kernel_per_pe_cluster_i_reg;
   reg  [CLUSTERS*PES-1:0]                              compute_mask_i_reg;
   reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_i_reg;
   reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_storage;
@@ -363,6 +372,7 @@ module OpenEye_Parallel
   reg  [4*CLUSTERS-1:0]                                iact_router_offset;
   reg                                                  enable_stream_reg;
   reg  [7:0]                                           data_stream_reg;
+  reg  [4:0]                                           iact_pes_per_router;
 
 
   ///#######################
@@ -379,6 +389,11 @@ module OpenEye_Parallel
     CALCULATE_IACT     = 1,
     WAIT               = 2
   } fsm_iact_mode;
+
+  enum bit [2:0] {
+    WGHT_READY         = 0,
+    WGHT_BUSY          = 1
+  } fsm_wght_mode;
 
   enum bit [2:0] {
     PSUM_IDLE          = 0,
@@ -403,11 +418,9 @@ module OpenEye_Parallel
       needed_iact_cycles_reg     <= 0;
       filters_reg                <= 0;
       iact_addr_len_reg          <= 0;
-      wght_addr_len_reg          <= 0;
       stride_x_reg               <= 0;
       stride_y_reg               <= 0;
       iact_addr_len_reg          <= 0;
-      wght_addr_len_reg          <= 0;
       bano_cluster_mode_reg      <= 0;
       af_cluster_mode_reg        <= 0;
       pooling_cluster_mode_reg   <= 0;
@@ -416,7 +429,6 @@ module OpenEye_Parallel
       iact_write_addr_t_reg      <= 0;
       iact_write_data_t_reg      <= 0;
       compute_mask_reg           <= 0;
-      router_mode_wght_reg       <= 0;
 
       fsm_cycle                  <= 0;
       fsm_last_state             <= MAIN_IDLE;
@@ -432,11 +444,9 @@ module OpenEye_Parallel
       flat_help_var               = 0;
 
       computing                  <= 0;
-      wght_enable_i_reg          <= 0;
-      wght_data_i_reg            <= 0;
-      wght_ready_o               <= 0;
       compute_i_reg              <= 0;
       status_reg_enable_i_reg    <= 0;
+      status_set_reg             <= 0;
       data_mode_i_reg            <= 0;
       fraction_bit_i_reg         <= 0;
       needed_cycles_i_reg        <= 0;
@@ -445,7 +455,6 @@ module OpenEye_Parallel
       needed_iact_cycles_i_reg   <= 0;
       filters_i_reg              <= 0;
       iact_addr_len_i_reg        <= 0;
-      wght_addr_len_i_reg        <= 0;
       bano_cluster_mode_i_reg    <= 0;
       af_cluster_mode_i_reg      <= 0;
       pooling_cluster_mode_i_reg <= 0;
@@ -454,19 +463,22 @@ module OpenEye_Parallel
       iact_write_data_t_i_reg    <= 0;
       stride_x_i_reg             <= 0;
       stride_y_i_reg             <= 0;
+      kernel_per_pe_cluster_i_reg<= 0;
       compute_mask_i_reg         <= 0;
+      router_mode_wght_reg       <= 0;
       router_mode_wght_i_reg     <= 0;
       router_mode_psum_i_reg     <= 0;
       storage_cycles             <= 0;
-      enable_stream_reg          <= 1;
+      enable_stream_reg          <= 0;
       data_stream_reg            <= 0;
+      iact_pes_per_router        <= 5;
+      wght_addr_len_i_reg        <= 0;
+      wght_addr_len_reg          <= 0;
+      router_mode_iact_reg       <= 0;
       
     end else begin
 
       ///Regs for ports
-      wght_data_i_reg            <= wght_data_i;
-      wght_enable_i_reg          <= wght_enable_i;
-      wght_ready_o               <= wght_ready_o_reg;  
       compute_i_reg              <= compute_i;
       status_reg_enable_i_reg    <= status_reg_enable_i;
       data_mode_i_reg            <= data_mode_i;
@@ -477,7 +489,6 @@ module OpenEye_Parallel
       needed_iact_cycles_i_reg   <= needed_iact_cycles_i;
       filters_i_reg              <= filters_i;
       iact_addr_len_i_reg        <= iact_addr_len_i;
-      wght_addr_len_i_reg        <= wght_addr_len_i;
       bano_cluster_mode_i_reg    <= bano_cluster_mode_i;
       af_cluster_mode_i_reg      <= af_cluster_mode_i;
       pooling_cluster_mode_i_reg <= pooling_cluster_mode_i;
@@ -486,8 +497,17 @@ module OpenEye_Parallel
       iact_write_data_t_i_reg    <= iact_write_data_t_i;
       stride_x_i_reg             <= stride_x_i;
       stride_y_i_reg             <= stride_y_i;
+      kernel_per_pe_cluster_i_reg<= kernel_per_pe_cluster_i;
+      wght_addr_len_i_reg        <= wght_addr_len_i; 
       compute_mask_i_reg         <= compute_mask_i;
-
+      if (status_reg_enable_i_reg) begin
+        enable_stream_reg <= 1;
+        data_stream_reg   <= 8'({stride_x_i_reg,data_mode_i_w});
+      end
+      if (status_set_reg) begin
+        status_set_reg    <= 0;
+        enable_stream_reg <= 0;
+      end
       case(fsm_current_state)
 
         MAIN_IDLE : begin
@@ -501,9 +521,9 @@ module OpenEye_Parallel
             data_write_enable <= 0;
             computing         <= 1;
             mem_addr_psum     <= 0;
+          end
+          if (compute_i) begin
             finished_cycles   <= 0;
-            enable_stream_reg <= 1;
-            data_stream_reg   <= 0;
           end
 
           if (status_reg_enable_i_w) begin
@@ -525,11 +545,13 @@ module OpenEye_Parallel
             iact_write_data_t_reg    <= iact_write_data_t_i_w;
             stride_x_reg             <= stride_x_i_w;
             stride_y_reg             <= stride_y_i_w;
+            kernel_per_pe_cluster_i_reg<= kernel_per_pe_cluster_i_w;
             compute_mask_reg         <= compute_mask_i_w;
-            router_mode_iact_reg     <= router_mode_iact_i_w;
+            router_mode_iact_reg     <= router_mode_iact_i;
             router_mode_iact_storage <= router_mode_iact_i;
             router_mode_wght_reg     <= router_mode_wght_i_w;
             router_mode_psum_reg     <= router_mode_psum_i_w;
+            status_set_reg           <= 1;
           end
           flat_help_var = 0;
         end
@@ -538,16 +560,21 @@ module OpenEye_Parallel
 
           start_new_cycle <= 0;
           compute_cluster_i_reg <= 0;
-          if (iact_transmitted & psum_transmitted) begin
+          if (iact_transmitted & wght_transmitted & psum_transmitted) begin
             start_new_cycle <= 1;
             if (start_new_cycle != 1) begin
               finished_cycles <= finished_cycles + 1;
             end
             compute_cluster_i_reg <= compute_mask_reg;
           end
+          if (fsm_psum_current_state == SEND_RESULTS) begin
+            computing         <= 0;
+
+          end
           if (fsm_psum_last_state == SEND_RESULTS) begin
             fsm_last_state    <= COMPUTING;
             fsm_current_state <= MAIN_IDLE;
+            status_set_reg    <= 0;
           end
 
         end
@@ -558,7 +585,45 @@ module OpenEye_Parallel
     end
   end
 
+  always@(posedge clk_i, negedge rst_n) begin
+    if (!rst_n) begin  ///Reset
+      fsm_wght_current_state <= WGHT_READY;
+      wght_enable_i_reg      <= 0;
+      wght_data_i_reg        <= 0;
+      wght_ready_o           <= 0;
+      wght_ready_reg         <= 1;
+      wght_transmitted       <= 0;
+    end else begin
+      wght_data_i_reg        <= wght_data_i;
+      wght_enable_i_reg      <= wght_enable_i;
+      wght_ready_o           <= wght_ready_o_reg; 
+      case(fsm_wght_current_state) 
 
+        WGHT_READY : begin
+          wght_ready_reg <= 1;
+          if (compute_i) begin
+            wght_ready_reg         <= 0;
+            fsm_wght_current_state <= WGHT_BUSY;
+          end
+        end
+
+        WGHT_BUSY : begin
+          wght_ready_reg   <= 0;
+          wght_transmitted <= 1;
+          if ((compute_cluster_i_reg != 0) & (8'(finished_cycles) == 8'(needed_cycles_i_reg))) begin
+            fsm_wght_current_state <= WGHT_READY;
+          end
+          if ((data_mode_reg) & (8'(finished_cycles) == 8'(1))) begin
+            fsm_wght_current_state <= WGHT_READY;
+          end
+        end
+
+        default : begin
+          wght_ready_reg <= 0;
+        end
+      endcase
+    end
+  end 
   always@(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
       iact_transmitted         <= 0;
@@ -580,7 +645,6 @@ module OpenEye_Parallel
       iact_ready_o             <= 0;
       iact_enable_i_reg        <= 0;
       iact_router_offset       <= 0;
-      router_mode_iact_reg     <= 0;
 
     end else begin
       case(fsm_iact_current_state)       
@@ -589,23 +653,12 @@ module OpenEye_Parallel
           iact_data_i_reg        <= iact_data_i;
           iact_enable_i_reg      <= iact_enable_i;
           iact_ready_o           <= iact_ready_o_reg;
-
           fsm_iact_cycle         <= 0;
           fsm_iact_cycle_mod1    <= 0;
           fsm_iact_cycle_mod2    <= 0;
           fsm_iact_cycle_mod3    <= 0;
           fsm_iact_cycle_div     <= 0;
           fsm_iact_cycle_div_cnt <= 0;
-
-          if (compute_i_w) begin
-            mem_addr_iact <= 0;
-            fsm_iact_last_state    <= IACT_IDLE;
-            fsm_iact_current_state <= CALCULATE_IACT;
-          end
-
-          if (status_reg_enable_i_w) begin
-            mem_addr_iact <= 0;
-          end
 
           router_mode_iact_reg     <= router_mode_iact_i;
           for (int g=0; g<CLUSTERS*NUM_GLB_IACT; g=g+1) begin
@@ -660,6 +713,21 @@ module OpenEye_Parallel
               end
             end
           end
+
+          if ((iact_enable_i == 0) & (iact_enable_i_reg != 0) & (data_mode_reg == 0)) begin
+            mem_addr_iact          <= 0;
+            fsm_iact_last_state    <= IACT_IDLE;
+            fsm_iact_current_state <= CALCULATE_IACT;
+            iact_ready_o           <= 0;
+          end
+          
+          if ((compute_i == 1) & (data_mode_reg == 1)) begin
+            mem_addr_iact          <= 0;
+            fsm_iact_last_state    <= IACT_IDLE;
+            fsm_iact_current_state <= CALCULATE_IACT;
+            iact_ready_o           <= 0;
+          end
+
         end
 
         CALCULATE_IACT : begin
@@ -700,85 +768,166 @@ module OpenEye_Parallel
             if (fsm_iact_last_state == IACT_IDLE) begin
               mem_addr_psum <= 0;
             end
-
-            for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-              for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                ///loop_mod: cr%needed_y_cls
-                if (loop_mod + 1 == (needed_y_cls_reg)) begin
-                  loop_mod = 0;
-                end
-                for (int pec=0; pec<PE_COLUMNS; pec=pec+1) begin
-                  for (int per=0; per<PE_ROWS; per=per+1) begin
-                    for (int b=0; b<4; b=b+1) begin
-                      flat_help_var[b] = iact_router_offset[cc*CLUSTER_ROWS*4+cr*4+b];
-                    end
-                    if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_reg) + per) >=  NUM_GLB_IACT *  32'(fsm_iact_cycle_div)) 
-                    &  (32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_reg) + per)  <  NUM_GLB_IACT * (32'(fsm_iact_cycle_div) + 1))
-                    &  (compute_mask_reg[cc * PES * CLUSTER_ROWS + cr * PES + per * PE_COLUMNS + pec] == 1)) begin
-                      flat_help_var   = (flat_help_var + loop_mod * PE_ROWS + pec * stride_x_reg + 64'(per) - NUM_GLB_IACT * fsm_iact_cycle_div);
-                      for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
-                        iact_choose_i[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
-                        <= flat_help_var[b];
-                      end
-                    end else begin
-                      flat_help_var = NUM_GLB_IACT;
-                      for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
-                        iact_choose_i[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
-                        <= flat_help_var[b];
-                      end
-                    end
-                    flat_help_var = 0;
-                  end
-                end
-              end
-            end
-            loop_mod = 0;
-
-            flat_help_var = 0;
-            if (((fsm_iact_cycle != 0) & (6'(fsm_iact_cycle_mod1) < 6'(iact_addr_len_reg))
-            & (0 == fsm_iact_cycle_mod2))  
-            | ((6'(fsm_iact_cycle_mod1) >= 6'(iact_addr_len_reg))
-            & (0 == fsm_iact_cycle_mod3))) begin
+            if (!data_mode_reg) begin
               for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                 for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                  for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
-                    flat_help_var = 0;
-                    for (int b=0; b<2; b=b+1) begin
-                      flat_help_var[b] = router_mode_iact_reg[cc*CLUSTER_ROWS*NUM_GLB_IACT*ROUTER_MODES_IACT+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT + b + 4];
-                    end
-                    if ((flat_help_var[0] == 0) & (flat_help_var[1] == 0)) begin
-                      for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
-                        flat_help_var[b] = mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b];
+                  ///loop_mod: cr%needed_y_cls
+                  if (loop_mod + 1 == (needed_y_cls_reg)) begin
+                    loop_mod = 0;
+                  end
+                  for (int pec=0; pec<PE_COLUMNS; pec=pec+1) begin
+                    for (int per=0; per<PE_ROWS; per=per+1) begin
+                      for (int b=0; b<4; b=b+1) begin
+                        flat_help_var[b] = iact_router_offset[cc*CLUSTER_ROWS*4+cr*4+b];
                       end
-                      flat_help_var = flat_help_var  +1;
-                      for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
-                        mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b]
-                        <= flat_help_var[b];
+                      if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_reg * kernel_per_pe_cluster_i_reg) + per) >=  NUM_GLB_IACT *  32'(fsm_iact_cycle_div)) 
+                      &  (32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_reg * kernel_per_pe_cluster_i_reg) + per)  <  NUM_GLB_IACT * (32'(fsm_iact_cycle_div) + 1))
+                      &  (compute_mask_reg[cc * PES * CLUSTER_ROWS + cr * PES + per * PE_COLUMNS + pec] == 1)) begin
+                        flat_help_var   = (flat_help_var + loop_mod * PE_ROWS + pec * stride_x_reg * kernel_per_pe_cluster_i_reg + 64'(per) - NUM_GLB_IACT * fsm_iact_cycle_div);
+                        for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
+                          iact_choose_i[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
+                          <= flat_help_var[b];
+                        end
+                      end else begin
+                        flat_help_var = NUM_GLB_IACT;
+                        for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
+                          iact_choose_i[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
+                          <= flat_help_var[b];
+                        end
                       end
                       flat_help_var = 0;
                     end
                   end
                 end
               end
-            end
-            if (fsm_iact_cycle < ((32'(iact_addr_len_reg) + 32'(input_activations_reg))*needed_iact_cycles_reg)) begin
-              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                  for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
-                    iact_enable_comp_reg[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] <= 1;
+              loop_mod = 0;
+
+              flat_help_var = 0;
+              if (((fsm_iact_cycle != 0) & (6'(fsm_iact_cycle_mod1) < 6'(iact_addr_len_reg))
+              & (0 == fsm_iact_cycle_mod2))  
+              | ((6'(fsm_iact_cycle_mod1) >= 6'(iact_addr_len_reg))
+              & (0 == fsm_iact_cycle_mod3))) begin
+                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                      flat_help_var = 0;
+                      for (int b=0; b<2; b=b+1) begin
+                        flat_help_var[b] = router_mode_iact_reg[cc*CLUSTER_ROWS*NUM_GLB_IACT*ROUTER_MODES_IACT+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT + b + 4];
+                      end
+                      if ((flat_help_var[0] == 0) & (flat_help_var[1] == 0)) begin
+                        for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+                          flat_help_var[b] = mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b];
+                        end
+                        flat_help_var = flat_help_var  +1;
+                        for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+                          mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b]
+                          <= flat_help_var[b];
+                        end
+                        flat_help_var = 0;
+                      end
+                    end
                   end
+                end
+              end else begin
+                if (fsm_iact_cycle < ((32'(iact_addr_len_reg) + 32'(input_activations_reg))*needed_iact_cycles_reg)) begin
+                  for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                    for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                      for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                        iact_enable_comp_reg[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] <= 1;
+                      end
+                    end
+                  end
+                end else begin
+                  iact_enable_comp_reg   <= 0;
+                  loop_mod                = 0;
+                  fsm_iact_cycle         <= 0;
+                  fsm_iact_cycle_mod1    <= 0;
+                  fsm_iact_cycle_mod2    <= 0;
+                  fsm_iact_cycle_div     <= 0;
+                  fsm_iact_cycle_div_cnt <= 0;
+                  fsm_iact_last_state    <= CALCULATE_IACT;
+                  fsm_iact_current_state <= WAIT;
                 end
               end
             end else begin
-              iact_enable_comp_reg   <= 0;
-              loop_mod                = 0;
-              fsm_iact_cycle         <= 0;
-              fsm_iact_cycle_mod1    <= 0;
-              fsm_iact_cycle_mod2    <= 0;
-              fsm_iact_cycle_div     <= 0;
-              fsm_iact_cycle_div_cnt <= 0;
-              fsm_iact_last_state    <= CALCULATE_IACT;
-              fsm_iact_current_state <= WAIT;
+              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                  for (int pec=0; pec<PE_COLUMNS; pec=pec+1) begin
+                    for (int per=0; per<PE_ROWS; per=per+1) begin
+                      for (int b=0; b<4; b=b+1) begin
+                        flat_help_var[b] = iact_router_offset[cc*CLUSTER_ROWS*4+cr*4+b];
+                      end
+                      if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * PE_ROWS) + per)  <  NUM_GLB_IACT * (32'(iact_pes_per_router)))
+                      &  (compute_mask_reg[cc * PES * CLUSTER_ROWS + cr * PES + per * PE_COLUMNS + pec] == 1)) begin
+                        if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  1 * (32'(3)))) begin
+                          flat_help_var = 0;
+                        end else begin
+                          if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  2 * (32'(3)))) begin
+                            flat_help_var = 1;
+                          end else begin
+                            if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  3 * (32'(3)))) begin
+                              flat_help_var = 2;
+                            end
+                          end
+                        end
+                        for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
+                          iact_choose_i[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
+                          <= flat_help_var[b];
+                        end
+                      end else begin
+                        flat_help_var = NUM_GLB_IACT;
+                        for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
+                          iact_choose_i[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
+                          <= flat_help_var[b];
+                        end
+                      end
+                      flat_help_var = 0;
+                    end
+                  end
+                end
+              end
+              if (fsm_iact_cycle != 0) begin
+                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                      flat_help_var = 0;
+                      for (int b=0; b<2; b=b+1) begin
+                        flat_help_var[b] = router_mode_iact_reg[cc*CLUSTER_ROWS*NUM_GLB_IACT*ROUTER_MODES_IACT+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT + b + 4];
+                      end
+                      if ((flat_help_var[0] == 0) & (flat_help_var[1] == 0)) begin
+                        for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+                          flat_help_var[b] = mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b];
+                        end
+                        flat_help_var = flat_help_var  +1;
+                        for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+                          mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b]
+                          <= flat_help_var[b];
+                        end
+                        flat_help_var = 0;
+                      end
+                    end
+                  end
+                end
+              end
+              if (fsm_iact_cycle < ((32'(needed_cycles_i_reg))*32'(input_activations_i_reg))) begin
+                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                      iact_enable_comp_reg[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] <= 1;
+                    end
+                  end
+                end
+              end else begin
+                iact_enable_comp_reg   <= 0;
+                loop_mod                = 0;
+                fsm_iact_cycle         <= 0;
+                fsm_iact_cycle_mod1    <= 0;
+                fsm_iact_cycle_mod2    <= 0;
+                fsm_iact_cycle_div     <= 0;
+                fsm_iact_cycle_div_cnt <= 0;
+                fsm_iact_last_state    <= CALCULATE_IACT;
+                fsm_iact_current_state <= WAIT;
+              end
             end
           end
         end
@@ -790,9 +939,9 @@ module OpenEye_Parallel
             fsm_iact_cycle         <= 0;
             fsm_iact_last_state    <= WAIT;
             fsm_iact_current_state <= CALCULATE_IACT;
-            if (finished_cycles == needed_cycles_reg) begin
+            if ((finished_cycles == needed_cycles_reg) | data_mode_reg) begin
               fsm_iact_current_state <= IACT_IDLE;
-              mem_addr_iact <= 0;
+              mem_addr_iact          <= 0;
             end
           end
         end
@@ -833,21 +982,35 @@ module OpenEye_Parallel
       if (start_new_cycle == 1) begin
         psum_transmitted <= 0;
       end
+      if (computing) begin
+        if (needed_y_cls_reg == 1) begin
+          psum_choose_i <= (2**(CLUSTER_ROWS*CLUSTER_COLUMNS*NUM_GLB_PSUM)-1);
+        end else begin 
+          if (needed_y_cls_reg == 2) begin
+          psum_choose_i <= 64'b1111000011110000111100001111000011110000111100001111000011110000;
+          end else begin
+            if (needed_y_cls_reg == 4) begin
+              psum_choose_i <= 64'b1111000000000000111100000000000011110000000000001111000000000000;
+            end else begin
+              psum_choose_i <= (2**(CLUSTER_ROWS*CLUSTER_COLUMNS*NUM_GLB_PSUM)-1);
+            end
+          end
+        end
+      end
       case(fsm_psum_current_state)       
         PSUM_IDLE : begin
           psum_transmitted <= 0;
           fsm_psum_cycle   <= 0;
+          fsm_psum_last_state      <= PSUM_IDLE;
 
-          if (compute_i_w) begin
+          if (((fsm_iact_current_state == WAIT)|(fsm_iact_current_state == IACT_IDLE)) & computing) begin
             mem_addr_psum          <= 0;
             fsm_psum_last_state    <= PSUM_IDLE;
             fsm_psum_current_state <= CALCULATE_PSUM;
           end
-
           if (status_reg_enable_i_w) begin
             mem_addr_psum <= 0;
           end
-
           router_mode_psum_reg     <= router_mode_psum_i;
           for (int g=0; g<CLUSTERS*NUM_GLB_PSUM; g=g+1) begin
             if (psum_enable_i_reg[g]) begin
@@ -861,35 +1024,16 @@ module OpenEye_Parallel
               flat_help_var = 0;
             end
           end
-          if (compute_i_w) begin
-            if (needed_y_cls_reg == 1) begin
-              psum_choose_i <= (2**(CLUSTER_ROWS*CLUSTER_COLUMNS*NUM_GLB_PSUM)-1);
-            end else begin 
-              if (needed_y_cls_reg == 2) begin
-              psum_choose_i <= 64'b1111000011110000111100001111000011110000111100001111000011110000;
-              end else begin
-                if (needed_y_cls_reg == 4) begin
-                  psum_choose_i <= 64'b1111000000000000111100000000000011110000000000001111000000000000;
-                end else begin
-                  psum_choose_i <= (2**(CLUSTER_ROWS*CLUSTER_COLUMNS*NUM_GLB_PSUM)-1);
-                end
-              end
-            end
-          end
         end
 
         CALCULATE_PSUM : begin
+          if (psum_ready_i_reg != 0) begin
+            psum_ready_i_reg <= psum_ready_i_reg;
+          end
           if (finished_cycles == 0) begin
             psum_transmitted <= 1;
           end
-          for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-            for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-              for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                psum_ready_i_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] <= 1;
-              end
-            end
-          end
-          if (results_ready == 0) begin
+          if (results_ready == 0 & (psum_ready_i_reg != 0)) begin
             results_ready = 1;
             for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
               for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
@@ -902,7 +1046,7 @@ module OpenEye_Parallel
               end
             end
           end
-          if (results_ready) begin
+          if (results_ready & (psum_ready_i_reg != 0)) begin
             fsm_psum_cycle <= fsm_psum_cycle + 1;
             for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
               for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
@@ -921,12 +1065,13 @@ module OpenEye_Parallel
                 end
               end
             end
-            if (fsm_psum_cycle >= ((32'(filters_reg)+1)/2)) begin
-              fsm_psum_last_state    <= CALCULATE_PSUM;
-              fsm_psum_current_state <= GET_RESULTS;
+            if (((fsm_psum_cycle >= 32'((32'(filters_reg)+1)/2)) & !data_mode_reg) |
+            ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg)) begin
               results_ready           = 0;
               fsm_psum_cycle         <= 0;
               psum_enable_i_reg      <= 0;
+              fsm_psum_last_state    <= CALCULATE_PSUM;
+              fsm_psum_current_state <= GET_RESULTS;
               for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                 for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                   for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
@@ -938,6 +1083,21 @@ module OpenEye_Parallel
                       end
                     end
                     flat_help_var = 0;
+                  end
+                end
+              end
+            end
+          end else begin
+            if ((fsm_psum_cycle <= 4) & (psum_ready_i_reg == 0)) begin
+              fsm_psum_cycle <= fsm_psum_cycle + 1;
+            end else begin
+              if ((fsm_iact_current_state == CALCULATE_IACT) | (fsm_iact_current_state == IACT_IDLE)) begin
+                fsm_psum_cycle <= 0;
+                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
+                      psum_ready_i_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] <= 1;
+                    end
                   end
                 end
               end
@@ -971,18 +1131,24 @@ module OpenEye_Parallel
           end
           if (results_ready) begin
             fsm_psum_cycle <= fsm_psum_cycle + 1;
-            if (fsm_psum_cycle == (32'((32'(filters_reg)+1)/2) - 1)) begin
-              psum_transmitted       <= 1;
+            if (!data_mode_reg) begin
+              if (fsm_psum_cycle == (32'((32'(filters_reg)+1)/2) - 1)) begin
+                psum_transmitted       <= 1;
+              end
+            end else begin
+              if (fsm_psum_cycle == (32'((32'(needed_cycles_i_reg)+1)/2) - 1)) begin
+                psum_transmitted       <= 1;
+              end
             end
           end
-          if (fsm_psum_cycle == 32'((32'(filters_reg)+1)/2)) begin
-            fsm_psum_cycle       <= 0;
-            if ((finished_cycles == needed_cycles_reg) | (fsm_current_state == MAIN_IDLE)) begin
+          if (((fsm_psum_cycle == 32'((32'(filters_reg)+1)/2)) & !data_mode_reg) |
+          ((fsm_psum_cycle == 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg)) begin
+            if ((finished_cycles == needed_cycles_reg) | (fsm_current_state == MAIN_IDLE) | data_mode_reg) begin
               fsm_psum_last_state    <= GET_RESULTS;
               fsm_psum_current_state <= WAIT_FOR_RESULTS;
               mem_addr_psum          <= 0;
               psum_ready_i_reg       <= 0;
-              
+              fsm_psum_cycle         <= 0;
             end else begin
               if (needed_y_cls_reg >= 2) begin
                 for (int cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
@@ -1034,7 +1200,6 @@ module OpenEye_Parallel
                                 router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] <= 0;
                                 router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
                                 router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 1;
-
                           end else begin
                             if ((router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 0) &
                                 (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
@@ -1071,24 +1236,25 @@ module OpenEye_Parallel
                   router_mode_iact_reg <= router_mode_iact_storage;
                 end
               end
-              fsm_psum_last_state    <= GET_RESULTS;
-              fsm_psum_current_state <= CALCULATE_PSUM;
-              mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(64'(48'(48'(filters_reg)+48'(1)))>>48'(1)));
+              if (iact_transmitted) begin
+                fsm_psum_last_state    <= GET_RESULTS;
+                fsm_psum_current_state <= CALCULATE_PSUM;
+                fsm_psum_cycle         <= 0;
+                mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(64'(48'(48'(filters_reg)+48'(1)))>>48'(1)));
+              end
               psum_ready_i_reg       <= 0;
             end
           end
         end
-
         WAIT_FOR_RESULTS : begin
 
           fsm_psum_cycle         <= fsm_psum_cycle + 1;
-          if (fsm_psum_cycle == 2) begin
+          if (fsm_psum_cycle == 0) begin
             fsm_psum_cycle         <= 0;
             fsm_psum_last_state    <= WAIT_FOR_RESULTS;
             fsm_psum_current_state <= SEND_RESULTS;
           end
         end
-
         SEND_RESULTS : begin
           for (int g=0; g<NUM_GLB_PSUM*CLUSTERS; g=g+1) begin
             psum_ready_i_reg[g]  <= 0;
@@ -1398,6 +1564,7 @@ module OpenEye_Parallel
     assign iact_write_data_t_i_w    = iact_write_data_t_i_reg;
     assign stride_x_i_w             = stride_x_i_reg;
     assign stride_y_i_w             = stride_y_i_reg;
+    assign kernel_per_pe_cluster_i_w= kernel_per_pe_cluster_i_reg;
     assign compute_mask_i_w         = compute_mask_i_reg;
     assign router_mode_iact_i_w     = router_mode_iact_i_reg;
     assign router_mode_wght_i_w     = router_mode_wght_i_reg;
@@ -1431,6 +1598,7 @@ module OpenEye_Parallel
     assign iact_write_data_t_i_w    = iact_write_data_t_i;
     assign stride_x_i_w             = stride_x_i;
     assign stride_y_i_w             = stride_y_i;
+    assign kernel_per_pe_cluster_i_w= kernel_per_pe_cluster_i;
     assign compute_mask_i_w         = compute_mask_i;
     assign router_mode_iact_i_w     = router_mode_iact_i;
     assign router_mode_wght_i_w     = router_mode_wght_i;
@@ -1523,7 +1691,7 @@ module OpenEye_Parallel
                                   g * TRANS_BITWIDTH_WGHT + b];
         end
         assign gen_x[cc].gen_y[cr].wght_enable_i_cluster_w[g] = wght_enable_i_w[cc*NUM_GLB_WGHT*CLUSTER_ROWS+cr*NUM_GLB_WGHT+g];
-        assign wght_ready_o_reg[cc*NUM_GLB_WGHT*CLUSTER_ROWS+cr*NUM_GLB_WGHT+g] = gen_x[cc].gen_y[cr].wght_ready_o_cluster_w[g];
+        assign wght_ready_o_reg[cc*NUM_GLB_WGHT*CLUSTER_ROWS+cr*NUM_GLB_WGHT+g] = gen_x[cc].gen_y[cr].wght_ready_o_cluster_w[g] & (wght_ready_reg != 0);
       end
 
       ///PSUM ASSIGNMENTS

@@ -105,6 +105,7 @@ class ConvMapper(LayerMapper):
             storage[strdic.status_dict["skipWght"]] = layer_params.skipWght
             storage[strdic.status_dict["skipPsum"]] = layer_params.skipPsum
             storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
+            storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
 
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
             storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params)

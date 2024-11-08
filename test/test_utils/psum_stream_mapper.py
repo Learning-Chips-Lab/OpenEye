@@ -32,11 +32,12 @@ class PsumStreamMapper(object):
                 for router in range(self.params.Psum_Routers):
                     psum_stream[cl_x][cl_y][router] = self.write_psum_data_glb(cl_x, cl_y, router)
         psum_stream = self.create_complete_psum_stream(psum_stream)
+        print("PSUM_LEN: " + str(len(psum_stream[0][0][0])))
         return psum_stream
 
     def write_psum_data_glb(self, cl_x, cl_y, router):
         storage = []
-        for cycle in range(self.layer_params.needed_refreshes_mx[self.layer_repetition][1],self.layer_params.needed_refreshes_mx[self.layer_repetition][2]):
+        for cycle in range(math.floor(self.layer_params.needed_refreshes_mx[self.layer_repetition][1]/2),math.ceil(self.layer_params.needed_refreshes_mx[self.layer_repetition][2]/2)):
             storage.append(self.write_psum_storage(cl_x, cl_y, router, cycle))
         return storage
 
@@ -82,7 +83,7 @@ class DwPsumStreamMapper(PsumStreamMapper):
 
     def write_psum_storage(self, cl_x, cl_y, router, cycle):
         storage = []
-        for part_data_num in range(int(self.layer_params.filters)):
+        for part_data_num in range(math.ceil(self.layer_params.filters/2)):
             if((cl_y % self.layer_params.ceil_used_PE_per_clm) == 0):
                 if(part_data_num < self.layer_params.used_psum_per_PE):
                     storage.append(0)
