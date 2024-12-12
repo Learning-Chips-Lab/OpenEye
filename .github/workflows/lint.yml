@@ -1,0 +1,14 @@
+name: Lint
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install verilator
+        run: sudo apt install -y verilator
+
+      - name: run verilator lint
+        run: verilator --lint-only -Wall -Ihdl/ -Ihdl/memory/ -Ihdl/memory/impl/ hdl/OpenEye_Parallel.v
