@@ -106,6 +106,17 @@ async def single_layer_test(dut):
     except:
         use_random = 1
         logger.debug("USE_RANDOM_VALUES set to one")
+
+    try:
+        sparse_iacts = int((os.getenv("USE_SPARSE_IACTS")))
+    except:
+        sparse_iacts = 0
+        logger.debug("No sparsety for wghts set")
+    try:
+        sparse_wghts = int((os.getenv("USE_SPARSE_WEIGHTS")))
+    except:
+        sparse_wghts = 0
+        logger.debug("No sparsety for wghts set")
     
     layer_es = les.LayerExecutionState()
     serial = 0
@@ -132,11 +143,13 @@ async def single_layer_test(dut):
     else:
         model = tflite2model.create_model_from_tflite(use_random)
     #load_model_function
+
     
     # Create the OpenEye parameters and the DRAM given the model
     dram = DRAM.DRAMContents(model)
     time_printer.timestamp("Initialized DRAM. ", logger)
-    dram.write_initial_data_to_dram(model)
+    dram.write_initial_data_to_dram(model, sparse_iacts, sparse_wghts)
+    time_printer.timestamp("DRAM Initialized. ", logger)
 
     openeye_parameter = oep.create_vh_file(serial)
     time_printer.timestamp("OpenEye parameters set. ", logger)
@@ -147,11 +160,10 @@ async def single_layer_test(dut):
     dut._log.info("Clock is %s " + ptp.clk_cycle_unit, ptp.clk_cycle)
     # reset the DUT
     await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
+    time_printer.timestamp("All signals resetted. ", logger)
 
     # Process the layers of the model one after another
     for layer_number, layer in enumerate(model.layers):
-        # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
-        # layer_parameters = ptu.LayerParameters(model.layers[layer_number], openeye_parameter)
         if("Pooling" in str(layer)):
             slo.pool(dram, layer, layer_number)
         elif("Flat" in str(layer)):
@@ -166,7 +178,7 @@ async def single_layer_test(dut):
 
             dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
             time_printer.timestamp("Start creating stream. ", logger)
-            stream = ptu.write_stream(openeye_parameter, layer_parameters, layer, dram_layer_content)
+            stream = ptu.write_stream(openeye_parameter, layer_parameters, layer, dram_layer_content, sparse_iacts, sparse_wghts)
             
             time_printer.timestamp("Streams set. ", logger)
             for layer_repetition in range(layer_parameters.needed_total_transmissions):
@@ -194,7 +206,7 @@ async def calculate_layer(ptp, dut, stream, oep, lp, layer_repetition, model, la
     else :
         iact_thread = cocotb.start_soon(rtl_test_utils.write_iact(ptp, dut, stream[layer_repetition][strdic.stream_parallel_dict["iact"]], oep, lp))
         wght_thread = cocotb.start_soon(rtl_test_utils.write_wght(ptp, dut, stream[layer_repetition][strdic.stream_parallel_dict["wght"]], oep, lp))
-    # wait until all transmission is finished
+    # wait until all transmission are finished
     await iact_thread
     await wght_thread
     if(stream[layer_repetition][strdic.stream_parallel_dict["status"]][strdic.status_dict["skipPsum"]] != 1):
@@ -218,6 +230,6 @@ async def calculate_layer(ptp, dut, stream, oep, lp, layer_repetition, model, la
     if("Depthwise" in str(layer)):
         await cocotb.start_soon(rtl_test_utils.compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lp, oep, layer_es, dram, log_level, stream[layer_repetition], output_order))
     elif("Conv" in str(layer)):
-        await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, lp, oep, layer_es, dram, log_level, stream[layer_repetition]))
+        await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, lp, oep, layer_es, dram, log_level, stream[layer_repetition], output_order))
     elif("Dense" in str(layer)):
         await cocotb.start_soon(rtl_test_utils.compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, lp, oep, layer_es, dram, log_level, stream[layer_repetition]))

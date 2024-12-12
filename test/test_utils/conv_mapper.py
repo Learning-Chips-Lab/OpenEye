@@ -18,9 +18,9 @@ logger = logging.getLogger("cocotb")
 
 class ConvMapper(LayerMapper):
         
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        input_mapper = ConvIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0])
-        weight_mapper = ConvWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1])
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts):
+        input_mapper = ConvIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0], sparse_iacts)
+        weight_mapper = ConvWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1], sparse_wghts)
         bias_mapper = ConvPsumStreamMapper(params, layer_params, layer_repetition, dram_layer_content[2])
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, input_mapper, weight_mapper, bias_mapper)
 
@@ -108,7 +108,7 @@ class ConvMapper(LayerMapper):
             storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
 
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
-            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params)
+            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params, layer_params)
             storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
         return storage
 
@@ -163,7 +163,7 @@ class ConvMapper(LayerMapper):
                         line = 0
         return storage
 
-    def write_router_wght(self, params):
+    def write_router_wght(self, params, layer_params):
         line = 0
         if(params.SERIAL):
             storage = []
@@ -173,7 +173,7 @@ class ConvMapper(LayerMapper):
         for cl_x in range(params.Clusters_X):
             for cl_y in range(params.Clusters_Y):   
                 for router in range(params.Wght_Routers):
-                    if(cl_x == 0):
+                    if((cl_x == 0) | (layer_params.single_cluster_computation == 1)):
                         if(params.SERIAL):
                             line = line + (0 << (params.Wght_Router_Bits * router_cycle))
                         else:

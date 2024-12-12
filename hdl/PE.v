@@ -171,6 +171,8 @@ module PE
   reg                                         mux_iact_b_o_w;
   wire                                        mux_iact_c_i_w;
   reg [WGHT_ADDR_DATA-1 : 0]                  wght_addr_current;
+  reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_max_reg;
+  reg [WGHT_ADDR_ADDR_BITWIDTH-1 : 0]         wght_addr_max_reg;
   reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_current;
   reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_count;
   reg [DATA_IACT_BITWIDTH-1 : 0]              iact_data_current_1;
@@ -248,7 +250,7 @@ module PE
   wire                                        psum_data_SPad_en_a_w_i;
   wire                                        psum_data_SPad_en_b_w_i;
   reg                                         data_mode_reg;
-  reg  [1:0]                                  stride_reg;
+  reg  [2:0]                                  stride_reg;
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1: 0]      fraction_bit_reg;
   reg  [1 : 0]                                current_state_stream;
   reg  [7:0]                                  iact_data_position_reg;
@@ -349,19 +351,23 @@ module PE
       fraction_bit_reg     <= 0;
       current_state_stream <= 0;
       input_activations_reg<= 0;
+      wght_addr_max_reg    <= 0;
+      iact_addr_max_reg    <= 0;
     end else begin
       case (current_state_stream)
         FIRST_PARAMS : begin
           if (enable_stream_i) begin
             current_state_stream <= SECOND_PARAMS;
             data_mode_reg        <= data_stream_i[0];
-            stride_reg           <= data_stream_i[2:1];
+            stride_reg           <= data_stream_i[3:1];
+            wght_addr_max_reg    <= 4'(data_stream_i[7:4]);
             input_activations_reg<= 3;
           end
         end
         SECOND_PARAMS : begin
           if (enable_stream_i) begin
             current_state_stream <= THIRD_PARAMS;
+            iact_addr_max_reg    <= data_stream_i[3:0];
           end else begin
             current_state_stream <= FIRST_PARAMS;
           end
@@ -511,6 +517,7 @@ module PE
           use_psum_1             <= 0;
           use_psum_2             <= 0;
           used_psum_memory       <= 0;
+          psum_select            <= 1;
           if (data_mode_reg) begin
             psum_select            <= 0;
             adder_1_en             <= 0;
@@ -546,7 +553,7 @@ module PE
             use_psum_2       <= 0;
             used_psum_memory <= 0;
           end
-          if (compute_i) begin 
+          if (compute_i & (second_spad_words_iact != 0) & (second_spad_words_wght != 0)) begin 
             //Start off
             current_state_computing <= LOADING_1;
             mux_iact_ready        <= 0;
@@ -571,7 +578,9 @@ module PE
           //Get first WGHT Addr Address
           current_state_computing <= LOADING_2;
           iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          iact_addr_SPad_addr     <= iact_addr_SPad_addr + 1;
+          if (iact_addr_max_reg != 0) begin
+            iact_addr_SPad_addr     <= iact_addr_SPad_addr + 1;
+          end
           wght_addr_SPad_en_r     <= 1;
         end
 
@@ -589,7 +598,9 @@ module PE
               values_valid            <= 0;
             end else begin
               current_state_computing       <= LOADING_1;
-              iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+              if (iact_addr_max_reg != (iact_addr_SPad_addr+1)) begin
+                iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+              end
               iact_addr_SPad_en_r <= 1;
             end
           end else begin
@@ -600,7 +611,9 @@ module PE
             iact_data_SPad_addr <= iact_data_SPad_addr + 1;
             iact_addr_current   <= iact_addr_SPad_data_r;
             iact_addr_SPad_en_r <= 0;
-            iact_addr_SPad_addr <= iact_addr_SPad_addr - 1;
+            if (iact_addr_max_reg != 0) begin
+              iact_addr_SPad_addr <= iact_addr_SPad_addr - 1;
+            end
           end
         end
 
@@ -637,7 +650,9 @@ module PE
           end
           iact_addr_SPad_en_r <= 0;
           if (iact_addr_current == 1) begin
-            iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+            if (iact_addr_max_reg != (iact_addr_SPad_addr+1)) begin
+              iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+            end
           end
         end
 
@@ -795,8 +810,10 @@ module PE
               iact_data_SPad_addr <= iact_data_SPad_addr + 1;
               next_iact           <= 1;
               iact_addr_count     <= iact_addr_count + 1;
-              if (((32'(iact_addr_count) + 1) >= 32'(iact_addr_current)) & ((32'(iact_addr_SPad_addr)+1) < first_spad_words_iact)) begin
-                iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+              if (((32'(iact_addr_count) + 1) >= 32'(iact_addr_current)) & ((iact_addr_SPad_addr) < first_spad_words_iact)) begin
+                if (iact_addr_max_reg != (iact_addr_SPad_addr+1)) begin
+                  iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+                end
                 iact_addr_SPad_en_r <= 1;
               end
             end
@@ -811,7 +828,9 @@ module PE
             end
             // Check valid values
             if (next_iact2) begin
-              iact_addr_current <= iact_addr_SPad_data_r;
+              if (iact_addr_current <= iact_addr_SPad_data_r) begin
+                iact_addr_current <= iact_addr_SPad_data_r;
+              end
             end
             if (wght_data_end <= wght_data_vec) begin
               values_valid <= 0;
@@ -1118,7 +1137,8 @@ module PE
     .data_i            (wght_data_i),
     .enable_i          (wght_enable_i),
 
-    .first_spad_words_o (first_spad_words_wght),
+    .first_spad_words_o  (first_spad_words_wght),
+    .first_spad_max_i    (wght_addr_max_reg),
     .second_spad_words_o (second_spad_words_wght),
 
     .first_spad_addr_o (first_spad_wght_addr_w),
@@ -1147,7 +1167,8 @@ module PE
     .data_i            (mux_iact_a_o_w),
     .enable_i          (mux_iact_b_o_w),
 
-    .first_spad_words_o (first_spad_words_iact),
+    .first_spad_words_o  (first_spad_words_iact),
+    .first_spad_max_i    (iact_addr_max_reg),
     .second_spad_words_o (second_spad_words_iact),
 
     .first_spad_addr_o (first_spad_iact_addr_w),

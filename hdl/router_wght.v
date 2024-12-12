@@ -108,7 +108,7 @@ module router_wght
   assign r00 = router_mode_i ? 1 : ready_dst_port_0;
   assign r10 = router_mode_i ? ready_dst_port_0 : 1;
 
-  assign r01 = router_mode_i ? 0 : ready_dst_port_1;
+  assign r01 = router_mode_i ? 1 : ready_dst_port_1;
   assign r11 = router_mode_i ? 1 : 1;
 
 endmodule

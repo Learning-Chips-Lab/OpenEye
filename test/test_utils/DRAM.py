@@ -64,7 +64,7 @@ class DRAMContents(object):
         self.weights = dram_weights
         self.bias = dram_bias
 
-    def write_initial_data_to_dram(self, model):
+    def write_initial_data_to_dram(self, model, sparse_iacts, sparse_wghts):
         """ TODO: Docu"""
         for l in range(len(model.layers)):
             if "Depthwise" in str(model.layers[l]):
@@ -72,16 +72,28 @@ class DRAMContents(object):
                     for x in range(model.layers[l].kernel_size[0]):
                         for y in range(model.layers[l].kernel_size[1]):
                             self.weights[l][c][x][y] = int(math.floor(float(127*model.layers[l].weights[0][x][y][c])))
+                            if (self.weights[l][c][x][y] == 0):
+                                self.weights[l][c][x][y] = int(np.random.choice([-1, 1]))
             elif "Conv" in str(model.layers[l]):
                 for c in range(model.layers[l].input.shape[3]):
                     for f in range(model.layers[l].filters):
                         for x in range(model.layers[l].kernel_size[0]):
                             for y in range(model.layers[l].kernel_size[1]):
                                 self.weights[l][c][f][x][y] = int(math.floor(float(127*model.layers[l].weights[0][x][y][c][f])))
+                                if (sparse_wghts & (((c+f+x+y) % 2) == 0)):
+                                    self.weights[l][c][f][x][y] = 0
+                                else:
+                                    if (self.weights[l][c][f][x][y] == 0):
+                                        self.weights[l][c][f][x][y] = int(np.random.choice([-1, 1]))
             elif "Dense" in str(model.layers[l]):
                 for c in range(model.layers[l].input.shape[1]):
                     for x in range(model.layers[l].output.shape[1]):
                             self.weights[l][x][c] = np.random.randint(-128, 127)
+                            if (sparse_wghts & (((c+l+x) % 2) == 0)):
+                                self.weights[l][x][c] = 0
+                            else:
+                                if (self.weights[l][x][c] == 0):
+                                    self.weights[l][x][c] = int(np.random.choice([-1, 1]))
 
         for l in range(len(model.layers)):
             if "Depthwise" in str(model.layers[l]):
@@ -104,6 +116,16 @@ class DRAMContents(object):
                 for x in range(model.layers[0].input.shape[1]):
                     for y in range(model.layers[0].input.shape[2]):
                         self.fmap[0][c][x][y] = np.random.randint(-128, 127)
+                        if (sparse_iacts & (((c+x+y) % 2) == 0)):
+                            self.fmap[0][c][x][y] = 0
+                        else:
+                            if (self.fmap[0][c][x][y] == 0):
+                                self.fmap[0][c][x][y] = int(np.random.choice([-1, 1]))
         elif "Dense" in str(model.layers[0]):
             for c in range(model.layers[l].input.shape[1]):
                 self.fmap[0][c] = np.random.randint(-128, 127)
+                if (sparse_iacts & (((c) % 2) == 0)):
+                    self.fmap[0][c] = 0
+                else:
+                    if (self.fmap[0][c] == 0):
+                        self.fmap[0][c] = int(np.random.choice([-1, 1]))

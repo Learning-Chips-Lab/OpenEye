@@ -37,7 +37,7 @@ class OpenEyeParameters(object):
         self.NUM_GLB_PSUM = 4
         self.NUM_GLB_WGHT = 3
         self.Clusters_X = 2
-        self.Clusters_Y = 8
+        self.Clusters_Y = 2
         self.PEs = self.PEs_X * self.PEs_Y
         self.Clusters = self.Clusters_X * self.Clusters_Y
         self.PE_Complete = self.PEs * self.Clusters

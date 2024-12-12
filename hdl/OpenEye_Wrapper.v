@@ -552,7 +552,6 @@ module OpenEye_Wrapper
             iact_enable_i_reg <= 0;
             iact_enable_i_reg[NUM_GLB_IACT*CLUSTER_ROWS+fsm_y_cl*NUM_GLB_IACT+4'(fsm_iact_r)] <= 1;
             iact_enable_i_reg[fsm_y_cl*NUM_GLB_IACT+fsm_iact_r] <= 1;
-            //if needs change with $Ceil isntead of the +1
             if(fsm_cycle == (needed_iact_cycles_reg*needed_cycles_reg*({30'd0,iact_write_addr_t_reg} + {28'd0,iact_write_data_t_reg}) - 1))begin
               fsm_cycle  <= 0;
               if(fsm_iact_r != NUM_GLB_IACT - 1)begin

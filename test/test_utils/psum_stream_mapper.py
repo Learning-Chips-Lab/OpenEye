@@ -32,7 +32,6 @@ class PsumStreamMapper(object):
                 for router in range(self.params.Psum_Routers):
                     psum_stream[cl_x][cl_y][router] = self.write_psum_data_glb(cl_x, cl_y, router)
         psum_stream = self.create_complete_psum_stream(psum_stream)
-        print("PSUM_LEN: " + str(len(psum_stream[0][0][0])))
         return psum_stream
 
     def write_psum_data_glb(self, cl_x, cl_y, router):

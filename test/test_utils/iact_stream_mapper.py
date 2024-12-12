@@ -4,6 +4,7 @@
 # For more details, see the LICENSE file in the root directory of this project.
 import sys
 import os
+import numpy as np
 directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 import math
@@ -15,11 +16,12 @@ logger = logging.getLogger("cocotb")
 
 
 class IactStreamMapper(object):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
         self.params = params
         self.layer_params = layer_params
         self.layer_repetition = layer_repetition
         self.dram_fmap = dram_layer_content
+        self.sparse_data = sparse_data
         if (params.SERIAL):
             self.storage = [[] for _ in range(len(strdic.stream_serial_dict))]
         else:
@@ -32,7 +34,6 @@ class IactStreamMapper(object):
                 for router in range(self.params.Iact_Routers):
                     iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
         iact_stream = self.create_complete_iact_stream(iact_stream)
-        print("IACT_LEN: " + str(len(iact_stream[0][0][0])))
         return iact_stream
     
     def write_iact_data_glb(self, cl_x, cl_y, router):
@@ -40,11 +41,41 @@ class IactStreamMapper(object):
         for cycle in range(self.layer_params.needed_refreshes_mx[self.layer_repetition][1],self.layer_params.needed_refreshes_mx[self.layer_repetition][2]):
             for iact_cycle in range(self.layer_params.needed_Iact_writes):
                 if ((cl_y - cycle) % self.layer_params.used_Y_cluster == 0) :
-                    data_spad = self.write_iact_data_storage(cl_x, cl_y, router, cycle, iact_cycle)
-                    addr_spad = self.write_iact_addr_storage(cl_x, cl_y, router, cycle, iact_cycle)
-                    storage.append([addr_spad, data_spad])
-
+                    spad = self.write_iact_pe(cl_x, cl_y, router, cycle, iact_cycle)
+                    if (self.sparse_data == 1):
+                        storage.append(self.set_sparse_stream(spad))
+                    else:
+                        storage.append(spad)
         return storage
+
+    def set_sparse_stream(self, spad):
+        layer_params = self.layer_params
+        params = self.params
+        array = np.array(spad[0])
+
+        # Filterbedingungen
+        trunc_addr = array[(np.arange(len(array)) < (math.ceil(layer_params.used_iact_addr_per_PE)-1)) | \
+            (array != 0)].tolist()
+        filtered_data = [sublist for i, sublist in enumerate(spad[1]) if not (sublist[0] == 0)]
+        addr_counter,addr_index = 0, 0
+        filtered_addr = []
+        for count,data in enumerate(filtered_data):
+            if (data[1] < trunc_addr[addr_index]):
+                addr_counter = addr_counter + 1
+            else:
+                filtered_addr.append(addr_counter)
+                addr_index = addr_index + 1
+                if (data[1] < trunc_addr[addr_index]):
+                    addr_counter = addr_counter + 1
+        filtered_addr.append(addr_counter)
+
+        spad = [filtered_addr,filtered_data]
+        return spad
+
+    def write_iact_pe(self, cl_x, cl_y, router, cycle, iact_cycle):
+        data_spad = self.write_iact_data_storage(cl_x, cl_y, router, cycle, iact_cycle)
+        addr_spad = self.write_iact_addr_storage(cl_x, cl_y, router, cycle, iact_cycle)
+        return [addr_spad, data_spad]
 
     def write_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
 
@@ -57,25 +88,58 @@ class IactStreamMapper(object):
         spad_storage = [[0 for _ in range(2)] for _ in range(params.Iacts_per_PE)]
         for words_in_storage in range(math.ceil(params.Iacts_per_PE)):
             if(words_in_storage < layer_params.used_iact_per_PE):
-                iact_temp_pos_x = \
-                int((math.floor(((cl_x * params.PEs_X) + \
-                (math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
-                cycle * params.PEs_X * math.floor(params.Clusters/layer_params.used_Y_cluster)) * layer_params.strideX) % \
-                ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
-                router + iact_cycle * math.floor(params.Iact_Routers/layer_params.kernel_per_pe_cluster)) - \
-                (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
-                
-                iact_temp_pos_y = \
-                int((words_in_storage % layer_params.kernel_size[1]) + \
-                (layer_params.strideY * \
-                math.floor((((math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
-                cycle * params.PEs_X * math.floor(params.Clusters/layer_params.used_Y_cluster)) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
-                (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                match layer_params.single_cluster_computation:
+                    case 1:
+                        iact_temp_pos_x = \
+                        int((math.floor((cycle * params.PEs_X * math.floor(params.Clusters/layer_params.used_Y_cluster)) * layer_params.strideX) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
+                        router + iact_cycle * math.floor(params.Iact_Routers/layer_params.kernel_per_pe_cluster)) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                        
+                        iact_temp_pos_y = \
+                        int((words_in_storage % layer_params.kernel_size[1]) + \
+                        (layer_params.strideY * \
+                        math.floor(((cycle * params.PEs_X) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
 
-                channel = math.floor(words_in_storage/layer_params.kernel_size[0]) + \
-                    ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
-                if(((math.floor(cycle/ layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X) + \
-                    ((math.floor(cl_y/ layer_params.used_Y_cluster) *  params.Clusters_X * params.PEs_X)) + (cl_x * params.PEs_X)) < \
+                        channel = math.floor(words_in_storage/layer_params.kernel_size[0]) + \
+                        ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
+                    case 2:
+                        iact_temp_pos_x = \
+                        int((math.floor(((cl_x * params.PEs_X) + \
+                        cycle * params.PEs_X * math.floor(params.Clusters/layer_params.used_Y_cluster)) * layer_params.strideX) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
+                        router + iact_cycle * math.floor(params.Iact_Routers/layer_params.kernel_per_pe_cluster)) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                        
+                        iact_temp_pos_y = \
+                        int((words_in_storage % layer_params.kernel_size[1]) + \
+                        (layer_params.strideY * \
+                        math.floor(((cycle * params.PEs_X) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+
+                        channel = math.floor(words_in_storage/layer_params.kernel_size[0]) + \
+                        ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
+                    case _:
+                        iact_temp_pos_x = \
+                        int((math.floor(((cl_x * params.PEs_X) + \
+                        (math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
+                        cycle * params.PEs_X * math.floor(params.Clusters/layer_params.used_Y_cluster)) * layer_params.strideX) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
+                        router + iact_cycle * math.floor(params.Iact_Routers/layer_params.kernel_per_pe_cluster)) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                        
+                        iact_temp_pos_y = \
+                        int((words_in_storage % layer_params.kernel_size[1]) + \
+                        (layer_params.strideY * \
+                        math.floor((((math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
+                        cycle * params.PEs_X * math.floor(params.Clusters/layer_params.used_Y_cluster)) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+
+                        channel = math.floor(words_in_storage/layer_params.kernel_size[0]) + \
+                        ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
+                if(((math.floor(cycle/ self.layer_params.used_Y_cluster) * params.Clusters_Y *  params.Clusters_X * params.PEs_X) + \
+                    ((math.floor(cl_y/ self.layer_params.used_Y_cluster) *  params.Clusters_X * params.PEs_X)) + (cl_x * params.PEs_X)) < \
                    (layer_params.output_shape[1] * (layer_params.output_shape[2]+layer_params.add_up))):
                     if(((iact_temp_pos_x >= 0) & (iact_temp_pos_x < (layer_params.output_shape[1] * layer_params.strideX))) & \
                     ((iact_temp_pos_y) >= 0) & (iact_temp_pos_y < (layer_params.output_shape[2] * layer_params.strideY))):
@@ -173,8 +237,8 @@ class IactStreamMapper(object):
         return stream
     
 class ConvIactStreamMapper(IactStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
 
     def write_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
 
@@ -186,40 +250,78 @@ class ConvIactStreamMapper(IactStreamMapper):
         overhead_counter = 0
         line_counter = 0
         spad_storage = [[0 for _ in range(2)] for _ in range(params.Iacts_per_PE)]
-        amout_of_words = ((math.ceil((router+1) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)) - \
-            (math.ceil(router * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster))) * layer_params.kernel_size[1]
 
-        for words_in_storage in range(amout_of_words):
+        amount_of_channels = ((math.ceil((router+1) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)) - \
+            (math.ceil(router * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)))
+        amout_of_iacts = amount_of_channels * layer_params.kernel_size[1]
+        for words_in_storage in range(amout_of_iacts):
             if(words_in_storage < layer_params.used_iact_per_PE):
+                match layer_params.single_cluster_computation:
+                    case 1:
+                        iact_temp_pos_x = \
+                        int((math.floor((cycle * params.PEs_X) * layer_params.strideX) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
+                        math.floor(router/layer_params.kernel_per_pe_cluster) + \
+                        iact_cycle * math.floor(params.Iact_Routers/layer_params.kernel_per_pe_cluster)) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                        
+                        iact_temp_pos_y = \
+                        int((words_in_storage % layer_params.kernel_size[1]) + \
+                        (layer_params.strideY * \
+                        math.floor(((cycle * params.PEs_X) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))      
 
-                iact_temp_pos_x = \
-                int((math.floor(((cl_x * params.PEs_X) + \
-                (math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
-                cycle * params.PEs_X * math.floor(params.Clusters/layer_params.used_Y_cluster)) * layer_params.strideX) % \
-                ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
-                math.floor(router/layer_params.kernel_per_pe_cluster) + \
-                iact_cycle * math.floor(params.Iact_Routers/layer_params.kernel_per_pe_cluster)) - \
-                (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
-                
-                iact_temp_pos_y = \
-                int((words_in_storage % layer_params.kernel_size[1]) + \
-                (layer_params.strideY * \
-                math.floor((((math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
-                (cl_x * params.PEs_X) + \
-                cycle * params.PEs_X * math.floor(params.Clusters/self.layer_params.used_Y_cluster)) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
-                (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                        channel = (math.ceil(((router%layer_params.kernel_per_pe_cluster) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))/layer_params.kernel_per_pe_cluster)) + \
+                        math.floor(words_in_storage/layer_params.kernel_size[0]) + \
+                        ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
+                    case 2:
+                        iact_temp_pos_x = \
+                        int((math.floor(((cl_x * params.PEs_X) + (cycle * params.PEs_X * params.Clusters_X)) * layer_params.strideX) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
+                        math.floor(router/layer_params.kernel_per_pe_cluster) + \
+                        iact_cycle * math.floor(params.Iact_Routers/layer_params.kernel_per_pe_cluster)) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                        
+                        iact_temp_pos_y = \
+                        int((words_in_storage % layer_params.kernel_size[1]) + \
+                        (layer_params.strideY * \
+                        math.floor(((cycle * params.PEs_X * params.Clusters_X) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))      
 
-                channel = (math.ceil(((router%layer_params.kernel_per_pe_cluster) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))/layer_params.kernel_per_pe_cluster))+ \
-                math.floor(words_in_storage/layer_params.kernel_size[0]) + \
-                ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
-                if(((math.floor(cycle/ self.layer_params.used_Y_cluster) * params.Clusters_Y *  params.Clusters_X * params.PEs_X) + \
+                        channel = (math.ceil(((router%layer_params.kernel_per_pe_cluster) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))/layer_params.kernel_per_pe_cluster)) + \
+                        math.floor(words_in_storage/layer_params.kernel_size[0]) + \
+                        ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
+                    case _:
+                        iact_temp_pos_x = \
+                        int((math.floor(((cl_x * params.PEs_X) + \
+                        (math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
+                        cycle * params.PEs_X * math.floor(params.Clusters/layer_params.used_Y_cluster)) * layer_params.strideX) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
+                        math.floor(router/layer_params.kernel_per_pe_cluster) + \
+                        iact_cycle * math.floor(params.Iact_Routers/layer_params.kernel_per_pe_cluster)) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                        
+                        iact_temp_pos_y = \
+                        int((words_in_storage % layer_params.kernel_size[1]) + \
+                        (layer_params.strideY * \
+                        math.floor((((math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
+                        (cl_x * params.PEs_X) + \
+                        cycle * params.PEs_X * math.floor(params.Clusters/self.layer_params.used_Y_cluster)) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+
+                        channel = (math.ceil(((router%layer_params.kernel_per_pe_cluster) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))/layer_params.kernel_per_pe_cluster))+ \
+                        math.floor(words_in_storage/layer_params.kernel_size[0]) + \
+                        ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
+
+
+                if((((math.floor(cycle/ self.layer_params.used_Y_cluster) * params.Clusters_Y *  params.Clusters_X * params.PEs_X) + \
                     ((math.floor(cl_y/ self.layer_params.used_Y_cluster) *  params.Clusters_X * params.PEs_X)) + (cl_x * params.PEs_X)) < \
-                   (layer_params.output_shape[1] * (layer_params.output_shape[2]+layer_params.add_up))):
+                   (layer_params.output_shape[1] * (layer_params.output_shape[2]+layer_params.add_up))) | (layer_params.single_cluster_computation != 0)):
                     if(((iact_temp_pos_x >= 0) & (iact_temp_pos_x < (layer_params.output_shape[1] * layer_params.strideX))) & \
                     ((iact_temp_pos_y) >= 0) & (iact_temp_pos_y < (layer_params.output_shape[2] * layer_params.strideY))):
-                        if (channel < layer_params.input_shape[3]) : 
+                        try:
                             spad_storage[words_in_storage][0] = dram_fmap[channel][iact_temp_pos_x][iact_temp_pos_y]
-                        else:
+                        except:
                             spad_storage[words_in_storage][0] = 0
 
                     else:
@@ -236,25 +338,30 @@ class ConvIactStreamMapper(IactStreamMapper):
         params = self.params
         line_counter = 0
         spad_storage = [0 for _ in range(self.params.Iacts_Addr_per_PE)]
+        if (layer_params.kernel_size[0] == 1):
+            spad_storage[0] = layer_params.used_channels
+        else:
+            for words_in_storage in range(params.Iacts_Addr_per_PE):
+                if(words_in_storage < (math.ceil(layer_params.used_iact_per_PE/layer_params.kernel_size[0]))):
+                    spad_storage[words_in_storage] = (layer_params.kernel_size[0] * (words_in_storage + 1))
+                line_counter = line_counter + 1
 
-        for words_in_storage in range(params.Iacts_Addr_per_PE):
-            if(words_in_storage < (math.ceil(layer_params.used_iact_per_PE/layer_params.kernel_size[0]))):
-                spad_storage[words_in_storage] = (layer_params.kernel_size[0] * (words_in_storage + 1))
-            line_counter = line_counter + 1
         return spad_storage
      
 class DenseIactStreamMapper(IactStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content)
-    
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
+
     def write_iact_data_glb(self, cl_x, cl_y, router):
         storage = []
         for cycle in range(self.layer_params.needed_refreshes_mx[self.layer_repetition][1],self.layer_params.needed_refreshes_mx[self.layer_repetition][2]):
             for iact_cycle in range(self.layer_params.needed_Iact_writes):
-                data_spad = self.write_iact_data_storage(cl_x, cl_y, router, cycle, iact_cycle)
-                addr_spad = self.write_iact_addr_storage(cl_x, cl_y, router, cycle, iact_cycle)
-                storage.append([addr_spad, data_spad])
-
+                #if ((cl_y - cycle) % self.layer_params.used_Y_cluster == 0) :
+                spad = self.write_iact_pe(cl_x, cl_y, router, cycle, iact_cycle)
+                if (self.sparse_data == 1):
+                    storage.append(self.set_sparse_stream(spad))
+                else:
+                    storage.append(spad)
         return storage
     
     def write_iact_addr_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
@@ -297,8 +404,8 @@ class DenseIactStreamMapper(IactStreamMapper):
         return spad_storage
     
 class DwIactStreamMapper(IactStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
 
     def write_iact_addr_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
         layer_params = self.layer_params
@@ -314,9 +421,11 @@ class DwIactStreamMapper(IactStreamMapper):
         for cycle in range(self.layer_params.needed_refreshes_mx[self.layer_repetition][1],self.layer_params.needed_refreshes_mx[self.layer_repetition][2]):
             for iact_cycle in range(self.layer_params.needed_Iact_writes):
                 if ((cl_y - cycle) % self.layer_params.used_Y_cluster == 0) :
-                    data_spad = self.write_iact_data_storage(cl_x, cl_y, router, cycle, iact_cycle)
-                    addr_spad = None
-                    storage.append([addr_spad, data_spad])
+                    spad = self.write_iact_pe(cl_x, cl_y, router, cycle, iact_cycle)
+                    if (self.sparse_data == 1):
+                        storage.append(self.set_sparse_stream(spad))
+                    else:
+                        storage.append(spad)
         return storage
         
     def create_complete_iact_stream(self, spad_storage):
@@ -364,39 +473,56 @@ class DwIactStreamMapper(IactStreamMapper):
 
         for words_in_storage in range(math.ceil(params.Iacts_per_PE)):
             if (words_in_storage < layer_params.used_iact_per_PE):
-                if (layer_params.single_cluster_computation == 0):
-                    iact_temp_pos_x = int(((cl_x * params.PEs_X * layer_params.strideX) + \
-                    ((cl_y / layer_params.ceil_used_PE_per_clm) * params.PEs_X * params.Clusters_X * layer_params.strideX) + \
-                    ((words_in_storage) % layer_params.kernel_size[1]) ) % \
-                    ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
-                    (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
-                    (router * 3))
+                match layer_params.single_cluster_computation:
+                    case 1:
+                        iact_temp_pos_x = int((((words_in_storage) % layer_params.kernel_size[1]) + \
+                        ((cycle * params.PEs_X * layer_params.strideX))) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
+                        (router * 3))
 
-                    iact_temp_pos_y = \
-                    int(iact_cycle + (layer_params.strideY * math.floor( \
-                    ((((cl_y / layer_params.ceil_used_PE_per_clm) * params.PEs_X * params.Clusters_X) + \
-                    ((cl_y % layer_params.ceil_used_PE_per_clm) * params.Clusters_X * params.PEs_X) + \
-                    (cl_x * params.PEs_X) + \
-                    cycle *params.PEs_X * params.Clusters) * \
-                    layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideY)))) - \
-                    (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
-                    
-                    channel = math.floor(words_in_storage/layer_params.kernel_size[0]) + ((self.layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)) #HIer was aendern
-                else :
-                    iact_temp_pos_x = int((((words_in_storage) % layer_params.kernel_size[1]) + \
-                    ((cycle * params.PEs_X * layer_params.strideX))) % \
-                    ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
-                    (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
-                    (router * 3))
+                        iact_temp_pos_y = int(iact_cycle + (layer_params.strideY * math.floor( \
+                        ((cycle *params.PEs_X) * layer_params.strideX)/ \
+                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideY)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
 
-                    iact_temp_pos_y = int(iact_cycle + (layer_params.strideY * math.floor( \
-                    ((cycle *params.PEs_X) * layer_params.strideX)/ \
-                    ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideY)))) - \
-                    (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                        
+                        channel = (cl_x  + cl_y * params.Clusters_X) + \
+                        ((self.layer_repetition * params.Clusters))
+                    case 2:
+                        iact_temp_pos_x = int(((cl_x * params.PEs_X * layer_params.strideX) + \
+                        ((words_in_storage) % layer_params.kernel_size[1]) + \
+                        (cycle * params.PEs_X * layer_params.strideX * params.Clusters_X)) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
+                        (router * 3))
 
-                    
-                    channel = (cl_x  + cl_y * params.Clusters_X) + \
-                    ((self.layer_repetition * params.Clusters))
+                        iact_temp_pos_y = \
+                        int(iact_cycle + (layer_params.strideY * math.floor( \
+                        (((cl_x * params.PEs_X) + \
+                        (cycle * params.PEs_X * params.Clusters_X)) * \
+                        layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideY)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                        
+                        channel = cl_y + ((self.layer_repetition * params.Clusters_Y))
+                    case _:
+                        iact_temp_pos_x = int(((cl_x * params.PEs_X * layer_params.strideX) + \
+                        ((cl_y / layer_params.ceil_used_PE_per_clm) * params.PEs_X * params.Clusters_X * layer_params.strideX) + \
+                        ((words_in_storage) % layer_params.kernel_size[1]) ) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
+                        (router * 3))
+
+                        iact_temp_pos_y = \
+                        int(iact_cycle + (layer_params.strideY * math.floor( \
+                        ((((cl_y / layer_params.ceil_used_PE_per_clm) * params.PEs_X * params.Clusters_X) + \
+                        ((cl_y % layer_params.ceil_used_PE_per_clm) * params.Clusters_X * params.PEs_X) + \
+                        (cl_x * params.PEs_X) + \
+                        cycle * params.PEs_X * params.Clusters) * \
+                        layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideY)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
+                        
+                        channel = math.floor(words_in_storage/layer_params.kernel_size[0]) + ((self.layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
 
                 if(((iact_temp_pos_x >= 0) & (iact_temp_pos_x < (layer_params.output_shape[1] * layer_params.strideX))) & \
                 ((iact_temp_pos_y) >= 0) & (iact_temp_pos_y < (layer_params.output_shape[2] * layer_params.strideY)) & \

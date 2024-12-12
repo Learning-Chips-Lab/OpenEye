@@ -18,9 +18,9 @@ logger = logging.getLogger("cocotb")
 
 class DWMapper(LayerMapper):
         
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        input_mapper = DwIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0])
-        weight_mapper = DwWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1])
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts):
+        input_mapper = DwIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0], sparse_iacts)
+        weight_mapper = DwWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1], sparse_wghts)
         bias_mapper = DwPsumStreamMapper(params, layer_params, layer_repetition, dram_layer_content[2])
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, input_mapper, weight_mapper, bias_mapper)
         

@@ -79,12 +79,11 @@ async def reset_all_signals(ptp, dut, serial):
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
 
-    for _ in range(3):
-        await Timer(ptp.clk_cycle, ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, ptp.clk_cycle_unit)
     cocotb.start_soon(set_input(ptp,(dut.rst_ni), 1))
 
-    # After deasserting reset, we wait 4 clock cycles
-    for _ in range(4):
+    # After deasserting reset, we wait 3 clock cycles
+    for _ in range(3):
         await Timer(ptp.clk_cycle, ptp.clk_cycle_unit)
 
 async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
@@ -123,7 +122,9 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
         cocotb.start_soon(set_input(ptp,(dut.stride_x_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["strideX"]]))
         cocotb.start_soon(set_input(ptp,(dut.stride_y_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["strideY"]]))
         cocotb.start_soon(set_input(ptp,(dut.kernel_per_pe_cluster_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["kernel_per_pe_cluster"]]))
+        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.compute_mask_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["usePEs"]]))
+        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         # Set the router mode for the input activations
         router_mode_port = 0
         for cl_x in range(oep.Clusters_X):
@@ -229,7 +230,7 @@ async def write_wght(ptp, dut, stream, oep, lp):
     wght_enable_signal = 0
     wght_transmission = 0
     if(lp.skipWght != 1):
-        while (dut.wght_ready_o.value == 0): #TODO: ADAPT for Sparsetiy
+        while (dut.wght_ready_o.value != ((2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_WGHT))-1)):
             await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
 
         cocotb.start_soon(set_input(ptp,(dut.wght_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_WGHT))-1))
@@ -292,7 +293,7 @@ async def await_ready_signal(ptp, dut, layer_number, model, layer_repetition, la
             await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     pass
 
-async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, oep, les, dram, login_level, stream):
+async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, oep, les, dram, login_level, stream, output_order):
     """ Await the output stream and compare it to the reference output.
 
     This function awaits the output stream and compares it to the reference output.
@@ -316,26 +317,14 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
         filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/storage_input.txt'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         storage_file = open(filename, 'w')
-    if(layer_repetition == 0):
-        les.y_corner_start = 0
-        les.x_corner_start = 0
 
-    les.f_start = int((math.floor(layer_repetition/layer_parameters.iact_transmissions_pe)%layer_parameters.needed_wght_transmissions) * math.ceil(layer_parameters.used_wght_per_PE/layer_parameters.used_iact_per_PE))
-    les.f_corner_start = int((math.floor(layer_repetition/layer_parameters.iact_transmissions_pe)%layer_parameters.needed_wght_transmissions) * math.ceil(layer_parameters.used_wght_per_PE/layer_parameters.used_iact_per_PE))
-    les.f_corner_end = layer_parameters.filters
-    les.f_end = les.f_start + math.ceil(layer_parameters.used_wght_per_PE/layer_parameters.used_iact_per_PE)
-    les.y_start = les.y_corner_start
-    les.x_start = les.x_corner_start
-    les.x_end = int(model.layers[layer_number].output.shape[1])
-    les.y_end = int(model.layers[layer_number].output.shape[2])
-    les.f_corner_end = int(model.layers[layer_number].output.shape[1])
-    les.y_corner_end = int(model.layers[layer_number].output.shape[2])
     logger.debug("PRE")
     logger.debug("f: " + str(les.f_start) + " x: " + str(les.x_start) + " y: " + str(les.y_start) + " f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
 
-    f = les.f_start
-    x = les.x_start
-    y = les.y_start
+    f = 0
+    x = 0
+    y = 0
+    les.current_position = 0
     if(logging.DEBUG >= login_level):
         storage_file.write(" f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
     if (oep.SERIAL == 0) :
@@ -360,6 +349,13 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
                                 if(logging.DEBUG >= login_level):
                                     txt_file.write(bin(outputvalue)[2:].zfill(40) + "\n")
                                 for i in range(2):
+                                    try:
+                                        f = output_order[layer_repetition][les.current_position][0]
+                                        x = output_order[layer_repetition][les.current_position][1]
+                                        y = output_order[layer_repetition][les.current_position][2]
+                                    except:
+                                        pass
+                                    les.current_position = les.current_position + 1
                                     if(logging.DEBUG >= login_level):
                                         storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
                                     try:
@@ -368,32 +364,6 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
                                             dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**20
                                     except:
                                         pass
-                                    f = f + 1
-                                if((y_cluster == 0) and (x_cluster == 0) and (router == layer_parameters.add_up)):
-                                    if(f >= les.f_end):
-                                        les.f_start = les.f_corner_start
-                                        f = les.f_start
-                                        if(x == les.x_end - 1):
-                                            x = 0
-                                            if(y >= les.y_end - 1):
-                                                y = 0
-                                            else:
-                                                y = y + 1
-                                        else:
-                                            x = x + 1
-                                        les.y_start = y
-                                        les.x_start = x
-                                    else:
-                                        les.f_start = f
-                                        x = les.x_start
-                                        y = les.y_start
-                                else:
-                                    f = f - 2
-                                    if(x == les.x_end - 1):
-                                        x = 0
-                                        y = y + 1
-                                    else:
-                                        x = x + 1
                 await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
@@ -409,7 +379,6 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
                 if(logging.DEBUG >= login_level):
                     txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(40) + "\n")
                 for i in range(2):
-
                     if(logging.DEBUG >= login_level):
                         storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
                     try:
@@ -617,9 +586,22 @@ async def compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, 
 async def send_enable_conv(ptp, dut, layer_params, layer_repetition, oep):
 
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
-    for _ in range(int((math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/2)*\
-                        math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.used_Y_cluster)))):
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+
+
+            
+    match layer_params.single_cluster_computation:
+        case 1:
+            for _ in range(int((math.ceil((layer_params.filters*layer_params.output_shape[1]*layer_params.output_shape[2])/2/(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))))):
+                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        case 2:
+            for _ in range(int((math.ceil((layer_params.filters*layer_params.output_shape[1]*layer_params.output_shape[2])/(2*oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))))):
+                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        case _:
+            for _ in range(int((math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/2)*\
+                                math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.used_Y_cluster)))):
+                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+
+
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
 
 async def send_enable_dw(ptp, dut, layer_params, layer_repetition, oep):
