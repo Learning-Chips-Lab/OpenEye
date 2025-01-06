@@ -33,30 +33,27 @@ module mux_iact
     input      [WIDTH*I_COUNT-1:0]  a_i,
     input      [I_COUNT-1:0]        b_i,
     output reg [I_COUNT-1:0]        c_o,
-    input      [$clog2(I_COUNT)-1:0]sel_i,
+    input      [$clog2(I_COUNT+1)-1:0]sel_i,
     output reg [WIDTH-1:0]          a_o,
     output reg                      b_o,
     input                           c_i
 );
 integer j;
+genvar i;
 
-  wire [WIDTH-1:0] a_1;
-  wire [WIDTH-1:0] a_2;
-  wire [WIDTH-1:0] a_3;
-
-  assign a_1 = a_i[(WIDTH)  -1:      0];
-  assign a_2 = a_i[(WIDTH*2)-1:WIDTH  ];
-  assign a_3 = a_i[(WIDTH*3)-1:WIDTH*2];
-
+  wire [WIDTH-1:0] a_w [0:(I_COUNT)-1];
+  for(i=0; i<I_COUNT; i=i+1)begin
+    assign a_w[i] = a_i[(WIDTH*(i+1))-1:(WIDTH*i)];
+  end
   always @(*) begin : configure_mux
-    a_o = (sel_i == 0) ? a_1 : (sel_i == 1) ? a_2 : (sel_i == 2) ? a_3 : 0;
-    b_o = b_i[sel_i];
+    a_o = a_w[$clog2(I_COUNT)'(sel_i)];
+    b_o = b_i[$clog2(I_COUNT)'(sel_i)];
     if(sel_i == I_COUNT)begin
       a_o = 0;
       b_o = 0;
     end
     for(j=0; j<I_COUNT; j=j+1)begin
-      c_o[j] = c_i | (!(sel_i == j[1:0]));
+      c_o[j] = c_i | (!(sel_i == j[$clog2(I_COUNT+1)-1:0]));
     end
   end
 

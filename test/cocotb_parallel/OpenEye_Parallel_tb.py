@@ -4,9 +4,9 @@
 # For more details, see the LICENSE file in the root directory of this project.
 import sys
 import os
-import time
 directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
+import time
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
@@ -151,7 +151,7 @@ async def single_layer_test(dut):
     dram.write_initial_data_to_dram(model, sparse_iacts, sparse_wghts)
     time_printer.timestamp("DRAM Initialized. ", logger)
 
-    openeye_parameter = oep.create_vh_file(serial)
+    openeye_parameter = oep.get_oep(serial)
     time_printer.timestamp("OpenEye parameters set. ", logger)
 
     # Start the clock

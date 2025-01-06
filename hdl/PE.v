@@ -116,7 +116,7 @@ module PE
 ) ( 
   input                                              clk_i,
   input                                              rst_ni,
-  input       [$clog2(NUM_GLB_IACT)-1:0]             iact_select_i,
+  input       [$clog2(NUM_GLB_IACT+1)-1:0]           iact_select_i,
   input       [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] iact_data_i,
   input       [NUM_GLB_IACT-1:0]                     iact_enable_i,
   output      [NUM_GLB_IACT-1:0]                     iact_ready_o,
@@ -529,10 +529,10 @@ module PE
             if (32'(iact_data_position_reg) >= NUM_GLB_IACT) begin
               iact_data_position_reg <= 8'(32'(iact_data_position_reg) - NUM_GLB_IACT);
             end
-            if (iact_enable_i[2'(iact_data_position_reg)]) begin
+            if (iact_enable_i[$clog2(NUM_GLB_IACT)'(iact_data_position_reg)]) begin
               current_state_computing <= CALCULATING;
               wght_data_SPad_en_r     <= 1;
-              next_iact               <= iact_enable_i[2'(iact_data_position_reg)];
+              next_iact               <= iact_enable_i[$clog2(NUM_GLB_IACT)'(iact_data_position_reg)];
               if (iact_data_position_reg == 0) begin
                 iact_data_current_2 <= iact_part_1_w;
               end else begin
@@ -690,7 +690,7 @@ module PE
             //Defaulting Values
             wght_data_SPad_en_r     <= 1;
             wght_data_use_vec       <= 1;
-            next_iact               <= iact_enable_i[2'(iact_data_position_reg)];
+            next_iact               <= iact_enable_i[$clog2(NUM_GLB_IACT)'(iact_data_position_reg)];
             values_valid            <= next_iact;
             computing               <= 1;
             adder_2_en              <= 1;

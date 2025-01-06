@@ -110,7 +110,7 @@ module OpenEye_Cluster
 )( 
   input                                          clk_i,
   input                                          rst_ni,
-  input [$clog2(NUM_GLB_IACT)*PES-1:0]           iact_choose_i,
+  input [$clog2(NUM_GLB_IACT+1)*PES-1:0]         iact_choose_i,
   input [NUM_GLB_PSUM-1:0]                       psum_choose_i,
   input [PES-1:0]                                compute_i,
   input                                          data_write_enable_iact_i,

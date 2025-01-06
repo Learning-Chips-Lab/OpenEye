@@ -204,7 +204,7 @@ async def write_iact(ptp, dut, stream, oep, lp):
                         try:
                             iact_transmission = iact_transmission + \
                             (stream[x_cluster][y_cluster][router][position] \
-                            << ((router + y_cluster * oep.NUM_GLB_IACT + x_cluster * oep.NUM_GLB_WGHT * oep.Clusters_Y) * int(oep.DMA_Bits/oep.Clusters_X)))
+                            << ((router + y_cluster * oep.NUM_GLB_IACT + x_cluster * oep.NUM_GLB_IACT * oep.Clusters_Y) * int(oep.DMA_Bits/oep.Clusters_X)))
                             iact_enable_signal = iact_enable_signal + 2**(router + y_cluster * oep.NUM_GLB_IACT+ x_cluster * oep.NUM_GLB_IACT * oep.Clusters_Y)
                         except:
                             iact_enable_signal = iact_enable_signal

@@ -46,7 +46,8 @@ class ConvMapper(LayerMapper):
                         if(layer_params.computing_mx[x][y][pe_y][pe_x]== 1):
                             computing_pes = computing_pes + 2**(counter)
                         counter = counter + 1
-        computing_pes = format(computing_pes, "0192b")
+        formating = "0" + str(params.Clusters_X * params.Clusters_Y * params.PEs_Y) + "b"
+        computing_pes = format(computing_pes, formating)
 
         if (params.SERIAL):
             dma_line = 0

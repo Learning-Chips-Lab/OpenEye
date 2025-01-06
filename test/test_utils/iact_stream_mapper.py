@@ -53,7 +53,6 @@ class IactStreamMapper(object):
         params = self.params
         array = np.array(spad[0])
 
-        # Filterbedingungen
         trunc_addr = array[(np.arange(len(array)) < (math.ceil(layer_params.used_iact_addr_per_PE)-1)) | \
             (array != 0)].tolist()
         filtered_data = [sublist for i, sublist in enumerate(spad[1]) if not (sublist[0] == 0)]
@@ -479,7 +478,7 @@ class DwIactStreamMapper(IactStreamMapper):
                         ((cycle * params.PEs_X * layer_params.strideX))) % \
                         ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
                         (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
-                        (router * 3))
+                        (router * params.NUM_GLB_IACT))
 
                         iact_temp_pos_y = int(iact_cycle + (layer_params.strideY * math.floor( \
                         ((cycle *params.PEs_X) * layer_params.strideX)/ \
@@ -495,7 +494,7 @@ class DwIactStreamMapper(IactStreamMapper):
                         (cycle * params.PEs_X * layer_params.strideX * params.Clusters_X)) % \
                         ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
                         (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
-                        (router * 3))
+                        (router * params.NUM_GLB_IACT))
 
                         iact_temp_pos_y = \
                         int(iact_cycle + (layer_params.strideY * math.floor( \
@@ -511,7 +510,7 @@ class DwIactStreamMapper(IactStreamMapper):
                         ((words_in_storage) % layer_params.kernel_size[1]) ) % \
                         ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
                         (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
-                        (router * 3))
+                        (router * params.NUM_GLB_IACT))
 
                         iact_temp_pos_y = \
                         int(iact_cycle + (layer_params.strideY * math.floor( \

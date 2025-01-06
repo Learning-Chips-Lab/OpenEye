@@ -18,6 +18,15 @@ class OpenEyeParameters(object):
     
     """
     def __init__(self, serial = 0):
+
+        try:
+            self.Clusters_Y = int(os.getenv("CLUSTER_ROWS"))
+        except:
+            self.Clusters_Y = 8
+        try:
+            self.NUM_GLB_IACT = int(os.getenv("NUM_GLB_IACT"))
+        except:
+            self.NUM_GLB_IACT = 3
         self.SERIAL = serial
         self.PARALLEL_MACS = 2
 
@@ -33,11 +42,9 @@ class OpenEyeParameters(object):
         self.PSUM_Trans_Bitwidth = 20 * self.PARALLEL_MACS
         self.PEs_X = 4
         self.PEs_Y = 3
-        self.NUM_GLB_IACT = 3
         self.NUM_GLB_PSUM = 4
         self.NUM_GLB_WGHT = 3
         self.Clusters_X = 2
-        self.Clusters_Y = 2
         self.PEs = self.PEs_X * self.PEs_Y
         self.Clusters = self.Clusters_X * self.Clusters_Y
         self.PE_Complete = self.PEs * self.Clusters
@@ -73,9 +80,12 @@ class OpenEyeParameters(object):
 
 def make_vh_file(params):
     generic_test_utils.delete_files_in_directory('demo/')
-    filename = 'demo/parameters.vh'
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    filename = 'parameters.vh'
+    #os.makedirs(os.path.dirname(filename), exist_ok=True)
     txt_file = open(filename, 'w')
+    txt_file.write("parameter CLUSTER_ROWS  = "  + str(params.Clusters_Y)+ ",\n")
+    txt_file.write("parameter NUM_GLB_IACT  = "  + str(params.NUM_GLB_IACT)+ ",\n")
+    '''
     txt_file.write("parameter PARALLEL_MACS  = "  + str(params.PARALLEL_MACS)+ ";\n")
     txt_file.write("\n")
     txt_file.write("parameter DATA_IACT_BITWIDTH  = "  + str(params.IACT_Bitwidth)+ ";\n")
@@ -86,7 +96,6 @@ def make_vh_file(params):
     txt_file.write("parameter TRANS_BITWIDTH_PSUM  = "  + str(params.PSUM_Trans_Bitwidth)+ ";\n")
     txt_file.write("parameter TRANS_BITWIDTH_WGHT = "  + str(params.WGHT_Trans_Bitwidth)+ ";\n")
     txt_file.write("\n")
-    txt_file.write("parameter NUM_GLB_IACT  = "  + str(params.NUM_GLB_IACT)+ ";\n")
     txt_file.write("parameter NUM_GLB_PSUM  = "  + str(params.NUM_GLB_PSUM)+ ";\n")
     txt_file.write("parameter NUM_GLB_WGHT = "  + str(params.NUM_GLB_WGHT)+ ";\n")
     txt_file.write("\n")
@@ -94,7 +103,6 @@ def make_vh_file(params):
     txt_file.write("parameter PE_COLUMNS  = "  + str(params.PEs_X)+ ";\n")
     txt_file.write("parameter PES = "  + str(params.PEs_Y * params.PEs_X)+ ";\n")
     txt_file.write("\n")
-    txt_file.write("parameter CLUSTER_ROWS  = "  + str(params.Clusters_Y)+ ";\n")
     txt_file.write("parameter CLUSTER_COLUMNS  = "  + str(params.Clusters_X)+ ";\n")
     txt_file.write("parameter CLUSTERS = "  + str(params.Clusters_Y * params.Clusters_X)+ ";\n")
     txt_file.write("\n")
@@ -119,6 +127,7 @@ def make_vh_file(params):
     txt_file.write("parameter DMA_BITWIDTH  = "  + str(params.DMA_Bits)+ ";\n")
     txt_file.write("parameter FSM_CYCLE_BITWIDTH  = "  + str(params.FSM_CYCLE_BITWIDTH)+ ";\n")
     txt_file.write("parameter FSM_STATES = "  + str(params.FSM_STATES)+ ";\n")
+    '''
     txt_file.close()
 
 def create_vh_file(serial = 0):

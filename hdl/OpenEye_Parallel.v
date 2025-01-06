@@ -104,7 +104,6 @@ module OpenEye_Parallel
   parameter PE_COLUMNS          = 4,
   parameter PE_ROWS             = 3,
   
-  parameter NUM_GLB_IACT        = 3,
   parameter NUM_GLB_WGHT        = 3,
   parameter NUM_GLB_PSUM        = 4,
   
@@ -272,7 +271,7 @@ module OpenEye_Parallel
   reg  [$clog2(CLUSTER_ROWS)-1:0]      storage_cycles;
 
   ///Register, that configure the chip
-  reg  [$clog2(NUM_GLB_IACT)*CLUSTERS*PES-1:0]         iact_choose_reg;
+  reg  [$clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0]       iact_choose_reg;
   reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_choose_reg;
   reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_reg;
   reg  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]   router_mode_wght_reg;
@@ -668,7 +667,7 @@ module OpenEye_Parallel
       router_mode_iact_i_reg   <= 0;
       router_mode_iact_storage <= 0;
       mem_addr_iact            <= 0;
-      iact_choose_reg          <= {CLUSTERS*PES{2'b11}};
+      iact_choose_reg          <= {CLUSTERS*PES{$clog2(NUM_GLB_IACT+1)'(NUM_GLB_IACT)}};
       iact_enable_comp_reg     <= 0;
       iact_data_i_reg          <= 0;
       iact_ready_o             <= 0;
@@ -814,13 +813,13 @@ module OpenEye_Parallel
                       &  (compute_mask_reg[cc * PES * CLUSTER_ROWS + cr * PES + per * PE_COLUMNS + pec] == 1)) begin
                         flat_help_var   = (flat_help_var + loop_mod * PE_ROWS + pec * stride_x_reg * kernel_per_pe_cluster_i_reg + 64'(per) - NUM_GLB_IACT * fsm_iact_cycle_div);
                         for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
-                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
+                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                           <= flat_help_var[b];
                         end
                       end else begin
                         flat_help_var = NUM_GLB_IACT;
                         for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
-                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
+                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                           <= flat_help_var[b];
                         end
                       end
@@ -901,13 +900,13 @@ module OpenEye_Parallel
                           end
                         end
                         for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
-                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
+                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                           <= flat_help_var[b];
                         end
                       end else begin
                         flat_help_var = NUM_GLB_IACT;
                         for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
-                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
+                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                           <= flat_help_var[b];
                         end
                       end
@@ -1337,7 +1336,7 @@ module OpenEye_Parallel
         ////////////////////////////////
           ///Selection
           //////////////////////////////////
-        wire  [$clog2(NUM_GLB_IACT)*PES-1:0]       iact_choose_cluster_i_w;
+        wire  [$clog2(NUM_GLB_IACT+1)*PES-1:0]     iact_choose_cluster_i_w;
         wire  [NUM_GLB_PSUM-1:0]                   psum_choose_cluster_i_w;
         wire  [PES-1:0]                            compute_cluster_i_w;
 
@@ -1695,8 +1694,8 @@ module OpenEye_Parallel
       for (pec=0; pec<PE_COLUMNS; pec=pec+1) begin
         for (per=0; per<PE_ROWS; per=per+1) begin
           for (b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
-            assign gen_x[cc].gen_y[cr].iact_choose_cluster_i_w[per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
-            = iact_choose_reg[cc*CLUSTER_ROWS*PES*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b];
+            assign gen_x[cc].gen_y[cr].iact_choose_cluster_i_w[per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
+            = iact_choose_reg[cc*CLUSTER_ROWS*PES*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b];
           end
           assign gen_x[cc].gen_y[cr].compute_cluster_i_w[pec*PE_ROWS+per] = compute_cluster_i_reg[cc*CLUSTER_ROWS*PES+cr*PES+pec*PE_ROWS+per];
         end
