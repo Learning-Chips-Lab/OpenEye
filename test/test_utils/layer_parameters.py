@@ -123,7 +123,7 @@ class LayerParameters(object):
 
     def calculate_iact_transmissions(self, layer, params):
         #Calculate Iact Cycles
-        self.needed_Iact_writes = math.ceil(((params.PEs_X - 1) * self.strideX * self.kernel_per_pe_cluster + (layer.kernel_size[1]*self.kernel_per_pe_cluster)) / (params.Iact_Routers))
+        self.needed_Iact_writes = math.ceil(((params.PEs_X - 1) * self.strideX * self.kernel_per_pe_cluster + (layer.kernel_size[1]*self.kernel_per_pe_cluster)) / (params.NUM_GLB_IACT))
 
     def calculate_computing_matrix(self, layer, params):
         """ TODO: Docu - explain why this function exists"""
@@ -530,7 +530,7 @@ class LayerParameters(object):
             
         self.filters = layer.output.shape[1]
         #Calculate Iact Cycles
-        self.needed_Iact_writes = math.ceil(params.PEs_Y/params.Iact_Routers)
+        self.needed_Iact_writes = math.ceil(params.PEs_Y/params.NUM_GLB_IACT)
 
         # Calculate the number of refreshes needed for the layer
         

@@ -49,20 +49,22 @@ export CLOCK_DELAY_UNIT_INPUT=ps
 export CLOCK_DELAY_OUTPUT=100
 export CLOCK_DELAY_UNIT_OUTPUT=ps
 
-export LOGGER_LEVEL=10    #Enables Logger Debug Mode
+export LOGGER_LEVEL=0    #Enables Logger Debug Mode
 
 #export LAYER=FC
-#export LAYER=Convolution
-export LAYER=Depthwise_Convolution
-export NUM_FILTERS=4
-export KERNEL_SIZE=3
-export INPUT_SIZE=32
-export OUTPUT_SIZE=32
+export LAYER=Convolution
+#export LAYER=Depthwise_Convolution
+export INPUT_CHANNELS=2
+export NUM_FILTERS=16
+export KERNEL_SIZE=5
+export INPUT_SIZE=16
+export OUTPUT_SIZE=256
 export STRIDE=1
-export INPUT_CHANNELS=3
 #Amout of parallel MACs
 export PARALLEL_MACS=2
 export USE_RANDOM_VALUES=1
+export USE_SPARSE_IACTS=0
+export USE_SPARSE_WEIGHTS=0
 	
 #Actual Datawidth of Data
 export DATA_IACT_BITWIDTH=8
@@ -77,18 +79,18 @@ export TRANS_BITWIDTH_WGHT=24
 export TRANS_BITWIDTH_PSUM=40
 
 #Set Number of Router Clusters per Instance
-export NUM_GLB_IACT=3
-export NUM_GLB_WGHT=3
+export NUM_GLB_IACT=4
+export NUM_GLB_WGHT=5
 export NUM_GLB_PSUM=4
 
 #Set Number of PEelements
-export PE_ROWS=3
+export PE_ROWS=5
 export PE_COLUMNS=4
 
 
 #Set number of Cluster rows need at least to be 2 columns
 export CLUSTER_COLUMNS=2
-export CLUSTER_ROWS=8
+export CLUSTER_ROWS=2
 
 #Number of Words per PE
 export IACT_PER_PE=16
@@ -97,9 +99,10 @@ export WGHT_PER_PE=96
 export PE_WGHT_ADDR_ADDR=16
 export PSUM_PER_PE=32
 
-# include cocotb's make rules to take care of the simulator setup
-include $(shell cocotb-config --makefiles)/Makefile.sim
+export PYTHON = /home/dlebold/miniconda3/bin/python
+export SCRIPT = $(PWD)/../test_utils/vh_file_creator.py
 
-gtkwave:
-	touch $(abspath $(PWD)/../../hdl/OpenEye_Parallel.v)
-	gtkwave $(PWD)/sim_build/OpenEye_Parallel.vcd
+export
+run:
+	@$(PYTHON) $(SCRIPT) && make -f $(shell cocotb-config --makefiles)/Makefile.sim
+

@@ -118,11 +118,11 @@ class ConvMapper(LayerMapper):
         if(params.SERIAL):
             storage = []
         else:
-            storage = [[[[] for c in range(params.Iact_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+            storage = [[[[] for c in range(params.NUM_GLB_IACT)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
         router_cycle = 0
         for cl_y in range(params.Clusters_Y):
             for cl_x in range(params.Clusters_X):
-                for router in range(params.Iact_Routers):
+                for router in range(params.NUM_GLB_IACT):
                     if(layer_params.used_Y_cluster == 1):
                         if(params.SERIAL):
                             line = line + (1 << (params.Iact_Router_Bits * router_cycle))
