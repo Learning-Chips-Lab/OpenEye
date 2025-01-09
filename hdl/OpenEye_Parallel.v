@@ -99,7 +99,7 @@ module OpenEye_Parallel
 
   parameter TRANS_BITWIDTH_IACT = 24,
   parameter TRANS_BITWIDTH_WGHT = 24,
-  parameter TRANS_BITWIDTH_PSUM = 40,
+  parameter TRANS_BITWIDTH_PSUM = 20,
 
   parameter PE_COLUMNS          = 4,
   parameter PE_ROWS             = 3,
@@ -119,7 +119,7 @@ module OpenEye_Parallel
   parameter WGHT_ADDR_PER_PE    = 16,
   
   parameter IACT_MEM_ADDR_WORDS = 512,
-  parameter PSUM_MEM_ADDR_WORDS = 384,
+  parameter PSUM_MEM_ADDR_WORDS = 768,
 
   parameter ROUTER_MODES_IACT   = 6,
   parameter ROUTER_MODES_WGHT   = 1,
@@ -427,7 +427,7 @@ module OpenEye_Parallel
       compute_mask_i_reg         <= 0;
       compute_cluster_i_reg      <= 0;
 
-      results_ready               = 0;
+      // results_ready               = 0;
       loop_mod                    = 0;
       flat_help_var               = 0;
 
@@ -581,6 +581,7 @@ module OpenEye_Parallel
       iact_enable_i_reg        <= 0;
       iact_router_offset       <= 0;
       router_mode_iact_reg     <= 0;
+      results_ready               = 0;
 
     end else begin
       case(fsm_iact_current_state)       
@@ -921,7 +922,7 @@ module OpenEye_Parallel
                 end
               end
             end
-            if (fsm_psum_cycle >= ((32'(filters_reg)+1)/2)) begin
+            if (fsm_psum_cycle >= 32'(filters_reg)) begin
               fsm_psum_last_state    <= CALCULATE_PSUM;
               fsm_psum_current_state <= GET_RESULTS;
               results_ready           = 0;
@@ -971,11 +972,11 @@ module OpenEye_Parallel
           end
           if (results_ready) begin
             fsm_psum_cycle <= fsm_psum_cycle + 1;
-            if (fsm_psum_cycle == (32'((32'(filters_reg)+1)/2) - 1)) begin
+            if (fsm_psum_cycle == 32'(32'(filters_reg)-1)) begin
               psum_transmitted       <= 1;
             end
           end
-          if (fsm_psum_cycle == 32'((32'(filters_reg)+1)/2)) begin
+          if (fsm_psum_cycle == 32'(filters_reg)) begin
             fsm_psum_cycle       <= 0;
             if ((finished_cycles == needed_cycles_reg) | (fsm_current_state == MAIN_IDLE)) begin
               fsm_psum_last_state    <= GET_RESULTS;
@@ -1068,12 +1069,13 @@ module OpenEye_Parallel
                     end
                   end
                   storage_cycles       <= 0;
-                  router_mode_iact_reg <= router_mode_iact_storage;
+                  //router_mode_iact_reg <= router_mode_iact_storage;
                 end
               end
               fsm_psum_last_state    <= GET_RESULTS;
               fsm_psum_current_state <= CALCULATE_PSUM;
-              mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(64'(48'(48'(filters_reg)+48'(1)))>>48'(1)));
+              //mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(64'(48'(48'(filters_reg)+48'(1)))>>48'(1)));
+              mem_addr_psum_storage  <= 10'(64'(mem_addr_psum_storage) + 64'(filters_reg));
               psum_ready_i_reg       <= 0;
             end
           end

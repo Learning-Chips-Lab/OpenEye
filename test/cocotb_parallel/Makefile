@@ -24,13 +24,12 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/multiplier.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/mux2.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/demux2.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/mux_iact.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_DP_RW.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_DP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_SP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RST_SYNC.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_DP_RW.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_DP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_SP.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_RW_generic.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_SP_generic.v)
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
@@ -52,8 +51,8 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 
 #export LAYER=FC
-#export LAYER=Convolution
-export LAYER=Depthwise_Convolution
+export LAYER=Convolution
+#export LAYER=Depthwise_Convolution
 export NUM_FILTERS=4
 export KERNEL_SIZE=3
 export INPUT_SIZE=32
@@ -74,7 +73,7 @@ export DATA_WGHT_IGNORE_ZEROS=4
 #Datawidth for Transportation of Data
 export TRANS_BITWIDTH_IACT=24
 export TRANS_BITWIDTH_WGHT=24
-export TRANS_BITWIDTH_PSUM=40
+export TRANS_BITWIDTH_PSUM=20
 
 #Set Number of Router Clusters per Instance
 export NUM_GLB_IACT=3

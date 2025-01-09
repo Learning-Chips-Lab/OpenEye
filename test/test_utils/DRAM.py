@@ -103,7 +103,8 @@ class DRAMContents(object):
             for c in range(model.layers[0].input.shape[3]):
                 for x in range(model.layers[0].input.shape[1]):
                     for y in range(model.layers[0].input.shape[2]):
-                        self.fmap[0][c][x][y] = np.random.randint(-128, 127)
+                        #self.fmap[0][c][x][y] = np.random.randint(-128, 127)
+                        self.fmap[0][c][x][y] = ((x + y*8 + c*64) & 0xff) - 128
         elif "Dense" in str(model.layers[0]):
             for c in range(model.layers[l].input.shape[1]):
                 self.fmap[0][c] = np.random.randint(-128, 127)

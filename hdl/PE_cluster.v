@@ -72,7 +72,7 @@ module PE_cluster
   parameter DATA_WGHT_IGNORE_ZEROS     = 4,
   parameter TRANS_BITWIDTH_IACT        = 24,
   parameter TRANS_BITWIDTH_WGHT        = 24,
-  parameter TRANS_BITWIDTH_PSUM        = 40,
+  parameter TRANS_BITWIDTH_PSUM        = 20,
   parameter NUM_GLB_IACT               = 3,
   parameter IACT_ADDR_WORDS            = 9,
   parameter IACT_DATA_WORDS            = 16,

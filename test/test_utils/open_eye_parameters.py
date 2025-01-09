@@ -30,7 +30,7 @@ class OpenEyeParameters(object):
         self.PSUM_Bitwidth = 20
         self.IACT_Trans_Bitwidth = 24
         self.WGHT_Trans_Bitwidth = 24
-        self.PSUM_Trans_Bitwidth = 20 * self.PARALLEL_MACS
+        self.PSUM_Trans_Bitwidth = 20 #* self.PARALLEL_MACS
         self.PEs_X = 4
         self.PEs_Y = 3
         self.NUM_GLB_IACT = 3

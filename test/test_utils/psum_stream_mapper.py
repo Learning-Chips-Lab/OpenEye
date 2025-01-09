@@ -55,9 +55,12 @@ class PsumStreamMapper(object):
         if(self.params.SERIAL):
             temp_stream = stream
             stream = []
+            # TODO change order, works with zero only
             for cl_y in range(self.params.Clusters_Y):
-                for router in range(self.params.Iact_Routers):
+                for router in range(self.params.Psum_Routers):
                     for word in range(len(temp_stream[0][cl_y][router])):
+                        # TODO: fix this, works for zero only
+                        stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
                         stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
         else:
             return stream

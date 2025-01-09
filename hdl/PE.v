@@ -104,7 +104,7 @@ module PE
   localparam integer PSUM_DATA               = DATA_PSUM_BITWIDTH,
   localparam integer PSUM_ADDR_BITWIDTH      = $clog2(PSUM_ADDR),
   localparam integer PSUM_DATA_BITWIDTH      = $clog2(PSUM_DATA),
-  localparam integer PSUM_WORDS_PER_TRANSFER = PARALLEL_MACS,
+  localparam integer PSUM_WORDS_PER_TRANSFER = 1,
   localparam integer TRANS_BITWIDTH_PSUM     = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER
 
 ) ( 
@@ -152,11 +152,13 @@ module PE
   reg                                         psum_data_SPad_en_b_w;
   reg                                         psum_select;
   reg                                         psum_enable;
+  reg                                         psum_enable_2;
   reg [TRANS_BITWIDTH_PSUM/2-1:0]             psum_data_1_delay;
   reg [TRANS_BITWIDTH_PSUM/2-1:0]             psum_data_2_delay;
   reg                                         mux_iact_ready;
   reg                                         adder_1_en;
   reg                                         adder_2_en;
+  reg                                         adder_3_en;
   reg                                         fast_cycle;
   reg                                         next_iact;
   reg                                         next_iact2;
@@ -184,19 +186,23 @@ module PE
   wire [DATA_IACT_BITWIDTH-1 : 0]              mult_1_fac_2;
   wire [DATA_WGHT_BITWIDTH-1 : 0]              mult_2_fac_1;
   wire [DATA_IACT_BITWIDTH-1 : 0]              mult_2_fac_2;
-  reg [PSUM_ADDR-1:0]                         used_psum_memory;
+  reg [PSUM_ADDR-1:0]                         used_psum_memory_1;
+  reg [PSUM_ADDR-1:0]                         used_psum_memory_2;
   reg                                         use_psum_1;
   reg                                         use_psum_2;
   wire [PSUM_DATA-1 : 0]                       psum_spad_data_a_o;
   wire [PSUM_DATA-1 : 0]                       psum_spad_data_b_o;
   wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_1_summand_1;
   wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_2_summand_1;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_3_summand_1;
   wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_1_summand_2;
   wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_2_summand_2;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_3_summand_2;
   wire [DATA_PSUM_BITWIDTH-1 : 0]              mult_1_o_w;
   wire [DATA_PSUM_BITWIDTH-1 : 0]              mult_2_o_w;
   wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_1_o_w;
   wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_2_o_w;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_3_o_w;
   wire [IACT_ADDR_ADDR_BITWIDTH-1 : 0]         first_spad_iact_addr_w;
   wire [IACT_ADDR_DATA-1 : 0]                  first_spad_iact_data_w;
   wire                                         first_spad_iact_en_w;
@@ -278,13 +284,17 @@ module PE
     LOADING_5          = 5,
     CALCULATING        = 6,
     WAIT_TO_SEND_PSUM  = 7,
-    SEND_PSUM          = 8
+    SEND_PSUM          = 8,
+    SEND_PSUM_LAST     = 9
   } fsm_mode_computing;
 
   assign mux_iact_c_i_w = mux_iact_ready;
   assign {iact_data_spad_oh,iact_data_spad_pay} = iact_data_SPad_data_r;
   assign {wght_data_spad_oh_2,wght_data_spad_pay_2,wght_data_spad_oh_1,wght_data_spad_pay_1} = wght_data_SPad_data_r;
-  assign psum_data_o = {adder_2_o_w,adder_1_o_w};
+  // assign psum_data_o = {adder_2_o_w,adder_1_o_w};
+  assign adder_3_summand_1 = adder_1_o_w;
+  assign adder_3_summand_2 = adder_2_o_w;
+  assign psum_data_o = adder_3_o_w;
   assign wght_addr_SPad_addr = wght_addr_use_vec ? wght_addr_vec : iact_data_spad_oh;
   assign wght_data_SPad_addr = wght_data_use_vec ? wght_data_vec : wght_addr_SPad_data_r;
   assign mult_1_fac_1 = wght_data_spad_pay_1;
@@ -402,17 +412,20 @@ module PE
       fast_cycle                <= 0;
       next_iact                 <= 0;
       next_iact2                <= 0;
-      used_psum_memory          <= 0;
+      used_psum_memory_1        <= 0;
+      used_psum_memory_2        <= 0;
       use_psum_1                <= 0;
       use_psum_2                <= 0;
       adder_1_en                <= 0;
       adder_2_en                <= 0;
+      adder_3_en                <= 0;
       mux_iact_ready            <= 1;
       wght_ready_o              <= 1;
       psum_select               <= 1;
       psum_data_1_delay         <= 0;
       psum_data_2_delay         <= 0;
       psum_enable               <= 0;
+      psum_enable_2             <= 0;
       psum_enable_o             <= 0;
       psum_spad_addr_a_mem      <= 0;
       psum_spad_addr_b_mem      <= 1;
@@ -432,7 +445,9 @@ module PE
       end else begin
         psum_enable                         <= 0;
       end
-      psum_enable_o                         <= psum_enable;
+      // delay for final adder
+      psum_enable_2                         <= psum_enable;
+      psum_enable_o                         <= psum_enable_2;
       iact_oh_delay_1                       <= iact_data_spad_oh;
       iact_oh_delay_2                       <= iact_oh_delay_1;
       case (current_state_computing)
@@ -490,7 +505,8 @@ module PE
           reused_data_b          <= 0;
           use_psum_1             <= 0;
           use_psum_2             <= 0;
-          used_psum_memory       <= 0;
+          used_psum_memory_1     <= 0;
+          used_psum_memory_2     <= 0;
           if (psum_enable_i) begin
             current_state_computing    <= SEND_PSUM;
             adder_1_en       <= 1;
@@ -498,7 +514,8 @@ module PE
             psum_select      <= 1;
             use_psum_1       <= 0;
             use_psum_2       <= 0;
-            used_psum_memory <= 0;
+            used_psum_memory_1 <= 0;
+            used_psum_memory_2 <= 0;
           end
           if (compute_i) begin 
             //Start off
@@ -517,7 +534,8 @@ module PE
             wght_data_use_vec     <= 0;
             use_psum_1            <= 0;
             use_psum_2            <= 0;
-            used_psum_memory      <= 0;
+            used_psum_memory_1    <= 0;
+            used_psum_memory_2    <= 0;
           end
         end
 
@@ -762,17 +780,17 @@ module PE
 
           adder_1_en <= 1;
           adder_2_en <= 1;
-          if (used_psum_memory[(psum_spad_addr_a_r)]  == 1) begin 
+          if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
             use_psum_1 <= 1;
           end else begin
             use_psum_1 <= 0;
-            used_psum_memory[(psum_spad_addr_a_r)] <= 1;
+            used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
           end
-          if (used_psum_memory[(psum_spad_addr_b_r)]  == 1) begin 
+          if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
             use_psum_2 <= 1;
           end else begin
             use_psum_2 <= 0;
-            used_psum_memory[(psum_spad_addr_b_r)] <= 1;
+            used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
           end
           psum_spad_addr_a_delay <= psum_spad_addr_a_r;
           psum_spad_addr_b_delay <= psum_spad_addr_b_r;
@@ -796,7 +814,7 @@ module PE
           psum_data_SPad_en_a_w  <= 1;
           psum_data_SPad_en_b_w  <= 1;
           psum_spad_addr_a_mem   <= 0;
-          psum_spad_addr_b_mem   <= 1;
+          psum_spad_addr_b_mem   <= 0;
           psum_spad_addr_a_delay <= psum_spad_addr_a_r;
           psum_spad_addr_b_delay <= psum_spad_addr_b_r;
           psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
@@ -831,7 +849,7 @@ module PE
             psum_data_SPad_en_a_w <= 0;
             psum_data_SPad_en_b_w <= 0;
             psum_spad_addr_a_mem <= 0;
-            psum_spad_addr_b_mem <= 1;
+            psum_spad_addr_b_mem <= 0;
             psum_spad_addr_a_w   <= 2;
             psum_spad_addr_b_w   <= 3;
           end
@@ -841,34 +859,34 @@ module PE
             current_state_computing         <= SEND_PSUM;
             psum_data_SPad_en_a_w <= 1;
             psum_data_SPad_en_b_w <= 1;
-            psum_spad_addr_a_mem  <= psum_spad_addr_a_r + 2;
-            psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
+            psum_spad_addr_a_mem  <= psum_spad_addr_a_r + 1;
+            psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 1;
             psum_spad_addr_a_w    <= psum_spad_addr_a_r;
             psum_spad_addr_b_w    <= psum_spad_addr_b_r;
-            if (used_psum_memory[(psum_spad_addr_a_r)]  == 1) begin 
+            if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
               use_psum_1    <= 1;
-              used_psum_memory[(psum_spad_addr_a_r)]  <= 0;
+              used_psum_memory_1[(psum_spad_addr_a_r)]  <= 0;
             end else begin
               use_psum_1    <= 0;
             end
-            if (used_psum_memory[(psum_spad_addr_b_r)]  == 1) begin 
+            if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
               use_psum_2    <= 1;
-              used_psum_memory[(psum_spad_addr_b_r)]  <= 0;
+              used_psum_memory_2[(psum_spad_addr_b_r)]  <= 0;
             end else begin
               use_psum_2    <= 0;
             end
           end else begin
-            if (used_psum_memory[(psum_spad_addr_a_r)]  == 1) begin 
+            if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
               use_psum_1 <= 1;
             end else begin
               use_psum_1 <= 0;
-              used_psum_memory[(psum_spad_addr_a_r)] <= 1;
+              //used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
             end
-            if (used_psum_memory[(psum_spad_addr_b_r)]  == 1) begin 
+            if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
               use_psum_2 <= 1;
             end else begin
               use_psum_2 <= 0;
-              used_psum_memory[(psum_spad_addr_b_r)] <= 1;
+              //used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
             end
           end
           computing   <= 0;
@@ -876,31 +894,38 @@ module PE
         end
 
         SEND_PSUM : begin
-          psum_spad_addr_a_mem <= psum_spad_addr_a_r + 2;
-          psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
+          psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
+          psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
           psum_spad_addr_a_w   <= psum_spad_addr_a_r;
           psum_spad_addr_b_w   <= psum_spad_addr_b_r;
           adder_1_en           <= 1;
           adder_2_en           <= 1;
+          adder_3_en           <= 1;
           psum_select          <= !computing;
           if (!psum_enable_i) begin
-            current_state_computing <= IDLE;
+            current_state_computing <= SEND_PSUM_LAST;
             adder_1_en    <= 0;
             adder_2_en    <= 0;
           end
-          if (used_psum_memory[(psum_spad_addr_a_r)]  == 1) begin 
+          if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin 
             use_psum_1                              <= 1;
-            used_psum_memory[(psum_spad_addr_a_r)]  <= 0;
+            used_psum_memory_1[(psum_spad_addr_a_r)]  <= 0;
           end else begin
             use_psum_1 <= 0;
           end
-          if (used_psum_memory[(psum_spad_addr_b_r)]  == 1) begin 
+          if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin 
             use_psum_2                              <= 1;
-            used_psum_memory[(psum_spad_addr_b_r)]  <= 0;
+            used_psum_memory_2[(psum_spad_addr_b_r)]  <= 0;
           end else begin
             use_psum_2 <= 0;
           end
         end
+
+        SEND_PSUM_LAST : begin
+          adder_3_en <= 0;
+          current_state_computing <= IDLE;
+        end
+
         default : begin
         end
       endcase
@@ -968,27 +993,35 @@ module PE
   );
 
   // SPad for PSUM
-  SPad_DP_RW #(
+  SPad_DP #(
     .DATA_WIDTH(PSUM_DATA),
-    .ADDR_WIDTH(PSUM_ADDR_BITWIDTH)
+    .ADDR_WIDTH(PSUM_ADDR_BITWIDTH),
 
-    ,.Implementation("pe_psum")
-  ) psum_SPad (
-    .clk_i     (clk_i),
-    .re_a_i    (psum_data_SPad_en_a_r || psum_enable_i),
-    .re_b_i    (psum_data_SPad_en_b_r || psum_enable_i),
-    .we_a_i    (psum_data_SPad_en_a_w_i),
-    .we_b_i    (psum_data_SPad_en_b_w_i),
-    .addr_r_a_i(psum_spad_addr_a_r),
-    .addr_r_b_i(psum_spad_addr_b_r),
-    .addr_w_a_i(psum_spad_addr_a_w),
-    .addr_w_b_i(psum_spad_addr_b_w),
-    .data_a_i  (psum_spad_data_a_i),
-    .data_b_i  (psum_spad_data_b_i),
-    .data_a_o  (psum_spad_data_a_o),
-    .data_b_o  (psum_spad_data_b_o)
+    .Implementation("pe_psum")
+  ) psum_SPad_A ( 
+    .clk_i(clk_i), 
+    .re_i(psum_data_SPad_en_a_r || psum_enable_i),
+    .we_i(psum_data_SPad_en_a_w_i), 
+    .addr_r_i(psum_spad_addr_a_r),
+    .addr_w_i(psum_spad_addr_a_w),
+    .data_i(psum_spad_data_a_i),
+    .data_o(psum_spad_data_a_o)
   );
-  
+  SPad_DP #(
+    .DATA_WIDTH(PSUM_DATA),
+    .ADDR_WIDTH(PSUM_ADDR_BITWIDTH),
+
+    .Implementation("pe_psum")
+  ) psum_SPad_B ( 
+    .clk_i(clk_i), 
+    .re_i(psum_data_SPad_en_b_r || psum_enable_i),
+    .we_i(psum_data_SPad_en_b_w_i), 
+    .addr_r_i(psum_spad_addr_b_r),
+    .addr_w_i(psum_spad_addr_b_w),
+    .data_i(psum_spad_data_b_i),
+    .data_o(psum_spad_data_b_o)
+  );
+
   // Mux to select the correct IACT data from GLB
   mux_iact #(
     .WIDTH  (TRANS_BITWIDTH_IACT),
@@ -1113,12 +1146,26 @@ module PE
     .adder_en_i (adder_2_en)
   );
 
+  // do the addition of both psum spads
+  adder #(
+    .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
+  ) adder_3 (
+    .clk_i      (clk_i),
+    .rst_ni     (rst_ni),
+    .summand_1_i(adder_3_summand_1), 
+    .summand_2_i(adder_3_summand_2),
+    .sum_o      (adder_3_o_w),
+    .adder_en_i (adder_3_en)
+  );
+
   // mux to select input to adder
   // (this can be either the data of psum SPAD or psum from another PE/router)
   mux2 #(
-    .DATA_WIDTH(TRANS_BITWIDTH_PSUM)
+    .DATA_WIDTH(TRANS_BITWIDTH_PSUM*PARALLEL_MACS)
   ) mux_psum (
+    /* verilator lint_off WIDTHEXPAND */
     .a_in ({psum_data_2_delay,psum_data_1_delay}),
+    /* verilator lint_on WIDTHEXPAND */
     .b_in ({mult_2_o_w,mult_1_o_w}),
     .sel_i(psum_select), 
     .y_o  ({adder_2_summand_2,adder_1_summand_2})

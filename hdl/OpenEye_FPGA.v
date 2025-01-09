@@ -5,9 +5,9 @@
 
 `timescale 1ns / 1ps
 
-/// Module: OpenEye_Wrapper
+/// Module: OpenEye_FPGA
 ///
-/// The OpenEye_Wrapper is used for implementation, that are limited in their ports. One example is
+/// The OpenEye_FPGA is used for implementation, that are limited in their ports. One example is
 /// the use of an FPGA. It uses OpenEye_Parallel.v as a submodul and communicates via handshake
 /// protocol. As delay of data can occur, the varlenFIFO will buffer the output data.
 /// 
@@ -58,7 +58,7 @@
 ///   last_data_o            - Signals the last output data word
 ///                 
 
-module OpenEye_Wrapper 
+module OpenEye_FPGA
 #(
   //Set parameters
   parameter IS_TOPLEVEL         = 1,
@@ -202,8 +202,8 @@ module OpenEye_Wrapper
   `ifdef COCOTB_SIM
     initial begin
       if(IS_TOPLEVEL) begin
-        $dumpfile ("sim_build/OpenEye_Wrapper.vcd");
-        $dumpvars (0, OpenEye_Wrapper);
+        $dumpfile ("sim_build/OpenEye_FPGA.vcd");
+        $dumpvars (0, OpenEye_FPGA);
       end
     end
   `endif
@@ -267,7 +267,33 @@ module OpenEye_Wrapper
   reg  [7:0]                           finished_cycles;
   reg                                  new_stream;
 
-  //Register, that configure the chip
+
+  // Register for the Buffer
+
+  reg iact_buffer_SP_en_r;
+  reg iact_buffer_SP_en_w;
+  reg [11-1:0] iact_buffer_SP_addr;
+  reg [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_w;
+  reg [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_r;
+
+  reg wght_buffer_SP_en_r;
+  reg wght_buffer_SP_en_w;
+  reg [11-1:0] wght_buffer_SP_addr;
+  reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_w;
+  reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_r;
+
+  reg psum_buffer_SP_en_r;
+  reg psum_buffer_SP_en_w;
+  reg [11-1:0] psum_buffer_SP_addr;
+  reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_data_w;
+  reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_data_r;
+
+  // TODO: adjust size
+  reg [7:0] iact_cnt;
+  reg [7:0] wght_cnt;
+  reg [7:0] psum_cnt;
+
+  // Register, that configure the chip
 
   reg                                                  status_reg_enable_reg;
 
@@ -299,7 +325,7 @@ module OpenEye_Wrapper
   //States of the FSM
   //#######################
 
-  enum bit [2:0] {
+  enum bit [3:0] {
     IDLE               = 0,
     GET_PARAMETERS     = 1,
     GET_ROUTER_CONFIG  = 2,
@@ -307,7 +333,16 @@ module OpenEye_Wrapper
     GET_WGHT           = 4,
     GET_BIAS           = 5,
     WAIT_FOR_RESULTS   = 6,
-    SEND_RESULTS       = 7
+    SEND_RESULTS_OLD       = 7,
+
+    WAIT_CYCLE = 10,
+    WRITE_IACT = 11,
+    WRITE_WGHT = 12,
+    WRITE_PSUM = 13,
+
+    GET_RESULTS = 14,
+    WAIT_CYCLE_2 = 9,
+    SEND_RESULTS = 15
   } fsm_mode;
 
   //#######################
@@ -391,6 +426,24 @@ module OpenEye_Wrapper
       ready_dma_o               <= 0;
 
       last_data_o               <= 0;
+
+      iact_buffer_SP_en_r       <= 0;
+      iact_buffer_SP_en_w       <= 0;
+      iact_buffer_SP_addr       <= 0;
+      iact_buffer_SP_data_w     <= 0;
+      wght_buffer_SP_en_r       <= 0;
+      wght_buffer_SP_en_w       <= 0;
+      wght_buffer_SP_addr       <= 0;
+      wght_buffer_SP_data_w     <= 0;
+      psum_buffer_SP_en_r       <= 0;
+      psum_buffer_SP_en_w       <= 0;
+      psum_buffer_SP_addr       <= 0;
+      psum_buffer_SP_data_w     <= 0;
+
+      iact_cnt <= 0;
+      wght_cnt <= 0;
+      psum_cnt <= 0;
+
 
     end else begin
       case(fsm_current_state)
@@ -540,74 +593,81 @@ module OpenEye_Wrapper
         GET_IACT : begin
           ready_dma_o <= 1;
           new_stream  <= 0;
+
+          iact_buffer_SP_en_w <= 0;
+
           if(enable_dma_i_reg) begin
-            fsm_cycle <= fsm_cycle + 1;
             for(int b=0; b<TRANS_BITWIDTH_IACT; b=b+1)begin
-              iact_data_i_reg[fsm_y_cl*TRANS_BITWIDTH_IACT*NUM_GLB_IACT+fsm_iact_r*TRANS_BITWIDTH_IACT+b]
+              iact_buffer_SP_data_w[fsm_y_cl*TRANS_BITWIDTH_IACT*NUM_GLB_IACT+fsm_iact_r*TRANS_BITWIDTH_IACT+b]
               <= data_dma_i_reg[b];
-              iact_data_i_reg[CLUSTER_ROWS*TRANS_BITWIDTH_IACT*NUM_GLB_IACT+fsm_y_cl*TRANS_BITWIDTH_IACT*NUM_GLB_IACT+fsm_iact_r*TRANS_BITWIDTH_IACT+b]
+              iact_buffer_SP_data_w[CLUSTER_ROWS*TRANS_BITWIDTH_IACT*NUM_GLB_IACT+fsm_y_cl*TRANS_BITWIDTH_IACT*NUM_GLB_IACT+fsm_iact_r*TRANS_BITWIDTH_IACT+b]
               <= data_dma_i_reg[TRANS_BITWIDTH_IACT+b];
             end
 
             iact_enable_i_reg <= 0;
-            iact_enable_i_reg[NUM_GLB_IACT*CLUSTER_ROWS+fsm_y_cl*NUM_GLB_IACT+4'(fsm_iact_r)] <= 1;
-            iact_enable_i_reg[fsm_y_cl*NUM_GLB_IACT+fsm_iact_r] <= 1;
-            //if needs change with $Ceil isntead of the +1
-            if(fsm_cycle == (needed_iact_cycles_reg*needed_cycles_reg*({30'd0,iact_write_addr_t_reg} + {28'd0,iact_write_data_t_reg}) - 1))begin
-              fsm_cycle  <= 0;
-              if(fsm_iact_r != NUM_GLB_IACT - 1)begin
-                fsm_iact_r <= fsm_iact_r + 1;
-              end else begin
-                fsm_iact_r <= 0;
-                if((fsm_y_cl + 1) != CLUSTER_ROWS )begin
-                  fsm_y_cl <= fsm_y_cl + 1;
-                end else begin
-                  fsm_y_cl          <= 0;
+            if(fsm_iact_r == NUM_GLB_IACT - 1) begin
+              fsm_iact_r <= 0;
+              if(fsm_y_cl == CLUSTER_ROWS - 1) begin
+                fsm_y_cl <= 0;
+                fsm_cycle <= fsm_cycle + 1;
+
+                iact_buffer_SP_en_w <= 1;
+                iact_buffer_SP_addr <= iact_buffer_SP_addr + 1;
+
+                if(fsm_cycle == (needed_iact_cycles_reg*needed_cycles_reg*({30'd0,iact_write_addr_t_reg} + {28'd0,iact_write_data_t_reg}) - 1)) begin
+                  fsm_cycle <= 0;
                   fsm_last_state    <= GET_IACT;
-                    if (!skipWght_reg) begin
-                      fsm_current_state <= GET_WGHT;
-                    end else begin
-                      fsm_current_state <= GET_BIAS;
-                    end
+                  if (!skipWght_reg) begin
+                    fsm_current_state <= GET_WGHT;
+                  end else begin
+                    fsm_current_state <= GET_BIAS;
+                  end
                 end
+              end else begin
+                fsm_y_cl <= fsm_y_cl + 1;
               end
+            end else begin
+              fsm_iact_r <= fsm_iact_r + 1;
             end
+            
+ 
           end else begin
             iact_enable_i_reg <= 0;
-            iact_data_i_reg <= 0;
+            iact_buffer_SP_data_w <= 0;
           end
         end
 
         GET_WGHT : begin
           ready_dma_o <= 1;
-          for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-            for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-              for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
-                iact_enable_i_reg[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] <= 0;
-              end
-            end
-          end
+
+          iact_enable_i_reg <= 0;
+          iact_buffer_SP_en_w <= 0;
+          wght_buffer_SP_en_w <= 0;
+
           if(enable_dma_i_reg) begin
-            fsm_cycle <= fsm_cycle + 1;
-            fsm_cycle                                  <= fsm_cycle + 1;
             for(int b=0; b<TRANS_BITWIDTH_WGHT; b=b+1)begin
-              wght_data_i_reg[fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b]
+              wght_buffer_SP_data_w[fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b]
               <= data_dma_i_reg[b];
-              wght_data_i_reg[CLUSTER_ROWS*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b] 
+              wght_buffer_SP_data_w[CLUSTER_ROWS*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b] 
               <= data_dma_i_reg[TRANS_BITWIDTH_WGHT+b];
             end
-            wght_enable_i_reg                          <= 0;
-            wght_enable_i_reg[fsm_y_cl*NUM_GLB_WGHT+fsm_wght_r] <= 1;
-            if(fsm_cycle == ({27'd0,wght_addr_len_reg} + input_activations_reg * ({26'd0,filters_reg}/PARALLEL_MACS)) - 1)begin
-              fsm_cycle <= 0;
-              if(fsm_wght_r != NUM_GLB_WGHT - 1)begin
-                fsm_wght_r <= fsm_wght_r + 1;
+            wght_enable_i_reg <= 0;
+            
+            if(fsm_wght_r != NUM_GLB_WGHT - 1)begin
+              fsm_wght_r <= fsm_wght_r + 1;
+            end else begin
+              fsm_wght_r <= 0;
+              if((fsm_y_cl + 1) != CLUSTER_ROWS)begin
+                fsm_y_cl <= fsm_y_cl + 1;
               end else begin
-                fsm_wght_r <= 0;
-                if((fsm_y_cl + 1) != CLUSTER_ROWS)begin
-                  fsm_y_cl <= fsm_y_cl + 1;
-                end else begin
-                  fsm_y_cl          <= 0;
+                fsm_y_cl <= 0;
+                fsm_cycle <= fsm_cycle + 1;
+
+                wght_buffer_SP_en_w <= 1;
+                wght_buffer_SP_addr <= wght_buffer_SP_addr + 1;
+
+                if(fsm_cycle == ({27'd0,wght_addr_len_reg} + input_activations_reg * ({26'd0,filters_reg}/PARALLEL_MACS)) - 1)begin
+                  fsm_cycle <= 0;
                   fsm_last_state    <= GET_WGHT;
                   if (!skipPsum_reg) begin
                     fsm_current_state <= GET_BIAS;
@@ -626,57 +686,48 @@ module OpenEye_Wrapper
         GET_BIAS : begin  
           ready_dma_o <= 1;
           wght_enable_i_reg <= 0;
+          wght_buffer_SP_en_w <= 0;
+
+          psum_buffer_SP_en_w <= 0;
+
           if(enable_dma_i_reg) begin    
-            fsm_cycle         <= fsm_cycle + 1;
             //fsm_cycle_mod1: fsm_cycle%CLUSTER_COLUMNS
             if(fsm_cycle_mod1 == (CLUSTER_COLUMNS-1))begin
               fsm_cycle_mod1 <= 0;
             end else begin
               fsm_cycle_mod1 <= fsm_cycle_mod1 + 1;
             end
-            if(DMA_BITWIDTH/TRANS_BITWIDTH_PSUM == 3)begin
+
+            for(int b=0; b<TRANS_BITWIDTH_PSUM; b=b+1)begin
+              psum_data_i_reg[fsm_cycle_mod1[0]*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+b]
+              <= data_dma_i_reg[b];
+            end
+            psum_enable_i_reg <= 0;
+
+            
+            if((fsm_psum_r + 1) != NUM_GLB_PSUM)begin
+              fsm_psum_r <= fsm_psum_r + 1;
             end else begin
-              for(int b=0; b<TRANS_BITWIDTH_PSUM; b=b+1)begin
-                psum_data_i_reg[fsm_cycle_mod1[0]*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+b]
-                <= data_dma_i_reg[b];
-              end
-              flat_help_var_1 = 0;
-              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                  for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                    psum_enable_i_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] <= 0;
-                  end
-                end
-              end
-              psum_enable_i_reg[fsm_cycle_mod1[0:0]*NUM_GLB_PSUM*CLUSTER_ROWS+fsm_y_cl*NUM_GLB_PSUM+4'(fsm_psum_r)] <= 1;
-              if(fsm_cycle == (CLUSTER_COLUMNS * filters_reg*needed_cycles_reg) - 1)begin
-                fsm_cycle      <= 0;
-                fsm_cycle_mod1 <= 0;
-                if((fsm_psum_r + 1) != NUM_GLB_PSUM)begin
-                  fsm_psum_r <= fsm_psum_r + 1;
-                end else begin
-                  fsm_psum_r <= 0;
-                  if((fsm_y_cl + 1) != CLUSTER_ROWS)begin
-                    fsm_y_cl <= fsm_y_cl + 1;
-                  end else begin
-                    fsm_y_cl          <= 0;
-                    fsm_last_state    <= GET_BIAS;
-                    fsm_current_state <= WAIT_FOR_RESULTS;
-                    ready_dma_o       <= 0;
-                    for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                      for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                        for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                          for (int b=0; b<ROUTER_MODES_PSUM; b=b+1) begin
-                            flat_help_var_1[b] =
-                            router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
-                            cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
-                            g * ROUTER_MODES_PSUM + b];
-                          end
-                          flat_help_var_1 = 0;
-                        end
-                      end
-                    end
-                  end
+              fsm_psum_r <= 0;
+              if((fsm_y_cl + 1) != CLUSTER_ROWS)begin
+                fsm_y_cl <= fsm_y_cl + 1;
+              end else begin
+                fsm_y_cl          <= 0;
+                fsm_cycle         <= fsm_cycle + 1;
+
+                // TODO
+                psum_enable_i_reg <= {((CLUSTERS*NUM_GLB_PSUM)){1'b1}};
+
+                psum_buffer_SP_en_w <= 1;
+                psum_buffer_SP_addr <= psum_buffer_SP_addr + 1;
+
+                if(fsm_cycle == (CLUSTER_COLUMNS * filters_reg*needed_cycles_reg) - 1)begin
+                  fsm_cycle      <= 0;
+                  fsm_cycle_mod1 <= 0;
+
+                  fsm_last_state    <= GET_BIAS;
+                  fsm_current_state <= WAIT_CYCLE;
+                  ready_dma_o       <= 0;
                 end
               end
             end
@@ -686,13 +737,76 @@ module OpenEye_Wrapper
           end
         end
 
-        WAIT_FOR_RESULTS : begin
-          compute_reg       <= 0;
-          if (fsm_last_state == GET_BIAS) begin
-            fsm_last_state    <= WAIT_FOR_RESULTS;
-            psum_enable_i_reg <= 0;
-            compute_reg           <= 1;
+        WAIT_CYCLE : begin
+          psum_enable_i_reg <= 0;
+          psum_buffer_SP_en_w <= 0;
+
+          iact_cnt <= iact_buffer_SP_addr;
+          iact_buffer_SP_addr <= 0;
+          wght_cnt <= wght_buffer_SP_addr;
+          wght_buffer_SP_addr <= 0;
+          psum_cnt <= psum_buffer_SP_addr;
+          psum_buffer_SP_addr <= 0;
+
+          fsm_cycle <= 0;
+          
+          fsm_current_state <= WRITE_IACT;
+          fsm_last_state <= WAIT_CYCLE;
+        end
+
+        WRITE_IACT : begin
+          iact_buffer_SP_en_r <= 1;
+          iact_buffer_SP_addr <= iact_buffer_SP_addr + 1;
+
+          fsm_cycle <= fsm_cycle + 1;
+
+          if (fsm_cycle > 1) begin
+            iact_data_i_reg <= iact_buffer_SP_data_r;
+            iact_enable_i_reg <= {((CLUSTERS*NUM_GLB_IACT)){1'b1}};
           end
+
+          // TODO: address offset
+
+          if (iact_buffer_SP_addr > iact_cnt  + 1) begin
+            // next cycle?
+            iact_buffer_SP_en_r <= 0;
+            iact_enable_i_reg <= 0;
+
+            fsm_cycle <= 0;
+
+            //compute_reg <= 1;
+            fsm_current_state <= WRITE_WGHT;
+            fsm_last_state <= WRITE_IACT;
+          end
+        end
+
+        WRITE_WGHT : begin
+          wght_buffer_SP_en_r <= 1;
+          wght_buffer_SP_addr <= wght_buffer_SP_addr + 1;
+
+          fsm_cycle <= fsm_cycle + 1;
+
+          if (fsm_cycle > 1) begin
+            wght_data_i_reg <= wght_buffer_SP_data_r;
+            wght_enable_i_reg <= {((CLUSTERS*NUM_GLB_WGHT)){1'b1}};
+          end
+
+          if (wght_buffer_SP_addr > wght_cnt  + 1) begin
+            // next cycle?
+            wght_buffer_SP_en_r <= 0;
+            wght_enable_i_reg <= 0;
+
+            fsm_cycle <= 0;
+
+            compute_reg <= 1;
+            fsm_current_state <= WAIT_FOR_RESULTS;
+            fsm_last_state <= WRITE_WGHT;
+          end
+        end
+        
+        WAIT_FOR_RESULTS : begin
+          compute_reg <= 0;
+
           status_reg_enable_reg <= 0;
           results_ready          = 1;
           for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
@@ -706,91 +820,107 @@ module OpenEye_Wrapper
               end
             end
           end
-          if(results_ready & ready_dma_i)begin
+          if(results_ready)begin
+          // if(results_ready & ready_dma_i)begin
             fsm_x_cl          <= 0;
             fsm_y_cl          <= 0;
             fsm_psum_r        <= 0;
             fsm_last_state    <= WAIT_FOR_RESULTS;
-            fsm_current_state <= SEND_RESULTS;
+            fsm_current_state <= GET_RESULTS;
+
+            psum_enable_i_reg <= {(CLUSTERS*NUM_GLB_PSUM){1'b1}};
+            psum_buffer_SP_addr <= 0;
           end
           results_ready = 0;
         end
 
-        SEND_RESULTS : begin
-          enable_dma_o <= enable_dma_o;
-          fsm_psum_r1  <= fsm_psum_r;
-          fsm_psum_r2  <= fsm_psum_r1;
-          fsm_psum_r3  <= fsm_psum_r2;
-          fsm_psum_r4  <= fsm_psum_r3;
-          fsm_psum_r5  <= fsm_psum_r4;
-          fsm_y_cl1    <= fsm_y_cl;
-          fsm_y_cl2    <= fsm_y_cl1;
-          fsm_y_cl3    <= fsm_y_cl2;
-          fsm_y_cl4    <= fsm_y_cl3;
-          fsm_y_cl5    <= fsm_y_cl4;
-          fsm_x_cl1    <= fsm_x_cl;
-          fsm_x_cl2    <= fsm_x_cl1;
-          fsm_x_cl3    <= fsm_x_cl2;
-          fsm_x_cl4    <= fsm_x_cl3;
-          fsm_x_cl5    <= fsm_x_cl4;
-          for (int b=0; b<TRANS_BITWIDTH_PSUM; b=b+1) begin
-            flat_help_var_1[b] = psum_data_o_reg[fsm_x_cl5 * CLUSTER_ROWS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
-                                fsm_y_cl5 * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
-                                fsm_psum_r5 * TRANS_BITWIDTH_PSUM + b];
+        GET_RESULTS : begin
+          if (fsm_cycle > 3) begin
+            psum_buffer_SP_en_w <= 1;
+            psum_buffer_SP_addr <= psum_buffer_SP_addr + 1;
+            psum_buffer_SP_data_w <= psum_data_o_reg;
           end
-          fifo_data_i   <= flat_help_var_1;
-          fifo_write_i  <= psum_enable_o_reg[fsm_x_cl5 * CLUSTER_ROWS * NUM_GLB_PSUM + fsm_y_cl5 * NUM_GLB_PSUM + fsm_psum_r5];
 
-          if (ready_dma_i == 0) begin
+          fsm_cycle <= fsm_cycle + 1;
+
+          if (psum_buffer_SP_addr > psum_cnt  + 1) begin
+            // next cycle?
+            psum_buffer_SP_en_w <= 0;
+            psum_buffer_SP_addr <= 1; // TODO: remove offset
+
+            psum_buffer_SP_en_r <= 1;
             psum_enable_i_reg <= 0;
-            flat_help_var_1 = 0;
-          end else begin
-            enable_dma_o                                                                           <= 1;
-            fsm_cycle                                                                              <= fsm_cycle + 1;
-            fsm_cycle_mod1                                                                         <= fsm_cycle_mod1 + 1;
-            psum_enable_i_reg                                                                      <= 0;
-            psum_enable_i_reg[fsm_x_cl*CLUSTER_ROWS*NUM_GLB_PSUM+fsm_psum_r+NUM_GLB_PSUM*fsm_y_cl] <= 1;
-            if (32'(fsm_cycle_mod1) == 32'(filters_reg-1)) begin
-              fsm_cycle_mod1 <= 0;
-              if (fsm_psum_r != 2'(NUM_GLB_PSUM-1)) begin
-                fsm_psum_r <= fsm_psum_r + 1;
+
+            fsm_cycle <= 0;
+
+            fsm_current_state <= SEND_RESULTS;
+            fsm_last_state <= GET_RESULTS;
+
+          end
+        end
+
+        SEND_RESULTS : begin
+          
+          fsm_psum_r1  <= fsm_psum_r;
+          fsm_y_cl1    <= fsm_y_cl;
+          fsm_x_cl1    <= fsm_x_cl;
+
+          if (fsm_psum_r == 1) begin
+            enable_dma_o <= 1;
+          end
+
+          psum_buffer_SP_en_r <= 1;
+
+          if (ready_dma_i == 1) begin
+            data_dma_o = 0;
+            for(int b=0; b<TRANS_BITWIDTH_PSUM; b=b+1) begin
+              data_dma_o[b] = psum_buffer_SP_data_r[fsm_x_cl1*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl1*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r1*TRANS_BITWIDTH_PSUM+b];
+            end
+
+              
+            if((fsm_psum_r + 1) != NUM_GLB_PSUM)begin
+              fsm_psum_r <= fsm_psum_r + 1;
+            end else begin
+              fsm_psum_r <= 0;
+              if((fsm_x_cl + 1) != CLUSTER_COLUMNS)begin
+                fsm_x_cl <= fsm_x_cl + 1;
               end else begin
-                fsm_psum_r <= 0;
-                if (fsm_x_cl != 1'(CLUSTER_COLUMNS-1)) begin
-                  fsm_x_cl <= fsm_x_cl + 1;
+                fsm_x_cl          <= 0;
+
+                if((fsm_y_cl + 1) != CLUSTER_ROWS)begin
+                  fsm_y_cl <= fsm_y_cl + 1;
                 end else begin
-                  fsm_x_cl <= 0;
-                  if (fsm_y_cl != 3'(CLUSTER_ROWS-1)) begin
-                    fsm_y_cl <= fsm_y_cl + 1;
-                  end else begin
                   fsm_y_cl <= 0;
+                  
+                  fsm_cycle <= fsm_cycle + 1;
+                  psum_buffer_SP_addr <= psum_buffer_SP_addr + 1;
+
+                  if(fsm_cycle == (filters_reg*needed_cycles_reg) - 1)begin
+                    fsm_cycle      <= 0;
+                    psum_buffer_SP_addr <= 0;
+
+                    fsm_last_state    <= SEND_RESULTS;
+                    fsm_current_state <= WAIT_CYCLE_2;
                   end
                 end
               end
             end
-            if (fsm_cycle >= 6) begin
-              fifo_read_i <= 1;
-            end
-            if (fsm_cycle <= 6) begin
-              enable_dma_o <= 0;
-            end
-            if(fsm_cycle == needed_cycles_reg * 32'(filters_reg) * (CLUSTER_COLUMNS) * (CLUSTER_ROWS) * NUM_GLB_PSUM + 6) begin
-              last_data_o <= 1;
-            end
-            if(fsm_cycle == needed_cycles_reg * 32'(filters_reg) * (CLUSTER_COLUMNS) * (CLUSTER_ROWS) * NUM_GLB_PSUM + 7)begin
-              for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                  psum_enable_i_reg[cr*NUM_GLB_PSUM+g]                           <= 0;
-                  psum_enable_i_reg[NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] <= 0;
-                end
-              end
-              fsm_psum_r        <= 0;
-              fsm_last_state    <= SEND_RESULTS;
-              fsm_current_state <= GET_PARAMETERS;
-              enable_dma_o      <= 0;
-              last_data_o       <= 0;
-              fsm_cycle         <= 0;
-            end
+          end
+        end
+
+        WAIT_CYCLE_2 : begin
+          fsm_cycle <= fsm_cycle + 1;
+
+          data_dma_o = 0;
+          for(int b=0; b<TRANS_BITWIDTH_PSUM; b=b+1) begin
+            data_dma_o[b] = psum_buffer_SP_data_r[fsm_x_cl1*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl1*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r1*TRANS_BITWIDTH_PSUM+b];
+          end
+
+          if (fsm_cycle == 1) begin
+            enable_dma_o <= 0;
+            
+            fsm_last_state <= WAIT_CYCLE_2;
+            fsm_current_state <= IDLE;
           end
         end
 
@@ -806,6 +936,42 @@ module OpenEye_Wrapper
   //#######################
 
   generate
+
+    SPad_SP_URAM #(
+      .DATA_WIDTH(TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT),
+      .ADDR_WIDTH(11) // TODO
+    ) iact_buffer_SP ( 
+      .clk_i (clk_i), 
+      .re_i  (iact_buffer_SP_en_r & !iact_buffer_SP_en_w),
+      .we_i  (iact_buffer_SP_en_w), 
+      .addr_i(iact_buffer_SP_addr),
+      .data_i(iact_buffer_SP_data_w),
+      .data_o(iact_buffer_SP_data_r)
+    );
+
+    SPad_SP_URAM #(
+      .DATA_WIDTH(TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT),
+      .ADDR_WIDTH(11) // TODO
+    ) wght_buffer_SP ( 
+      .clk_i (clk_i), 
+      .re_i  (wght_buffer_SP_en_r & !wght_buffer_SP_en_w),
+      .we_i  (wght_buffer_SP_en_w), 
+      .addr_i(wght_buffer_SP_addr),
+      .data_i(wght_buffer_SP_data_w),
+      .data_o(wght_buffer_SP_data_r)
+    );
+
+    SPad_SP_URAM #(
+      .DATA_WIDTH(TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_PSUM),
+      .ADDR_WIDTH(11) // TODO
+    ) psum_buffer_SP ( 
+      .clk_i (clk_i), 
+      .re_i  (psum_buffer_SP_en_r & !psum_buffer_SP_en_w),
+      .we_i  (psum_buffer_SP_en_w), 
+      .addr_i(psum_buffer_SP_addr),
+      .data_i(psum_buffer_SP_data_w),
+      .data_o(psum_buffer_SP_data_r)
+    );
 
     OpenEye_Parallel #(
       .IS_TOPLEVEL         (0),
@@ -892,21 +1058,6 @@ module OpenEye_Wrapper
       .router_mode_wght_i     (router_mode_wght_reg),
       .router_mode_psum_i     (router_mode_psum_reg)
     );
-
-    varlenFIFO #(
-      .DATA_WIDTH (DMA_BITWIDTH),
-      .DEPTH      (8)
-    ) FIFO (
-      .clk_i       (clk_i),
-      .rst_ni      (rst_n),
-      .wr_en       (fifo_write_i),
-      .rd_en       (fifo_read_i & ready_dma_i),
-      .new_stream_i(new_stream),
-      .data_i      (fifo_data_i),
-      .data_o      (data_dma_o),
-      .empty       (),
-      .full        ()
-  );
 
   endgenerate
 

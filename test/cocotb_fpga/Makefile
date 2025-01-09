@@ -7,7 +7,7 @@ TOPLEVEL_LANG ?= verilog
 #EXTRA_ARGS += --trace-fst --trace-structs
 
 # use VHDL_SOURCES for VHDL files
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_Wrapper.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_FPGA.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/varlenFIFO.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_Parallel.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_Cluster.v)
@@ -34,13 +34,16 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_SP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_SP_generic.v)
 
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_SP_URAM.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_SP_URAM.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_SP_generic_URAM.v)
+
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
- TOPLEVEL = OpenEye_Wrapper
-#TOPLEVEL = OpenEye_Top
+TOPLEVEL = OpenEye_FPGA
 
 # MODULE is the basename of the Python test file
-MODULE = OpenEye_Wrapper_tb
+MODULE = OpenEye_FPGA_tb
 COMPILE_ARGS += -P OpenEye_Parallel.CREATE_VCD=1
 
 export CLOCK_LEN=10
@@ -59,8 +62,8 @@ export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
 export NUM_FILTERS=4
 export KERNEL_SIZE=3
-export INPUT_SIZE=32
-export OUTPUT_SIZE=32
+export INPUT_SIZE=8
+export OUTPUT_SIZE=8
 export STRIDE=1
 export INPUT_CHANNELS=4
 #Amout of parallel MACs
@@ -103,5 +106,5 @@ export PSUM_PER_PE=32
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
 gtkwave:
-	touch $(abspath $(PWD)/../../hdl/OpenEye_Wrapper.v)
-	gtkwave $(PWD)/sim_build/OpenEye_Wrapper.vcd
+	touch $(abspath $(PWD)/../../hdl/OpenEye_FPGA.v)
+	gtkwave $(PWD)/sim_build/OpenEye_FPGA.vcd
