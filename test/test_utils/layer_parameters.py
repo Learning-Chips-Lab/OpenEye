@@ -315,10 +315,9 @@ class LayerParameters(object):
         logger.debug("Used_refreshes : " + str(self.Used_refreshes))
         logger.debug("layer_params.needed_psum_transmissions : " + str(self.needed_psum_transmissions))
         self.iact_transmissions_glb = \
-            math.ceil(((math.ceil((self.used_channels*layer.kernel_size[0])/2) + (math.ceil((self.used_channels + 1)/6))) \
-            * self.needed_Iact_writes * math.ceil(self.Used_refreshes/self.wght_transmissions_pe/self.needed_psum_transmissions/self.iact_transmissions_pe))/params.Iact_Mem_Addr_Words)
+        math.ceil(math.ceil(self.Used_refreshes/self.wght_transmissions_pe/self.needed_psum_transmissions/self.iact_transmissions_pe)/math.floor(params.Iact_Mem_Addr_Words/\
+        ((math.ceil((self.used_channels*layer.kernel_size[0])/2) + (math.ceil((self.used_channels + 1)/6)))* self.needed_Iact_writes)))self.needed_iact_transmissions = self.iact_transmissions_pe * self.iact_transmissions_glb
         self.needed_iact_transmissions = self.iact_transmissions_pe * self.iact_transmissions_glb
-
         match self.single_cluster_computation:
             case 1:
                 self.used_wght_addr_per_PE = (math.ceil(layer.kernel_size[0] * layer.input.shape[3]/self.kernel_per_pe_cluster / self.iact_transmissions_pe/ self.wght_transmissions_pe)) + 2
