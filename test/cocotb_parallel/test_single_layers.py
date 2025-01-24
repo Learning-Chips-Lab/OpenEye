@@ -16,6 +16,7 @@ tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
 
 import parallel_test_utils as ptu
+import test_utils.vh_file_creator as vh_file_creator
 
 
 #As ref:
@@ -37,12 +38,18 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("KERNEL_SIZE", [(3)])
 @pytest.mark.parametrize("INPUT_SIZE", [(32)])
 @pytest.mark.parametrize("INPUT_CHANNELS", [(4)])#, 4, 8])
-def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE, INPUT_CHANNELS):
+@pytest.mark.parametrize("USE_SPARSE_IACTS", [(0)])
+@pytest.mark.parametrize("USE_SPARSE_WGHTS", [(0)])
+@pytest.mark.parametrize("USE_RANDOM_VALUES", [(1)])
+@pytest.mark.parametrize("LOGGER_LEVEL", [(0)])
+
+def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE, INPUT_CHANNELS, \
+USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL):
     layer = "Convolution"
     dut = 'OpenEye_Parallel'
     module = 'OpenEye_Parallel_tb'
     toplevel = dut
-    verilog_sources = ptu.get_verilog_sources(hdl_dir)
+    verilog_sources = ptu.get_verilog_sources(hdl_dir, False)
 
     target_dir = os.path.join(tests_dir, '.temp') 
 
@@ -54,7 +61,7 @@ def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE, INPUT_C
         sim_build=target_dir,
         testcase='single_layer_test',
         force_compile=True,
-        waves=False,
+        waves=True,
         simulator="verilator",
         extra_env = {"CLOCK_LEN" : str(clk_cycle)
                     ,"CLOCK_UNIT" : clk_cycle_unit
@@ -67,7 +74,11 @@ def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE, INPUT_C
                     ,"STRIDE" : str(STRIDE)
                     ,"KERNEL_SIZE" : str(KERNEL_SIZE)
                     ,"INPUT_SIZE" : str(INPUT_SIZE)
-                    ,"INPUT_CHANNELS" : str(INPUT_CHANNELS)}
+                    ,"INPUT_CHANNELS" : str(INPUT_CHANNELS)
+                    ,"USE_SPARSE_IACTS" : str(USE_SPARSE_IACTS)
+                    ,"USE_SPARSE_WGHTS" : str(USE_SPARSE_WGHTS)
+                    ,"USE_RANDOM_VALUES" : str(USE_RANDOM_VALUES)
+                    ,"LOGGER_LEVEL" : str(LOGGER_LEVEL)}
     )
     
 @pytest.mark.parametrize("STRIDE", [(1)])#, (2,2)])

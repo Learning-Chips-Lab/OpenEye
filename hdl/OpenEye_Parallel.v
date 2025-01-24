@@ -195,8 +195,6 @@ module OpenEye_Parallel
     .rst_no       (rst_n)
   );
 
-
-
   `ifdef COCOTB_SIM
   initial begin
       if(IS_TOPLEVEL) begin

@@ -172,8 +172,8 @@ async def single_layer_test(dut):
             layer_parameters = lp.LayerParameters(layer, openeye_parameter)
             time_printer.timestamp("Layer parameters created. ", logger)
             calculated_results = ptu.collect_results(layer, layer_number, layer_parameters, dram)
+            output_order = ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)
             if(logging.DEBUG >= log_level):
-                output_order = ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)
                 time_printer.timestamp("Reference data created. ", logger)
 
             dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
