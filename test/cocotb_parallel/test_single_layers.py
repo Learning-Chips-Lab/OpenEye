@@ -41,10 +41,11 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("USE_SPARSE_IACTS", [(0)])
 @pytest.mark.parametrize("USE_SPARSE_WGHTS", [(0)])
 @pytest.mark.parametrize("USE_RANDOM_VALUES", [(1)])
+@pytest.mark.parametrize("CLUSTER_ROWS", [(4)])
 @pytest.mark.parametrize("LOGGER_LEVEL", [(0)])
 
 def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE, INPUT_CHANNELS, \
-USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL):
+USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL, CLUSTER_ROWS):
     layer = "Convolution"
     dut = 'OpenEye_Parallel'
     module = 'OpenEye_Parallel_tb'
@@ -79,6 +80,7 @@ USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL):
                     ,"USE_SPARSE_IACTS" : str(USE_SPARSE_IACTS)
                     ,"USE_SPARSE_WGHTS" : str(USE_SPARSE_WGHTS)
                     ,"USE_RANDOM_VALUES" : str(USE_RANDOM_VALUES)
+                    ,"CLUSTER_ROWS" : str(CLUSTER_ROWS)
                     ,"LOGGER_LEVEL" : str(LOGGER_LEVEL)}
     )
     
