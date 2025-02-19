@@ -159,6 +159,16 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 0))
     else:
+        with open('dma_stream_input.txt', 'w') as f_dump:
+            for v in stream[strdic.stream_parallel_dict["status"]]:
+                f_dump.write(f'{v}\n')
+            for v in stream[strdic.stream_parallel_dict["iact"]]:
+                f_dump.write(f'{v}\n')
+            for v in stream[strdic.stream_parallel_dict["wght"]]:
+                f_dump.write(f'{v}\n')
+            for v in stream[strdic.stream_parallel_dict["psum"]]:
+                f_dump.write(f'{v}\n')
+
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 1))
         for data_word in range(len(stream[strdic.stream_parallel_dict["status"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["status"]][data_word]))
@@ -400,8 +410,8 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
 
             if ((layer_repetition % layer_parameters.iact_transmissions_pe) == (layer_parameters.iact_transmissions_pe - 1)) :
                 if(logging.DEBUG >= login_level):
-                    txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(20) + "\n")
-                for i in range(1):
+                    txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(40) + "\n")
+                for i in range(2):
 
                     if(logging.DEBUG >= login_level):
                         storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")

@@ -32,6 +32,33 @@ class IactStreamMapper(object):
                 for router in range(self.params.Iact_Routers):
                     iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
         iact_stream = self.create_complete_iact_stream(iact_stream)
+
+        # send values only
+        import numpy as np
+        values = np.transpose(np.array(self.dram_fmap),axes=[0,2,1])
+        
+        channels, iact_size_x, iact_size_y = values.shape
+        
+        iact_stream_cycles = iact_size_x * iact_size_y * channels // 8
+        iact_params = (channels << 48) | (iact_size_x << 32) |(iact_size_y << 16) | iact_stream_cycles
+        print(hex(iact_params))
+
+        iact_stream = [iact_params]
+        pos = 0
+        while pos < iact_size_x * iact_size_y:
+            for n in range(channels):
+                vals = values[n].flatten()[pos:pos+64]
+                for i in range(8):
+                    v = 0
+                    for j in range(8):
+                        v_tmp = int(vals[i*8 + j])
+                        if v_tmp < 0:
+                            v_tmp += 256
+                        v = v | (v_tmp << (8*j))
+
+                    iact_stream.append(v)
+            pos += 64
+
         return iact_stream
     
     def write_iact_data_glb(self, cl_x, cl_y, router):
@@ -122,7 +149,7 @@ class IactStreamMapper(object):
                     for router in range(params.Iact_Routers):
                     
                         stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
-                        print(stream[-1])
+                        # print(stream[-1])
 
         return stream
     
@@ -214,7 +241,8 @@ class ConvIactStreamMapper(IactStreamMapper):
                         spad_storage[words_in_storage][0] = dram_fmap[channel][iact_temp_pos_x][iact_temp_pos_y]
 
                     else:
-                        spad_storage[words_in_storage][0] = 1
+                        # zero pad
+                        spad_storage[words_in_storage][0] = 0 #1
                     spad_storage[words_in_storage][1] = overhead_counter
                     overhead_counter = overhead_counter + 1
 

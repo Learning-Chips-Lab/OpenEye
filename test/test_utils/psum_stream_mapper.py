@@ -61,7 +61,6 @@ class PsumStreamMapper(object):
                     for word in range(len(temp_stream[0][cl_y][router])):
                         # TODO: fix this, works for zero only
                         stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
-                        stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
         else:
             return stream
         return stream

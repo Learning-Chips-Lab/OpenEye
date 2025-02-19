@@ -368,12 +368,12 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
 
                 for cl_y in cluster_order:
                     for cl_x in range(params.Clusters_X):
-                        for router in range(params.Psum_Routers):
+                        for router in range(0, params.Psum_Routers, 2):
                         
                             if(layer_params.computing_mx[cl_x][cl_y][0][router] == 1):
                                 partial_result_a = gtu.to_twos_complement_string(0,20)
                                 partial_result_b = gtu.to_twos_complement_string(0,20)
-                                for counter in range(math.floor(params.PSUM_Trans_Bitwidth/params.PSUM_Bitwidth)):
+                                for counter in range(2):
                                     x_cor= int(((router + \
                                     cl_x * params.PEs_X + \
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
@@ -385,19 +385,18 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                     ((cl_y%layer_params.used_Y_cluster) + refresh*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
                                     / (layer.output.shape[2] + layer_params.add_up)))
-                                    filter = 1 * psum_pe + counter
+                                    filter = psum_pe
                                     try:
                                         if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
                                             if (counter == 0):
                                                 partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
                                             else:
-                                                partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
+                                                partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor+1][y_cor],20)
                                     except:
                                         partial_result_b = partial_result_b
                                         partial_result_a = partial_result_a
 
-                                #file_dma_ref.write(partial_result_a + partial_result_b + "\n")
-                                file_dma_ref.write(partial_result_b + "\n")
+                                file_dma_ref.write(partial_result_a + partial_result_b + "\n")
     else:
         for refresh in range(math.ceil(layer_params.needed_refreshes_mx[layer_repetition][1]/layer_params.used_Y_cluster),
                             math.ceil(layer_params.needed_refreshes_mx[layer_repetition][2]/layer_params.used_Y_cluster)):
@@ -487,8 +486,10 @@ def calculate_conv_results_mp(f, layer, layer_number, layer_params, dram, calcul
                                                                     dram.fmap[layer_number][c][x + (i * layer_params.strideX)][y + (j * layer_params.strideY)])
 
                                 else:
-                                    calculated_results[i][j] = int(calculated_results[i][j] + \
-                                                                    dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)])
+                                    pass
+                                    # zero pad with 1
+                                    # calculated_results[i][j] = int(calculated_results[i][j] + \
+                                    #                                 dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)])
         return_dict[f] = calculated_results
 
 def compare_dram_with_ref(layer, ref_output, dram):

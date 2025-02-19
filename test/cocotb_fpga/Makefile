@@ -34,6 +34,7 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_SP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_SP_generic.v)
 
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/iact_converter.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_SP_URAM.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_SP_URAM.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_SP_generic_URAM.v)
@@ -60,10 +61,10 @@ export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 #export LAYER=FC
 export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
-export NUM_FILTERS=4
+export NUM_FILTERS=8
 export KERNEL_SIZE=3
-export INPUT_SIZE=8
-export OUTPUT_SIZE=8
+export INPUT_SIZE=48
+export OUTPUT_SIZE=48
 export STRIDE=1
 export INPUT_CHANNELS=4
 #Amout of parallel MACs

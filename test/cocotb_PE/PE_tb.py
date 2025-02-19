@@ -141,15 +141,23 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
     for iact_y in range(len(iact)):
         for iact_x in range(len(iact[iact_y])):
             for wght_x in range(len(wght[current_iact])):
+                tmp_wght = wght[current_iact][wght_x]
+                if tmp_wght > 127:
+                    tmp_wght -= 256
                 control[wght_x] = (
-                    control[wght_x] + wght[current_iact][wght_x] * iact[iact_y][iact_x]
+                    control[wght_x] + tmp_wght * iact[iact_y][iact_x]
                 )
+                if wght_x == 0:
+                    print(control[wght_x], wght[current_iact][wght_x])
             current_iact = current_iact + 1
 
     current_control = 0
 
     while dut.psum_enable_o.value == 1:
-        assert dut.adder_3.sum_o.value.integer == control[current_control], (
+        xx = dut.adder_3.sum_o.value.integer
+        if xx > 2**19 - 1:
+            xx -= 2**20
+        assert xx == control[current_control], (
             "PSUM("
             + str(dut.adder_3.sum_o.value.integer)
             + ") is not equal to control("
