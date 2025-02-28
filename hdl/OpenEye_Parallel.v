@@ -259,7 +259,7 @@ module OpenEye_Parallel
   reg                                  results_ready;
   reg  [2:0]                           loop_mod;
   reg  [7:0]                           finished_cycles;
-  reg  [$clog2(CLUSTER_ROWS)-1:0]      storage_cycles;
+  reg  [$clog2(CLUSTER_ROWS+1)-1:0]    storage_cycles;
 
   ///Register, that configure the chip
   reg  [$clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0]       iact_choose_reg;
@@ -695,7 +695,7 @@ module OpenEye_Parallel
           end
 
           flat_help_var      = 0;
-          if (needed_y_cls_i_reg == 2) begin
+          if (needed_y_cls_i_reg == ($clog2(CLUSTER_ROWS+1))'(2)) begin
             for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
               for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                 if ((cr == 1) | (cr == 3) | (cr == 5) | (cr == 7)) begin
@@ -961,7 +961,7 @@ module OpenEye_Parallel
             fsm_iact_last_state    <= WAIT;
             fsm_iact_current_state <= CALCULATE_IACT;
             iact_choose_reg        <= 0; //TODO: Change to PE all composition for next iteration
-            if ((needed_y_cls_reg >= 2) & (storage_cycles != ($clog2(CLUSTER_ROWS))'(32'(needed_y_cls_reg) - 1))) begin
+            if (((32)'(needed_y_cls_reg) >= 2) & (storage_cycles != ($clog2(CLUSTER_ROWS+1))'(32'(needed_y_cls_reg) - 1))) begin
               for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                 for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
                   router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+3] <= 0;
@@ -1062,11 +1062,11 @@ module OpenEye_Parallel
         if (needed_y_cls_reg == 1) begin
           psum_choose_reg <= (2**(CLUSTER_ROWS*CLUSTER_COLUMNS*NUM_GLB_PSUM)-1);
         end else begin 
-          if (needed_y_cls_reg == 2) begin
+          if (needed_y_cls_reg == ($clog2(CLUSTER_ROWS+1))'(2)) begin
           psum_choose_reg <= {CLUSTER_ROWS{{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{1'b0}}}};
           end else begin
-            if (3'(needed_y_cls_reg) == 4) begin
-              psum_choose_reg <= {(CLUSTER_ROWS/2){{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{3'b000}}}};
+            if ((needed_y_cls_reg == ($clog2(CLUSTER_ROWS+1))'(4)) & (CLUSTER_ROWS >= 4)) begin
+              //32'(psum_choose_reg) <= {((CLUSTER_ROWS+1)/2){{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{3'b000}}}};
             end else begin
               psum_choose_reg <= (2**(CLUSTER_ROWS*CLUSTER_COLUMNS*NUM_GLB_PSUM)-1);
             end
@@ -1227,7 +1227,7 @@ module OpenEye_Parallel
               psum_ready_i_reg       <= 0;
               fsm_psum_cycle         <= 0;
             end else begin
-              if ((needed_y_cls_reg >= 2) & !psum_router_set_reg) begin
+              if (((32)'(needed_y_cls_reg) >= 2) & !psum_router_set_reg) begin
                 psum_router_set_reg  <= 1;
                 for (int cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
                   for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
@@ -1237,7 +1237,7 @@ module OpenEye_Parallel
                     end
                   end
                 end
-                if (storage_cycles != ($clog2(CLUSTER_ROWS))'(32'(needed_y_cls_reg) - 1)) begin
+                if (storage_cycles != ($clog2(CLUSTER_ROWS+1))'(32'(needed_y_cls_reg) - 1)) begin
                   for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                     for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
                       router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 0;
