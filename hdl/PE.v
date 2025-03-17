@@ -153,8 +153,8 @@ module PE
   reg                                         psum_select;
   reg                                         psum_enable;
   reg                                         psum_enable_2;
-  reg [TRANS_BITWIDTH_PSUM/2-1:0]             psum_data_1_delay;
-  reg [TRANS_BITWIDTH_PSUM/2-1:0]             psum_data_2_delay;
+  reg [TRANS_BITWIDTH_PSUM-1:0]             psum_data_1_delay;
+  reg [TRANS_BITWIDTH_PSUM-1:0]             psum_data_2_delay;
   reg                                         mux_iact_ready;
   reg                                         adder_1_en;
   reg                                         adder_2_en;
@@ -1163,9 +1163,7 @@ module PE
   mux2 #(
     .DATA_WIDTH(TRANS_BITWIDTH_PSUM*PARALLEL_MACS)
   ) mux_psum (
-    /* verilator lint_off WIDTHEXPAND */
     .a_in ({psum_data_2_delay,psum_data_1_delay}),
-    /* verilator lint_on WIDTHEXPAND */
     .b_in ({mult_2_o_w,mult_1_o_w}),
     .sel_i(psum_select), 
     .y_o  ({adder_2_summand_2,adder_1_summand_2})

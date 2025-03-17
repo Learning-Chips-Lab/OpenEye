@@ -111,6 +111,8 @@ module OpenEye_FPGA
   parameter FSM_CYCLE_MAX       = 4294967295,
   parameter FSM_STATES          = 10,
 
+  parameter BUFFER_WIDTH = 12,
+
   parameter real FSM_IACT_RTR_CCLS_A = (CLUSTERS*NUM_GLB_IACT),
   parameter real FSM_IACT_RTR_CCLS_B = (DMA_BITWIDTH_OLD/ROUTER_MODES_IACT),
   parameter real FSM_IACT_RTR_CCLS   = FSM_IACT_RTR_CCLS_A/FSM_IACT_RTR_CCLS_B,
@@ -277,25 +279,25 @@ module OpenEye_FPGA
 
   reg iact_buffer_SP_en_r;
   reg iact_buffer_SP_en_w;
-  reg [11-1:0] iact_buffer_SP_addr;
+  reg [BUFFER_WIDTH-1:0] iact_buffer_SP_addr;
   reg [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_w;
   reg [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_r;
 
   reg wght_buffer_SP_en_r;
   reg wght_buffer_SP_en_w;
-  reg [11-1:0] wght_buffer_SP_addr;
+  reg [BUFFER_WIDTH-1:0] wght_buffer_SP_addr;
   reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_w;
   reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_r;
 
   reg psum_buffer_SP_en_r;
   reg psum_buffer_SP_en_w;
-  reg [11-1:0] psum_buffer_SP_addr;
+  reg [BUFFER_WIDTH-1:0] psum_buffer_SP_addr;
   reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_data_w;
   reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_data_r;
 
-  reg [11:0] iact_cnt;
-  reg [11:0] wght_cnt;
-  reg [11:0] psum_cnt;
+  reg [BUFFER_WIDTH-1:0] iact_cnt;
+  reg [BUFFER_WIDTH-1:0] wght_cnt;
+  reg [BUFFER_WIDTH-1:0] psum_cnt;
 
   // Register for IACT Stream
   reg [1:0] current_buffer_n;
@@ -323,7 +325,7 @@ module OpenEye_FPGA
   reg iact_converter_n_en_reg [15:0];
   reg [2:0] iact_converter_n_reg [15:0];
   reg [3:0] iact_converter_nx_reg [15:0];
-  reg [11:0] iact_converter_mem_addr_reg [15:0];
+  reg [10:0] iact_converter_mem_addr_reg [15:0];
   reg [3:0] iact_converter_mem_off_reg [15:0];
 
   reg [7:0] iact_converter_x;
@@ -1374,7 +1376,7 @@ module OpenEye_FPGA
     // other Buffers
     RAM_SP #(
       .DataWidth(TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT),
-      .AddrWidth(12)
+      .AddrWidth(BUFFER_WIDTH)
     ) iact_buffer_SP ( 
       .clk_i   (clk_i), 
       .rd_en_i (iact_buffer_SP_en_r & !iact_buffer_SP_en_w),
@@ -1386,7 +1388,7 @@ module OpenEye_FPGA
 
     RAM_SP #(
       .DataWidth(TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT),
-      .AddrWidth(12)
+      .AddrWidth(BUFFER_WIDTH)
     ) wght_buffer_SP ( 
       .clk_i   (clk_i), 
       .rd_en_i (wght_buffer_SP_en_r & !wght_buffer_SP_en_w),
@@ -1398,7 +1400,7 @@ module OpenEye_FPGA
 
     RAM_SP #(
       .DataWidth(TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM),
-      .AddrWidth(12)
+      .AddrWidth(BUFFER_WIDTH)
     ) psum_buffer_SP ( 
       .clk_i   (clk_i), 
       .rd_en_i (psum_buffer_SP_en_r & !psum_buffer_SP_en_w),
