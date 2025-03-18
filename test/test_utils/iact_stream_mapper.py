@@ -327,9 +327,6 @@ class ConvIactStreamMapper(IactStreamMapper):
                         spad_storage[words_in_storage][0] = 1
                     spad_storage[words_in_storage][1] = overhead_counter
                     overhead_counter = overhead_counter + 1
-        if ((cl_x == 0) & (cl_y == 1) & (router == 2) & (cycle == 1) & (iact_cycle == 0)):
-            print("Damn: ")
-            print(spad_storage)
 
         return spad_storage
         
