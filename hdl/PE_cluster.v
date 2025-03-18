@@ -86,7 +86,7 @@ module PE_cluster
 ) ( 
   input                                         clk_i,
   input                                         rst_ni,
-  input  [$clog2(NUM_GLB_IACT)*PES-1:0]         iact_choose_i,
+  input  [$clog2(NUM_GLB_IACT+1)*PES-1:0]       iact_choose_i,
   input  [PE_COLUMNS-1:0]                       psum_choose_i,
   input  [PES-1:0]                              compute_i,
   
@@ -180,7 +180,7 @@ genvar i,j,g;
           )pe(
             .clk_i(clk_i),
             .rst_ni(rst_nw),
-            .iact_select_i(iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(NUM_GLB_IACT)-1:(i+j*PE_COLUMNS)*$clog2(NUM_GLB_IACT)]),
+            .iact_select_i(iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(NUM_GLB_IACT+1)-1:(i+j*PE_COLUMNS)*$clog2(NUM_GLB_IACT+1)]),
             .compute_i(compute_i[i+j*PE_COLUMNS]),
 
             .iact_data_i(pe_iact_data),
