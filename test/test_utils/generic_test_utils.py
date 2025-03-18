@@ -102,6 +102,12 @@ def select_gpu(gpu_id):
         except RuntimeError as e:
                 logger.debug(e)
 
+def reset_nested_list(lst):
+    if isinstance(lst, list):
+        return [reset_nested_list(sublist) for sublist in lst]
+    else:
+        return 0
+
 class HDF5_Model:
     def save_model_to_hdf5(self, model, filename):
         model.save(filename)
