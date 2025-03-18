@@ -161,7 +161,7 @@ module OpenEye_Parallel
   input                                                          data_mode_i,
   input      [$clog2(DATA_PSUM_BITWIDTH)-1:0]                    fraction_bit_i,
   input      [7:0]                                               needed_cycles_i,
-  input      [$clog2(CLUSTER_COLUMNS+1)-1:0]                      needed_x_cls_i,
+  input      [$clog2(CLUSTER_COLUMNS+1)-1:0]                     needed_x_cls_i,
   input      [$clog2(CLUSTER_ROWS+1)-1:0]                        needed_y_cls_i,
   input      [3:0]                                               needed_iact_cycles_i,
   input      [$clog2(PSUM_PER_PE+1)-1:0]                         filters_i,
@@ -195,8 +195,6 @@ module OpenEye_Parallel
     .rst_no       (rst_n)
   );
 
-
-
   `ifdef COCOTB_SIM
   initial begin
       if(IS_TOPLEVEL) begin
@@ -213,7 +211,7 @@ module OpenEye_Parallel
   reg                                           data_mode_reg;
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0]         fraction_bit_reg;
   reg  [7:0]                                    needed_cycles_reg;
-  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]           needed_x_cls_reg;
+  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]          needed_x_cls_reg;
   reg  [$clog2(CLUSTER_ROWS+1)-1:0]             needed_y_cls_reg;
   reg  [3:0]                                    needed_iact_cycles_reg;
   reg  [$clog2(PSUM_PER_PE+1)-1:0]              filters_reg;
@@ -269,6 +267,7 @@ module OpenEye_Parallel
   reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_reg;
   reg  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]   router_mode_wght_reg;
   reg  [ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0]   router_mode_psum_reg;
+  reg                                                  psum_router_set_reg;
   reg                                                  computing;
 
   reg  [CLUSTERS*NUM_GLB_IACT-1:0]                     iact_enable_comp_reg;
@@ -322,6 +321,7 @@ module OpenEye_Parallel
   wire  [3:0]                                           iact_write_data_t_i_w;
   wire  [2:0]                                           stride_x_i_w;
   wire  [2:0]                                           stride_y_i_w;
+  wire  [$clog2(PE_ROWS)-1:0]                           kernel_per_pe_cluster_i_w;
   wire  [CLUSTERS*PES-1:0]                              compute_mask_i_w;
   wire  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_i_w;
   wire  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]   router_mode_wght_i_w;
@@ -341,7 +341,7 @@ module OpenEye_Parallel
   reg                                                  data_mode_i_reg;
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0]                fraction_bit_i_reg;
   reg  [7:0]                                           needed_cycles_i_reg;
-  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]                  needed_x_cls_i_reg;
+  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]                 needed_x_cls_i_reg;
   reg  [$clog2(CLUSTER_ROWS+1)-1:0]                    needed_y_cls_i_reg;
   reg  [3:0]                                           needed_iact_cycles_i_reg;
   reg  [$clog2(PSUM_PER_PE+1)-1:0]                     filters_i_reg;
@@ -353,8 +353,9 @@ module OpenEye_Parallel
   reg  [$clog2(IACT_PER_PE+1)-1:0]                     input_activations_i_reg;
   reg  [1:0]                                           iact_write_addr_t_i_reg;
   reg  [3:0]                                           iact_write_data_t_i_reg;
-  reg  [3:0]                                           stride_x_i_reg;
-  reg  [3:0]                                           stride_y_i_reg;
+  reg  [2:0]                                           stride_x_i_reg;
+  reg  [2:0]                                           stride_y_i_reg;
+  reg  [$clog2(PE_ROWS)-1:0]                           kernel_per_pe_cluster_i_reg;
   reg  [CLUSTERS*PES-1:0]                              compute_mask_i_reg;
   reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_i_reg;
   reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_storage;
@@ -363,11 +364,17 @@ module OpenEye_Parallel
   reg  [4*CLUSTERS-1:0]                                iact_router_offset;
   reg                                                  enable_stream_reg;
   reg  [7:0]                                           data_stream_reg;
+  reg  [4:0]                                           iact_pes_per_router;
 
 
   ///#######################
   ///States of the FSM
   ///#######################
+
+  enum bit [2:0] {
+    FIRST_PARAMS  = 0,
+    SECOND_PARAMS = 1
+  } fsm_transmission_mode;
 
   enum bit [2:0] {
     MAIN_IDLE          = 0,
@@ -379,6 +386,11 @@ module OpenEye_Parallel
     CALCULATE_IACT     = 1,
     WAIT               = 2
   } fsm_iact_mode;
+
+  enum bit [2:0] {
+    WGHT_READY         = 0,
+    WGHT_BUSY          = 1
+  } fsm_wght_mode;
 
   enum bit [2:0] {
     PSUM_IDLE          = 0,
