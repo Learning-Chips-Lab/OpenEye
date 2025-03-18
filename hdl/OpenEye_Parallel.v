@@ -404,6 +404,34 @@ module OpenEye_Parallel
   ///Process
   ///#######################
 
+  always@(posedge clk_i, negedge rst_ni) begin
+    if(!rst_ni) begin ///Reset
+      enable_stream_reg       <= 0;
+      enable_stream_reg       <= 0;
+      fsm_transmission_state  <= FIRST_PARAMS;
+      data_stream_reg         <= 0;
+    end else begin
+      enable_stream_reg <= 0;
+      data_stream_reg   <= 0;
+      case (fsm_transmission_state)
+        FIRST_PARAMS : begin
+          if (status_reg_enable_i) begin
+            enable_stream_reg      <= 1;
+            data_stream_reg        <= 8'({wght_addr_len_i,stride_x_i,data_mode_i});
+            fsm_transmission_state <= SECOND_PARAMS;
+          end
+        end
+        SECOND_PARAMS : begin
+          enable_stream_reg      <= 1;
+          data_stream_reg        <= 8'({iact_addr_len_i_reg});
+          fsm_transmission_state <= FIRST_PARAMS;
+        end
+        default : begin
+        end
+      endcase
+    end
+  end
+
   always@(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
       start_new_cycle            <= 0;
@@ -418,7 +446,6 @@ module OpenEye_Parallel
       stride_x_reg               <= 0;
       stride_y_reg               <= 0;
       iact_addr_len_reg          <= 0;
-      wght_addr_len_reg          <= 0;
       bano_cluster_mode_reg      <= 0;
       af_cluster_mode_reg        <= 0;
       pooling_cluster_mode_reg   <= 0;
@@ -427,7 +454,6 @@ module OpenEye_Parallel
       iact_write_addr_t_reg      <= 0;
       iact_write_data_t_reg      <= 0;
       compute_mask_reg           <= 0;
-      router_mode_wght_reg       <= 0;
 
       fsm_cycle                  <= 0;
       fsm_last_state             <= MAIN_IDLE;
