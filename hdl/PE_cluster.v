@@ -223,9 +223,7 @@ genvar i,j,g;
         .a_out (pe_router_psum_ready_o[k]),
         .b_out (pe_psum_ready_o[k]),
         .sel_i (psum_choose_i[k]),
-        .i     (in_w),
-        .clk_i (clk_i),
-        .rst_ni(rst_ni)
+        .i     (in_w)
     );
   end
 

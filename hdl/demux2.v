@@ -23,29 +23,13 @@ module demux2
 #( 
   parameter DATA_WIDTH = 1
 ) (
-  input                       clk_i,
-  input                       rst_ni,
   output reg [DATA_WIDTH-1:0] a_out,
   output reg [DATA_WIDTH-1:0] b_out,
   input                       sel_i,
   input      [DATA_WIDTH-1:0] i
 );
 
-  always @(posedge clk_i, negedge rst_ni) begin
-    //Reset
-    if (!rst_ni) begin
-      a_out = 0;
-      b_out = 0;
-    end else begin
-      if (sel_i) begin 
-        a_out = i;
-        b_out = 0;
-      end else begin
-        a_out = 0;
-        b_out = i;
-      end
-    end
-
-  end
+  assign a_out = sel_i & (i);
+  assign b_out = (!sel_i) & (i);
 
 endmodule
