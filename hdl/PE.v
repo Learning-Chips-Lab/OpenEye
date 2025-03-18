@@ -62,6 +62,9 @@ module PE
   parameter         IS_TOPLEVEL             = 1,
   parameter         CREATE_VCD              = 0,
 
+  parameter         PE_X                    = 0,
+  parameter         PE_Y                    = 0,
+
   parameter integer PARALLEL_MACS           = 2,
 
   parameter integer DATA_IACT_BITWIDTH      = 8,

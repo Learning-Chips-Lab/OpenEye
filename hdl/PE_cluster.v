@@ -147,6 +147,8 @@ genvar i,j,g;
           PE #(
             .IS_TOPLEVEL(0),
             .PARALLEL_MACS(PARALLEL_MACS),
+            .PE_X(i),
+            .PE_Y(j),
             .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
             .DATA_WGHT_BITWIDTH(DATA_WGHT_BITWIDTH),
             .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
@@ -252,7 +254,7 @@ genvar i,j,g;
         assign pe_router_psum_enable_o[i] = gen_X[i].gen_Y[j].psum_enable_o_w;
         assign pe_router_psum_data_o[(i+1)*TRANS_BITWIDTH_PSUM-1:i*TRANS_BITWIDTH_PSUM] = gen_X[i].gen_Y[j].psum_data_o_w;
       end else begin
-        if(j == PE_ROWS - 1)begin /// Check wether os bottom row
+        if(j == PE_ROWS - 1)begin /// Check wether is bottom row
           assign psum_ready_demux[i].in_w = gen_X[i].gen_Y[j].psum_ready_o_w;
           assign gen_X[i].gen_Y[j-1].psum_enable_i_w = gen_X[i].gen_Y[j].psum_enable_o_w;
           assign gen_X[i].gen_Y[j-1].psum_data_i_w = gen_X[i].gen_Y[j].psum_data_o_w;
