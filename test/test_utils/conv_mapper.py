@@ -81,7 +81,7 @@ class ConvMapper(LayerMapper):
                 dma_line = int(computing_pes[x*48:(x+1)*48],2)
                 dma_storage.append(dma_line)
             dma_storage.extend(self.write_router_iact(params, layer_params))
-            dma_storage.extend(self.write_router_wght(params))
+            dma_storage.extend(self.write_router_wght(params, layer_params))
             dma_storage.extend(self.write_router_psum(params, layer_params))
             storage = dma_storage
         else:
