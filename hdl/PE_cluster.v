@@ -121,19 +121,34 @@ module PE_cluster
 ///#######################
 ///Reset synchronization
 ///#######################
-wire rst_n;
+wire rst_nw;
 
-RST_SYNC rst_sync_pe_cluster (
-  .clk_i        (clk_i),
-  .rst_ni       (rst_ni),
-  .rst_no       (rst_n)
-);
 
 wire [PE_ROWS*PE_COLUMNS-1:0]                 wght_ready_temp;
 wire [PE_COLUMNS*PE_ROWS*NUM_GLB_IACT-1:0]    iact_ready_temp;
 
+reg  [PE_COLUMNS-1:0]                         psum_ready_reg;
+
+ always@(posedge clk_i, negedge rst_nw) begin
+    if(!rst_nw) begin: reset
+      psum_ready_reg <= 0;
+    end else begin
+      psum_ready_reg <= pe_psum_ready_i;
+    end
+ end
+
 genvar i,j,g;
   generate 
+    if (IS_TOPLEVEL) begin: gen_reset_control
+      RST_SYNC rst_sync_pe_cluster (
+        .clk_i        (clk_i),
+        .rst_ni       (rst_ni),
+        .rst_no       (rst_nw)
+      );
+    end else begin : direct_reset
+      assign rst_nw = rst_ni;
+    end
+
     for(i=0; i<PE_COLUMNS; i=i+1) begin : gen_X
       for(j=0; j<PE_ROWS; j=j+1) begin : gen_Y
         wire [TRANS_BITWIDTH_PSUM-1 : 0] psum_data_i_w;
@@ -164,7 +179,7 @@ genvar i,j,g;
             .NUM_GLB_IACT(NUM_GLB_IACT)
           )pe(
             .clk_i(clk_i),
-            .rst_ni(rst_n),
+            .rst_ni(rst_nw),
             .iact_select_i(iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(NUM_GLB_IACT)-1:(i+j*PE_COLUMNS)*$clog2(NUM_GLB_IACT)]),
             .compute_i(compute_i[i+j*PE_COLUMNS]),
 
@@ -246,7 +261,7 @@ genvar i,j,g;
           assign gen_X[i].gen_Y[j].psum_data_i_w = psum_data_mux[i].out_w;
         end
 
-        assign gen_X[i].gen_Y[j].psum_ready_i_w = ((TOP_CLUSTER == 1) ? pe_router_psum_ready_i[j] : pe_router_psum_ready_i[j] | pe_psum_ready_i[j]);
+        assign gen_X[i].gen_Y[j].psum_ready_i_w = ((TOP_CLUSTER == 1) ? pe_router_psum_ready_i[j] : pe_router_psum_ready_i[j] | psum_ready_reg[j]);
         assign pe_psum_enable_o[i]        = gen_X[i].gen_Y[j].psum_enable_o_w;
         assign pe_psum_data_o[(i+1)*TRANS_BITWIDTH_PSUM-1:i*TRANS_BITWIDTH_PSUM]= gen_X[i].gen_Y[j].psum_data_o_w;
         assign pe_router_psum_enable_o[i] = gen_X[i].gen_Y[j].psum_enable_o_w;
