@@ -47,11 +47,16 @@ class LayerParameters(object):
         self.strideX = 1
         self.strideY = 1
         self.add_up = 1
+        self.complete_iacts_in_design = 0
 
         self.filters = 1
         self.input_shape = []
         self.output_shape = []
         self.kernel_size = []
+        self.kernel_per_pe_cluster = 1
+        self.used_channels = 1
+        self.channel_repetition = 4
+        self.single_cluster_computation = 0
 
         self.iact_transmissions_pe = 1
         self.wght_transmissions_pe = 1
@@ -69,7 +74,7 @@ class LayerParameters(object):
         self.skipPsum = 0
 
         self.computing_mx = 0
-
+        self.data_mode = 0
         params = params
 
 
@@ -294,6 +299,15 @@ class LayerParameters(object):
         logger.debug("Needed transmissions WGHT    : " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions PSUM    : " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions TOTAL   : " + str(self.needed_total_transmissions))
+        print("Refreshes: " + str(self.Used_refreshes))
+        print("self.used_channels : " + str(self.used_channels))
+        print("layer.kernel_size[0] : " + str(layer.kernel_size[0]))
+        print("self.needed_Iact_writes : " + str(self.needed_Iact_writes))
+        print("self.needed_iact_transmissions : " + str(self.iact_transmissions_pe))
+        print("self.needed_iact_transmissions : " + str(self.iact_transmissions_glb))
+        print("self.needed_iact_transmissions : " + str(self.needed_iact_transmissions))
+        print("self.needed_wght_transmissions : " + str(self.needed_wght_transmissions))
+        print("self.needed_psum_transmissions : " + str(self.needed_psum_transmissions))
  
     def write_convdw_layer(self, layer, params):
         """ Write the weights and bias of a Conv2D layer to a file. """
