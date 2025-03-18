@@ -166,7 +166,7 @@ module OpenEye_Parallel
   input      [3:0]                                               needed_iact_cycles_i,
   input      [$clog2(PSUM_PER_PE+1)-1:0]                         filters_i,
   input      [$clog2(IACT_ADDR_PER_PE+1)-1:0]                    iact_addr_len_i,
-  input      [$clog2(WGHT_ADDR_PER_PE+1)-1:0]                    wght_addr_len_i,
+  input      [$clog2(WGHT_ADDR_PER_PE)-1:0]                      wght_addr_len_i,
   input      [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0]               bano_cluster_mode_i,
   input      [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0]                 af_cluster_mode_i,
   input      [NUM_GLB_PSUM-1:0]                                  pooling_cluster_mode_i,
@@ -444,9 +444,6 @@ module OpenEye_Parallel
       flat_help_var               = 0;
 
       computing                  <= 0;
-      wght_enable_i_reg          <= 0;
-      wght_data_i_reg            <= 0;
-      wght_ready_o               <= 0;
       compute_i_reg              <= 0;
       status_reg_enable_i_reg    <= 0;
       data_mode_i_reg            <= 0;
@@ -457,7 +454,6 @@ module OpenEye_Parallel
       needed_iact_cycles_i_reg   <= 0;
       filters_i_reg              <= 0;
       iact_addr_len_i_reg        <= 0;
-      wght_addr_len_i_reg        <= 0;
       bano_cluster_mode_i_reg    <= 0;
       af_cluster_mode_i_reg      <= 0;
       pooling_cluster_mode_i_reg <= 0;
@@ -466,12 +462,16 @@ module OpenEye_Parallel
       iact_write_data_t_i_reg    <= 0;
       stride_x_i_reg             <= 0;
       stride_y_i_reg             <= 0;
+      kernel_per_pe_cluster_i_reg<= 0;
       compute_mask_i_reg         <= 0;
+      router_mode_wght_reg       <= 0;
       router_mode_wght_i_reg     <= 0;
       router_mode_psum_i_reg     <= 0;
       storage_cycles             <= 0;
-      enable_stream_reg          <= 1;
-      data_stream_reg            <= 0;
+      iact_pes_per_router        <= 5;
+      wght_addr_len_i_reg        <= 0;
+      wght_addr_len_reg          <= 0;
+      router_mode_iact_reg       <= 0;
       
     end else begin
 
@@ -489,7 +489,6 @@ module OpenEye_Parallel
       needed_iact_cycles_i_reg   <= needed_iact_cycles_i;
       filters_i_reg              <= filters_i;
       iact_addr_len_i_reg        <= iact_addr_len_i;
-      wght_addr_len_i_reg        <= wght_addr_len_i;
       bano_cluster_mode_i_reg    <= bano_cluster_mode_i;
       af_cluster_mode_i_reg      <= af_cluster_mode_i;
       pooling_cluster_mode_i_reg <= pooling_cluster_mode_i;
@@ -498,8 +497,12 @@ module OpenEye_Parallel
       iact_write_data_t_i_reg    <= iact_write_data_t_i;
       stride_x_i_reg             <= stride_x_i;
       stride_y_i_reg             <= stride_y_i;
+      kernel_per_pe_cluster_i_reg<= kernel_per_pe_cluster_i;
+      wght_addr_len_i_reg        <= wght_addr_len_i; 
       compute_mask_i_reg         <= compute_mask_i;
-
+      if (status_set_reg) begin
+        status_set_reg    <= 0;
+      end
       case(fsm_current_state)
 
         MAIN_IDLE : begin
@@ -537,8 +540,9 @@ module OpenEye_Parallel
             iact_write_data_t_reg    <= iact_write_data_t_i_w;
             stride_x_reg             <= stride_x_i_w;
             stride_y_reg             <= stride_y_i_w;
+            kernel_per_pe_cluster_i_reg<= kernel_per_pe_cluster_i_w;
             compute_mask_reg         <= compute_mask_i_w;
-            router_mode_iact_reg     <= router_mode_iact_i_w;
+            router_mode_iact_reg     <= router_mode_iact_i;
             router_mode_iact_storage <= router_mode_iact_i;
             router_mode_wght_reg     <= router_mode_wght_i_w;
             router_mode_psum_reg     <= router_mode_psum_i_w;
@@ -586,7 +590,7 @@ module OpenEye_Parallel
       router_mode_iact_i_reg   <= 0;
       router_mode_iact_storage <= 0;
       mem_addr_iact            <= 0;
-      iact_choose_i            <= {CLUSTERS*PES{2'b11}};
+      iact_choose_i            <= {CLUSTERS*PES{$clog2(NUM_GLB_IACT+1)'(NUM_GLB_IACT)}};
       iact_enable_comp_reg     <= 0;
       iact_data_i_reg          <= 0;
       iact_ready_o             <= 0;
@@ -602,7 +606,6 @@ module OpenEye_Parallel
           iact_data_i_reg        <= iact_data_i;
           iact_enable_i_reg      <= iact_enable_i;
           iact_ready_o           <= iact_ready_o_reg;
-
           fsm_iact_cycle         <= 0;
           fsm_iact_cycle_mod1    <= 0;
           fsm_iact_cycle_mod2    <= 0;
@@ -635,7 +638,7 @@ module OpenEye_Parallel
           end
 
           flat_help_var      = 0;
-          if (needed_y_cls_i_reg == 2) begin
+          if (needed_y_cls_i_reg == ($clog2(CLUSTER_ROWS+1))'(2)) begin
             for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
               for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                 if ((cr == 1) | (cr == 3) | (cr == 5) | (cr == 7)) begin
@@ -650,7 +653,7 @@ module OpenEye_Parallel
               end
             end
           end else begin
-            if (needed_y_cls_i_reg == 4) begin
+            if (3'(needed_y_cls_i_reg) == 4) begin
               for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                 for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                   if ((cr == 1) | (cr == 5)) begin
@@ -805,7 +808,7 @@ module OpenEye_Parallel
             fsm_iact_current_state <= CALCULATE_IACT;
             if (finished_cycles == needed_cycles_reg) begin
               fsm_iact_current_state <= IACT_IDLE;
-              mem_addr_iact <= 0;
+              mem_addr_iact          <= 0;
             end
           end
         end
@@ -835,6 +838,7 @@ module OpenEye_Parallel
       psum_data_o              <= 0;
       psum_choose_i            <= 0;
       router_mode_psum_reg     <= 0;
+      psum_router_set_reg      <= 1;
 
     end else begin
       psum_enable_o     <= psum_enable_o_reg;
@@ -856,11 +860,9 @@ module OpenEye_Parallel
             fsm_psum_last_state    <= PSUM_IDLE;
             fsm_psum_current_state <= CALCULATE_PSUM;
           end
-
           if (status_reg_enable_i_w) begin
             mem_addr_psum <= 0;
           end
-
           router_mode_psum_reg     <= router_mode_psum_i;
           for (int g=0; g<CLUSTERS*NUM_GLB_PSUM; g=g+1) begin
             if (psum_enable_i_reg[g]) begin
@@ -983,6 +985,7 @@ module OpenEye_Parallel
             end
           end
           if (results_ready) begin
+            psum_router_set_reg  <= 0;
             fsm_psum_cycle <= fsm_psum_cycle + 1;
             if (fsm_psum_cycle == 32'(32'(filters_reg)-1)) begin
                 psum_transmitted       <= 1;
@@ -995,7 +998,7 @@ module OpenEye_Parallel
               fsm_psum_current_state <= WAIT_FOR_RESULTS;
               mem_addr_psum          <= 0;
               psum_ready_i_reg       <= 0;
-              
+              fsm_psum_cycle         <= 0;
             end else begin
               if (needed_y_cls_reg >= 2) begin
                 for (int cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
@@ -1006,7 +1009,7 @@ module OpenEye_Parallel
                     end
                   end
                 end
-                if (storage_cycles != 3'(32'(needed_y_cls_reg) - 1)) begin
+                if (storage_cycles != ($clog2(CLUSTER_ROWS+1))'(32'(needed_y_cls_reg) - 1)) begin
                   for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                     for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
                       router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 0;
@@ -1081,7 +1084,6 @@ module OpenEye_Parallel
                     end
                   end
                   storage_cycles       <= 0;
-                  //router_mode_iact_reg <= router_mode_iact_storage;
                 end
               end
                 fsm_psum_last_state    <= GET_RESULTS;
@@ -1092,7 +1094,6 @@ module OpenEye_Parallel
             end
           end
         end
-
         WAIT_FOR_RESULTS : begin
 
           fsm_psum_cycle         <= fsm_psum_cycle + 1;
@@ -1153,7 +1154,7 @@ module OpenEye_Parallel
         ////////////////////////////////
           ///Selection
           //////////////////////////////////
-        wire  [$clog2(NUM_GLB_IACT)*PES-1:0]       iact_choose_cluster_i_w;
+        wire  [$clog2(NUM_GLB_IACT+1)*PES-1:0]     iact_choose_cluster_i_w;
         wire  [NUM_GLB_PSUM-1:0]                   psum_choose_cluster_i_w;
         wire  [PES-1:0]                            compute_cluster_i_w;
 
@@ -1412,6 +1413,7 @@ module OpenEye_Parallel
     assign iact_write_data_t_i_w    = iact_write_data_t_i_reg;
     assign stride_x_i_w             = stride_x_i_reg;
     assign stride_y_i_w             = stride_y_i_reg;
+    assign kernel_per_pe_cluster_i_w= kernel_per_pe_cluster_i_reg;
     assign compute_mask_i_w         = compute_mask_i_reg;
     assign router_mode_iact_i_w     = router_mode_iact_i_reg;
     assign router_mode_wght_i_w     = router_mode_wght_i_reg;
@@ -1445,6 +1447,7 @@ module OpenEye_Parallel
     assign iact_write_data_t_i_w    = iact_write_data_t_i;
     assign stride_x_i_w             = stride_x_i;
     assign stride_y_i_w             = stride_y_i;
+    assign kernel_per_pe_cluster_i_w= kernel_per_pe_cluster_i;
     assign compute_mask_i_w         = compute_mask_i;
     assign router_mode_iact_i_w     = router_mode_iact_i;
     assign router_mode_wght_i_w     = router_mode_wght_i;
