@@ -55,11 +55,9 @@ class PsumStreamMapper(object):
         if(self.params.SERIAL):
             temp_stream = stream
             stream = []
-            # TODO change order, works with zero only
             for cl_y in range(self.params.Clusters_Y):
-                for router in range(self.params.Psum_Routers):
+                for router in range(self.params.NUM_GLB_PSUM):
                     for word in range(len(temp_stream[0][cl_y][router])):
-                        # TODO: fix this, works for zero only
                         stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
         else:
             return stream
@@ -84,7 +82,7 @@ class DwPsumStreamMapper(PsumStreamMapper):
 
     def write_psum_storage(self, cl_x, cl_y, router, cycle):
         storage = []
-        for part_data_num in range(int(self.layer_params.filters)):
+        for part_data_num in range(math.ceil(self.layer_params.filters/2)):
             if((cl_y % self.layer_params.ceil_used_PE_per_clm) == 0):
                 if(part_data_num < self.layer_params.used_psum_per_PE):
                     storage.append(0)
