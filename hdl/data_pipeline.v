@@ -116,8 +116,9 @@ module data_pipeline
         LOADING_ADDR : begin // First state, start loading the first SPAD
           second_spad_en_o  <= 0;
           second_spad_addr_o <= 0;
-          if (enable_i == 1) begin
-                        first_spad_en_o   <= 1;
+          if ((enable_i == 1) & (!data_mode)) begin
+            second_spad_words_o <= 0;
+            first_spad_en_o   <= 1;
             first_spad_addr_o <= address_temp[FIRST_SPAD_ADDR_BITWIDTH-1:0];
             first_tmp <= address_temp[FIRST_SPAD_ADDR_BITWIDTH-1:0];
             address_temp      <= address_temp + 1;
