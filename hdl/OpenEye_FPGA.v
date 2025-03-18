@@ -219,19 +219,19 @@ module OpenEye_FPGA
   reg                                           data_mode_reg;
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0]         fraction_bit_reg;
   reg  [7:0]                                    needed_cycles_reg;
-  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]           needed_x_cls_reg;
+  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]          needed_x_cls_reg;
   reg  [$clog2(CLUSTER_ROWS+1)-1:0]             needed_y_cls_reg;
   reg  [3:0]                                    needed_iact_cycles_reg;
   reg  [$clog2(PSUM_PER_PE+1)-1:0]              filters_reg;
   reg  [$clog2(IACT_ADDR_PER_PE+1)-1:0]         iact_addr_len_reg;
-  reg  [$clog2(WGHT_ADDR_PER_PE+1)-1:0]         wght_addr_len_reg;
+  reg  [$clog2(WGHT_ADDR_PER_PE)-1:0]           wght_addr_len_reg;
   reg  [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0]    bano_cluster_mode_reg;
   reg  [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0]      af_cluster_mode_reg;
   reg  [$clog2(IACT_PER_PE+1)-1:0]              input_activations_reg;
   reg  [1:0]                                    iact_write_addr_t_reg;
   reg  [3:0]                                    iact_write_data_t_reg;
-  reg  [3:0]                                    stride_x_reg;
-  reg  [3:0]                                    stride_y_reg;
+  reg  [2:0]                                    stride_x_reg;
+  reg  [2:0]                                    stride_y_reg;
   reg                                           skipIact_reg;
   reg                                           skipWght_reg;
   reg                                           skipPsum_reg;
@@ -615,8 +615,8 @@ module OpenEye_FPGA
               32'd1 : begin
                 iact_write_addr_t_reg <= data_dma_i_reg[1+PARAMETER_POS_2_0:PARAMETER_POS_2_0];
                 iact_write_data_t_reg <= data_dma_i_reg[3+PARAMETER_POS_2_1:PARAMETER_POS_2_1];
-                stride_x_reg          <= data_dma_i_reg[3+PARAMETER_POS_2_2:PARAMETER_POS_2_2];
-                stride_y_reg          <= data_dma_i_reg[3+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
+                stride_x_reg          <= data_dma_i_reg[2+PARAMETER_POS_2_2:PARAMETER_POS_2_2];
+                stride_y_reg          <= data_dma_i_reg[2+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
                 skipIact_reg          <= data_dma_i_reg[PARAMETER_POS_2_4:PARAMETER_POS_2_4];
                 skipWght_reg          <= data_dma_i_reg[PARAMETER_POS_2_5:PARAMETER_POS_2_5];
                 skipPsum_reg          <= data_dma_i_reg[PARAMETER_POS_2_6:PARAMETER_POS_2_6];

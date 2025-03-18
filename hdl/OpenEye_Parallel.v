@@ -215,8 +215,8 @@ module OpenEye_Parallel
   reg  [$clog2(CLUSTER_ROWS+1)-1:0]             needed_y_cls_reg;
   reg  [3:0]                                    needed_iact_cycles_reg;
   reg  [$clog2(PSUM_PER_PE+1)-1:0]              filters_reg;
-  reg  [$clog2(IACT_ADDR_PER_PE+1)-1:0]         iact_addr_len_reg;
-  reg  [$clog2(WGHT_ADDR_PER_PE+1)-1:0]         wght_addr_len_reg;
+  reg  [$clog2(IACT_ADDR_PER_PE)-1:0]           iact_addr_len_reg;
+  reg  [$clog2(WGHT_ADDR_PER_PE)-1:0]           wght_addr_len_reg;
   reg  [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0]    bano_cluster_mode_reg;
   reg  [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0]      af_cluster_mode_reg;
   reg  [NUM_GLB_PSUM-1:0]                       pooling_cluster_mode_reg;
