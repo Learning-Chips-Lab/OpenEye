@@ -26,3 +26,5 @@ class LayerExecutionState(object):
         self.y_start = 0
         self.y_end = 0
         self.y_corner_end = 0
+
+        self.current_position = 0

@@ -18,9 +18,9 @@ logger = logging.getLogger("cocotb")
 
 class DenseMapper(LayerMapper):
     
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        input_mapper = DenseIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0])
-        weight_mapper = DenseWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1])
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts):
+        input_mapper = DenseIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0], sparse_iacts)
+        weight_mapper = DenseWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1], sparse_wghts)
         bias_mapper = DensePsumStreamMapper(params, layer_params, layer_repetition, dram_layer_content[2])
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, input_mapper, weight_mapper, bias_mapper)
 
@@ -45,7 +45,8 @@ class DenseMapper(LayerMapper):
                         if(layer_params.computing_mx[x][y][pe_y][pe_x]== 1):
                             computing_pes = computing_pes + 2**(counter)
                         counter = counter + 1
-        computing_pes = format(computing_pes, "0192b")
+        formating = "0" + str(params.Clusters_X * params.Clusters_Y * params.PEs_Y) + "b"
+        computing_pes = format(computing_pes, formating)
         if (params.SERIAL):
             dma_line = 0
             dma_storage = []
@@ -100,7 +101,7 @@ class DenseMapper(LayerMapper):
             storage[strdic.status_dict["skipWght"]] = layer_params.skipWght
             storage[strdic.status_dict["skipPsum"]] = layer_params.skipPsum
             storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
-
+            storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
             storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params)
             storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
@@ -111,11 +112,11 @@ class DenseMapper(LayerMapper):
         if(params.SERIAL):
             storage = []
         else:
-            storage = [[[[] for c in range(params.Iact_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+            storage = [[[[] for c in range(params.NUM_GLB_IACT)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
         router_cycle = 0
         for cl_y in range(params.Clusters_Y):
             for cl_x in range(params.Clusters_X):
-                for router in range(params.Iact_Routers):
+                for router in range(params.NUM_GLB_IACT):
                     if(layer_params.used_Y_cluster == 1):
                         if(params.SERIAL):
                             line = line + (1 << (params.Iact_Router_Bits * router_cycle))
