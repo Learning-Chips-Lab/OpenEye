@@ -89,7 +89,7 @@
 
 module OpenEye_Parallel 
 #(
-
+  `include "parameters.vh"
   ///Set parameters
   parameter IS_TOPLEVEL         = 1,
 
@@ -99,17 +99,9 @@ module OpenEye_Parallel
 
   parameter TRANS_BITWIDTH_IACT = 24,
   parameter TRANS_BITWIDTH_WGHT = 24,
-  parameter TRANS_BITWIDTH_PSUM = 20,
+  parameter TRANS_BITWIDTH_PSUM = 40,
 
-  parameter PE_COLUMNS          = 4,
-  parameter PE_ROWS             = 3,
-  
-  parameter NUM_GLB_IACT        = 3,
-  parameter NUM_GLB_WGHT        = 3,
-  parameter NUM_GLB_PSUM        = 4,
-  
-  parameter CLUSTER_ROWS        = 8,
-  parameter CLUSTER_COLUMNS     = 2,
+  parameter CLUSTER_COLUMNS      = 2,
 
   parameter IACT_PER_PE         = 16,
   parameter PSUM_PER_PE         = 32,
@@ -182,8 +174,9 @@ module OpenEye_Parallel
   input      [$clog2(IACT_PER_PE+1)-1:0]                         input_activations_i,
   input      [1:0]                                               iact_write_addr_t_i,
   input      [3:0]                                               iact_write_data_t_i,
-  input      [3:0]                                               stride_x_i,
-  input      [3:0]                                               stride_y_i,
+  input      [2:0]                                               stride_x_i,
+  input      [2:0]                                               stride_y_i,
+  input      [$clog2(PE_ROWS)-1:0]                               kernel_per_pe_cluster_i,
   input      [CLUSTERS*PES-1:0]                                  compute_mask_i,
   input      [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]       router_mode_iact_i,
   input      [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]       router_mode_wght_i,
@@ -233,8 +226,8 @@ module OpenEye_Parallel
   reg  [$clog2(IACT_PER_PE+1)-1:0]              input_activations_reg;
   reg  [1:0]                                    iact_write_addr_t_reg;
   reg  [3:0]                                    iact_write_data_t_reg;
-  reg  [3:0]                                    stride_x_reg;
-  reg  [3:0]                                    stride_y_reg;
+  reg  [2:0]                                    stride_x_reg;
+  reg  [2:0]                                    stride_y_reg;
   reg  [CLUSTERS*PES-1:0]                       compute_cluster_i_reg;
   reg  [CLUSTERS*PES-1:0]                       compute_mask_reg;
 
@@ -242,6 +235,7 @@ module OpenEye_Parallel
   reg  [32-1:0]                        fsm_cycle;
   reg  [$clog2(FSM_STATES)-1:0]        fsm_last_state;
   reg  [$clog2(FSM_STATES)-1:0]        fsm_current_state;
+  reg  [$clog2(FSM_STATES)-1:0]        fsm_transmission_state;
 
   ///Register for the iact FSM
   reg  [32-1:0]                        fsm_iact_cycle;
@@ -252,6 +246,9 @@ module OpenEye_Parallel
   reg  [6:0]                           fsm_iact_cycle_div_cnt;
   reg  [$clog2(FSM_STATES)-1:0]        fsm_iact_last_state;
   reg  [$clog2(FSM_STATES)-1:0]        fsm_iact_current_state;
+
+  ///Register for the wght FSM
+  reg  [$clog2(FSM_STATES)-1:0]        fsm_wght_current_state;
 
   ///Register for the psum FSM
   reg  [32-1:0]                        fsm_psum_cycle;
@@ -301,15 +298,16 @@ module OpenEye_Parallel
 
   wire                                                  compute_i_w;
 
-  reg                                                  iact_transmitted;
-  reg                                                  psum_transmitted;
-  reg                                                  start_new_cycle;
+  reg                                                   iact_transmitted;
+  reg                                                   wght_transmitted;
+  reg                                                   psum_transmitted;
+  reg                                                   start_new_cycle;
 
   wire                                                  status_reg_enable_i_w;
   wire                                                  data_mode_i_w;
   wire  [$clog2(DATA_PSUM_BITWIDTH)-1:0]                fraction_bit_i_w;
   wire  [7:0]                                           needed_cycles_i_w;
-  wire  [$clog2(CLUSTER_COLUMNS+1)-1:0]                  needed_x_cls_i_w;
+  wire  [$clog2(CLUSTER_COLUMNS+1)-1:0]                 needed_x_cls_i_w;
   wire  [$clog2(CLUSTER_ROWS+1)-1:0]                    needed_y_cls_i_w;
   wire  [3:0]                                           needed_iact_cycles_i_w;
   wire  [$clog2(PSUM_PER_PE+1)-1:0]                     filters_i_w;
@@ -322,8 +320,8 @@ module OpenEye_Parallel
   wire  [$clog2(IACT_PER_PE+1)-1:0]                     input_activations_i_w;
   wire  [1:0]                                           iact_write_addr_t_i_w;
   wire  [3:0]                                           iact_write_data_t_i_w;
-  wire  [3:0]                                           stride_x_i_w;
-  wire  [3:0]                                           stride_y_i_w;
+  wire  [2:0]                                           stride_x_i_w;
+  wire  [2:0]                                           stride_y_i_w;
   wire  [CLUSTERS*PES-1:0]                              compute_mask_i_w;
   wire  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_i_w;
   wire  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]   router_mode_wght_i_w;
@@ -335,9 +333,11 @@ module OpenEye_Parallel
   reg  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i_reg;
   reg  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_enable_i_reg;
   reg  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_ready_o_reg;
+  reg                                                  wght_ready_reg;
 
   reg                                                  compute_i_reg;
   reg                                                  status_reg_enable_i_reg;
+  reg                                                  status_set_reg;
   reg                                                  data_mode_i_reg;
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0]                fraction_bit_i_reg;
   reg  [7:0]                                           needed_cycles_i_reg;
