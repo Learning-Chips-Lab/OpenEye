@@ -22,6 +22,8 @@
 /// Parameters:
 ///    IS_TOPLEVEL             - Decides, wether modul is topmodul or not
 ///    CREATE_VCD              - Decides, wether a vcd-file should be created
+///    PE_X                    - X Position of PE in cluster
+///    PE_Y                    - Y Position of PE in cluster
 ///    PARALLEL_MACS           - Number of MAC operations that are performed in parallel
 ///    DATA_IACT_BITWIDTH      - Width of input activation data
 ///    DATA_WGHT_BITWIDTH      - Width of weight data
@@ -108,12 +110,13 @@ module PE
   localparam integer PSUM_ADDR_BITWIDTH      = $clog2(PSUM_ADDR),
   localparam integer PSUM_DATA_BITWIDTH      = $clog2(PSUM_DATA),
   localparam integer PSUM_WORDS_PER_TRANSFER = 1,
-  localparam integer TRANS_BITWIDTH_PSUM     = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER
+  localparam integer TRANS_BITWIDTH_PSUM     = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER,
+  localparam integer VALUES_OF_IACTS         = $rtoi($ceil(TRANS_BITWIDTH_IACT / DATA_IACT_BITWIDTH))
 
 ) ( 
   input                                              clk_i,
   input                                              rst_ni,
-  input       [$clog2(NUM_GLB_IACT)-1:0]             iact_select_i,
+  input       [$clog2(NUM_GLB_IACT+1)-1:0]           iact_select_i,
   input       [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] iact_data_i,
   input       [NUM_GLB_IACT-1:0]                     iact_enable_i,
   output      [NUM_GLB_IACT-1:0]                     iact_ready_o,
@@ -139,16 +142,16 @@ module PE
   reg [WGHT_DATA_DATA-1 : 0]                  wght_data_SPad_data_r;
   reg [IACT_ADDR_ADDR_BITWIDTH-1:0]           iact_addr_SPad_addr;
   reg [IACT_DATA_ADDR_BITWIDTH-1:0]           iact_data_SPad_addr;
-  wire [WGHT_ADDR_ADDR_BITWIDTH-1:0]           wght_addr_SPad_addr;
-  wire [WGHT_DATA_ADDR_BITWIDTH-1:0]           wght_data_SPad_addr;
-  wire [DATA_IACT_BITWIDTH-1:0]                iact_data_spad_pay;
-  wire [DATA_IACT_IGNORE_ZEROS-1:0]            iact_data_spad_oh;
+  wire [WGHT_ADDR_ADDR_BITWIDTH-1:0]          wght_addr_SPad_addr;
+  wire [WGHT_DATA_ADDR_BITWIDTH-1:0]          wght_data_SPad_addr;
+  wire [DATA_IACT_BITWIDTH-1:0]               iact_data_spad_pay;
+  wire [DATA_IACT_IGNORE_ZEROS-1:0]           iact_data_spad_oh;
   reg [DATA_IACT_IGNORE_ZEROS-1:0]            iact_oh_delay_1;
   reg [DATA_IACT_IGNORE_ZEROS-1:0]            iact_oh_delay_2;
-  wire [DATA_WGHT_BITWIDTH-1:0]                wght_data_spad_pay_1;
-  wire [DATA_WGHT_IGNORE_ZEROS-1:0]            wght_data_spad_oh_1;
-  wire [DATA_WGHT_BITWIDTH-1:0]                wght_data_spad_pay_2;
-  wire [DATA_WGHT_IGNORE_ZEROS-1:0]            wght_data_spad_oh_2;
+  wire [DATA_WGHT_BITWIDTH-1:0]               wght_data_spad_pay_1;
+  wire [DATA_WGHT_IGNORE_ZEROS-1:0]           wght_data_spad_oh_1;
+  wire [DATA_WGHT_BITWIDTH-1:0]               wght_data_spad_pay_2;
+  wire [DATA_WGHT_IGNORE_ZEROS-1:0]           wght_data_spad_oh_2;
   reg                                         psum_data_SPad_en_a_r;
   reg                                         psum_data_SPad_en_b_r;
   reg                                         psum_data_SPad_en_a_w;
@@ -170,6 +173,8 @@ module PE
   reg                                         mux_iact_b_o_w;
   wire                                        mux_iact_c_i_w;
   reg [WGHT_ADDR_DATA-1 : 0]                  wght_addr_current;
+  reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_max_reg;
+  reg [WGHT_ADDR_ADDR_BITWIDTH-1 : 0]         wght_addr_max_reg;
   reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_current;
   reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_count;
   reg [DATA_IACT_BITWIDTH-1 : 0]              iact_data_current_1;
@@ -243,16 +248,22 @@ module PE
   reg                                         wght_start_set;
   reg                                         wght_end_set;
   reg                                         next_end_set;
-  wire [3 : 0]                                 first_spad_words_iact;
-  wire [4 : 0]                                 second_spad_words_iact;
-  wire [4 : 0]                                 first_spad_words_wght;
-  wire [6 : 0]                                 second_spad_words_wght;
+  wire [3 : 0]                                first_spad_words_iact;
+  wire [4 : 0]                                second_spad_words_iact;
+  wire [4 : 0]                                first_spad_words_wght;
+  wire [6 : 0]                                second_spad_words_wght;
   reg                                         values_valid;
-  wire                                         psum_data_SPad_en_a_w_i;
-  wire                                         psum_data_SPad_en_b_w_i;
+  wire                                        psum_data_SPad_en_a_w_i;
+  wire                                        psum_data_SPad_en_b_w_i;
   reg                                         data_mode_reg;
+  reg  [2:0]                                  stride_reg;
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1: 0]      fraction_bit_reg;
   reg  [1 : 0]                                current_state_stream;
+  reg  [7:0]                                  iact_data_position_reg;
+  reg  [2:0]                                  input_activations_reg;
+  wire [DATA_IACT_BITWIDTH-1:0]               iact_part_1_w;
+  wire [DATA_IACT_BITWIDTH-1:0]               iact_part_2_w;
+  wire [DATA_IACT_BITWIDTH-1:0]               iact_part_3_w;
 
   //Necessary for creating VCD, if this is top
   `ifdef COCOTB_SIM
@@ -343,8 +354,12 @@ module PE
     // Reset
     if (!rst_ni) begin
       data_mode_reg        <= 0;
+      stride_reg           <= 0;
       fraction_bit_reg     <= 0;
       current_state_stream <= 0;
+      input_activations_reg<= 0;
+      wght_addr_max_reg    <= 0;
+      iact_addr_max_reg    <= 0;
     end else begin
       case (current_state_stream)
         FIRST_PARAMS : begin
@@ -389,6 +404,7 @@ module PE
       iact_addr_count           <= 0;
       iact_data_SPad_addr       <= 0;
       iact_data_SPad_en_r       <= 0;
+      iact_data_position_reg    <= 0;
       wght_addr_SPad_en_r       <= 0;
       wght_addr_use_vec         <= 1;
       wght_data_use_vec         <= 1;
@@ -511,7 +527,7 @@ module PE
           used_psum_memory_1     <= 0;
           used_psum_memory_2     <= 0;
           if (psum_enable_i) begin
-            current_state_computing    <= SEND_PSUM;
+            current_state_computing <= SEND_PSUM;
             adder_1_en       <= 1;
             adder_2_en       <= 1;
             psum_select      <= 1;
@@ -565,7 +581,7 @@ module PE
               values_valid          <= 0;
             end else begin
               current_state_computing       <= LOADING_1;
-              iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+                iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
               iact_addr_SPad_en_r <= 1;
             end
           end else begin
@@ -576,7 +592,7 @@ module PE
             iact_data_SPad_addr <= iact_data_SPad_addr + 1;
             iact_addr_current   <= iact_addr_SPad_data_r;
             iact_addr_SPad_en_r <= 0;
-            iact_addr_SPad_addr <= iact_addr_SPad_addr - 1;
+              iact_addr_SPad_addr <= iact_addr_SPad_addr - 1;
           end
         end
 
@@ -613,7 +629,7 @@ module PE
           end
           iact_addr_SPad_en_r <= 0;
           if (iact_addr_current == 1) begin
-            iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+              iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
           end
         end
 
@@ -644,161 +660,157 @@ module PE
         end
 
         CALCULATING : begin
-          //Defaulting Values
-          iact_addr_SPad_en_r   <= 0;
-          iact_data_SPad_en_r   <= !mux_iact_ready;
-          wght_addr_SPad_en_r   <= 1;
-          wght_data_SPad_en_r   <= 1;
-          psum_data_SPad_en_a_r <= computing;
-          psum_data_SPad_en_b_r <= computing;
-          psum_data_SPad_en_a_w <= 0;
-          psum_data_SPad_en_b_w <= 0;
-          reuse_psum_spad_a     <= 0;
-          reuse_psum_spad_b     <= 0;
-          reused_data_a         <= 0;
-          reused_data_b         <= 0;
-          computing             <= 1;
-          values_valid          <= 1;
-          wght_addr_use_vec     <= 1;
-          wght_data_use_vec     <= 1;
-          fast_cycle            <= 0;
-          next_iact             <= 0;
-          next_iact2            <= 0;
-          psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1;
-          psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
-          if (wght_data_vec < (second_spad_words_wght - 1)) begin
-            wght_data_vec <= wght_data_vec + 1;
-          end else begin
-            mux_iact_ready <= 1;
-          end
-
-          if (!next_iact || fast_cycle) begin
-            if (wght_start_set) begin
-              if (!wght_end_set) begin
-                wght_data_end_pre <= wght_addr_SPad_data_r;
-                wght_end_set      <= 1;
-              end
+            //Defaulting Values
+            iact_addr_SPad_en_r   <= 0;
+            iact_data_SPad_en_r   <= !mux_iact_ready;
+            wght_addr_SPad_en_r   <= 1;
+            psum_data_SPad_en_a_r <= computing;
+            psum_data_SPad_en_b_r <= computing;
+            psum_data_SPad_en_a_w <= 0;
+            psum_data_SPad_en_b_w <= 0;
+            reuse_psum_spad_a     <= 0;
+            reuse_psum_spad_b     <= 0;
+            reused_data_a         <= 0;
+            reused_data_b         <= 0;
+            wght_addr_use_vec     <= 1;
+            fast_cycle            <= 0;
+            next_iact             <= 0;
+            next_iact2            <= 0;
+            psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1;
+            psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
+            if (wght_data_vec < (second_spad_words_wght - 1)) begin
+              wght_data_vec <= wght_data_vec + 1;
             end else begin
-              wght_data_start_pre <= wght_addr_SPad_data_r;
-              wght_start_set <= 1;
-              if ((first_spad_words_wght - 1) > wght_addr_vec) begin
-                wght_addr_vec <= iact_oh_delay_1;
+              mux_iact_ready <= 1;
+            end
+
+            if (!next_iact || fast_cycle) begin
+              if (wght_start_set) begin
+                if (!wght_end_set) begin
+                  wght_data_end_pre <= wght_addr_SPad_data_r;
+                  wght_end_set      <= 1;
+                end
+              end else begin
+                wght_data_start_pre <= wght_addr_SPad_data_r;
+                wght_start_set <= 1;
+                if ((first_spad_words_wght - 1) > wght_addr_vec) begin
+                  wght_addr_vec <= iact_oh_delay_1;
+                end
               end
             end
-          end
 
-          if ((wght_data_end <= wght_data_SPad_addr + 1) && !next_iact) begin
-            wght_data_start <= wght_data_start_pre;
-            wght_end_set    <= 0;
-            wght_start_set  <= 0;
-            if (wght_start_set) begin
+            if ((wght_data_end <= wght_data_SPad_addr + 1) && !next_iact) begin
               wght_data_start <= wght_data_start_pre;
-              if (wght_data_vec < (second_spad_words_wght - 1)) begin
-                wght_data_vec   <= wght_data_start_pre;
+              wght_end_set    <= 0;
+              wght_start_set  <= 0;
+              if (wght_start_set) begin
+                wght_data_start <= wght_data_start_pre;
+                if (wght_data_vec < (second_spad_words_wght - 1)) begin
+                  wght_data_vec   <= wght_data_start_pre;
+                end
               end
-            end
-            if (wght_end_set) begin
-              wght_data_end       <= wght_data_end_pre;
-              wght_data_start_pre <= wght_addr_SPad_data_r;
-            end else begin
-              wght_data_end       <= wght_addr_SPad_data_r;
-            end
-            if (iact_oh_delay_1  <= iact_oh_delay_2 + 1) begin
+              if (wght_end_set) begin
+                wght_data_end       <= wght_data_end_pre;
+                wght_data_start_pre <= wght_addr_SPad_data_r;
+              end else begin
+                wght_data_end       <= wght_addr_SPad_data_r;
+              end
+              if (iact_oh_delay_1  <= iact_oh_delay_2 + 1) begin
+                if ((first_spad_words_wght - 1) > wght_addr_vec) begin
+                  wght_addr_vec <= wght_addr_vec + 1;
+                end
+                if (wght_end_set) begin
+                  wght_data_start_pre <= wght_data_end_pre;
+                end else begin
+                  wght_data_start_pre <= wght_addr_SPad_data_r;
+                end
+              end else begin
+
+                if ((first_spad_words_wght - 1) > wght_addr_vec) begin
+                  wght_addr_vec <= iact_oh_delay_1;
+                end
+                wght_start_set <= 0;
+              end
               if ((first_spad_words_wght - 1) > wght_addr_vec) begin
                 wght_addr_vec <= wght_addr_vec + 1;
               end
-              if (wght_end_set) begin
-                wght_data_start_pre <= wght_data_end_pre;
-              end else begin
-                wght_data_start_pre <= wght_addr_SPad_data_r;
-              end
-            end else begin
-
-              if ((first_spad_words_wght - 1) > wght_addr_vec) begin
-                wght_addr_vec <= iact_oh_delay_1;
-              end
-              wght_start_set <= 0;
-            end
-            if ((first_spad_words_wght - 1) > wght_addr_vec) begin
-              wght_addr_vec <= wght_addr_vec + 1;
-            end
-            fast_cycle          <= 1;
-            iact_data_SPad_addr <= iact_data_SPad_addr + 1;
-            next_iact           <= 1;
-            iact_addr_count     <= iact_addr_count + 1;
+              fast_cycle          <= 1;
+              iact_data_SPad_addr <= iact_data_SPad_addr + 1;
+              next_iact           <= 1;
+              iact_addr_count     <= iact_addr_count + 1;
             if (((32'(iact_addr_count) + 1) >= 32'(iact_addr_current)) & ((32'(iact_addr_SPad_addr)+1) < first_spad_words_iact)) begin
-              iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
-              iact_addr_SPad_en_r <= 1;
+                  iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+                iact_addr_SPad_en_r <= 1;
+              end
             end
-          end
 
-          if (next_iact) begin
-            next_iact2           <= iact_addr_SPad_en_r;
-            iact_data_current_1  <= iact_data_spad_pay;
-            iact_data_current_2  <= iact_data_current_1;
-            iact_data_current_3  <= iact_data_current_2;
-            psum_spad_addr_a_mem <= 0;
-            psum_spad_addr_b_mem <= 1;
-          end
-          // Check valid values
-          if (next_iact2) begin
-            iact_addr_current <= iact_addr_SPad_data_r;
-          end
-          if (wght_data_end <= wght_data_vec) begin
-            values_valid <= 0;
-          end
-          //Reuse Values of PSUM SPad
-          if (((32'(32'(iact_addr_count)) == 32'(32'(iact_addr_current)+1)) | (iact_addr_count == 0)) & (next_iact)) begin
+            if (next_iact) begin
+              next_iact2           <= iact_addr_SPad_en_r;
+              iact_data_current_1  <= iact_data_spad_pay;
+              iact_data_current_2  <= iact_data_current_1;
+              iact_data_current_3  <= iact_data_current_2;
+              psum_spad_addr_a_mem <= 0;
+              psum_spad_addr_b_mem <= 1;
+            end
+            // Check valid values
+            if (next_iact2) begin
+                iact_addr_current <= iact_addr_SPad_data_r;
+            end
+            if (wght_data_end <= wght_data_vec) begin
+              values_valid <= 0;
+            end
+            //Reuse Values of PSUM SPad
+            if (((32'(32'(iact_addr_count)) == 32'(32'(iact_addr_current)+1)) | (iact_addr_count == 0)) & (next_iact)) begin
             current_state_computing          <= WAIT_TO_SEND_PSUM;
-            mux_iact_ready         <= 1;
-            iact_data_current_3    <= 0;
-            computing              <= 0;
-            psum_data_SPad_en_a_r  <= 0;
-            psum_data_SPad_en_b_r  <= 0;
-            psum_data_SPad_en_a_w  <= 1;
-            psum_data_SPad_en_b_w  <= 1;
-            values_valid           <= 0;
-          end else begin
-            psum_data_SPad_en_a_w <= 1;
-            psum_data_SPad_en_b_w <= 1;
-          end
+              mux_iact_ready         <= 1;
+              iact_data_current_3    <= 0;
+              computing              <= 0;
+              psum_data_SPad_en_a_r  <= 0;
+              psum_data_SPad_en_b_r  <= 0;
+              psum_data_SPad_en_a_w  <= 1;
+              psum_data_SPad_en_b_w  <= 1;
+              values_valid           <= 0;
+            end else begin
+              psum_data_SPad_en_a_w <= 1;
+              psum_data_SPad_en_b_w <= 1;
+            end
 
-          //Duplicated Data in adders
-          if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
-            reuse_psum_spad_a <= 1;
-            reused_data_a     <= adder_1_o_w;
-          end
-          if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
-            reuse_psum_spad_b <= 1;
-            reused_data_b     <= adder_2_o_w;
-          end
-          if (psum_spad_addr_a_r == psum_spad_addr_b_w) begin
-            reuse_psum_spad_a <= 1;
-            reused_data_a     <= adder_2_o_w;
-          end
-          if (psum_spad_addr_b_r == psum_spad_addr_a_w) begin
-            reuse_psum_spad_b <= 1;
-            reused_data_b     <= adder_1_o_w;
-          end
+            //Duplicated Data in adders
+            if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
+              reuse_psum_spad_a <= 1;
+              reused_data_a     <= adder_1_o_w;
+            end
+            if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
+              reuse_psum_spad_b <= 1;
+              reused_data_b     <= adder_2_o_w;
+            end
+            if (psum_spad_addr_a_r == psum_spad_addr_b_w) begin
+              reuse_psum_spad_a <= 1;
+              reused_data_a     <= adder_2_o_w;
+            end
+            if (psum_spad_addr_b_r == psum_spad_addr_a_w) begin
+              reuse_psum_spad_b <= 1;
+              reused_data_b     <= adder_1_o_w;
+            end
 
-          adder_1_en <= 1;
-          adder_2_en <= 1;
+            adder_1_en <= 1;
+            adder_2_en <= 1;
           if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
-            use_psum_1 <= 1;
-          end else begin
-            use_psum_1 <= 0;
+              use_psum_1 <= 1;
+            end else begin
+              use_psum_1 <= 0;
             used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
-          end
+            end
           if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
-            use_psum_2 <= 1;
-          end else begin
-            use_psum_2 <= 0;
+              use_psum_2 <= 1;
+            end else begin
+              use_psum_2 <= 0;
             used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
-          end
-          psum_spad_addr_a_delay <= psum_spad_addr_a_r;
-          psum_spad_addr_b_delay <= psum_spad_addr_b_r;
-          psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
-          psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
+              end
+            psum_spad_addr_a_delay <= psum_spad_addr_a_r;
+            psum_spad_addr_b_delay <= psum_spad_addr_b_r;
+            psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
+            psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
         end
 
         WAIT_TO_SEND_PSUM : begin
@@ -815,7 +827,7 @@ module PE
           psum_data_SPad_en_a_r  <= 0;
           psum_data_SPad_en_b_r  <= 0;
           psum_data_SPad_en_a_w  <= 1;
-          psum_data_SPad_en_b_w  <= 1;
+            psum_data_SPad_en_b_w  <= 1;
           psum_spad_addr_a_mem   <= 0;
           psum_spad_addr_b_mem   <= 0;
           psum_spad_addr_a_delay <= psum_spad_addr_a_r;
@@ -867,28 +879,28 @@ module PE
             psum_spad_addr_a_w    <= psum_spad_addr_a_r;
             psum_spad_addr_b_w    <= psum_spad_addr_b_r;
             if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
-              use_psum_1    <= 1;
+                use_psum_1    <= 1;
               used_psum_memory_1[(psum_spad_addr_a_r)]  <= 0;
-            end else begin
-              use_psum_1    <= 0;
-            end
+              end else begin
+                use_psum_1    <= 0;
+              end
             if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
-              use_psum_2    <= 1;
+                use_psum_2    <= 1;
               used_psum_memory_2[(psum_spad_addr_b_r)]  <= 0;
-            end else begin
-              use_psum_2    <= 0;
-            end
+              end else begin
+                use_psum_2    <= 0;
+              end
           end else begin
             if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
-              use_psum_1 <= 1;
-            end else begin
-              use_psum_1 <= 0;
+                use_psum_1 <= 1;
+              end else begin
+                use_psum_1 <= 0;
               //used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
-            end
+              end
             if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
-              use_psum_2 <= 1;
-            end else begin
-              use_psum_2 <= 0;
+                use_psum_2 <= 1;
+              end else begin
+                use_psum_2 <= 0;
               //used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
             end
           end
@@ -1024,7 +1036,7 @@ module PE
     .data_i(psum_spad_data_b_i),
     .data_o(psum_spad_data_b_o)
   );
-
+  
   // Mux to select the correct IACT data from GLB
   mux_iact #(
     .WIDTH  (TRANS_BITWIDTH_IACT),
@@ -1051,11 +1063,13 @@ module PE
     .clk_i             (clk_i),
     .rst_ni            (rst_ni),
     .compute_i         (compute_i),
+    .data_mode         (1'd0),
 
     .data_i            (wght_data_i),
     .enable_i          (wght_enable_i),
 
-    .first_spad_words_o (first_spad_words_wght),
+    .first_spad_words_o  (first_spad_words_wght),
+    .first_spad_max_i    (wght_addr_max_reg),
     .second_spad_words_o (second_spad_words_wght),
 
     .first_spad_addr_o (first_spad_wght_addr_w),
@@ -1079,11 +1093,13 @@ module PE
     .clk_i             (clk_i),
     .rst_ni            (rst_ni),
     .compute_i         (compute_i),
+    .data_mode         (data_mode_reg),
 
     .data_i            (mux_iact_a_o_w),
     .enable_i          (mux_iact_b_o_w),
 
-    .first_spad_words_o (first_spad_words_iact),
+    .first_spad_words_o  (first_spad_words_iact),
+    .first_spad_max_i    (iact_addr_max_reg),
     .second_spad_words_o (second_spad_words_iact),
 
     .first_spad_addr_o (first_spad_iact_addr_w),

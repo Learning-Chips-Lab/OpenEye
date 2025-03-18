@@ -54,11 +54,13 @@ module data_pipeline
     input                                        clk_i,
     input                                        rst_ni,
     input                                        compute_i,
+    input                                        data_mode,
 
     input      [DATA_WIDTH-1 : 0]                data_i,
     input                                        enable_i,
 
     output reg [$clog2(FIRST_SPAD_ADDR+1)-1 : 0]  first_spad_words_o,
+    input      [$clog2(FIRST_SPAD_ADDR)-1 : 0]    first_spad_max_i,
     output reg [$clog2(SECOND_SPAD_ADDR+1)-1 : 0] second_spad_words_o, 
 
     output reg [FIRST_SPAD_ADDR_BITWIDTH-1 : 0]  first_spad_addr_o,
@@ -115,7 +117,7 @@ module data_pipeline
           second_spad_en_o  <= 0;
           second_spad_addr_o <= 0;
           if (enable_i == 1) begin
-            first_spad_en_o   <= 1;
+                        first_spad_en_o   <= 1;
             first_spad_addr_o <= address_temp[FIRST_SPAD_ADDR_BITWIDTH-1:0];
             first_tmp <= address_temp[FIRST_SPAD_ADDR_BITWIDTH-1:0];
             address_temp      <= address_temp + 1;
