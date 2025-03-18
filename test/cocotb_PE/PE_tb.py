@@ -141,25 +141,27 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
     for iact_y in range(len(iact)):
         for iact_x in range(len(iact[iact_y])):
             for wght_x in range(len(wght[current_iact])):
-                tmp_wght = wght[current_iact][wght_x]
-                if tmp_wght > 127:
-                    tmp_wght -= 256
                 control[wght_x] = (
-                    control[wght_x] + tmp_wght * iact[iact_y][iact_x]
+                    control[wght_x] + wght[current_iact][wght_x] * iact[iact_y][iact_x]
                 )
-                if wght_x == 0:
-                    print(control[wght_x], wght[current_iact][wght_x])
             current_iact = current_iact + 1
 
     current_control = 0
 
     while dut.psum_enable_o.value == 1:
-        xx = dut.adder_3.sum_o.value.integer
-        if xx > 2**19 - 1:
-            xx -= 2**20
-        assert xx == control[current_control], (
+        assert dut.adder_1.sum_o.value.integer == control[current_control], (
             "PSUM("
-            + str(dut.adder_3.sum_o.value.integer)
+            + str(dut.adder_1.sum_o.value.integer)
+            + ") is not equal to control("
+            + str(control[current_control])
+            + "), "
+            + str(current_control + 1)
+            + ". PSUM Value"
+        )
+        current_control = current_control + 1
+        assert dut.adder_2.sum_o.value.integer == control[current_control], (
+            "PSUM("
+            + str(dut.adder_2.sum_o.value.integer)
             + ") is not equal to control("
             + str(control[current_control])
             + "), "
@@ -217,8 +219,8 @@ async def send_bias(ptp, dut, data_array):
         dut.PSUM_ADDR.value,
         dut.PSUM_ADDR.value,
         dut.DATA_PSUM_BITWIDTH.value,
-        True,
-        0,#dut.DATA_PSUM_BITWIDTH.value,
+        False,
+        dut.DATA_PSUM_BITWIDTH.value,
         False,
     )
     dut._log.info("PSUM is %s", spad_data[1])
@@ -229,7 +231,7 @@ async def send_bias(ptp, dut, data_array):
         dut.psum_data_i,
         dut.PSUM_ADDR.value,
         dut.TRANS_BITWIDTH_PSUM.value,
-        dut.DATA_PSUM_BITWIDTH.value,# * 2,
+        dut.DATA_PSUM_BITWIDTH.value * 2,
         False,
     )
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.psum_enable_i, 0))
@@ -237,7 +239,7 @@ async def send_bias(ptp, dut, data_array):
 
 async def reset_all_signals(ptp, dut):
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.rst_ni), 0))
-    #cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_mode_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_mode_i), 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.iact_select_i), 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.compute_i), 0))
 
@@ -252,10 +254,7 @@ async def reset_all_signals(ptp, dut):
     cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.psum_enable_i, 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.psum_ready_i, 0))
 
-    #cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.fraction_bit_i, 0))
-
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.enable_stream_i, 0))
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.data_stream_i, 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.fraction_bit_i, 0))
 
     await Timer(clk_cycle, units=clk_cycle_unit)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.rst_ni, 1))

@@ -251,8 +251,8 @@ async def send_iact(dut, params, data_array):
 
 async def get_psum(dut, params, iacts_array, wghts_array, psum_array):
     control = np.zeros(
-        params.NUM_GLB_PSUM * params.Psums_per_PE, dtype=int
-    ).reshape(params.NUM_GLB_PSUM, params.Psums_per_PE)
+        params.NUM_GLB_PSUM * params.Psums_per_PE * 2, dtype=int
+    ).reshape(params.NUM_GLB_PSUM, params.Psums_per_PE * 2)
 
     iact = iacts_array
     wght = wghts_array
@@ -347,32 +347,32 @@ async def check_psum(dut, pe_x, control):
             
         current_control = current_control + 1
         
-        # if (int(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])/(2**20)) == control[current_control]):
-        #     print(
-        #     "PSUM("
-        #     + str(int(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])/(2**20)))
-        #     + ") is equal to control("
-        #     + str(control[current_control])
-        #     + "), "
-        #     + str(current_control + 1)
-        #     + ". PSUM Value, "
-        #     + str(pe_x + 1)
-        #     + ". PE_X"
-        #     )
-        # else:
-        #     print(
-        #     "PSUM("
-        #     + str(int(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])/(2**20)))
-        #     + ") is not equal to control("
-        #     + str(control[current_control])
-        #     + "), "
-        #     + str(current_control + 1)
-        #     + ". PSUM Value, "
-        #     + str(pe_x + 1)
-        #     + ". PE_X"
-        #     )
-        #     first_error_found = 1
-        # current_control = current_control + 1
+        if (int(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])/(2**20)) == control[current_control]):
+            print(
+            "PSUM("
+            + str(int(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])/(2**20)))
+            + ") is equal to control("
+            + str(control[current_control])
+            + "), "
+            + str(current_control + 1)
+            + ". PSUM Value, "
+            + str(pe_x + 1)
+            + ". PE_X"
+            )
+        else:
+            print(
+            "PSUM("
+            + str(int(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])/(2**20)))
+            + ") is not equal to control("
+            + str(control[current_control])
+            + "), "
+            + str(current_control + 1)
+            + ". PSUM Value, "
+            + str(pe_x + 1)
+            + ". PE_X"
+            )
+            first_error_found = 1
+        current_control = current_control + 1
         await RisingEdge(clk.signal)
         await Timer(clk_delay_out, units=clk_delay_unit_out)
 
@@ -453,8 +453,8 @@ async def send_bias(dut, params, data_array):
                 params.Psums_per_PE,
                 params.Psums_per_PE,
                 params.PSUM_Bitwidth,
-                True,
-                0,#params.PSUM_Bitwidth,
+                False,
+                params.PSUM_Bitwidth,
                 False,
                 False
             )
@@ -468,8 +468,8 @@ async def send_bias(dut, params, data_array):
                     spad_data[glb_cluster][1],
                     signals_dict["pe_router_psum_data_i"][glb_cluster],
                     signals_dict["pe_router_psum_enable_i"][glb_cluster],
-                    math.ceil(params.Psums_per_PE),
-                    params.PSUM_Bitwidth,
+                    math.ceil(params.Psums_per_PE/params.PARALLEL_MACS),
+                    params.PSUM_Bitwidth * 2,
                     params.PSUM_Trans_Bitwidth,
                     False,
                     "PSUM_" + str(glb_cluster)
@@ -621,10 +621,8 @@ def create_iact_wght_psum_arrays(
 async def reset_all_signals(dut, params):
 
     cocotb.start_soon(set_flat_input(signals_dict["rst_ni"], 0))
-    #cocotb.start_soon(set_flat_input(signals_dict["data_mode_i"], 0))
-    #cocotb.start_soon(set_flat_input(signals_dict["fraction_bit_i"], 0))
-    cocotb.start_soon(set_flat_input(signals_dict["enable_stream_i"], 0))
-    cocotb.start_soon(set_flat_input(signals_dict["data_stream_i"], 0))
+    cocotb.start_soon(set_flat_input(signals_dict["data_mode_i"], 0))
+    cocotb.start_soon(set_flat_input(signals_dict["fraction_bit_i"], 0))
     
     for pe_columns in range(params.PEs_X):
         for pe_rows in range(params.PEs_Y):
@@ -665,14 +663,10 @@ async def create_dict(dut, params):
     signals_dict["clk_i"] = current_signal
     current_signal = {"signal":dut.rst_ni, "start_bit":0, "end_bit":0}
     signals_dict["rst_ni"] = current_signal
-    #current_signal = {"signal":dut.data_mode_i, "start_bit":0, "end_bit":0}
-    #signals_dict["data_mode_i"] = current_signal
-    #current_signal = {"signal":dut.fraction_bit_i, "start_bit":4, "end_bit":0}
-    #signals_dict["fraction_bit_i"] = current_signal
-    current_signal = {"signal":dut.enable_stream_i, "start_bit":0, "end_bit":0}
-    signals_dict["enable_stream_i"] = current_signal
-    current_signal = {"signal":dut.data_stream_i, "start_bit":7, "end_bit":0}
-    signals_dict["data_stream_i"] = current_signal
+    current_signal = {"signal":dut.data_mode_i, "start_bit":0, "end_bit":0}
+    signals_dict["data_mode_i"] = current_signal
+    current_signal = {"signal":dut.fraction_bit_i, "start_bit":4, "end_bit":0}
+    signals_dict["fraction_bit_i"] = current_signal
     current_signal = []
     for x in range(params.PEs_X):
         current_signal.append([])

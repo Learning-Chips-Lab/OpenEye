@@ -42,12 +42,13 @@ status_dict = {
   "iact_data_len": 13,
   "strideX": 14,
   "strideY": 15,
-  "skipIact": 16,
-  "skipWght": 17,
-  "skipPsum": 18,
-  "usePEs": 19,
-  "router_iact": 20,
-  "router_wght": 21,
-  "router_psum": 22,
-  "psum_delay": 23
+  "kernel_per_pe_cluster": 16,
+  "skipIact": 17,
+  "skipWght": 18,
+  "skipPsum": 19,
+  "usePEs": 20,
+  "router_iact": 21,
+  "router_wght": 22,
+  "router_psum": 23,
+  "psum_delay": 24
 }

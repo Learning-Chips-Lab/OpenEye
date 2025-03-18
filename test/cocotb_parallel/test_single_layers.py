@@ -5,9 +5,9 @@
 import logging
 import os
 import sys
-
 import pytest
 import cocotb_test.simulator
+from datetime import datetime
 logger = logging.getLogger("cocotb")
 
 directory = (os.path.abspath(os.getcwd()))
@@ -16,6 +16,7 @@ tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
 
 import parallel_test_utils as ptu
+import test_utils.vh_file_creator as vh_file_creator
 
 
 #As ref:
@@ -37,15 +38,23 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("KERNEL_SIZE", [(3)])
 @pytest.mark.parametrize("INPUT_SIZE", [(32)])
 @pytest.mark.parametrize("INPUT_CHANNELS", [(4)])#, 4, 8])
-def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE, INPUT_CHANNELS):
+@pytest.mark.parametrize("USE_SPARSE_IACTS", [(0)])
+@pytest.mark.parametrize("USE_SPARSE_WGHTS", [(0)])
+@pytest.mark.parametrize("USE_RANDOM_VALUES", [(1)])
+@pytest.mark.parametrize("CLUSTER_ROWS", [(4)])
+@pytest.mark.parametrize("LOGGER_LEVEL", [(0)])
+
+def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE, INPUT_CHANNELS, \
+USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL, CLUSTER_ROWS):
     layer = "Convolution"
     dut = 'OpenEye_Parallel'
     module = 'OpenEye_Parallel_tb'
     toplevel = dut
-    verilog_sources = ptu.get_verilog_sources(hdl_dir)
-
-    target_dir = os.path.join(tests_dir, '.temp') 
-
+    verilog_sources = ptu.get_verilog_sources(hdl_dir, serial = False)
+    target_dir = os.path.join(tests_dir, '.temp')
+    #target_dir = os.path.join(tests_dir, '.temp/test_' + str(datetime.now().isoformat())) 
+    os.makedirs(target_dir, exist_ok=True)
+    vh_file_creator.create_vh_file(target_dir,hdl_dir + "/", toplevel = "OpenEye_Parallel")
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],
         verilog_sources=verilog_sources,
@@ -54,7 +63,7 @@ def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE, INPUT_C
         sim_build=target_dir,
         testcase='single_layer_test',
         force_compile=True,
-        waves=False,
+        waves=True,
         simulator="verilator",
         extra_env = {"CLOCK_LEN" : str(clk_cycle)
                     ,"CLOCK_UNIT" : clk_cycle_unit
@@ -67,7 +76,12 @@ def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE, INPUT_C
                     ,"STRIDE" : str(STRIDE)
                     ,"KERNEL_SIZE" : str(KERNEL_SIZE)
                     ,"INPUT_SIZE" : str(INPUT_SIZE)
-                    ,"INPUT_CHANNELS" : str(INPUT_CHANNELS)}
+                    ,"INPUT_CHANNELS" : str(INPUT_CHANNELS)
+                    ,"USE_SPARSE_IACTS" : str(USE_SPARSE_IACTS)
+                    ,"USE_SPARSE_WGHTS" : str(USE_SPARSE_WGHTS)
+                    ,"USE_RANDOM_VALUES" : str(USE_RANDOM_VALUES)
+                    ,"CLUSTER_ROWS" : str(CLUSTER_ROWS)
+                    ,"LOGGER_LEVEL" : str(LOGGER_LEVEL)}
     )
     
 @pytest.mark.parametrize("STRIDE", [(1)])#, (2,2)])
@@ -80,9 +94,9 @@ def test_single_pool_layer(STRIDE,KERNEL_SIZE,INPUT_SIZE,INPUT_CHANNELS):
     module = 'OpenEye_Parallel_tb'
     toplevel = dut
     verilog_sources = ptu.get_verilog_sources(hdl_dir)
-
-    target_dir = os.path.join(tests_dir, '.temp') 
-
+    current_time = str(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    target_dir = os.path.join(tests_dir, '.temp_' + current_time) 
+    vh_file_creator.create_vh_file(file_path_vh = target_dir, file_path_hdl = os.getcwd() + "/../../../hdl/")
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],
         verilog_sources=verilog_sources,

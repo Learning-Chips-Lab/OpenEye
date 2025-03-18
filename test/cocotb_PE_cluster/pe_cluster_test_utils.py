@@ -93,7 +93,6 @@ class OpenEyeParameters():
         self.Wghts_Addr_per_PE = 16
         self.Wghts_per_PE = 192
         self.Psums_per_PE  = 32
-        self.Iact_Routers = 3
         self.Wght_Routers = self.PEs_Y
         self.Psum_Routers = self.PEs_X
         self.Data_mode = 1
@@ -181,11 +180,12 @@ def get_verilog_sources(hdl_dir):
         os.path.join(hdl_dir, "mux2.v"),
         os.path.join(hdl_dir, "demux2.v"),
         os.path.join(hdl_dir, "mux_iact.v"),
-        os.path.join(hdl_dir, "SPad_DP.v"),
+        os.path.join(hdl_dir, "SPad_DP_RW.v"),
         os.path.join(hdl_dir, "SPad_SP.v"),
+        os.path.join(hdl_dir, "memory/RAM_DP_RW.v"),
         os.path.join(hdl_dir, "memory/RAM_DP.v"),
         os.path.join(hdl_dir, "memory/RAM_SP.v"),
-        os.path.join(hdl_dir, "memory/impl/RAM_DP_generic.v"),
+        os.path.join(hdl_dir, "memory/impl/RAM_DP_RW_generic.v"),
         os.path.join(hdl_dir, "memory/impl/RAM_SP_generic.v"),
     ]
     return verilog_sources
@@ -261,7 +261,7 @@ def write_conv2d_layer(params, layer_params, layer, file_weights, file_bias):
         current_input_Y = layer.input.shape[2]
     layer_params.complete_computations = calc_X * calc_Y
         
-    layer_params.needed_Iact_writes = math.ceil((params.PEs_X + layer.kernel_size[1] - 1) /(params.Iact_Routers))
+    layer_params.needed_Iact_writes = math.ceil((params.PEs_X + layer.kernel_size[1] - 1) /(params.NUM_GLB_IACT))
     
     layer_params.realfactor = math.floor(abs(math.log2(abs(layer_params.current_highest_number))))
     # Calculate the number of refreshes needed for the layer
@@ -317,7 +317,7 @@ def write_router_reference_files(params, layer_params, file_dma):
     
     for cl_x in range(params.Clusters_X):
         for cl_y in range(params.Clusters_Y):
-            for router in range(params.Iact_Routers):
+            for router in range(params.NUM_GLB_IACT):
                 if((layer_params.ceil_used_PE_per_clm == 1) & (layer_params.used_PEs_Y == 1)):
                     file_i_router.write("000001\n")
                 else:
@@ -407,7 +407,7 @@ def write_router_iact(params, layer_params, file_dma):
     
     for cl_x in range(params.Clusters_X):
         for cl_y in range(params.Clusters_Y):
-            for router in range(params.Iact_Routers):
+            for router in range(params.NUM_GLB_IACT):
                 if((layer_params.ceil_used_PE_per_clm == 1) & (layer_params.used_PEs_Y == 1)):
                     dma_line = dma_line + (1 << (params.Iact_Router_Bits * router_cycle))
                 else:
@@ -507,7 +507,7 @@ def write_iact_data(params, layer_params, layer, Inputdata, file_dma):
     overhead_counter_before_x_cl = 0
     
     for cl_y in range(params.Clusters_Y):
-        for router in range(params.Iact_Routers):
+        for router in range(params.NUM_GLB_IACT):
             for cycle in range(layer_params.Used_refreshes):
                 for iact_cycle in range(layer_params.needed_Iact_writes):
                     for dma_part_data_num in range(math.ceil(params.Iacts_Addr_per_PE/3)):
@@ -532,7 +532,7 @@ def write_iact_data(params, layer_params, layer, Inputdata, file_dma):
                                 if((cl_y % layer_params.ceil_used_PE_per_clm) == 0) & ((txt_row + dma_part_data_num * 2) < layer_params.used_iact_per_PE):
                                     iact_temp_pos_x = int(math.floor(cl_x * params.PEs_X + cl_y * params.PEs_X * params.Clusters_X + cycle * params.PEs_X * params.Clusters / layer_params.ceil_used_PE_per_clm) %\
                                                         (layer.output.shape[2])+\
-                                                        router + iact_cycle * params.Iact_Routers)
+                                                        router + iact_cycle * params.NUM_GLB_IACT)
                                     iact_temp_pos_y = int(((txt_row + dma_part_data_num * 2) + \
                                                         ((params.Clusters_X * params.PEs_X) * cl_y + cl_x * params.PEs_X + cycle *params.PEs_X * params.Clusters)/layer.output.shape[2]/ layer_params.ceil_used_PE_per_clm))
                                     if iact_temp_pos_x < (layer.input.shape[1] + layer.kernel_size[1] - 1):

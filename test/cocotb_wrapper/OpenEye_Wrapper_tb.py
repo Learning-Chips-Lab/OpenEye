@@ -190,15 +190,12 @@ async def single_layer_test(dut):
             for layer_repetition in range(layer_parameters.needed_total_transmissions):
                 
                 logger.info("Send stream.")
-                await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters, layer_repetition))
+                await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters))
                 logger.info("Stream is sent.")
-
-                await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level, stream[layer_repetition]))
-
                 if("Depthwise" in str(layer)):
                     await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
                 elif("Conv" in str(layer)):
-                    await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level, stream))
+                    await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
                 elif("Dense" in str(layer)):
                     await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
                 if(logging.DEBUG >= log_level):
