@@ -1428,7 +1428,7 @@ module OpenEye_FPGA
       .NUM_GLB_WGHT        (NUM_GLB_WGHT),
       .NUM_GLB_PSUM        (NUM_GLB_PSUM),
 
-      .CLUSTER_COLUMNS      (CLUSTER_COLUMNS),
+      .CLUSTER_COLUMNS     (CLUSTER_COLUMNS),
       .CLUSTER_ROWS        (CLUSTER_ROWS),
 
       .IACT_ADDR_PER_PE    (IACT_ADDR_PER_PE),
