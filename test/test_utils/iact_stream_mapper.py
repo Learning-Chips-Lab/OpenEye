@@ -26,10 +26,10 @@ class IactStreamMapper(object):
             self.storage = [[] for _ in range(len(strdic.stream_parallel_dict))]
 
     def get_iact_stream(self):
-        iact_stream = [[[[] for c in range(self.params.Iact_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
+        iact_stream = [[[[] for c in range(self.params.NUM_GLB_IACT)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
         for cl_x in range(self.params.Clusters_X):
             for cl_y in range(self.params.Clusters_Y):
-                for router in range(self.params.Iact_Routers):
+                for router in range(self.params.NUM_GLB_IACT):
                     iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
         iact_stream = self.create_complete_iact_stream(iact_stream)
 
@@ -88,7 +88,7 @@ class IactStreamMapper(object):
                 (math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
                 cycle * params.PEs_X * math.floor(params.Clusters/self.layer_params.used_Y_cluster)) * layer_params.strideX) % \
                 ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
-                router + iact_cycle * params.Iact_Routers) - \
+                router + iact_cycle * params.NUM_GLB_IACT) - \
                 (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
                 
                 iact_temp_pos_y = \
@@ -130,10 +130,10 @@ class IactStreamMapper(object):
     def create_complete_iact_stream(self, spad_storage):
         params = self.params
 
-        stream = [[[[] for c in range(params.Iact_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+        stream = [[[[] for c in range(params.NUM_GLB_IACT)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
         for cl_x in range(params.Clusters_X):
             for cl_y in range(params.Clusters_Y):
-                for router in range(params.Iact_Routers):
+                for router in range(params.NUM_GLB_IACT):
 
                     current_spad = spad_storage[cl_x][cl_y][router]
                     for cycle in range(len(current_spad)):
@@ -146,7 +146,7 @@ class IactStreamMapper(object):
             stream = []
             for word in range(len(temp_stream[0][0][0])):
                 for cl_y in range(params.Clusters_Y):
-                    for router in range(params.Iact_Routers):
+                    for router in range(params.NUM_GLB_IACT):
                     
                         stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
                         # print(stream[-1])
@@ -221,7 +221,7 @@ class ConvIactStreamMapper(IactStreamMapper):
                 (math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
                 cycle * params.PEs_X * math.floor(params.Clusters/self.layer_params.used_Y_cluster)) * layer_params.strideX) % \
                 ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
-                router + iact_cycle * params.Iact_Routers) - \
+                router + iact_cycle * params.NUM_GLB_IACT) - \
                 (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
                 
                 iact_temp_pos_y = \
@@ -304,7 +304,7 @@ class DenseIactStreamMapper(IactStreamMapper):
 
                     iact_temp_pos_x = words_in_storage + \
                     router * layer_params.used_iact_per_PE + \
-                    (layer_repetition % layer_params.iact_transmissions_pe) * params.Iact_Routers * layer_params.used_iact_per_PE
+                    (layer_repetition % layer_params.iact_transmissions_pe) * params.NUM_GLB_IACT * layer_params.used_iact_per_PE
 
                     try:
                         spad_storage[words_in_storage][0]= dram_fmap[iact_temp_pos_x]
@@ -353,7 +353,7 @@ class DwIactStreamMapper(IactStreamMapper):
                 cycle * params.PEs_X * params.Clusters) * \
                 layer_params.strideX) % \
                 ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
-                router + iact_cycle * params.Iact_Routers) - \
+                router + iact_cycle * params.NUM_GLB_IACT) - \
                 (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
                 
                 iact_temp_pos_y = \

@@ -119,7 +119,7 @@ class LayerParameters(object):
 
     def calculate_iact_transmissions(self, layer, params):
         #Calculate Iact Cycles
-        self.needed_Iact_writes = math.ceil(((params.PEs_X - 1) * self.strideX + layer.kernel_size[1]) /(params.Iact_Routers))
+        self.needed_Iact_writes = math.ceil(((params.PEs_X - 1) * self.strideX + layer.kernel_size[1]) /(params.NUM_GLB_IACT))
        
     def calculate_computing_matrix(self, layer, params):
         """ TODO: Docu - explain why this function exists"""

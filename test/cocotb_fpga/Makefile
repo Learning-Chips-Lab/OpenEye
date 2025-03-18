@@ -60,13 +60,15 @@ export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
 export NUM_FILTERS=8
 export KERNEL_SIZE=3
-export INPUT_SIZE=48
-export OUTPUT_SIZE=48
+export INPUT_SIZE=16
+export OUTPUT_SIZE=16
 export STRIDE=1
 export INPUT_CHANNELS=4
 #Amout of parallel MACs
 export PARALLEL_MACS=2
 export USE_RANDOM_VALUES=1
+export USE_SPARSE_IACTS=0
+export USE_SPARSE_WEIGHTS=0
 	
 #Actual Datawidth of Data
 export DATA_IACT_BITWIDTH=8
@@ -101,7 +103,12 @@ export PE_WGHT_ADDR_ADDR=16
 export PSUM_PER_PE=32
 
 # include cocotb's make rules to take care of the simulator setup
-include $(shell cocotb-config --makefiles)/Makefile.sim
+export PYTHON = /home/dlebold/miniconda3/bin/python
+export SCRIPT = $(PWD)/../test_utils/vh_file_creator.py
+
+export
+run:
+	@$(PYTHON) $(SCRIPT) && make -f $(shell cocotb-config --makefiles)/Makefile.sim
 
 gtkwave:
 	touch $(abspath $(PWD)/../../hdl/OpenEye_FPGA.v)
