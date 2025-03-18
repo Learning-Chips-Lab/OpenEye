@@ -11,21 +11,34 @@ import requests
 
 def create_model_from_tflite(use_random):
 #tflite model needed for bias and weights
-    script_dir = Path(__file__).resolve().parent
-    tflite_model_path = Path.joinpath(script_dir, 'mobilenet_v1_0.5_128_quant.tflite')
+    if (False):
+        script_dir = Path(__file__).resolve().parent
+        tflite_model_path = Path.joinpath(script_dir, 'mobilenet_v1_0.5_128_quant.tflite')
 
-    if not tflite_model_path.exists():
-        mobilenet_v1_url = 'http://download.tensorflow.org/models/mobilenet_v1_2018_08_02/mobilenet_v1_0.5_128_quant.tgz'
+        if not tflite_model_path.exists():
+            mobilenet_v1_url = 'http://download.tensorflow.org/models/mobilenet_v1_2018_08_02/mobilenet_v1_0.5_128_quant.tgz'
+            response = requests.get(mobilenet_v1_url)
+            if response.status_code == 200:
+                data = response.content
+                tar_file = tarfile.open(fileobj=BytesIO(data))
+                tar_file.extract('./mobilenet_v1_0.5_128_quant.tflite', path=script_dir)
+                tar_file.close()
+        interpreter = tf.lite.Interpreter(model_path=str(tflite_model_path))
+        interpreter.allocate_tensors()
+    else:
+        script_dir = Path(__file__).resolve().parent
+        tflite_model_path = Path.joinpath(script_dir, 'tflite_net')
+
+        #if not tflite_model_path.exists():
+        mobilenet_v1_url = 'http://download.tensorflow.org/models/mobilenet_v1_2018_08_02/mobilenet_v1_0.5_128.tgz'
         response = requests.get(mobilenet_v1_url)
         if response.status_code == 200:
             data = response.content
             tar_file = tarfile.open(fileobj=BytesIO(data))
-            tar_file.extract('./mobilenet_v1_0.5_128_quant.tflite', path=script_dir)
+            tar_file.extractall(path=tflite_model_path)
             tar_file.close()
-
-    interpreter = tf.lite.Interpreter(model_path=tflite_model_path)
-    interpreter.allocate_tensors()
-
+        model = tf.saved_model.load(tflite_model_path)
+        model.summary()
 
 #manual model parameter
     layer_type = ["Convolution", "Depthwise_Convolution","Convolution", "Depthwise_Convolution",\
@@ -42,7 +55,7 @@ def create_model_from_tflite(use_random):
                 256,256,256,256,\
                 256,256,256,256,\
                 256,256,256,256,\
-                512,512,512,1001
+                512,512,512,1000
                 ]
 
     stride_array = [2,1,1,2,\
@@ -61,7 +74,7 @@ def create_model_from_tflite(use_random):
                      1,3,1,3,\
                      1,3,1,3,\
                      1,3,1,3,\
-                     1,3,1,1001
+                     1,3,1,1000
                      ]
 
     input_size_array =  [128,64,64,64,\
@@ -104,7 +117,8 @@ def create_model_from_tflite(use_random):
     conv_layer = []
     model = tf.keras.models.Sequential()
 
-    for i in range(len(input_size_array)-27):
+    #for i in range(len(input_size_array)-25):
+    for i in range(5):
         match layer_type[i]:
             case "Convolution":
                 conv_layer.append(tf.keras.layers.Conv2D(filter_array[i], (kernel_size_array[i], kernel_size_array[i]), padding="SAME",\
