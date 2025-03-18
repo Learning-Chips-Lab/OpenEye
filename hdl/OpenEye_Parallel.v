@@ -588,6 +588,7 @@ module OpenEye_Parallel
           if (fsm_psum_last_state == SEND_RESULTS) begin
             fsm_last_state    <= COMPUTING;
             fsm_current_state <= MAIN_IDLE;
+            status_set_reg    <= 0;
           end
 
         end
@@ -598,6 +599,46 @@ module OpenEye_Parallel
     end
   end
 
+  always@(posedge clk_i, negedge rst_n) begin
+    if (!rst_n) begin  ///Reset
+      fsm_wght_current_state <= WGHT_READY;
+      wght_enable_i_reg      <= 0;
+      wght_data_i_reg        <= 0;
+      wght_ready_o           <= 0;
+      wght_ready_reg         <= 1;
+      wght_transmitted       <= 0;
+    end else begin
+      wght_data_i_reg        <= wght_data_i;
+      wght_enable_i_reg      <= wght_enable_i;
+      wght_ready_o           <= wght_ready_o_reg; 
+      case(fsm_wght_current_state) 
+
+        WGHT_READY : begin
+          wght_ready_reg   <= 1;
+          wght_transmitted <= 0;
+          if (compute_i) begin
+            wght_ready_reg         <= 0;
+            fsm_wght_current_state <= WGHT_BUSY;
+          end
+        end
+
+        WGHT_BUSY : begin
+          wght_ready_reg   <= 0;
+          wght_transmitted <= 1;
+          if ((compute_cluster_i_reg != 0) & (8'(finished_cycles) == 8'(needed_cycles_i_reg))) begin
+            fsm_wght_current_state <= WGHT_READY;
+          end
+          if ((data_mode_reg) & (8'(finished_cycles) == 8'(1))) begin
+            fsm_wght_current_state <= WGHT_READY;
+          end
+        end
+
+        default : begin
+          wght_ready_reg <= 0;
+        end
+      endcase
+    end
+  end
 
   always@(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
