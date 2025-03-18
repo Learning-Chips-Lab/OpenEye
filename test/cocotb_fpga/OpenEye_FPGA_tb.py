@@ -16,6 +16,7 @@ import test_utils.rtl_test_utils as rtl_test_utils
 import test_utils.timing_parameters as tp
 import test_utils.generic_test_utils as gtu
 import test_utils.DRAM as DRAM
+import test_utils.time_stamper as time_stamper
 import test_utils.open_eye_parameters as oep
 import test_utils.layer_parameters as lp
 import test_utils.simple_layer_operations as slo
@@ -31,6 +32,8 @@ os.environ["CLOCK_DELAY_UNIT_INPUT"] = "ps"
 
 os.environ["CLOCK_DELAY_OUTPUT"] = "100"
 os.environ["CLOCK_DELAY_UNIT_OUTPUT"] = "ps"
+
+time_printer = time_stamper.time_stamper()
 
 tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = (os.path.abspath(os.path.join(os.getcwd(), os.pardir, os.pardir, "hdl")))
@@ -114,10 +117,6 @@ async def single_layer_test(dut):
     clk_delay_out = int(os.environ["CLOCK_DELAY_OUTPUT"])
     clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]
 
-    time_last_check = time.time()
-    time_currently = time.time()
-    time_elapsed = time_currently - time_last_check
-
     ptp = tp.PortTimingParameters()
     ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
     
@@ -133,17 +132,11 @@ async def single_layer_test(dut):
     
     # Create the OpenEye parameters and the DRAM given the model
     dram = DRAM.DRAMContents(model)
-    time_currently = time.time()
-    time_elapsed = time_currently - time_last_check
-    time_last_check = time.time()
-    logger.debug("Initialize DRAM. " + str(time_elapsed))
+    time_printer.timestamp("Initialized DRAM. ", logger)
     dram.write_initial_data_to_dram(model)
 
     openeye_parameter = oep.create_vh_file(serial)
-    time_currently = time.time()
-    time_elapsed = time_currently - time_last_check
-    time_last_check = time.time()
-    logger.debug("OpenEye parameters set. " + str(time_elapsed))
+    time_printer.timestamp("OpenEye parameters set. ", logger)
 
     # Start the clock
     clk = Clock(dut.clk_i, ptp.clk_cycle, units=ptp.clk_cycle_unit)
@@ -163,29 +156,17 @@ async def single_layer_test(dut):
             slo.flat(dram, layer, layer_number)
         else:
             layer_parameters = lp.LayerParameters(layer, openeye_parameter)
-            time_currently = time.time()
-            time_elapsed = time_currently - time_last_check
-            time_last_check = time.time()
-            logger.info("Layer parameters created. " + str(time_elapsed))
+            time_printer.timestamp("Layer parameters created. ", logger)
             calculated_results = ptu.collect_results(layer, layer_number, layer_parameters, dram)
             if(logging.DEBUG >= log_level):
                 ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)
-                time_currently = time.time()
-                time_elapsed = time_currently - time_last_check
-                time_last_check = time.time()
-                logger.info("Reference data created. " + str(time_elapsed))
+                time_printer.timestamp("Reference data created. ", logger)
 
             dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
-            time_currently = time.time()
-            time_elapsed = time_currently - time_last_check
-            time_last_check = time.time()
-            logger.info("Start creating stream. " + str(time_elapsed))
+            time_printer.timestamp("Start creating stream. " , logger)
             stream = ptu.write_stream(openeye_parameter, layer_parameters, layer, dram_layer_content)
             
-            time_currently = time.time()
-            time_elapsed = time_currently - time_last_check
-            time_last_check = time.time()
-            logger.info("Streams set. " + str(time_elapsed))
+            time_printer.timestamp("Streams set. " , logger)
 
             for layer_repetition in range(layer_parameters.needed_total_transmissions):
                 
