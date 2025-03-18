@@ -204,6 +204,8 @@ async def write_iact(ptp, dut, stream, oep, lp):
     iact_enable_signal = 0
     iact_transmission = 0
     if(lp.skipIact != 1):
+        while (dut.iact_ready_o.value == 0): #TODO: ADAPT for Sparsetiy
+            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         for position in range(len(stream[0][0][0])):
             iact_enable_signal = 0
             for x_cluster in range(oep.Clusters_X):
@@ -212,7 +214,7 @@ async def write_iact(ptp, dut, stream, oep, lp):
                         try:
                             iact_transmission = iact_transmission + \
                             (stream[x_cluster][y_cluster][router][position] \
-                            << ((router + y_cluster * oep.NUM_GLB_IACT + x_cluster * oep.NUM_GLB_WGHT * oep.Clusters_Y) * int(oep.DMA_Bits/oep.Clusters_X)))
+                            << ((router + y_cluster * oep.NUM_GLB_IACT + x_cluster * oep.NUM_GLB_IACT * oep.Clusters_Y) * int(oep.DMA_Bits/oep.Clusters_X)))
                             iact_enable_signal = iact_enable_signal + 2**(router + y_cluster * oep.NUM_GLB_IACT+ x_cluster * oep.NUM_GLB_IACT * oep.Clusters_Y)
                         except:
                             iact_enable_signal = iact_enable_signal
@@ -238,6 +240,9 @@ async def write_wght(ptp, dut, stream, oep, lp):
     wght_enable_signal = 0
     wght_transmission = 0
     if(lp.skipWght != 1):
+        while (dut.wght_ready_o.value != ((2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_WGHT))-1)):
+            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+
         cocotb.start_soon(set_input(ptp,(dut.wght_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_WGHT))-1))
         for position in range(len(stream[0][0][0])):
             wght_enable_signal = 0
