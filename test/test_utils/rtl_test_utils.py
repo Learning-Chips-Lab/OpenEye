@@ -596,8 +596,28 @@ async def compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, 
 async def send_enable_conv(ptp, dut, layer_params, layer_repetition, oep):
 
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
-    for _ in range(int((math.ceil(layer_params.filters/layer_params.needed_wght_transmissions)*\
-                        math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.used_Y_cluster)))):
+
+
+            
+    match layer_params.single_cluster_computation:
+        case 1:
+            for _ in range(int((math.ceil((layer_params.filters*layer_params.output_shape[1]*layer_params.output_shape[2])/2/(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))))):
+                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        case 2:
+            for _ in range(int((math.ceil((layer_params.filters*layer_params.output_shape[1]*layer_params.output_shape[2])/(2*oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))))):
+                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        case _:
+            for _ in range(int((math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/2)*\
+                                math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.used_Y_cluster)))):
+                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+
+
+    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
+
+async def send_enable_dw(ptp, dut, layer_params, layer_repetition, oep):
+
+    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
+    for _ in range(int((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.used_Y_cluster/2)))):
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
 
