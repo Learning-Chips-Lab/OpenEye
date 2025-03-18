@@ -105,6 +105,18 @@ async def single_layer_test(dut):
         use_random = 1
         logger.debug("USE_RANDOM_VALUES set to one")
         print("except use random")
+
+    try:
+        sparse_iacts = int((os.getenv("USE_SPARSE_IACTS")))
+    except:
+        sparse_iacts = 0
+        logger.debug("No sparsety for wghts set")
+
+    try:
+        sparse_wghts = int((os.getenv("USE_SPARSE_WEIGHTS")))
+    except:
+        sparse_wghts = 0
+        logger.debug("No sparsety for wghts set")
     
     layer_es = les.LayerExecutionState()
     serial = 1
@@ -133,7 +145,7 @@ async def single_layer_test(dut):
     # Create the OpenEye parameters and the DRAM given the model
     dram = DRAM.DRAMContents(model)
     time_printer.timestamp("Initialized DRAM. ", logger)
-    dram.write_initial_data_to_dram(model)
+    dram.write_initial_data_to_dram(model, sparse_iacts, sparse_wghts)
 
     openeye_parameter = oep.create_vh_file(serial)
     time_printer.timestamp("OpenEye parameters set. ", logger)
