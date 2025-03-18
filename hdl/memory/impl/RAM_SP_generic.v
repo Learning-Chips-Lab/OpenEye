@@ -36,7 +36,9 @@ module RAM_SP_generic
     input  wire  [DataWidth-1:0]    d,
     output reg   [DataWidth-1:0]    q
 );
-    reg     [DataWidth-1:0]     mem[(2**AddrWidth)-1];
+    localparam Depth = 2 ** AddrWidth;
+
+    reg     [DataWidth-1:0]     mem[(Depth)];
     reg     [DataWidth-1:0]     memout;
 
     generate
