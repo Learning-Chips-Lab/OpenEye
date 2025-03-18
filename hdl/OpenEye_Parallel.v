@@ -415,7 +415,6 @@ module OpenEye_Parallel
       needed_iact_cycles_reg     <= 0;
       filters_reg                <= 0;
       iact_addr_len_reg          <= 0;
-      wght_addr_len_reg          <= 0;
       stride_x_reg               <= 0;
       stride_y_reg               <= 0;
       iact_addr_len_reg          <= 0;
@@ -439,13 +438,14 @@ module OpenEye_Parallel
       compute_mask_i_reg         <= 0;
       compute_cluster_i_reg      <= 0;
 
-      // results_ready               = 0;
+      results_ready               = 0;
       loop_mod                    = 0;
       flat_help_var               = 0;
 
       computing                  <= 0;
       compute_i_reg              <= 0;
       status_reg_enable_i_reg    <= 0;
+      status_set_reg             <= 0;
       data_mode_i_reg            <= 0;
       fraction_bit_i_reg         <= 0;
       needed_cycles_i_reg        <= 0;
@@ -476,9 +476,6 @@ module OpenEye_Parallel
     end else begin
 
       ///Regs for ports
-      wght_data_i_reg            <= wght_data_i;
-      wght_enable_i_reg          <= wght_enable_i;
-      wght_ready_o               <= wght_ready_o_reg;  
       compute_i_reg              <= compute_i;
       status_reg_enable_i_reg    <= status_reg_enable_i;
       data_mode_i_reg            <= data_mode_i;
@@ -546,6 +543,7 @@ module OpenEye_Parallel
             router_mode_iact_storage <= router_mode_iact_i;
             router_mode_wght_reg     <= router_mode_wght_i_w;
             router_mode_psum_reg     <= router_mode_psum_i_w;
+            status_set_reg           <= 1;
           end
           flat_help_var = 0;
         end
@@ -596,8 +594,6 @@ module OpenEye_Parallel
       iact_ready_o             <= 0;
       iact_enable_i_reg        <= 0;
       iact_router_offset       <= 0;
-      router_mode_iact_reg     <= 0;
-      results_ready               = 0;
 
     end else begin
       case(fsm_iact_current_state)       
@@ -720,7 +716,7 @@ module OpenEye_Parallel
               for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                 for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                   ///loop_mod: cr%needed_y_cls
-                if (loop_mod + 1 == (needed_y_cls_reg)) begin
+                  if (loop_mod + 1 == 3'(needed_y_cls_reg)) begin
                     loop_mod = 0;
                   end
                   for (int pec=0; pec<PE_COLUMNS; pec=pec+1) begin
@@ -854,6 +850,7 @@ module OpenEye_Parallel
         PSUM_IDLE : begin
           psum_transmitted <= 0;
           fsm_psum_cycle   <= 0;
+          fsm_psum_last_state      <= PSUM_IDLE;
 
           if (compute_i_w) begin
             mem_addr_psum          <= 0;
@@ -1103,7 +1100,6 @@ module OpenEye_Parallel
             fsm_psum_current_state <= SEND_RESULTS;
           end
         end
-
         SEND_RESULTS : begin
           for (int g=0; g<NUM_GLB_PSUM*CLUSTERS; g=g+1) begin
             psum_ready_i_reg[g]  <= 0;
@@ -1511,9 +1507,9 @@ module OpenEye_Parallel
       end
       for (pec=0; pec<PE_COLUMNS; pec=pec+1) begin
         for (per=0; per<PE_ROWS; per=per+1) begin
-          for (b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
-            assign gen_x[cc].gen_y[cr].iact_choose_cluster_i_w[per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
-            = iact_choose_reg[cc*CLUSTER_ROWS*PES*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b];
+          for (b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
+            assign gen_x[cc].gen_y[cr].iact_choose_cluster_i_w[per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
+            = iact_choose_reg[cc*CLUSTER_ROWS*PES*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b];
           end
           assign gen_x[cc].gen_y[cr].compute_cluster_i_w[pec*PE_ROWS+per] = compute_cluster_i_reg[cc*CLUSTER_ROWS*PES+cr*PES+pec*PE_ROWS+per];
         end
