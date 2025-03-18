@@ -1603,7 +1603,7 @@ module OpenEye_Parallel
                                   g * TRANS_BITWIDTH_WGHT + b];
         end
         assign gen_x[cc].gen_y[cr].wght_enable_i_cluster_w[g] = wght_enable_i_w[cc*NUM_GLB_WGHT*CLUSTER_ROWS+cr*NUM_GLB_WGHT+g];
-        assign wght_ready_o_reg[cc*NUM_GLB_WGHT*CLUSTER_ROWS+cr*NUM_GLB_WGHT+g] = gen_x[cc].gen_y[cr].wght_ready_o_cluster_w[g];
+        assign wght_ready_o_reg[cc*NUM_GLB_WGHT*CLUSTER_ROWS+cr*NUM_GLB_WGHT+g] = gen_x[cc].gen_y[cr].wght_ready_o_cluster_w[g] & (wght_ready_reg != 0);
       end
 
       ///PSUM ASSIGNMENTS
