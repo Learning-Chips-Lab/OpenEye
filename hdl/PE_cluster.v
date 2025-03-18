@@ -72,7 +72,7 @@ module PE_cluster
   parameter DATA_WGHT_IGNORE_ZEROS     = 4,
   parameter TRANS_BITWIDTH_IACT        = 24,
   parameter TRANS_BITWIDTH_WGHT        = 24,
-  parameter TRANS_BITWIDTH_PSUM        = 40,
+  parameter TRANS_BITWIDTH_PSUM        = 20,
   parameter NUM_GLB_IACT               = 3,
   parameter IACT_ADDR_WORDS            = 9,
   parameter IACT_DATA_WORDS            = 16,
@@ -118,13 +118,19 @@ module PE_cluster
   input  [7:0]                                  data_stream_i
 );
 
+///#######################
+///Reset synchronization
+///#######################
+wire rst_nw;
+
+
 wire [PE_ROWS*PE_COLUMNS-1:0]                 wght_ready_temp;
 wire [PE_COLUMNS*PE_ROWS*NUM_GLB_IACT-1:0]    iact_ready_temp;
 
 reg  [PE_COLUMNS-1:0]                         psum_ready_reg;
 
- always@(posedge clk_i, negedge rst_ni) begin
-    if(!rst_ni) begin: reset
+ always@(posedge clk_i, negedge rst_nw) begin
+    if(!rst_nw) begin: reset
       psum_ready_reg <= 0;
     end else begin
       psum_ready_reg <= pe_psum_ready_i;
@@ -133,6 +139,16 @@ reg  [PE_COLUMNS-1:0]                         psum_ready_reg;
 
 genvar i,j,g;
   generate 
+    if (IS_TOPLEVEL) begin: gen_reset_control
+      RST_SYNC rst_sync_pe_cluster (
+        .clk_i        (clk_i),
+        .rst_ni       (rst_ni),
+        .rst_no       (rst_nw)
+      );
+    end else begin : direct_reset
+      assign rst_nw = rst_ni;
+    end
+
     for(i=0; i<PE_COLUMNS; i=i+1) begin : gen_X
       for(j=0; j<PE_ROWS; j=j+1) begin : gen_Y
         wire [TRANS_BITWIDTH_PSUM-1 : 0] psum_data_i_w;
@@ -163,7 +179,7 @@ genvar i,j,g;
             .NUM_GLB_IACT(NUM_GLB_IACT)
           )pe(
             .clk_i(clk_i),
-            .rst_ni(rst_ni),
+            .rst_ni(rst_nw),
             .iact_select_i(iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(NUM_GLB_IACT+1)-1:(i+j*PE_COLUMNS)*$clog2(NUM_GLB_IACT+1)]),
             .compute_i(compute_i[i+j*PE_COLUMNS]),
 

@@ -75,7 +75,7 @@ module GLB_cluster
   parameter integer NUM_GLB_PSUM        = 4,
 
   parameter integer IACT_MEM_ADDR_WORDS = 512,
-  parameter integer PSUM_MEM_ADDR_WORDS = 384,
+  parameter integer PSUM_MEM_ADDR_WORDS = 768,
 
   parameter integer IACT_MEM_ADDR_BITS  = $clog2(IACT_MEM_ADDR_WORDS),
   parameter integer PSUM_MEM_ADDR_BITS  = $clog2(PSUM_MEM_ADDR_WORDS)
