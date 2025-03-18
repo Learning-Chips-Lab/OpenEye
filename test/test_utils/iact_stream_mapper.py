@@ -15,7 +15,7 @@ logger = logging.getLogger("cocotb")
 
 
 class IactStreamMapper(object):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts):
         self.params = params
         self.layer_params = layer_params
         self.layer_repetition = layer_repetition
@@ -200,8 +200,8 @@ class IactStreamMapper(object):
         return stream
     
 class ConvIactStreamMapper(IactStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts)
 
     def write_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
 
@@ -264,8 +264,8 @@ class ConvIactStreamMapper(IactStreamMapper):
         return spad_storage
      
 class DenseIactStreamMapper(IactStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts)
     
     def write_iact_data_glb(self, cl_x, cl_y, router):
         storage = []
@@ -317,8 +317,8 @@ class DenseIactStreamMapper(IactStreamMapper):
         return spad_storage
     
 class DwIactStreamMapper(IactStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts)
 
     def write_iact_addr_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
 

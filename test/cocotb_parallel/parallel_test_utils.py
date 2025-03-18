@@ -55,7 +55,7 @@ def write_stream_layer_mp(params, layer_params, layer, dram_layer_content, retur
         LayerStreamGenerator = DWMapper(params, layer_params, layer_repetition, dram_layer_content)
         LayerStreamGenerator.make_stream()
     elif "Conv" in str(layer):
-        LayerStreamGenerator = ConvMapper(params, layer_params, layer_repetition, dram_layer_content)
+        LayerStreamGenerator = ConvMapper(params, layer_params, layer_repetition, dram_layer_content,0,0)
         LayerStreamGenerator.make_stream()
     elif "Dense" in str(layer):
         LayerStreamGenerator = DenseMapper(params, layer_params, layer_repetition, dram_layer_content)

@@ -16,7 +16,7 @@ logger = logging.getLogger("cocotb")
 
 
 class WghtStreamMapper(object):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_wghts):
         self.params = params
         self.layer_params = layer_params
         self.layer_repetition = layer_repetition
@@ -161,8 +161,8 @@ class WghtStreamMapper(object):
         return stream
     
 class ConvWghtStreamMapper(WghtStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_wghts):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_wghts)
 
     def write_wght_data_storage(self, cl_x, cl_y, router):
 
@@ -218,8 +218,8 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         return spad_storage
 
 class DenseWghtStreamMapper(WghtStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_wghts):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_wghts)
 
     def write_wght_data_storage(self, cl_x, cl_y, router):
 
@@ -268,8 +268,8 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         return spad_storage
 
 class DwWghtStreamMapper(WghtStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_wghts):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_wghts)
 
     def write_wght_data_storage(self, cl_x, cl_y, router):
 

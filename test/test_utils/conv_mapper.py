@@ -18,9 +18,9 @@ logger = logging.getLogger("cocotb")
 
 class ConvMapper(LayerMapper):
         
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
-        input_mapper = ConvIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0])
-        weight_mapper = ConvWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1])
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts):
+        input_mapper = ConvIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0], sparse_iacts)
+        weight_mapper = ConvWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1], sparse_wghts)
         bias_mapper = ConvPsumStreamMapper(params, layer_params, layer_repetition, dram_layer_content[2])
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, input_mapper, weight_mapper, bias_mapper)
 
@@ -46,7 +46,8 @@ class ConvMapper(LayerMapper):
                         if(layer_params.computing_mx[x][y][pe_y][pe_x]== 1):
                             computing_pes = computing_pes + 2**(counter)
                         counter = counter + 1
-        computing_pes = format(computing_pes, "0192b")
+        formating = "0" + str(params.Clusters_X * params.Clusters_Y * params.PEs_Y) + "b"
+        computing_pes = format(computing_pes, formating)
 
         if (params.SERIAL):
             dma_line = 0
@@ -80,7 +81,7 @@ class ConvMapper(LayerMapper):
                 dma_line = int(computing_pes[x*48:(x+1)*48],2)
                 dma_storage.append(dma_line)
             dma_storage.extend(self.write_router_iact(params, layer_params))
-            dma_storage.extend(self.write_router_wght(params))
+            dma_storage.extend(self.write_router_wght(params, layer_params))
             dma_storage.extend(self.write_router_psum(params, layer_params))
             storage = dma_storage
         else:
@@ -105,9 +106,10 @@ class ConvMapper(LayerMapper):
             storage[strdic.status_dict["skipWght"]] = layer_params.skipWght
             storage[strdic.status_dict["skipPsum"]] = layer_params.skipPsum
             storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
+            storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
 
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
-            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params)
+            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params, layer_params)
             storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
         return storage
 
@@ -116,7 +118,7 @@ class ConvMapper(LayerMapper):
         if(params.SERIAL):
             storage = []
         else:
-            storage = [[[[] for c in range(params.Iact_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+            storage = [[[[] for c in range(params.NUM_GLB_IACT)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
         router_cycle = 0
         for cl_y in range(params.Clusters_Y):
             for cl_x in range(params.Clusters_X):
@@ -162,7 +164,7 @@ class ConvMapper(LayerMapper):
                         line = 0
         return storage
 
-    def write_router_wght(self, params):
+    def write_router_wght(self, params, layer_params):
         line = 0
         if(params.SERIAL):
             storage = []
@@ -172,7 +174,7 @@ class ConvMapper(LayerMapper):
         for cl_x in range(params.Clusters_X):
             for cl_y in range(params.Clusters_Y):   
                 for router in range(params.Wght_Routers):
-                    if(cl_x == 0):
+                    if((cl_x == 0) | (layer_params.single_cluster_computation == 1)):
                         if(params.SERIAL):
                             line = line + (0 << (params.Wght_Router_Bits * router_cycle))
                         else:
