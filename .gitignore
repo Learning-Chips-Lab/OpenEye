@@ -11,7 +11,8 @@ results.xml
 cmds.f
 *.vvp
 *.csv
-
+*.gtkw
+*tflite_net
 openeye_env/*
 env/*
 
