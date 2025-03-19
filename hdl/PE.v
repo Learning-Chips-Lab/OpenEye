@@ -690,6 +690,53 @@ module PE
         end
 
         CALCULATING : begin
+          if (data_mode_reg) begin
+            //Defaulting Values
+            wght_data_SPad_en_r     <= 1;
+            wght_data_use_vec       <= 1;
+            next_iact               <= iact_enable_i[$clog2(NUM_GLB_IACT)'(iact_data_position_reg)];
+            values_valid            <= next_iact;
+            computing               <= 1;
+            adder_2_en              <= 1;
+            use_psum_1              <= adder_1_en;
+            use_psum_2              <= 1;
+            psum_data_SPad_en_a_w   <= 0;
+            if (((input_activations_reg == 1) | (wght_data_vec+1)==7'(32'(input_activations_reg)-1)) & adder_1_en) begin
+              use_psum_1            <= 0;
+              psum_data_SPad_en_a_w <= 1;
+              used_psum_memory_1[(psum_spad_addr_a_w)] <= 1;
+              used_psum_memory_2[(psum_spad_addr_a_w)] <= 1;
+            end
+            if (psum_data_SPad_en_a_w) begin
+              psum_spad_addr_a_w <= psum_spad_addr_a_w + 1;
+              psum_spad_addr_a_delay <= psum_spad_addr_a_delay + 1;
+            end
+            wght_data_vec <= wght_data_vec + 1;
+            adder_1_en    <= values_valid;
+            if (iact_data_position_reg == 0) begin
+              iact_data_current_2 <= iact_part_1_w;
+            end else begin
+              if (iact_data_position_reg == 1) begin
+                iact_data_current_2 <= iact_part_2_w;
+              end else begin
+                iact_data_current_2 <= iact_part_3_w;
+              end
+            end
+            iact_data_current_3 <= iact_data_current_2;
+            if ((wght_data_vec+1) >= input_activations_reg) begin
+              wght_data_vec        <= 0;
+              psum_spad_addr_a_mem <= psum_spad_addr_b_r + 1;
+              psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
+            end
+            if (!values_valid & adder_1_en) begin
+              current_state_computing <= WAIT_TO_SEND_PSUM;
+              wght_addr_vec           <= 0;
+              wght_data_vec           <= 0;
+              wght_ready_o            <= 1;
+              computing               <= 0;
+              use_psum_1              <= 0;
+            end
+          end else begin
             //Defaulting Values
             iact_addr_SPad_en_r   <= 0;
             iact_data_SPad_en_r   <= !mux_iact_ready;
@@ -791,7 +838,10 @@ module PE
             end
             //Reuse Values of PSUM SPad
             if (((32'(32'(iact_addr_count)) == 32'(32'(iact_addr_current)+1)) | (iact_addr_count == 0)) & (next_iact)) begin
-            current_state_computing          <= WAIT_TO_SEND_PSUM;
+              current_state_computing<= WAIT_TO_SEND_PSUM;
+              wght_addr_vec          <= 0;
+              wght_data_vec          <= 0;
+              wght_ready_o           <= 1;
               mux_iact_ready         <= 1;
               iact_data_current_3    <= 0;
               computing              <= 0;
@@ -841,6 +891,7 @@ module PE
             psum_spad_addr_b_delay <= psum_spad_addr_b_r;
             psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
             psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
+          end
         end
 
         WAIT_TO_SEND_PSUM : begin
