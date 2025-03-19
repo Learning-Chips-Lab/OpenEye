@@ -517,7 +517,6 @@ module PE
           psum_spad_addr_b_mem   <= 1;
           adder_1_en             <= 0;
           adder_2_en             <= 0;
-          psum_select            <= 0;
           reuse_psum_spad_a      <= 0;
           reuse_psum_spad_b      <= 0;
           reused_data_a          <= 0;
@@ -526,6 +525,33 @@ module PE
           use_psum_2             <= 0;
           used_psum_memory_1     <= 0;
           used_psum_memory_2     <= 0;
+          psum_select            <= 0;
+          if (data_mode_reg) begin
+            psum_select            <= 0;
+            adder_1_en             <= 0;
+            adder_2_en             <= 0;
+            if (stride_reg != 0) begin
+              stride_reg <= 0;
+              iact_data_position_reg <= PE_Y + PE_X * stride_reg;
+            end
+            if (32'(iact_data_position_reg) >= NUM_GLB_IACT) begin
+              iact_data_position_reg <= 8'(32'(iact_data_position_reg) - NUM_GLB_IACT);
+            end
+            if (iact_enable_i[$clog2(NUM_GLB_IACT)'(iact_data_position_reg)]) begin
+              current_state_computing <= CALCULATING;
+              wght_data_SPad_en_r     <= 1;
+              next_iact               <= iact_enable_i[$clog2(NUM_GLB_IACT)'(iact_data_position_reg)];
+              if (iact_data_position_reg == 0) begin
+                iact_data_current_2 <= iact_part_1_w;
+              end else begin
+                if (iact_data_position_reg == 1) begin
+                  iact_data_current_2 <= iact_part_2_w;
+                end else begin
+                  iact_data_current_2 <= iact_part_3_w;
+                end
+              end
+            end
+          end
           if (psum_enable_i) begin
             current_state_computing <= SEND_PSUM;
             adder_1_en       <= 1;
@@ -538,9 +564,10 @@ module PE
           end
           if (compute_i) begin 
             //Start off
-            current_state_computing         <= LOADING_1;
+            current_state_computing <= LOADING_1;
             mux_iact_ready        <= 0;
             wght_ready_o          <= 0;
+            psum_select           <= 0;
             
             iact_addr_SPad_addr   <= 0;
             iact_addr_SPad_en_r   <= 1;
@@ -560,25 +587,25 @@ module PE
 
         LOADING_1 : begin
           //Get first WGHT Addr Address
-          current_state_computing       <= LOADING_2;
-          iact_data_SPad_addr <= iact_data_SPad_addr + 1;
+          current_state_computing <= LOADING_2;
+          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
           wght_addr_SPad_en_r <= 1;
-          iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
-          psum_select         <= 0;
+            iact_addr_SPad_addr     <= iact_addr_SPad_addr + 1;
+          wght_addr_SPad_en_r     <= 1;
         end
 
         LOADING_2 : begin
           //Get first WGHT Data Address
-          current_state_computing       <= LOADING_3;
+          current_state_computing <= LOADING_3;
           if (iact_addr_SPad_data_r == 0) begin
             if (iact_addr_SPad_addr == 4) begin
-              current_state_computing         <= WAIT_TO_SEND_PSUM;
-              computing             <= 0;
-              psum_data_SPad_en_a_r <= 0;
-              psum_data_SPad_en_b_r <= 0;
-              psum_data_SPad_en_a_w <= 1;
-              psum_data_SPad_en_b_w <= 1;
-              values_valid          <= 0;
+              current_state_computing <= WAIT_TO_SEND_PSUM;
+              computing               <= 0;
+              psum_data_SPad_en_a_r   <= 0;
+              psum_data_SPad_en_b_r   <= 0;
+              psum_data_SPad_en_a_w   <= 1;
+              psum_data_SPad_en_b_w   <= 1;
+              values_valid            <= 0;
             end else begin
               current_state_computing       <= LOADING_1;
                 iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
@@ -648,9 +675,9 @@ module PE
               wght_addr_vec     <= iact_oh_delay_1;
             end
           end else begin
-            wght_data_start_pre<= wght_addr_SPad_data_r;
-            fast_cycle         <= 1;
-            wght_addr_vec     <= iact_oh_delay_1;
+            wght_data_start_pre <= wght_addr_SPad_data_r;
+            fast_cycle          <= 1;
+            wght_addr_vec       <= iact_oh_delay_1;
           end
           iact_addr_count     <= 1;
           iact_addr_SPad_en_r <= 0;
