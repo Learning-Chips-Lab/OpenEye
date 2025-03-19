@@ -135,7 +135,6 @@ module PE
   input       [7:0]                                  data_stream_i
 );
 
-generate
   reg [$clog2(16)-1:0]                        current_state_computing;
 
   reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_SPad_data_r;
@@ -160,24 +159,14 @@ generate
   reg                                         psum_data_SPad_en_b_w;
   reg                                         psum_select;
   reg                                         psum_enable;
+  reg                                         psum_enable_2;
 
-  if (SERIAL == 1) begin
-    reg                                       psum_enable_2;
-    reg                                       adder_3_en;
-    reg  [PSUM_ADDR-1:0]                      used_psum_memory_1;
-    reg  [PSUM_ADDR-1:0]                      used_psum_memory_2;
-    wire [DATA_PSUM_BITWIDTH-1 : 0]           adder_3_summand_1;
-    wire [DATA_PSUM_BITWIDTH-1 : 0]           adder_3_summand_2;
-    wire [DATA_PSUM_BITWIDTH-1 : 0]           adder_3_o_w;
-  end else begin
-    reg [PSUM_ADDR-1:0]                       used_psum_memory;
-  
-  end
   reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_1_delay;
   reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_2_delay;
   reg                                         mux_iact_ready;
   reg                                         adder_1_en;
   reg                                         adder_2_en;
+  reg                                         adder_3_en;
   reg                                         fast_cycle;
   reg                                         next_iact;
   reg                                         next_iact2;
@@ -208,18 +197,23 @@ generate
   wire [DATA_WGHT_BITWIDTH-1 : 0]             mult_2_fac_1;
   wire [DATA_IACT_BITWIDTH-1 : 0]             mult_2_fac_2;
   reg [PSUM_ADDR-1:0]                         used_psum_memory;
+    reg  [PSUM_ADDR-1:0]                      used_psum_memory_1;
+    reg  [PSUM_ADDR-1:0]                      used_psum_memory_2;
   reg                                         use_psum_1;
   reg                                         use_psum_2;
   wire [PSUM_DATA-1 : 0]                      psum_spad_data_a_o;
   wire [PSUM_DATA-1 : 0]                      psum_spad_data_b_o;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_1_summand_1;
-  wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_2_summand_1;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_1_summand_2;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_2_summand_1;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_2_summand_2;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_3_summand_1;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_3_summand_2;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             mult_1_o_w;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             mult_2_o_w;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_1_o_w;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_2_o_w;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_3_o_w;
   wire [IACT_ADDR_ADDR_BITWIDTH-1 : 0]        first_spad_iact_addr_w;
   wire [IACT_ADDR_DATA-1 : 0]                 first_spad_iact_data_w;
   wire                                        first_spad_iact_en_w;
@@ -1259,5 +1253,5 @@ generate
     .sel_i(psum_select), 
     .y_o  ({adder_2_summand_2,adder_1_summand_2})
   );
-endgenerate
+
 endmodule
