@@ -667,6 +667,9 @@ module PE
           current_state_computing  <= CALCULATING;
           wght_start_set <= 1;
           computing      <= 1;
+          if (iact_addr_current == 1) begin
+            next_iact2     <= 1;
+          end
           if (wght_data_end > wght_data_start) begin
             values_valid       <= 1;
           end
@@ -815,7 +818,7 @@ module PE
               iact_data_SPad_addr <= iact_data_SPad_addr + 1;
               next_iact           <= 1;
               iact_addr_count     <= iact_addr_count + 1;
-            if (((32'(iact_addr_count) + 1) >= 32'(iact_addr_current)) & ((32'(iact_addr_SPad_addr)+1) < first_spad_words_iact)) begin
+              if (((32'(iact_addr_count) + 1) >= 32'(iact_addr_current)) & ((iact_addr_SPad_addr) < first_spad_words_iact)) begin
                   iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
                 iact_addr_SPad_en_r <= 1;
               end
@@ -831,7 +834,9 @@ module PE
             end
             // Check valid values
             if (next_iact2) begin
+              if (iact_addr_current <= iact_addr_SPad_data_r) begin
                 iact_addr_current <= iact_addr_SPad_data_r;
+              end
             end
             if (wght_data_end <= wght_data_vec) begin
               values_valid <= 0;
