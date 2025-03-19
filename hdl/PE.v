@@ -134,6 +134,7 @@ module PE
   input                                              enable_stream_i,
   input       [7:0]                                  data_stream_i
 );
+
   reg [$clog2(16)-1:0]                        current_state_computing;
 
   reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_SPad_data_r;
@@ -163,6 +164,11 @@ generate
   if (SERIAL == 1) begin
     reg                                       psum_enable_2;
     reg                                       adder_3_en;
+    reg [PSUM_ADDR-1:0]                      used_psum_memory_1;
+    reg [PSUM_ADDR-1:0]                      used_psum_memory_2;
+  end else begin
+    reg [PSUM_ADDR-1:0]                       used_psum_memory;
+  
   end
 endgenerate
   reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_1_delay;
