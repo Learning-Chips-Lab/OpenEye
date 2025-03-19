@@ -62,6 +62,7 @@ module OpenEye_FPGA
 #(
   //Set parameters
   parameter IS_TOPLEVEL         = 1,
+  parameter SERIAL              = 1,
   parameter PARALLEL_MACS       = 2,
 
   parameter ADDR_IACT_BITWIDTH  = 4,
@@ -1412,6 +1413,7 @@ module OpenEye_FPGA
 
     OpenEye_Parallel #(
       .IS_TOPLEVEL         (0),
+      .SERIAL              (SERIAL),
 
       .DATA_IACT_BITWIDTH  (DATA_IACT_BITWIDTH),
       .DATA_PSUM_BITWIDTH  (DATA_PSUM_BITWIDTH),

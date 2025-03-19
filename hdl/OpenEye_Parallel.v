@@ -92,6 +92,7 @@ module OpenEye_Parallel
   `include "parameters.vh"
   ///Set parameters
   parameter IS_TOPLEVEL         = 1,
+  parameter SERIAL              = 0,
 
   parameter DATA_IACT_BITWIDTH  = 8,
   parameter DATA_PSUM_BITWIDTH  = 20,
@@ -1311,7 +1312,7 @@ module OpenEye_Parallel
 
         OpenEye_Cluster #(
           .IS_TOPLEVEL        (0),
-          .SERIAL             (!IS_TOPLEVEL),
+          .SERIAL             (SERIAL),
           .DATA_IACT_BITWIDTH (DATA_IACT_BITWIDTH),
           .DATA_PSUM_BITWIDTH (DATA_PSUM_BITWIDTH),
           .DATA_WGHT_BITWIDTH (DATA_WGHT_BITWIDTH),

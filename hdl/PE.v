@@ -110,7 +110,7 @@ module PE
   localparam integer PSUM_DATA               = DATA_PSUM_BITWIDTH,
   localparam integer PSUM_ADDR_BITWIDTH      = $clog2(PSUM_ADDR),
   localparam integer PSUM_DATA_BITWIDTH      = $clog2(PSUM_DATA),
-  localparam integer PSUM_WORDS_PER_TRANSFER = 1,
+  localparam integer PSUM_WORDS_PER_TRANSFER = (SERIAL ?  1 : PARALLEL_MACS),
   localparam integer TRANS_BITWIDTH_PSUM     = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER,
   localparam integer VALUES_OF_IACTS         = $rtoi($ceil(TRANS_BITWIDTH_IACT / DATA_IACT_BITWIDTH))
 
@@ -160,8 +160,9 @@ module PE
   reg                                         psum_select;
   reg                                         psum_enable;
   reg                                         psum_enable_2;
-  reg [TRANS_BITWIDTH_PSUM-1:0]             psum_data_1_delay;
-  reg [TRANS_BITWIDTH_PSUM-1:0]             psum_data_2_delay;
+
+  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_1_delay;
+  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_2_delay;
   reg                                         mux_iact_ready;
   reg                                         adder_1_en;
   reg                                         adder_2_en;
@@ -195,18 +196,19 @@ module PE
   wire [DATA_IACT_BITWIDTH-1 : 0]             mult_1_fac_2;
   wire [DATA_WGHT_BITWIDTH-1 : 0]             mult_2_fac_1;
   wire [DATA_IACT_BITWIDTH-1 : 0]             mult_2_fac_2;
-  reg  [PSUM_ADDR-1:0]                         used_psum_memory_1;
-  reg  [PSUM_ADDR-1:0]                         used_psum_memory_2;
+  reg [PSUM_ADDR-1:0]                         used_psum_memory;
+    reg  [PSUM_ADDR-1:0]                      used_psum_memory_1;
+    reg  [PSUM_ADDR-1:0]                      used_psum_memory_2;
   reg                                         use_psum_1;
   reg                                         use_psum_2;
   wire [PSUM_DATA-1 : 0]                      psum_spad_data_a_o;
   wire [PSUM_DATA-1 : 0]                      psum_spad_data_b_o;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_1_summand_1;
-  wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_2_summand_1;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_1_summand_2;
-  wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_3_summand_1;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_2_summand_1;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_2_summand_2;
-  wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_3_summand_2;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_3_summand_1;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_3_summand_2;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             mult_1_o_w;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             mult_2_o_w;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_1_o_w;

@@ -250,7 +250,7 @@ module OpenEye_Cluster
   
   PE_cluster #(
     .IS_TOPLEVEL        (0),
-    .SERIAL             (!IS_TOPLEVEL),
+    .SERIAL             (SERIAL),
     .TOP_CLUSTER        (TOP_CLUSTER),
 
     .DATA_IACT_BITWIDTH (DATA_IACT_BITWIDTH),
