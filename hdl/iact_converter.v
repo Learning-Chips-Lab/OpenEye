@@ -4,21 +4,22 @@ module iact_converter
 #(
   // TODO wght_size changeable
   parameter WGHT_SIZE = 3,
+  parameter PARAMS_SIZE = 32,
   parameter N_PSUM    = 64
 ) (
-  input             clk_i,
-  input             rst_ni,
+  input                        clk_i,
+  input                        rst_ni,
 
-  input      [31:0] params,
-  input             enable_config,
-  input             enable_converter,
-  output reg        ready,
+  input      [PARAMS_SIZE-1:0] params,
+  input                        enable_config,
+  input                        enable_converter,
+  output reg                   ready,
 
-  output reg        n_en_o,
-  output reg [2:0]  n_o,
-  output reg [3:0]  nx_o,
-  output reg [10:0] mem_addr_o,
-  output reg [3:0]  mem_off_o
+  output reg                   n_en_o,
+  output reg [2:0]             n_o,
+  output reg [3:0]             nx_o,
+  output reg [10:0]            mem_addr_o,
+  output reg [3:0]             mem_off_o
 );
 
   reg [7:0]  x;
@@ -146,10 +147,10 @@ module iact_converter
 
         GET_PARAMETER : begin
           if (enable_config == 1) begin
-            x         <= params[31:24];
-            y         <= params[23:16];
-            iact_size <= params[15:8];
-            channels  <= params[7:0];
+            x         <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
+            y         <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4];
+            iact_size <= params[(2*PARAMS_SIZE/4)-1:PARAMS_SIZE/4];
+            channels  <= params[(PARAMS_SIZE/4)-1:0];
             fsm_cycle <= 1;
           end
 
