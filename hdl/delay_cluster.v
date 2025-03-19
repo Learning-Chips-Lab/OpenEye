@@ -83,8 +83,8 @@ assign ready_o = (delay_psum_glb_i== 0) ? ready_i :
       enable_s <= 0;
       ready_s  <= 0;
     end else begin
-      data_s   <= 8*DATA_BITWIDTH'(data_s << DATA_BITWIDTH) + 8*DATA_BITWIDTH'(data_i);
-      enable_s <= 8'(data_s << 1) + 8'(enable_i);
+      data_s   <= (8*DATA_BITWIDTH)'(data_s << DATA_BITWIDTH) + (8*DATA_BITWIDTH)'(data_i);
+      enable_s <= 8'(enable_s << 1) + 8'(enable_i);
       ready_s  <= 8'(ready_s << 1) + 8'(ready_i);
     end
  end
