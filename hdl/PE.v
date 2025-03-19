@@ -135,6 +135,7 @@ module PE
   input       [7:0]                                  data_stream_i
 );
 
+generate
   reg [$clog2(16)-1:0]                        current_state_computing;
 
   reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_SPad_data_r;
@@ -160,17 +161,18 @@ module PE
   reg                                         psum_select;
   reg                                         psum_enable;
 
-generate
   if (SERIAL == 1) begin
     reg                                       psum_enable_2;
     reg                                       adder_3_en;
-    reg [PSUM_ADDR-1:0]                      used_psum_memory_1;
-    reg [PSUM_ADDR-1:0]                      used_psum_memory_2;
+    reg  [PSUM_ADDR-1:0]                      used_psum_memory_1;
+    reg  [PSUM_ADDR-1:0]                      used_psum_memory_2;
+    wire [DATA_PSUM_BITWIDTH-1 : 0]           adder_3_summand_1;
+    wire [DATA_PSUM_BITWIDTH-1 : 0]           adder_3_summand_2;
+    wire [DATA_PSUM_BITWIDTH-1 : 0]           adder_3_o_w;
   end else begin
     reg [PSUM_ADDR-1:0]                       used_psum_memory;
   
   end
-endgenerate
   reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_1_delay;
   reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_2_delay;
   reg                                         mux_iact_ready;
@@ -1257,4 +1259,5 @@ endgenerate
     .sel_i(psum_select), 
     .y_o  ({adder_2_summand_2,adder_1_summand_2})
   );
+endgenerate
 endmodule
