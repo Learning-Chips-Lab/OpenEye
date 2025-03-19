@@ -80,6 +80,7 @@
 module OpenEye_Cluster
 #(
   parameter IS_TOPLEVEL                = 1,
+  parameter SERIAL                     = 0,
   parameter LEFT_CLUSTER               = 0,
   parameter TOP_CLUSTER                = 0,
   parameter BOTTOM_CLUSTER             = 0,
@@ -248,8 +249,9 @@ module OpenEye_Cluster
   /////////////////////////////////////////
   
   PE_cluster #(
-    .IS_TOPLEVEL(0),
-    .TOP_CLUSTER(TOP_CLUSTER),
+    .IS_TOPLEVEL        (0),
+    .SERIAL             (!IS_TOPLEVEL),
+    .TOP_CLUSTER        (TOP_CLUSTER),
 
     .DATA_IACT_BITWIDTH (DATA_IACT_BITWIDTH),
     .DATA_WGHT_BITWIDTH (DATA_WGHT_BITWIDTH),

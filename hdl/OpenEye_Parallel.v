@@ -1310,6 +1310,8 @@ module OpenEye_Parallel
         wire  [NUM_GLB_PSUM-1:0]                     psum_ready_i_cluster_w;
 
         OpenEye_Cluster #(
+          .IS_TOPLEVEL        (0),
+          .SERIAL             (!IS_TOPLEVEL),
           .DATA_IACT_BITWIDTH (DATA_IACT_BITWIDTH),
           .DATA_PSUM_BITWIDTH (DATA_PSUM_BITWIDTH),
           .DATA_WGHT_BITWIDTH (DATA_WGHT_BITWIDTH),
