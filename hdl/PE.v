@@ -62,6 +62,7 @@ module PE
 #(
 
   parameter         IS_TOPLEVEL             = 1,
+  parameter         SERIAL                  = 0,
   parameter         CREATE_VCD              = 0,
 
   parameter         PE_X                    = 0,

@@ -219,19 +219,19 @@ module OpenEye_FPGA
   reg                                           data_mode_reg;
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0]         fraction_bit_reg;
   reg  [7:0]                                    needed_cycles_reg;
-  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]           needed_x_cls_reg;
+  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]          needed_x_cls_reg;
   reg  [$clog2(CLUSTER_ROWS+1)-1:0]             needed_y_cls_reg;
   reg  [3:0]                                    needed_iact_cycles_reg;
   reg  [$clog2(PSUM_PER_PE+1)-1:0]              filters_reg;
   reg  [$clog2(IACT_ADDR_PER_PE+1)-1:0]         iact_addr_len_reg;
-  reg  [$clog2(WGHT_ADDR_PER_PE+1)-1:0]         wght_addr_len_reg;
+  reg  [$clog2(WGHT_ADDR_PER_PE)-1:0]           wght_addr_len_reg;
   reg  [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0]    bano_cluster_mode_reg;
   reg  [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0]      af_cluster_mode_reg;
   reg  [$clog2(IACT_PER_PE+1)-1:0]              input_activations_reg;
   reg  [1:0]                                    iact_write_addr_t_reg;
   reg  [3:0]                                    iact_write_data_t_reg;
-  reg  [3:0]                                    stride_x_reg;
-  reg  [3:0]                                    stride_y_reg;
+  reg  [2:0]                                    stride_x_reg;
+  reg  [2:0]                                    stride_y_reg;
   reg                                           skipIact_reg;
   reg                                           skipWght_reg;
   reg                                           skipPsum_reg;
@@ -615,8 +615,8 @@ module OpenEye_FPGA
               32'd1 : begin
                 iact_write_addr_t_reg <= data_dma_i_reg[1+PARAMETER_POS_2_0:PARAMETER_POS_2_0];
                 iact_write_data_t_reg <= data_dma_i_reg[3+PARAMETER_POS_2_1:PARAMETER_POS_2_1];
-                stride_x_reg          <= data_dma_i_reg[3+PARAMETER_POS_2_2:PARAMETER_POS_2_2];
-                stride_y_reg          <= data_dma_i_reg[3+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
+                stride_x_reg          <= data_dma_i_reg[2+PARAMETER_POS_2_2:PARAMETER_POS_2_2];
+                stride_y_reg          <= data_dma_i_reg[2+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
                 skipIact_reg          <= data_dma_i_reg[PARAMETER_POS_2_4:PARAMETER_POS_2_4];
                 skipWght_reg          <= data_dma_i_reg[PARAMETER_POS_2_5:PARAMETER_POS_2_5];
                 skipPsum_reg          <= data_dma_i_reg[PARAMETER_POS_2_6:PARAMETER_POS_2_6];
@@ -1319,12 +1319,6 @@ module OpenEye_FPGA
     end
   end
 
-  assign buffer_SP_en_r = buffer_SP_en_r_reg;
-  assign buffer_SP_en_w = buffer_SP_en_w_reg;
-  assign buffer_SP_addr = buffer_SP_addr_reg;
-  assign buffer_SP_data_w = buffer_SP_data_w_reg;
-  assign buffer_SP_data_r_reg = buffer_SP_data_r;
-
   //#######################
   //Wires
   //#######################
@@ -1334,6 +1328,12 @@ module OpenEye_FPGA
   wire [11:0] buffer_SP_addr [3:0][7:0];
   wire [63:0] buffer_SP_data_w [3:0][7:0];
   wire [63:0] buffer_SP_data_r [3:0][7:0];
+
+  assign buffer_SP_en_r = buffer_SP_en_r_reg;
+  assign buffer_SP_en_w = buffer_SP_en_w_reg;
+  assign buffer_SP_addr = buffer_SP_addr_reg;
+  assign buffer_SP_data_w = buffer_SP_data_w_reg;
+  assign buffer_SP_data_r_reg = buffer_SP_data_r;
 
   genvar i,j;
   generate
@@ -1428,7 +1428,7 @@ module OpenEye_FPGA
       .NUM_GLB_WGHT        (NUM_GLB_WGHT),
       .NUM_GLB_PSUM        (NUM_GLB_PSUM),
 
-      .CLUSTER_COLUMNS      (CLUSTER_COLUMNS),
+      .CLUSTER_COLUMNS     (CLUSTER_COLUMNS),
       .CLUSTER_ROWS        (CLUSTER_ROWS),
 
       .IACT_ADDR_PER_PE    (IACT_ADDR_PER_PE),
@@ -1484,6 +1484,8 @@ module OpenEye_FPGA
       .wght_addr_len_i        (wght_addr_len_reg),
       .bano_cluster_mode_i    (bano_cluster_mode_reg),
       .af_cluster_mode_i      (af_cluster_mode_reg),
+      .pooling_cluster_mode_i (4'd0),
+      .kernel_per_pe_cluster_i(2'd1),
       .input_activations_i    (input_activations_reg),
       .iact_write_addr_t_i    (iact_write_addr_t_reg),
       .iact_write_data_t_i    (iact_write_data_t_reg),

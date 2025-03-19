@@ -63,6 +63,7 @@ module PE_cluster
 #(
   //Set parameters
   parameter IS_TOPLEVEL                = 1,
+  parameter SERIAL                     = 0,
   parameter PARALLEL_MACS              = 2,
   parameter TOP_CLUSTER                = 1,
   parameter DATA_IACT_BITWIDTH         = 8,
@@ -160,45 +161,46 @@ genvar i,j,g;
         wire [NUM_GLB_IACT-1:0]          iact_ready_o_w;
         wire                             wght_ready_o_w;
           PE #(
-            .IS_TOPLEVEL(0),
-            .PARALLEL_MACS(PARALLEL_MACS),
-            .PE_X(i),
-            .PE_Y(j),
-            .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
-            .DATA_WGHT_BITWIDTH(DATA_WGHT_BITWIDTH),
-            .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
+            .SERIAL                (!IS_TOPLEVEL),
+            .IS_TOPLEVEL           (0),
+            .PARALLEL_MACS         (PARALLEL_MACS),
+            .PE_X                  (i),
+            .PE_Y                  (j),
+            .DATA_IACT_BITWIDTH    (DATA_IACT_BITWIDTH),
+            .DATA_WGHT_BITWIDTH    (DATA_WGHT_BITWIDTH),
+            .DATA_PSUM_BITWIDTH    (DATA_PSUM_BITWIDTH),
             .DATA_IACT_IGNORE_ZEROS(DATA_IACT_IGNORE_ZEROS),
             .DATA_WGHT_IGNORE_ZEROS(DATA_WGHT_IGNORE_ZEROS),
-            .IACT_DATA_ADDR(IACT_DATA_WORDS),
-            .IACT_ADDR_ADDR(IACT_ADDR_WORDS),
-            .WGHT_DATA_ADDR(WGHT_DATA_WORDS),
-            .WGHT_ADDR_ADDR(WGHT_ADDR_WORDS),
-            .PSUM_ADDR(PSUM_WORDS),
-            .TRANS_BITWIDTH_IACT(TRANS_BITWIDTH_IACT),
-            .TRANS_BITWIDTH_WGHT(TRANS_BITWIDTH_WGHT),
-            .NUM_GLB_IACT(NUM_GLB_IACT)
+            .IACT_DATA_ADDR        (IACT_DATA_WORDS),
+            .IACT_ADDR_ADDR        (IACT_ADDR_WORDS),
+            .WGHT_DATA_ADDR        (WGHT_DATA_WORDS),
+            .WGHT_ADDR_ADDR        (WGHT_ADDR_WORDS),
+            .PSUM_ADDR             (PSUM_WORDS),
+            .TRANS_BITWIDTH_IACT   (TRANS_BITWIDTH_IACT),
+            .TRANS_BITWIDTH_WGHT   (TRANS_BITWIDTH_WGHT),
+            .NUM_GLB_IACT          (NUM_GLB_IACT)
           )pe(
-            .clk_i(clk_i),
-            .rst_ni(rst_nw),
-            .iact_select_i(iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(NUM_GLB_IACT+1)-1:(i+j*PE_COLUMNS)*$clog2(NUM_GLB_IACT+1)]),
-            .compute_i(compute_i[i+j*PE_COLUMNS]),
+            .clk_i          (clk_i),
+            .rst_ni         (rst_nw),
+            .iact_select_i  (iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(NUM_GLB_IACT+1)-1:(i+j*PE_COLUMNS)*$clog2(NUM_GLB_IACT+1)]),
+            .compute_i      (compute_i[i+j*PE_COLUMNS]),
 
-            .iact_data_i(pe_iact_data),
-            .iact_enable_i(pe_iact_enable),
-            .iact_ready_o(iact_ready_o_w),
+            .iact_data_i    (pe_iact_data),
+            .iact_enable_i  (pe_iact_enable),
+            .iact_ready_o   (iact_ready_o_w),
 
-            .wght_data_i(pe_wght_data[(j+1)*TRANS_BITWIDTH_WGHT-1:j*TRANS_BITWIDTH_WGHT]),
-            .wght_enable_i(pe_wght_enable[j]),
-            .wght_ready_o(wght_ready_o_w),
+            .wght_data_i    (pe_wght_data[(j+1)*TRANS_BITWIDTH_WGHT-1:j*TRANS_BITWIDTH_WGHT]),
+            .wght_enable_i  (pe_wght_enable[j]),
+            .wght_ready_o   (wght_ready_o_w),
 
-            .psum_data_i(psum_data_i_w),
-            .psum_enable_i(psum_enable_i_w),
-            .psum_ready_o(psum_ready_o_w),
-            .psum_data_o(psum_data_o_w),
-            .psum_enable_o(psum_enable_o_w),
-            .psum_ready_i(psum_ready_i_w),
+            .psum_data_i    (psum_data_i_w),
+            .psum_enable_i  (psum_enable_i_w),
+            .psum_ready_o   (psum_ready_o_w),
+            .psum_data_o    (psum_data_o_w),
+            .psum_enable_o  (psum_enable_o_w),
+            .psum_ready_i   (psum_ready_i_w),
             .enable_stream_i(enable_stream_i),
-            .data_stream_i(data_stream_i)
+            .data_stream_i  (data_stream_i)
           );
       end
     end
