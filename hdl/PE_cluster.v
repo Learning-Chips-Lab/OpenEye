@@ -161,8 +161,8 @@ genvar i,j,g;
         wire [NUM_GLB_IACT-1:0]          iact_ready_o_w;
         wire                             wght_ready_o_w;
           PE #(
-            .SERIAL                (!IS_TOPLEVEL),
             .IS_TOPLEVEL           (0),
+            .SERIAL                (SERIAL),
             .PARALLEL_MACS         (PARALLEL_MACS),
             .PE_X                  (i),
             .PE_Y                  (j),

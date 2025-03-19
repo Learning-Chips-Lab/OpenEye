@@ -1430,7 +1430,7 @@ module OpenEye_Parallel
 
         OpenEye_Cluster #(
           .IS_TOPLEVEL        (0),
-          .SERIAL             (!IS_TOPLEVEL),
+          .SERIAL             (IS_TOPLEVEL == 0),
           .DATA_IACT_BITWIDTH (DATA_IACT_BITWIDTH),
           .DATA_PSUM_BITWIDTH (DATA_PSUM_BITWIDTH),
           .DATA_WGHT_BITWIDTH (DATA_WGHT_BITWIDTH),

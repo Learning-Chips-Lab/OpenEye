@@ -110,7 +110,7 @@ module PE
   localparam integer PSUM_DATA               = DATA_PSUM_BITWIDTH,
   localparam integer PSUM_ADDR_BITWIDTH      = $clog2(PSUM_ADDR),
   localparam integer PSUM_DATA_BITWIDTH      = $clog2(PSUM_DATA),
-  localparam integer PSUM_WORDS_PER_TRANSFER = PARALLEL_MACS,
+  localparam integer PSUM_WORDS_PER_TRANSFER = (SERIAL ?  1 : PARALLEL_MACS),
   localparam integer TRANS_BITWIDTH_PSUM     = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER,
   localparam integer VALUES_OF_IACTS         = $rtoi($ceil(TRANS_BITWIDTH_IACT / DATA_IACT_BITWIDTH))
 
@@ -134,7 +134,6 @@ module PE
   input                                              enable_stream_i,
   input       [7:0]                                  data_stream_i
 );
-
   reg [$clog2(16)-1:0]                        current_state_computing;
 
   reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_SPad_data_r;
@@ -159,8 +158,15 @@ module PE
   reg                                         psum_data_SPad_en_b_w;
   reg                                         psum_select;
   reg                                         psum_enable;
-  reg [TRANS_BITWIDTH_PSUM/2-1:0]             psum_data_1_delay;
-  reg [TRANS_BITWIDTH_PSUM/2-1:0]             psum_data_2_delay;
+
+generate
+  if (SERIAL == 1) begin
+    reg                                       psum_enable_2;
+    reg                                       adder_3_en;
+  end
+endgenerate
+  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_1_delay;
+  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_2_delay;
   reg                                         mux_iact_ready;
   reg                                         adder_1_en;
   reg                                         adder_2_en;
@@ -1245,5 +1251,4 @@ module PE
     .sel_i(psum_select), 
     .y_o  ({adder_2_summand_2,adder_1_summand_2})
   );
-
 endmodule
