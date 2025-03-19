@@ -1319,12 +1319,6 @@ module OpenEye_FPGA
     end
   end
 
-  assign buffer_SP_en_r = buffer_SP_en_r_reg;
-  assign buffer_SP_en_w = buffer_SP_en_w_reg;
-  assign buffer_SP_addr = buffer_SP_addr_reg;
-  assign buffer_SP_data_w = buffer_SP_data_w_reg;
-  assign buffer_SP_data_r_reg = buffer_SP_data_r;
-
   //#######################
   //Wires
   //#######################
@@ -1334,6 +1328,12 @@ module OpenEye_FPGA
   wire [11:0] buffer_SP_addr [3:0][7:0];
   wire [63:0] buffer_SP_data_w [3:0][7:0];
   wire [63:0] buffer_SP_data_r [3:0][7:0];
+
+  assign buffer_SP_en_r = buffer_SP_en_r_reg;
+  assign buffer_SP_en_w = buffer_SP_en_w_reg;
+  assign buffer_SP_addr = buffer_SP_addr_reg;
+  assign buffer_SP_data_w = buffer_SP_data_w_reg;
+  assign buffer_SP_data_r_reg = buffer_SP_data_r;
 
   genvar i,j;
   generate
@@ -1484,6 +1484,8 @@ module OpenEye_FPGA
       .wght_addr_len_i        (wght_addr_len_reg),
       .bano_cluster_mode_i    (bano_cluster_mode_reg),
       .af_cluster_mode_i      (af_cluster_mode_reg),
+      .pooling_cluster_mode_i (4'd0),
+      .kernel_per_pe_cluster_i(2'd1),
       .input_activations_i    (input_activations_reg),
       .iact_write_addr_t_i    (iact_write_addr_t_reg),
       .iact_write_data_t_i    (iact_write_data_t_reg),
