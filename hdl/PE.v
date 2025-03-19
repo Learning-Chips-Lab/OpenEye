@@ -854,7 +854,9 @@ module PE
           psum_data_SPad_en_a_r  <= 0;
           psum_data_SPad_en_b_r  <= 0;
           psum_data_SPad_en_a_w  <= 1;
+          if (!data_mode_reg) begin
             psum_data_SPad_en_b_w  <= 1;
+          end
           psum_spad_addr_a_mem   <= 0;
           psum_spad_addr_b_mem   <= 0;
           psum_spad_addr_a_delay <= psum_spad_addr_a_r;
@@ -898,7 +900,7 @@ module PE
           if (psum_enable_i) begin
             adder_1_en            <= 1;
             adder_2_en            <= 1;
-            current_state_computing         <= SEND_PSUM;
+            current_state_computing <= SEND_PSUM;
             psum_data_SPad_en_a_w <= 1;
             psum_data_SPad_en_b_w <= 1;
             psum_spad_addr_a_mem  <= psum_spad_addr_a_r + 1;
@@ -918,17 +920,19 @@ module PE
                 use_psum_2    <= 0;
               end
           end else begin
-            if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
+            if (!data_mode_reg) begin
+              if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
                 use_psum_1 <= 1;
               end else begin
                 use_psum_1 <= 0;
-              //used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
+                //used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
               end
-            if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
+              if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
                 use_psum_2 <= 1;
               end else begin
                 use_psum_2 <= 0;
-              //used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
+                //used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
+              end
             end
           end
           computing   <= 0;
@@ -946,8 +950,8 @@ module PE
           psum_select          <= !computing;
           if (!psum_enable_i) begin
             current_state_computing <= SEND_PSUM_LAST;
-            adder_1_en    <= 0;
-            adder_2_en    <= 0;
+            adder_1_en              <= 1;
+            adder_2_en              <= 1;
           end
           if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin 
             use_psum_1                              <= 1;
