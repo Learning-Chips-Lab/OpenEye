@@ -303,6 +303,9 @@ module PE
   } fsm_mode_computing;
 
   assign mux_iact_c_i_w = mux_iact_ready;
+  assign iact_part_1_w = mux_iact_a_o_w[7:0];
+  assign iact_part_2_w = mux_iact_a_o_w[15:8];
+  assign iact_part_3_w = mux_iact_a_o_w[23:16];
   assign {iact_data_spad_oh,iact_data_spad_pay} = iact_data_SPad_data_r;
   assign {wght_data_spad_oh_2,wght_data_spad_pay_2,wght_data_spad_oh_1,wght_data_spad_pay_1} = wght_data_SPad_data_r;
   // assign psum_data_o = {adder_2_o_w,adder_1_o_w};
@@ -370,6 +373,7 @@ module PE
         SECOND_PARAMS : begin
           if (enable_stream_i) begin
             current_state_stream <= THIRD_PARAMS;
+            iact_addr_max_reg    <= data_stream_i[3:0];
           end else begin
             current_state_stream <= FIRST_PARAMS;
           end
@@ -562,14 +566,13 @@ module PE
             used_psum_memory_1 <= 0;
             used_psum_memory_2 <= 0;
           end
-          if (compute_i) begin 
+          if (compute_i & (second_spad_words_iact != 0) & (second_spad_words_wght != 0)) begin 
             //Start off
             current_state_computing <= LOADING_1;
             mux_iact_ready        <= 0;
             wght_ready_o          <= 0;
             psum_select           <= 0;
             
-            iact_addr_SPad_addr   <= 0;
             iact_addr_SPad_en_r   <= 1;
 
             iact_data_SPad_addr   <= 0;
