@@ -34,7 +34,10 @@ class WghtStreamMapper(object):
                 for router in range(self.params.Wght_Routers):
                     if(self.layer_params.computing_mx[cl_x][cl_y][router][0] == 1):
                         spad = self.write_wght_pe(cl_x, cl_y, router)
-                        storage[cl_x][cl_y][router] = spad
+                        if (self.sparse_data == 1):
+                            storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
+                        else:
+                            storage[cl_x][cl_y][router] = spad
         wght_stream = self.create_complete_wght_stream(storage)
         return wght_stream
     
