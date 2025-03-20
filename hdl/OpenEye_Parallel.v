@@ -1279,7 +1279,11 @@ module OpenEye_Parallel
                 fsm_psum_current_state <= CALCULATE_PSUM;
                 fsm_psum_cycle         <= 0;
                 if (storage_cycles == 0) begin
-              mem_addr_psum_storage  <= 10'(64'(mem_addr_psum_storage) + 64'(filters_reg));
+                  if (SERIAL) begin 
+                    mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(filters_reg));
+                  end else begin
+                    mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(32'(filters_reg)+1)/2);
+                  end
                 end
               end
               psum_ready_i_reg       <= 0;
