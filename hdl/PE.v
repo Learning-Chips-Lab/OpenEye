@@ -161,8 +161,8 @@ module PE
   reg                                         psum_enable;
   reg                                         psum_enable_2;
 
-  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_1_delay;
-  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_2_delay;
+  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/PARALLEL_MACS-1 :0]    psum_data_1_delay;
+  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/PARALLEL_MACS-1 :0]    psum_data_2_delay;
   reg                                         mux_iact_ready;
   reg                                         adder_1_en;
   reg                                         adder_2_en;
@@ -1105,6 +1105,7 @@ module PE
   );
 
   // SPad for PSUM
+if (SERIAL) begin
   SPad_DP #(
     .DATA_WIDTH(PSUM_DATA),
     .ADDR_WIDTH(PSUM_ADDR_BITWIDTH),
@@ -1133,6 +1134,30 @@ module PE
     .data_i(psum_spad_data_b_i),
     .data_o(psum_spad_data_b_o)
   );
+end else begin
+  SPad_DP_RW #(
+    .DATA_WIDTH(PSUM_DATA),
+    .ADDR_WIDTH(PSUM_ADDR_BITWIDTH)
+
+    ,.Implementation("pe_psum")
+  ) psum_SPad (
+    .clk_i     (clk_i),
+    .re_a_i    (psum_data_SPad_en_a_r || psum_enable_i),
+    .re_b_i    (psum_data_SPad_en_b_r || psum_enable_i),
+    .we_a_i    (psum_data_SPad_en_a_w_i),
+    .we_b_i    (psum_data_SPad_en_b_w_i),
+    .addr_r_a_i(psum_spad_addr_a_r),
+    .addr_r_b_i(psum_spad_addr_b_r),
+    .addr_w_a_i(psum_spad_addr_a_w),
+    .addr_w_b_i(psum_spad_addr_b_w),
+    .data_a_i  (psum_spad_data_a_i),
+    .data_b_i  (psum_spad_data_b_i),
+    .data_a_o  (psum_spad_data_a_o),
+    .data_b_o  (psum_spad_data_b_o)
+  );
+end
+  // SPad for PSUM
+  
   
   // Mux to select the correct IACT data from GLB
   mux_iact #(
@@ -1262,6 +1287,7 @@ module PE
     .adder_en_i (adder_2_en)
   );
 
+if (SERIAL) begin
   // do the addition of both psum spads
   adder #(
     .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
@@ -1273,9 +1299,10 @@ module PE
     .sum_o      (adder_3_o_w),
     .adder_en_i (adder_3_en)
   );
-
+end
   // mux to select input to adder
   // (this can be either the data of psum SPAD or psum from another PE/router)
+if (SERIAL) begin
   mux2 #(
     .DATA_WIDTH(TRANS_BITWIDTH_PSUM*PARALLEL_MACS)
   ) mux_psum (
@@ -1284,5 +1311,16 @@ module PE
     .sel_i(psum_select), 
     .y_o  ({adder_2_summand_2,adder_1_summand_2})
   );
+end else begin
+  mux2 #(
+    .DATA_WIDTH(TRANS_BITWIDTH_PSUM)
+  ) mux_psum (
+    .a_in ({psum_data_2_delay,psum_data_1_delay}),
+    .b_in ({mult_2_o_w,mult_1_o_w}),
+    .sel_i(psum_select), 
+    .y_o  ({adder_2_summand_2,adder_1_summand_2})
+  );
+
+end
 
 endmodule
