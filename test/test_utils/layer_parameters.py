@@ -177,10 +177,11 @@ class LayerParameters(object):
         self.input_shape = layer.input.shape
         self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size
-        if (layer.output.shape[1] <= 8):
-            self.single_cluster_computation = 2
-        if (layer.output.shape[1] <= 4):
-            self.single_cluster_computation = 1
+        if (params.SERIAL == 0) :
+            if (layer.output.shape[1] <= 8):
+                self.single_cluster_computation = 2
+            if (layer.output.shape[1] <= 4):
+                self.single_cluster_computation = 1
 
         if (math.floor(params.PEs_Y/layer.kernel_size[0]) > 1):
             self.kernel_per_pe_cluster = math.floor(params.PEs_Y/layer.kernel_size[0])

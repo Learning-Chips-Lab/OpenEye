@@ -373,11 +373,14 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
     if (params.SERIAL):
         for refresh in range(math.ceil(layer_params.needed_refreshes_mx[layer_repetition][1]/layer_params.used_Y_cluster),
                             math.ceil(layer_params.needed_refreshes_mx[layer_repetition][2]/layer_params.used_Y_cluster)):
-            for cl_y in cluster_order:
-                for cl_x in range(params.Clusters_X):
-                    for router in range(params.Psum_Routers):
-                        for psum_pe in range((layer_repetition_cycle%layer_params.needed_wght_transmissions)*math.ceil(layer.filters/layer_params.needed_wght_transmissions/2),\
-                            ((layer_repetition_cycle%layer_params.needed_wght_transmissions)+1)*math.ceil(layer.filters/layer_params.needed_wght_transmissions/2)):
+
+            for psum_pe in range((layer_repetition_cycle%layer_params.needed_wght_transmissions)*math.ceil(layer.filters/layer_params.needed_wght_transmissions),\
+                ((layer_repetition_cycle%layer_params.needed_wght_transmissions)+1)*math.ceil(layer.filters/layer_params.needed_wght_transmissions)):
+
+                for cl_y in cluster_order:
+                    for cl_x in range(params.Clusters_X):
+                        for router in range(0, params.Psum_Routers, 2):
+                        
                             if(layer_params.computing_mx[cl_x][cl_y][0][router] == 1):
                                 partial_result_a = gtu.to_twos_complement_string(0,20)
                                 partial_result_b = gtu.to_twos_complement_string(0,20)
@@ -393,13 +396,13 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                     ((cl_y%layer_params.used_Y_cluster) + refresh*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
                                     / (layer.output.shape[2] + layer_params.add_up)))
-                                    filter = 2 * psum_pe + counter
+                                    filter = psum_pe
                                     try:
                                         if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
                                             if (counter == 0):
                                                 partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
                                             else:
-                                                partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
+                                                partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor+1][y_cor],20)
                                     except:
                                         partial_result_b = partial_result_b
                                         partial_result_a = partial_result_a

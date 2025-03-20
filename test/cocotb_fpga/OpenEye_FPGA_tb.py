@@ -177,7 +177,7 @@ async def single_layer_test(dut):
 
             dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
             time_printer.timestamp("Start creating stream. " , logger)
-            stream = ptu.write_stream(openeye_parameter, layer_parameters, layer, dram_layer_content)
+            stream = ptu.write_stream(openeye_parameter, layer_parameters, layer, dram_layer_content, sparse_iacts, sparse_wghts)
             
             time_printer.timestamp("Streams set. " , logger)
 
