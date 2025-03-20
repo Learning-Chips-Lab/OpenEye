@@ -16,11 +16,12 @@ logger = logging.getLogger("cocotb")
 
 
 class WghtStreamMapper(object):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_wghts):
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
         self.params = params
         self.layer_params = layer_params
         self.layer_repetition = layer_repetition
         self.dram_weights = dram_layer_content
+        self.sparse_data = sparse_data
         if (params.SERIAL):
             self.storage = [[] for _ in range(len(strdic.stream_serial_dict))]
         else:
