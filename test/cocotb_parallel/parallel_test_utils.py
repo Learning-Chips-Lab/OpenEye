@@ -18,7 +18,7 @@ import multiprocessing as mp
 
 logger = logging.getLogger("cocotb")
 
-def get_verilog_sources(hdl_dir, serial=False):
+def get_verilog_sources(hdl_dir, serial):
 
     verilog_sources =[
     os.path.join(hdl_dir, "OpenEye_Parallel.v"),
@@ -38,37 +38,38 @@ def get_verilog_sources(hdl_dir, serial=False):
     os.path.join(hdl_dir, "mux2.v"),
     os.path.join(hdl_dir, "demux2.v"),
     os.path.join(hdl_dir, "mux_iact.v"),
-    os.path.join(hdl_dir, "SPad_DP.v"),
+    os.path.join(hdl_dir, "SPad_DP_RW.v"),
     os.path.join(hdl_dir, "SPad_SP.v"),
     os.path.join(hdl_dir, "RST_SYNC.v"),
+    os.path.join(hdl_dir, "memory/RAM_DP_RW.v"),
     os.path.join(hdl_dir, "memory/RAM_DP.v"),
     os.path.join(hdl_dir, "memory/RAM_SP.v"),
-    os.path.join(hdl_dir, "memory/impl/RAM_DP_generic.v"),
+    os.path.join(hdl_dir, "memory/impl/RAM_DP_RW_generic.v"),
     os.path.join(hdl_dir, "memory/impl/RAM_SP_generic.v")
     ]
     if (serial):
         verilog_sources.append(os.path.join(hdl_dir, "OpenEye_Wrapper.v"))
     return verilog_sources
 
-def write_stream_layer_mp(params, layer_params, layer, dram_layer_content, return_dict, layer_repetition):
+def write_stream_layer_mp(params, layer_params, layer, dram_layer_content, return_dict, layer_repetition, sparse_iacts, sparse_wghts):
     if "Depthwise" in str(layer):
-        LayerStreamGenerator = DWMapper(params, layer_params, layer_repetition, dram_layer_content)
+        LayerStreamGenerator = DWMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
     elif "Conv" in str(layer):
-        LayerStreamGenerator = ConvMapper(params, layer_params, layer_repetition, dram_layer_content,0,0)
+        LayerStreamGenerator = ConvMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
     elif "Dense" in str(layer):
-        LayerStreamGenerator = DenseMapper(params, layer_params, layer_repetition, dram_layer_content)
+        LayerStreamGenerator = DenseMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
     return_dict[layer_repetition] = LayerStreamGenerator.get_stream()
 
-def write_stream(params, layer_params, layer, dram_layer_content):
+def write_stream(params, layer_params, layer, dram_layer_content, sparse_iacts, sparse_wghts):
     manager = mp.Manager()
     return_dict = manager.dict()
     jobs = []
 
     for layer_repetition in range(layer_params.needed_total_transmissions):
-        p = mp.Process(target = write_stream_layer_mp, args = (params, layer_params, layer, dram_layer_content, return_dict, layer_repetition))
+        p = mp.Process(target = write_stream_layer_mp, args = (params, layer_params, layer, dram_layer_content, return_dict, layer_repetition, sparse_iacts, sparse_wghts))
         p.start()
         jobs.append(p)
 
