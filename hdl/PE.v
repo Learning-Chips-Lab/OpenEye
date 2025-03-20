@@ -1006,7 +1006,11 @@ module PE
             psum_data_SPad_en_a_w <= 0;
             psum_data_SPad_en_b_w <= 0;
             psum_spad_addr_a_mem <= 0;
-            psum_spad_addr_b_mem <= 1;
+            if (SERIAL) begin
+            psum_spad_addr_b_mem   <= 0;
+            end else begin
+              psum_spad_addr_b_mem   <= 1;
+            end
             psum_spad_addr_a_w   <= 2;
             psum_spad_addr_b_w   <= 3;
           end
@@ -1051,6 +1055,20 @@ module PE
               end
           end else begin
             if (!data_mode_reg) begin
+              if (SERIAL) begin
+                if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
+                  use_psum_1 <= 1;
+                end else begin
+                  use_psum_1 <= 0;
+                  //used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
+                end
+                if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
+                  use_psum_2 <= 1;
+                end else begin
+                  use_psum_2 <= 0;
+                  //used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
+                end
+              end else begin
               if (used_psum_memory[(psum_spad_addr_a_r)]  == 1) begin 
                 use_psum_1 <= 1;
               end else begin
@@ -1062,6 +1080,7 @@ module PE
               end else begin
                 use_psum_2 <= 0;
                 used_psum_memory[(psum_spad_addr_b_r)] <= 1;
+                end
               end
             end
           end

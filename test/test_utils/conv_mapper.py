@@ -76,6 +76,7 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + (layer_params.skipWght << 15)
             dma_line = dma_line + (layer_params.skipPsum << 16)
             dma_line = dma_line + (layer_params.psum_delay << 17)
+            dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21)
             dma_storage.append(dma_line)
             for x in reversed(range(4)):
                 dma_line = int(computing_pes[x*48:(x+1)*48],2)

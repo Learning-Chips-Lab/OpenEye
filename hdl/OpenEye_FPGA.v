@@ -62,6 +62,7 @@ module OpenEye_FPGA
 #(
   //Set parameters
   parameter IS_TOPLEVEL         = 1,
+  parameter SERIAL              = 1,
   parameter PARALLEL_MACS       = 2,
 
   parameter ADDR_IACT_BITWIDTH  = 4,
@@ -145,13 +146,14 @@ module OpenEye_FPGA
   parameter PARAMETER_POS_2_2     = 4 + PARAMETER_POS_2_1,
   parameter PARAMETER_POS_2_3     = 4 + PARAMETER_POS_2_2,
   parameter PARAMETER_POS_2_4     = 4 + PARAMETER_POS_2_3,
-  parameter PARAMETER_POS_2_5     = 4 + PARAMETER_POS_2_4,
-  parameter PARAMETER_POS_2_6     = 4 + PARAMETER_POS_2_5,
+  parameter PARAMETER_POS_2_5     = 1 + PARAMETER_POS_2_4,
+  parameter PARAMETER_POS_2_6     = 1 + PARAMETER_POS_2_5,
   parameter PARAMETER_POS_2_7     = 1 + PARAMETER_POS_2_6,
-  parameter PARAMETER_POS_2_8     = 1 + PARAMETER_POS_2_7,
-  parameter PARAMETER_POS_2_9     = 1 + PARAMETER_POS_2_8,
+  parameter PARAMETER_POS_2_8     = 4 + PARAMETER_POS_2_7,
+  parameter PARAMETER_POS_2_9     = 4 + PARAMETER_POS_2_8,
   parameter PARAMETER_POS_2_10    = 1 + PARAMETER_POS_2_9,
   parameter PARAMETER_POS_2_11    = 1 + PARAMETER_POS_2_10,
+  parameter PARAMETER_POS_2_12    = 4 + PARAMETER_POS_2_11,
   
   //Number of Words per PE
   parameter BANO_MODES            = 2,
@@ -235,6 +237,7 @@ module OpenEye_FPGA
   reg                                           skipIact_reg;
   reg                                           skipWght_reg;
   reg                                           skipPsum_reg;
+  reg [$clog2(PE_ROWS)-1:0]                     kernel_per_pe_cluster_reg;
   reg [DMA_BITWIDTH-1 : 0]                      fifo_data_i;
   reg                                           fifo_read_i;
   reg                                           fifo_write_i;
@@ -448,6 +451,7 @@ module OpenEye_FPGA
       wght_addr_len_reg         <= 0;
       stride_x_reg              <= 0;
       stride_y_reg              <= 0;
+      kernel_per_pe_cluster_reg <= 0;
       new_stream                <= 0;
 
       fsm_cycle                 <= 0;
@@ -620,7 +624,8 @@ module OpenEye_FPGA
                 skipIact_reg          <= data_dma_i_reg[PARAMETER_POS_2_4:PARAMETER_POS_2_4];
                 skipWght_reg          <= data_dma_i_reg[PARAMETER_POS_2_5:PARAMETER_POS_2_5];
                 skipPsum_reg          <= data_dma_i_reg[PARAMETER_POS_2_6:PARAMETER_POS_2_6];
-                psum_delay_reg        <= data_dma_i_reg[PARAMETER_POS_2_11+4:PARAMETER_POS_2_11];
+                psum_delay_reg        <= data_dma_i_reg[3+PARAMETER_POS_2_7:PARAMETER_POS_2_7];
+                kernel_per_pe_cluster_reg <= data_dma_i_reg[1+PARAMETER_POS_2_8:PARAMETER_POS_2_8];
               end
               32'd2 : begin
                 compute_mask_reg[DMA_BITWIDTH_OLD-1:0] <= data_dma_i_reg[DMA_BITWIDTH_OLD-1:0];
@@ -1412,6 +1417,7 @@ module OpenEye_FPGA
 
     OpenEye_Parallel #(
       .IS_TOPLEVEL         (0),
+      .SERIAL              (SERIAL),
 
       .DATA_IACT_BITWIDTH  (DATA_IACT_BITWIDTH),
       .DATA_PSUM_BITWIDTH  (DATA_PSUM_BITWIDTH),
@@ -1485,7 +1491,7 @@ module OpenEye_FPGA
       .bano_cluster_mode_i    (bano_cluster_mode_reg),
       .af_cluster_mode_i      (af_cluster_mode_reg),
       .pooling_cluster_mode_i (4'd0),
-      .kernel_per_pe_cluster_i(2'd1),
+      .kernel_per_pe_cluster_i(kernel_per_pe_cluster_reg),
       .input_activations_i    (input_activations_reg),
       .iact_write_addr_t_i    (iact_write_addr_t_reg),
       .iact_write_data_t_i    (iact_write_data_t_reg),
