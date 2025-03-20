@@ -231,15 +231,15 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                         except:
                             spad_storage[words_in_storage][spad_val_number][0] = 0
 
-                        spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
-                        filters = filters + 1
-                        if((filters == (start_current_repetition + filters_per_calculation))):
-                            filters = start_current_repetition
-                            kernel_x = kernel_x + 1
-                            overhead_counter = 0
-                        if(kernel_x == layer_params.kernel_size[0]):
-                            kernel_x = 0
-                            channel = channel + 1
+                    spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
+                    filters = filters + 1
+                    if((filters == (start_current_repetition + filters_per_calculation))):
+                        filters = start_current_repetition
+                        kernel_x = kernel_x + 1
+                        overhead_counter = 0
+                    if(kernel_x == layer_params.kernel_size[0]):
+                        kernel_x = 0
+                        channel = channel + 1
             if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
         return spad_storage
