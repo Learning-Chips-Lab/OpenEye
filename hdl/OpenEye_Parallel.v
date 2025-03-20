@@ -801,12 +801,12 @@ module OpenEye_Parallel
                       for (int b=0; b<4; b=b+1) begin
                         flat_help_var[b] = iact_router_offset[cc*CLUSTER_ROWS*4+cr*4+b];
                       end
-                    if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_reg) + per) >=  NUM_GLB_IACT *  32'(fsm_iact_cycle_div)) 
-                    &  (32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_reg) + per)  <  NUM_GLB_IACT * (32'(fsm_iact_cycle_div) + 1))
+                      if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_reg * kernel_per_pe_cluster_i_reg) + per) >=  (NUM_GLB_IACT *  32'(fsm_iact_cycle_div))) 
+                      &  (32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_reg * kernel_per_pe_cluster_i_reg) + per)  <  (NUM_GLB_IACT * (32'(fsm_iact_cycle_div) + 1)))
                       &  (compute_mask_reg[cc * PES * CLUSTER_ROWS + cr * PES + per * PE_COLUMNS + pec] == 1)) begin
-                      flat_help_var   = (flat_help_var + loop_mod * PE_ROWS + pec * stride_x_reg + 64'(per) - NUM_GLB_IACT * fsm_iact_cycle_div);
-                      for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
-                        iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
+                        flat_help_var   = (flat_help_var + loop_mod * PE_ROWS + pec * stride_x_reg * kernel_per_pe_cluster_i_reg + 64'(per) - NUM_GLB_IACT * fsm_iact_cycle_div);
+                        for (int b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
+                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                           <= flat_help_var[b];
                         end
                       end else begin
