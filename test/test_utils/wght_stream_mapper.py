@@ -41,6 +41,42 @@ class WghtStreamMapper(object):
         wght_stream = self.create_complete_wght_stream(storage)
         return wght_stream
     
+    def set_sparse_stream(self,spad_data):
+        layer_params = self.layer_params
+        params = self.params
+        addr_spad,data_spad = [0],spad_data[1]
+        #data_spad = gtu.reset_nested_list(data_spad)
+        temp_word,temp_part_list,temp_complete_list,temp_offset,added_words = [],[],[],0,0
+        #Sparse DATA SPAD
+        for addr_spad_count in range(params.Wghts_Addr_per_PE-1):
+            if (spad_data[0][addr_spad_count+1] != 0):
+                addr_spad.append(addr_spad[addr_spad_count])
+                for data_spad_pos in range(spad_data[0][addr_spad_count],spad_data[0][addr_spad_count+1]):
+                    for x in range (params.PARALLEL_MACS):
+                        temp_part_list.append(data_spad[data_spad_pos][x][0])
+                    for x in range (math.ceil(len(temp_part_list)/params.PARALLEL_MACS)):
+                        for y in range (params.PARALLEL_MACS):
+                            word = (x * params.PARALLEL_MACS) + y
+                            try:
+                                if (temp_part_list[word] != 0):
+                                    temp_word.append([temp_part_list[word],temp_offset])
+                                    temp_offset = 0
+                                    added_words = added_words + 1
+                                else:
+                                    temp_offset = temp_offset + 1
+                            except:
+                                temp_word.append([0,0])
+                                added_words = added_words + 1
+                            if (added_words == params.PARALLEL_MACS):
+                                temp_complete_list.append(temp_word)
+                                addr_spad[addr_spad_count+1] = addr_spad[addr_spad_count+1] + 1
+                                added_words = 0
+                                temp_word = []
+                    temp_part_list = []
+                temp_offset = 0
+        data_spad = temp_complete_list
+        return [addr_spad, data_spad]
+
     def write_wght_pe(self, cl_x, cl_y, router):
         data_spad = self.write_wght_data_storage(cl_x, cl_y, router)
         addr_spad = self.write_wght_addr_storage(cl_x, cl_y, router)
