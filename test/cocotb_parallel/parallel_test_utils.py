@@ -384,7 +384,7 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                             if(layer_params.computing_mx[cl_x][cl_y][0][router] == 1):
                                 partial_result_a = gtu.to_twos_complement_string(0,20)
                                 partial_result_b = gtu.to_twos_complement_string(0,20)
-                                for counter in range(2):
+                                for counter in range(math.floor(params.DMA_Bits/params.PSUM_Bitwidth)):
                                     x_cor= int(((router + \
                                     cl_x * params.PEs_X + \
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
