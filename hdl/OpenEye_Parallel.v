@@ -1138,7 +1138,11 @@ module OpenEye_Parallel
           if (results_ready) begin
             psum_router_set_reg  <= 0;
             fsm_psum_cycle <= fsm_psum_cycle + 1;
-            if (fsm_psum_cycle == 32'(32'(filters_reg)-1)) begin
+            if (!data_mode_reg) begin
+              if (fsm_psum_cycle == (32'((32'(filters_reg)+1)/2) - 1)) begin
+                psum_transmitted       <= 1;
+              end
+            end else begin
                 psum_transmitted       <= 1;
               end
           end
