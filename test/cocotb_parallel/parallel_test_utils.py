@@ -156,12 +156,14 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
 
         for layer_repetition in range(layer_params.needed_total_transmissions):
             p = mp.Process(target = calculate_conv_output_stream_mp, \
-                            args = (layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results))
+                            args = (layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results, return_dict))
             p.start()
             jobs.append(p)
         
         for proc in range(len(jobs)):
             jobs[proc].join()
+        for layer_repetition in range(layer_params.needed_total_transmissions):
+            output_order.append(return_dict[layer_repetition])
     elif "Dense" in str(layer):
         if(params.SERIAL):
             assert False, "not realized yet"
@@ -364,7 +366,8 @@ def calculate_dense_results_mp(x, layer, layer_number, dram, calculated_results,
         calculated_results = int(calculated_results + dram.weights[layer_number][x][c] * dram.fmap[layer_number][c])
     return_dict[x] = calculated_results
 
-def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results):
+def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results, return_dict):
+    coordinates = []
     file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
     layer_repetition_cycle = math.floor(layer_repetition/layer_params.iact_transmissions_pe)
     if (params.SERIAL):
@@ -480,6 +483,7 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
     file_dma_ref.close()
 
     logger.info("Stream " + str(layer_repetition) + " / " + str(layer_params.needed_total_transmissions) + " calculated.")
+    return_dict[layer_repetition] = coordinates
 
 def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results, return_dict):
     coordinates = []
