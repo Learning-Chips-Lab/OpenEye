@@ -437,20 +437,16 @@ module PE
       next_iact                 <= 0;
       next_iact2                <= 0;
       used_psum_memory          <= 0;
-      used_psum_memory_1        <= 0;
-      used_psum_memory_2        <= 0;
       use_psum_1                <= 0;
       use_psum_2                <= 0;
       adder_1_en                <= 0;
       adder_2_en                <= 0;
-      adder_3_en                <= 0;
       mux_iact_ready            <= 1;
       wght_ready_o              <= 1;
       psum_select               <= 1;
       psum_data_1_delay         <= 0;
       psum_data_2_delay         <= 0;
       psum_enable               <= 0;
-      psum_enable_2             <= 0;
       psum_enable_o             <= 0;
       psum_spad_addr_a_mem      <= 0;
       psum_spad_addr_b_mem      <= 1;
@@ -470,9 +466,12 @@ module PE
       end else begin
         psum_enable                         <= 0;
       end
-      // delay for final adder
-      psum_enable_2                         <= psum_enable;
-      psum_enable_o                         <= psum_enable_2;
+      if (SERIAL) begin
+        psum_enable_2                         <= psum_enable;
+        psum_enable_o                         <= psum_enable_2;
+      end else begin
+        psum_enable_o                         <= psum_enable;
+      end
       iact_oh_delay_1                       <= iact_data_spad_oh;
       iact_oh_delay_2                       <= iact_oh_delay_1;
       case (current_state_computing)
@@ -530,9 +529,16 @@ module PE
           reused_data_b          <= 0;
           use_psum_1             <= 0;
           use_psum_2             <= 0;
-          used_psum_memory_1     <= 0;
-          used_psum_memory_2     <= 0;
-          psum_select            <= 0;
+          if (SERIAL) begin
+            psum_select            <= 0;
+            used_psum_memory_1     <= 0;
+            used_psum_memory_2     <= 0;
+
+          end else begin
+            psum_select            <= 1;
+            used_psum_memory       <= 0;
+
+          end
           if (data_mode_reg) begin
             psum_select            <= 0;
             adder_1_en             <= 0;
