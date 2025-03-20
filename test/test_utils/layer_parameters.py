@@ -75,7 +75,6 @@ class LayerParameters(object):
 
         self.computing_mx = 0
         self.data_mode = 0
-        params = params
 
 
         if "Depthwise" in str(layer):
@@ -124,8 +123,8 @@ class LayerParameters(object):
 
     def calculate_iact_transmissions(self, layer, params):
         #Calculate Iact Cycles
-        self.needed_Iact_writes = math.ceil(((params.PEs_X - 1) * self.strideX + layer.kernel_size[1]) /(params.NUM_GLB_IACT))
-       
+        self.needed_Iact_writes = math.ceil(((params.PEs_X - 1) * self.strideX * self.kernel_per_pe_cluster + (layer.kernel_size[1]*self.kernel_per_pe_cluster)) / (params.NUM_GLB_IACT))
+
     def calculate_computing_matrix(self, layer, params):
         """ TODO: Docu - explain why this function exists"""
 
@@ -134,19 +133,19 @@ class LayerParameters(object):
                                             for _ in range(params.PEs_Y)]
                                             for _ in range(params.Clusters_Y)]
                                             for _ in range(params.Clusters_X)]
-            if(layer.kernel_size[0] < 3):
+            if((layer.kernel_size[0]*self.kernel_per_pe_cluster) < params.PEs_Y):
                 for x_cluster in range(params.Clusters_X):
                     for y_cluster in range(params.Clusters_Y):
                         for y_pe in range(params.PEs_Y):
                             for x_pe in range(params.PEs_X):
-                                if((1 + y_pe) > layer.kernel_size[1]):
+                                if((1 + y_pe) > (layer.kernel_size[0]*self.kernel_per_pe_cluster)):
                                     self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
             else:
                 for x_cluster in range(params.Clusters_X):
                     for y_cluster in range(params.Clusters_Y):
                         for y_pe in range(params.PEs_Y):
                             for x_pe in range(params.PEs_X):
-                                if((1 + y_pe + (y_cluster % math.ceil(layer.kernel_size[0]/params.PEs_Y)) * params.PEs_Y) > layer.kernel_size[1]):
+                                if((1 + y_pe + (y_cluster % math.ceil(layer.kernel_size[0]/params.PEs_Y)) * params.PEs_Y) > (layer.kernel_size[0]*self.kernel_per_pe_cluster)):
                                     self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
 
             if((layer.output.shape[1] % params.PEs_X) != 0):
