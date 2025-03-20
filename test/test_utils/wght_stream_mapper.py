@@ -79,7 +79,8 @@ class WghtStreamMapper(object):
 
     def write_wght_pe(self, cl_x, cl_y, router):
         data_spad = self.write_wght_data_storage(cl_x, cl_y, router)
-        addr_spad = self.write_wght_addr_storage(cl_x, cl_y, router)
+        addr_spad = self.write_wght_addr_storage(cl_x, cl_y, router, data_spad)
+
         return [addr_spad, data_spad]
 
     def write_wght_data_storage(self, cl_x, cl_y, router):
@@ -89,7 +90,7 @@ class WghtStreamMapper(object):
         params = self.params
         dram = self.dram_weights
 
-        spad_storage = [[[0 for _ in range(2)] for _ in range(2)] for _ in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS))]
+        spad_storage = [[[0 for _ in range(2)] for _ in range(self.params.PARALLEL_MACS)] for _ in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS))]
         overhead_counter = 0
         kernel_x = 0
         channel = (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)
@@ -116,7 +117,7 @@ class WghtStreamMapper(object):
                 break
         return spad_storage
         
-    def write_wght_addr_storage(self, cl_x, cl_y, router):
+    def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
 
         layer_params = self.layer_params
         params = self.params
@@ -243,8 +244,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                 break
         return spad_storage
         
-    def write_wght_addr_storage(self, cl_x, cl_y, router):
-
+    def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
         layer_params = self.layer_params
         params = self.params
         spad_storage = [0 for _ in range(params.Wghts_Addr_per_PE)]
