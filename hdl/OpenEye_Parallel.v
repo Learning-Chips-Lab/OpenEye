@@ -540,9 +540,9 @@ module OpenEye_Parallel
             data_write_enable <= 0;
             computing         <= 1;
             mem_addr_psum     <= 0;
+          end
+          if (compute_i) begin
             finished_cycles   <= 0;
-            enable_stream_reg <= 1;
-            data_stream_reg   <= 0;
           end
 
           if (status_reg_enable_i_w) begin
@@ -579,12 +579,16 @@ module OpenEye_Parallel
 
           start_new_cycle <= 0;
           compute_cluster_i_reg <= 0;
-          if (iact_transmitted & psum_transmitted) begin
+          if (iact_transmitted & wght_transmitted & psum_transmitted) begin
             start_new_cycle <= 1;
             if (start_new_cycle != 1) begin
               finished_cycles <= finished_cycles + 1;
             end
             compute_cluster_i_reg <= compute_mask_reg;
+          end
+          if (fsm_psum_current_state == SEND_RESULTS) begin
+            computing         <= 0;
+
           end
           if (fsm_psum_last_state == SEND_RESULTS) begin
             fsm_last_state    <= COMPUTING;
