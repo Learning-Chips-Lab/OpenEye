@@ -850,8 +850,88 @@ module OpenEye_Parallel
                     end
                   end
                 end
-            end
-            if (fsm_iact_cycle < ((32'(iact_addr_len_reg) + 32'(input_activations_reg))*needed_iact_cycles_reg)) begin
+              end else begin
+                if (32'(fsm_iact_cycle+1) <= ((32'(iact_addr_len_reg) + 32'(input_activations_reg))*needed_iact_cycles_reg)) begin
+                  for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                    for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                      for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                        iact_enable_comp_reg[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] <= 1;
+                      end
+                    end
+                  end
+                end else begin
+                  iact_enable_comp_reg   <= 0;
+                  loop_mod                = 0;
+                  fsm_iact_cycle         <= 0;
+                  fsm_iact_cycle_mod1    <= 0;
+                  fsm_iact_cycle_mod2    <= 0;
+                  fsm_iact_cycle_div     <= 0;
+                  fsm_iact_cycle_div_cnt <= 0;
+                  fsm_iact_last_state    <= CALCULATE_IACT;
+                  fsm_iact_current_state <= WAIT;
+                end
+              end
+            end else begin
+              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                  for (int pec=0; pec<PE_COLUMNS; pec=pec+1) begin
+                    for (int per=0; per<PE_ROWS; per=per+1) begin
+                      for (int b=0; b<4; b=b+1) begin
+                        flat_help_var[b] = iact_router_offset[cc*CLUSTER_ROWS*4+cr*4+b];
+                      end
+                      if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * PE_ROWS) + per)  <  NUM_GLB_IACT * (32'(iact_pes_per_router)))
+                      &  (compute_mask_reg[cc * PES * CLUSTER_ROWS + cr * PES + per * PE_COLUMNS + pec] == 1)) begin
+                        if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  1 * (32'(3)))) begin
+                          flat_help_var = 0;
+                        end else begin
+                          if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  2 * (32'(3)))) begin
+                            flat_help_var = 1;
+                          end else begin
+                            if ((32'(32'(flat_help_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  3 * (32'(3)))) begin
+                              flat_help_var = 2;
+                            end
+                          end
+                        end
+                        for (int b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
+                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
+                          <= flat_help_var[b];
+                        end
+                      end else begin
+                        flat_help_var = NUM_GLB_IACT;
+                        for (int b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
+                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
+                          <= flat_help_var[b];
+                        end
+                      end
+                      flat_help_var = 0;
+                    end
+                  end
+                end
+              end
+              if (fsm_iact_cycle != 0) begin
+                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                      flat_help_var = 0;
+                      for (int b=0; b<2; b=b+1) begin
+                        flat_help_var[b] = router_mode_iact_reg[cc*CLUSTER_ROWS*NUM_GLB_IACT*ROUTER_MODES_IACT+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT + b + 4];
+                      end
+                      if ((flat_help_var[0] == 0) & (flat_help_var[1] == 0)) begin
+                        for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+                          flat_help_var[b] = mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b];
+                        end
+                        flat_help_var = flat_help_var  +1;
+                        for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+                          mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b]
+                          <= flat_help_var[b];
+                        end
+                        flat_help_var = 0;
+                      end
+                    end
+                  end
+                end
+              end
+              if (fsm_iact_cycle < ((32'(needed_cycles_i_reg))*32'(input_activations_i_reg))) begin
                 for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                   for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                     for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
