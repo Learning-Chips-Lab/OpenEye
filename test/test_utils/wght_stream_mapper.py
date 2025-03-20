@@ -208,12 +208,12 @@ class ConvWghtStreamMapper(WghtStreamMapper):
 
         layer_params = self.layer_params
         params = self.params
-
-        spad_storage = [0 for _ in range(self.params.Wghts_Addr_per_PE)]
+        spad_storage = [0 for _ in range(params.Wghts_Addr_per_PE)]
+        temp_value = 0
         for words_in_storage in range(math.ceil(params.Wghts_Addr_per_PE)):
             if((words_in_storage != (self.layer_params.used_wght_addr_per_PE - 1)) | (self.layer_params.used_wght_addr_per_PE == self.params.Wghts_Addr_per_PE)):
                 spad_storage[words_in_storage] = \
-                    int(words_in_storage * math.ceil(layer_params.used_wght_per_PE/layer_params.kernel_size[0]/2/ int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)))
+                    int(words_in_storage * math.ceil(layer_params.used_wght_per_PE/2/int(layer_params.used_iact_per_PE)))
             else:
                 break
         return spad_storage
