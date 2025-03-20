@@ -681,16 +681,6 @@ module OpenEye_Parallel
           fsm_iact_cycle_div     <= 0;
           fsm_iact_cycle_div_cnt <= 0;
 
-          if (compute_i_w) begin
-            mem_addr_iact <= 0;
-            fsm_iact_last_state    <= IACT_IDLE;
-            fsm_iact_current_state <= CALCULATE_IACT;
-          end
-
-          if (status_reg_enable_i_w) begin
-            mem_addr_iact <= 0;
-          end
-
           router_mode_iact_reg     <= router_mode_iact_i;
           for (int g=0; g<CLUSTERS*NUM_GLB_IACT; g=g+1) begin
             if (iact_enable_i_w[g]) begin
@@ -744,6 +734,21 @@ module OpenEye_Parallel
               end
             end
           end
+
+          if ((iact_enable_i == 0) & (iact_enable_i_reg != 0) & (data_mode_reg == 0)) begin
+            mem_addr_iact          <= 0;
+            fsm_iact_last_state    <= IACT_IDLE;
+            fsm_iact_current_state <= CALCULATE_IACT;
+            iact_ready_o           <= 0;
+          end
+          
+          if ((compute_i == 1) & (data_mode_reg == 1)) begin
+            mem_addr_iact          <= 0;
+            fsm_iact_last_state    <= IACT_IDLE;
+            fsm_iact_current_state <= CALCULATE_IACT;
+            iact_ready_o           <= 0;
+          end
+
         end
 
         CALCULATE_IACT : begin
