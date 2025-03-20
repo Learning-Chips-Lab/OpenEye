@@ -811,8 +811,8 @@ module OpenEye_Parallel
                         end
                       end else begin
                         flat_help_var = NUM_GLB_IACT;
-                      for (int b=0; b<$clog2(NUM_GLB_IACT); b=b+1) begin
-                        iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT)+cr*PES*$clog2(NUM_GLB_IACT)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT)+pec*$clog2(NUM_GLB_IACT)+b]
+                        for (int b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
+                          iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                           <= flat_help_var[b];
                         end
                       end
@@ -824,10 +824,11 @@ module OpenEye_Parallel
               loop_mod = 0;
 
               flat_help_var = 0;
-            if (((fsm_iact_cycle != 0) & (6'(fsm_iact_cycle_mod1) < 6'(iact_addr_len_reg))
+              if ((((fsm_iact_cycle != 0) & (6'(fsm_iact_cycle_mod1) < 6'(iact_addr_len_reg))
               & (0 == fsm_iact_cycle_mod2))  
               | ((6'(fsm_iact_cycle_mod1) >= 6'(iact_addr_len_reg))
-            & (0 == fsm_iact_cycle_mod3))) begin
+              & (0 == fsm_iact_cycle_mod3)))
+              & ((((7'(iact_addr_len_reg) + 7'(input_activations_reg))-1) != fsm_iact_cycle_div_cnt) | (needed_iact_cycles_reg != 4'(fsm_iact_cycle_div+12'(1))))) begin
                 for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                   for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                     for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
