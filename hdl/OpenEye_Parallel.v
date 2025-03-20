@@ -1274,10 +1274,14 @@ module OpenEye_Parallel
                   storage_cycles       <= 0;
                 end
               end
+              if (iact_transmitted) begin
                 fsm_psum_last_state    <= GET_RESULTS;
                 fsm_psum_current_state <= CALCULATE_PSUM;
-              //mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(64'(48'(48'(filters_reg)+48'(1)))>>48'(1)));
+                fsm_psum_cycle         <= 0;
+                if (storage_cycles == 0) begin
               mem_addr_psum_storage  <= 10'(64'(mem_addr_psum_storage) + 64'(filters_reg));
+                end
+              end
               psum_ready_i_reg       <= 0;
             end
           end
