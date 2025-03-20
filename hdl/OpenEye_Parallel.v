@@ -944,7 +944,7 @@ module OpenEye_Parallel
           fsm_psum_cycle   <= 0;
           fsm_psum_last_state      <= PSUM_IDLE;
 
-          if (compute_i_w) begin
+          if (((fsm_iact_current_state == WAIT)|(fsm_iact_current_state == IACT_IDLE)) & computing) begin
             mem_addr_psum          <= 0;
             fsm_psum_last_state    <= PSUM_IDLE;
             fsm_psum_current_state <= CALCULATE_PSUM;
@@ -963,21 +963,6 @@ module OpenEye_Parallel
                  mem_addr_psum[g*PSUM_MEM_ADDR_BITS+b] <= flat_help_var[b];
               end
               flat_help_var = 0;
-            end
-          end
-          if (compute_i_w) begin
-            if (needed_y_cls_reg == 1) begin
-              psum_choose_reg <= (2**(CLUSTER_ROWS*CLUSTER_COLUMNS*NUM_GLB_PSUM)-1);
-            end else begin 
-              if (needed_y_cls_reg == 2) begin
-              psum_choose_reg <= 64'b1111000011110000111100001111000011110000111100001111000011110000;
-              end else begin
-                if (needed_y_cls_reg == 4) begin
-                  psum_choose_reg <= 64'b1111000000000000111100000000000011110000000000001111000000000000;
-                end else begin
-                  psum_choose_reg <= (2**(CLUSTER_ROWS*CLUSTER_COLUMNS*NUM_GLB_PSUM)-1);
-                end
-              end
             end
           end
         end
