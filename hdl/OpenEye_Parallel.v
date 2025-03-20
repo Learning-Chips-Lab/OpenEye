@@ -1162,7 +1162,7 @@ module OpenEye_Parallel
         WAIT_FOR_RESULTS : begin
 
           fsm_psum_cycle         <= fsm_psum_cycle + 1;
-          if (fsm_psum_cycle == 2) begin
+          if (fsm_psum_cycle == 0) begin
             fsm_psum_cycle         <= 0;
             fsm_psum_last_state    <= WAIT_FOR_RESULTS;
             fsm_psum_current_state <= SEND_RESULTS;
