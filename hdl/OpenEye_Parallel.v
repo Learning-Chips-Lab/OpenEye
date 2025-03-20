@@ -789,7 +789,7 @@ module OpenEye_Parallel
             if (fsm_iact_last_state == IACT_IDLE) begin
               mem_addr_psum <= 0;
             end
-
+            if (!data_mode_reg) begin
               for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                 for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                   ///loop_mod: cr%needed_y_cls
@@ -868,6 +868,7 @@ module OpenEye_Parallel
                 fsm_iact_cycle_div_cnt <= 0;
                 fsm_iact_last_state    <= CALCULATE_IACT;
                 fsm_iact_current_state <= WAIT;
+              end
             end
           end
         end
