@@ -28,12 +28,37 @@ class IactStreamMapper(object):
             self.storage = [[] for _ in range(len(strdic.stream_parallel_dict))]
 
     def get_iact_stream(self):
-        iact_stream = [[[[] for c in range(self.params.NUM_GLB_IACT)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
-        for cl_x in range(self.params.Clusters_X):
-            for cl_y in range(self.params.Clusters_Y):
-                for router in range(self.params.NUM_GLB_IACT):
-                    iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
-        iact_stream = self.create_complete_iact_stream(iact_stream)
+        if (not self.params.SERIAL) :
+            iact_stream = [[[[] for c in range(self.params.NUM_GLB_IACT)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
+            for cl_x in range(self.params.Clusters_X):
+                for cl_y in range(self.params.Clusters_Y):
+                    for router in range(self.params.NUM_GLB_IACT):
+                        iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
+            iact_stream = self.create_complete_iact_stream(iact_stream)
+        else :
+            values = np.transpose(np.array(self.dram_fmap),axes=[0,2,1])
+            
+            channels, iact_size_x, iact_size_y = values.shape
+            
+            iact_stream_cycles = iact_size_x * iact_size_y * channels // 8
+            iact_params = (channels << 48) | (iact_size_x << 32) |(iact_size_y << 16) | iact_stream_cycles
+            print(hex(iact_params))
+
+            iact_stream = [iact_params]
+            pos = 0
+            while pos < iact_size_x * iact_size_y:
+                for n in range(channels):
+                    vals = values[n].flatten()[pos:pos+64]
+                    for i in range(8):
+                        v = 0
+                        for j in range(8):
+                            v_tmp = int(vals[i*8 + j])
+                            if v_tmp < 0:
+                                v_tmp += 256
+                            v = v | (v_tmp << (8*j))
+
+                        iact_stream.append(v)
+                pos += 64
         return iact_stream
     
     def write_iact_data_glb(self, cl_x, cl_y, router):
