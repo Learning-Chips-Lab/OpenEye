@@ -37,28 +37,27 @@ class IactStreamMapper(object):
             iact_stream = self.create_complete_iact_stream(iact_stream)
         else :
             values = np.transpose(np.array(self.dram_fmap),axes=[0,2,1])
-            
+            print(values)
             channels, iact_size_x, iact_size_y = values.shape
             
-            iact_stream_cycles = iact_size_x * iact_size_y * channels // 8
+            iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER_B
             iact_params = (channels << 48) | (iact_size_x << 32) |(iact_size_y << 16) | iact_stream_cycles
-            print(hex(iact_params))
 
             iact_stream = [iact_params]
             pos = 0
             while pos < iact_size_x * iact_size_y:
                 for n in range(channels):
                     vals = values[n].flatten()[pos:pos+64]
-                    for i in range(8):
+                    for i in range(self.params.NUM_BUFFER_B):
                         v = 0
-                        for j in range(8):
-                            v_tmp = int(vals[i*8 + j])
+                        for j in range(self.params.DMA_Bit_AXI//self.params.IACT_Bitwidth):
+                            v_tmp = int(vals[i*self.params.DMA_Bit_AXI//self.params.IACT_Bitwidth + j])
                             if v_tmp < 0:
                                 v_tmp += 256
-                            v = v | (v_tmp << (8*j))
+                            v = v | (v_tmp << (self.params.IACT_Bitwidth*j))
 
                         iact_stream.append(v)
-                pos += 64
+                pos += self.params.NUM_BUFFER_B*self.params.IACT_Bitwidth
         return iact_stream
     
     def write_iact_data_glb(self, cl_x, cl_y, router):

@@ -67,6 +67,10 @@ class OpenEyeParameters(object):
         self.autofunction = 0
         self.poolingmode = 1
         
+        self.NUM_BUFFER_A = 4
+        self.NUM_BUFFER_B = 8
+        self.NUM_BUFFER_TOTAL = self.NUM_BUFFER_A * self.NUM_BUFFER_B
+
         self.Iact_Mem_Addr_Words = 512
         self.Psum_Mem_Addr_Words = 384 * 2
 
@@ -77,6 +81,7 @@ class OpenEyeParameters(object):
         self.poolingmode = 1
 
         self.DMA_Bits = 48
+        self.DMA_Bit_AXI = 64
         self.FSM_CYCLE_BITWIDTH = 1024
         self.FSM_STATES = 9
         self.Iact_Router_Bits = 6

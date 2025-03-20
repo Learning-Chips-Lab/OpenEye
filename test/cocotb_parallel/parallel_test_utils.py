@@ -112,7 +112,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
                             for router in range(params.Psum_Routers):
                                 for psum_pe in range(int((layer.filters*(layer_repetition%layer_params.needed_wght_transmissions)/layer_params.needed_wght_transmissions)/2),\
                                     int((layer.filters*(1+(layer_repetition%layer_params.needed_wght_transmissions))/layer_params.needed_wght_transmissions)/2)):
-                                    for counter in range(math.floor(params.DMA_Bits/params.PSUM_Bitwidth)):
+                                    for counter in range(params.DMA_Bit_AXI//params.PSUM_Bitwidth):
                                         x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % layer.output.shape[2]))
                                         y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / layer.output.shape[2]))
                                         if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
@@ -384,7 +384,7 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                             if(layer_params.computing_mx[cl_x][cl_y][0][router] == 1):
                                 partial_result_a = gtu.to_twos_complement_string(0,20)
                                 partial_result_b = gtu.to_twos_complement_string(0,20)
-                                for counter in range(math.floor(params.DMA_Bits/params.PSUM_Bitwidth)):
+                                for counter in range(params.PARALLEL_MACS):
                                     x_cor= int(((router + \
                                     cl_x * params.PEs_X + \
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
