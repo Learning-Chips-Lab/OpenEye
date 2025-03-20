@@ -968,6 +968,9 @@ module OpenEye_Parallel
         end
 
         CALCULATE_PSUM : begin
+          if (psum_ready_i_reg != 0) begin
+            psum_ready_i_reg <= psum_ready_i_reg;
+          end
           if (finished_cycles == 0) begin
             psum_transmitted <= 1;
           end
