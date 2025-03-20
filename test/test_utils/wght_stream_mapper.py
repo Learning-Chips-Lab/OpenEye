@@ -217,9 +217,10 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                 break
         return spad_storage
 
+
 class DenseWghtStreamMapper(WghtStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_wghts):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_wghts)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
 
     def write_wght_data_storage(self, cl_x, cl_y, router):
 
@@ -252,13 +253,14 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                 break
         return spad_storage
         
-    def write_wght_addr_storage(self, cl_x, cl_y, router):
+    def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
 
         layer_params = self.layer_params
         params = self.params
 
         spad_storage = [0 for _ in range(self.params.Wghts_Addr_per_PE)]
 
+        temp_value = 0
         for words_in_storage in range(math.ceil(params.Wghts_Addr_per_PE)):
             if(words_in_storage != (self.layer_params.used_wght_addr_per_PE - 1)):
                 spad_storage[words_in_storage] = \
@@ -268,8 +270,8 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         return spad_storage
 
 class DwWghtStreamMapper(WghtStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_wghts):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_wghts)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
 
     def write_wght_data_storage(self, cl_x, cl_y, router):
 
@@ -281,7 +283,15 @@ class DwWghtStreamMapper(WghtStreamMapper):
         spad_storage = [[[0 for _ in range(2)] for _ in range(2)] for _ in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS))]
         overhead_counter = 0
         kernel_x = 0
-        channel = (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)
+
+        match layer_params.single_cluster_computation:
+            case 1:
+                channel = (cl_x  + cl_y * params.Clusters_X) + ((layer_repetition * params.Clusters))
+            case 2:
+                channel = cl_y + (layer_repetition * params.Clusters_Y)
+            case _:
+                channel = (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)
+
                     
         if(layer_params.filters == 1):
             values_per_wght_data = 1
@@ -304,7 +314,7 @@ class DwWghtStreamMapper(WghtStreamMapper):
                 break
         return spad_storage
         
-    def write_wght_addr_storage(self, cl_x, cl_y, router):
+    def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
 
         layer_params = self.layer_params
         params = self.params
