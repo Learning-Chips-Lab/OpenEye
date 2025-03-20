@@ -1141,9 +1141,13 @@ module OpenEye_Parallel
               end
             end
           end
-          if (fsm_psum_cycle == 32'(filters_reg)) begin
-            fsm_psum_cycle       <= 0;
-            if ((finished_cycles == needed_cycles_reg) | (fsm_current_state == MAIN_IDLE)) begin
+          if ((!SERIAL &
+          (((fsm_psum_cycle >= 32'((32'(filters_reg)+1)/2)) & !data_mode_reg) |
+          ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg))) |
+          (SERIAL & 
+          (((fsm_psum_cycle >= 32'(filters_reg)) & !data_mode_reg) |
+          ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg)))) begin
+            if ((finished_cycles == needed_cycles_reg) | (fsm_current_state == MAIN_IDLE) | data_mode_reg) begin
               fsm_psum_last_state    <= GET_RESULTS;
               fsm_psum_current_state <= WAIT_FOR_RESULTS;
               mem_addr_psum          <= 0;
