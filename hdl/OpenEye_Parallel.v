@@ -1142,8 +1142,12 @@ module OpenEye_Parallel
                 end
               end
             end
-            if (((fsm_psum_cycle >= 32'((32'(filters_reg)+1)/2)) & !data_mode_reg) |
-            ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg)) begin
+            if ((!SERIAL &
+            (((fsm_psum_cycle >= 32'((32'(filters_reg)+1)/2)) & !data_mode_reg) |
+            ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg))) |
+            (SERIAL & 
+            (((fsm_psum_cycle >= 32'(filters_reg)) & !data_mode_reg) |
+            ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg)))) begin
               results_ready           = 0;
               fsm_psum_cycle         <= 0;
               psum_enable_i_reg      <= 0;
