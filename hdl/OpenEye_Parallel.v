@@ -1028,14 +1028,7 @@ module OpenEye_Parallel
           if (finished_cycles == 0) begin
             psum_transmitted <= 1;
           end
-          for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-            for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-              for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                psum_ready_i_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] <= 1;
-              end
-            end
-          end
-          if (results_ready == 0) begin
+          if (results_ready == 0 & (psum_ready_i_reg != 0)) begin
             results_ready = 1;
             for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
               for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
