@@ -99,6 +99,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
     
     dma_line = 0
     
+    output_order = []
     if "Depthwise" in str(layer):
         if(params.SERIAL):
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
@@ -109,10 +110,9 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
                     for cl_y in range(params.Clusters_Y):
                         for cl_x in range(params.Clusters_X):
                             for router in range(params.Psum_Routers):
-                                for psum_pe in range(int((layer.filters*(layer_repetition%layer_params.needed_wght_transmissions)/layer_params.needed_wght_transmissions)),\
-                                    int((layer.filters*(1+(layer_repetition%layer_params.needed_wght_transmissions))/layer_params.needed_wght_transmissions))):
-                                    #for counter in range(math.floor(params.DMA_Bits/params.PSUM_Bitwidth)):
-                                    for counter in range(math.floor(params.PSUM_Trans_Bitwidth/params.PSUM_Bitwidth)):
+                                for psum_pe in range(int((layer.filters*(layer_repetition%layer_params.needed_wght_transmissions)/layer_params.needed_wght_transmissions)/2),\
+                                    int((layer.filters*(1+(layer_repetition%layer_params.needed_wght_transmissions))/layer_params.needed_wght_transmissions)/2)):
+                                    for counter in range(math.floor(params.DMA_Bits/params.PSUM_Bitwidth)):
                                         x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % layer.output.shape[2]))
                                         y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / layer.output.shape[2]))
                                         if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
