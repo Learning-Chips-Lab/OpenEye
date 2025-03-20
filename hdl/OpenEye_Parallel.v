@@ -1223,8 +1223,12 @@ module OpenEye_Parallel
               end
             end
           end
-          if (((fsm_psum_cycle == 32'((32'(filters_reg)+1)/2)) & !data_mode_reg) |
-          ((fsm_psum_cycle == 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg)) begin
+          if ((!SERIAL &
+          (((fsm_psum_cycle >= 32'((32'(filters_reg)+1)/2)) & !data_mode_reg) |
+          ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg))) |
+          (SERIAL & 
+          (((fsm_psum_cycle >= 32'(filters_reg)) & !data_mode_reg) |
+          ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg)))) begin
             if ((finished_cycles == needed_cycles_reg) | (fsm_current_state == MAIN_IDLE) | data_mode_reg) begin
               fsm_psum_last_state    <= GET_RESULTS;
               fsm_psum_current_state <= WAIT_FOR_RESULTS;
@@ -1275,7 +1279,11 @@ module OpenEye_Parallel
                 fsm_psum_current_state <= CALCULATE_PSUM;
                 fsm_psum_cycle         <= 0;
                 if (storage_cycles == 0) begin
-                  mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(64'(48'(48'(filters_reg)+48'(1)))>>48'(1)));
+                  if (SERIAL) begin 
+                    mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(filters_reg));
+                  end else begin
+                    mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(32'(filters_reg)+1)/2);
+                  end
                 end
               end
               psum_ready_i_reg       <= 0;
