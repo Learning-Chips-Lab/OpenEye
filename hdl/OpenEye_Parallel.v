@@ -1136,8 +1136,10 @@ module OpenEye_Parallel
                 psum_transmitted       <= 1;
               end
             end else begin
+              if (fsm_psum_cycle == (32'((32'(needed_cycles_i_reg)+1)/2) - 1)) begin
                 psum_transmitted       <= 1;
               end
+            end
           end
           if (fsm_psum_cycle == 32'(filters_reg)) begin
             fsm_psum_cycle       <= 0;
@@ -1148,7 +1150,8 @@ module OpenEye_Parallel
               psum_ready_i_reg       <= 0;
               fsm_psum_cycle         <= 0;
             end else begin
-              if (needed_y_cls_reg >= 2) begin
+              if (((32)'(needed_y_cls_reg) >= 2) & !psum_router_set_reg) begin
+                psum_router_set_reg  <= 1;
                 for (int cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
                   for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                     for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
