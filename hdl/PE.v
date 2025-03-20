@@ -728,8 +728,12 @@ module PE
             if (((input_activations_reg == 1) | (wght_data_vec+1)==7'(32'(input_activations_reg)-1)) & adder_1_en) begin
               use_psum_1            <= 0;
               psum_data_SPad_en_a_w <= 1;
+              if (SERIAL) begin
               used_psum_memory_1[(psum_spad_addr_a_w)] <= 1;
               used_psum_memory_2[(psum_spad_addr_a_w)] <= 1;
+              end else begin
+              used_psum_memory[(psum_spad_addr_a_w)] <= 1;
+              end
             end
             if (psum_data_SPad_en_a_w) begin
               psum_spad_addr_a_w <= psum_spad_addr_a_w + 1;
@@ -901,6 +905,7 @@ module PE
 
             adder_1_en <= 1;
             adder_2_en <= 1;
+          if (SERIAL) begin
           if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
               use_psum_1 <= 1;
             end else begin
@@ -912,6 +917,21 @@ module PE
             end else begin
               use_psum_2 <= 0;
             used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
+            end
+          end else begin
+            if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin 
+              use_psum_1 <= 1;
+            end else begin
+              use_psum_1 <= 0;
+              used_psum_memory[(psum_spad_addr_a_r)] <= 1;
+            end
+            if (used_psum_memory[(psum_spad_addr_b_r)]  == 1) begin 
+              use_psum_2 <= 1;
+            end else begin
+              use_psum_2 <= 0;
+              used_psum_memory[(psum_spad_addr_b_r)] <= 1;
+            end
+
               end
             psum_spad_addr_a_delay <= psum_spad_addr_a_r;
             psum_spad_addr_b_delay <= psum_spad_addr_b_r;
@@ -938,7 +958,11 @@ module PE
             psum_data_SPad_en_b_w  <= 1;
           end
           psum_spad_addr_a_mem   <= 0;
+          if (SERIAL) begin
           psum_spad_addr_b_mem   <= 0;
+          end else begin
+            psum_spad_addr_b_mem   <= 1;
+          end
           psum_spad_addr_a_delay <= psum_spad_addr_a_r;
           psum_spad_addr_b_delay <= psum_spad_addr_b_r;
           psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
@@ -973,7 +997,11 @@ module PE
             psum_data_SPad_en_a_w <= 0;
             psum_data_SPad_en_b_w <= 0;
             psum_spad_addr_a_mem <= 0;
-            psum_spad_addr_b_mem <= 0;
+            if (SERIAL) begin
+            psum_spad_addr_b_mem   <= 0;
+            end else begin
+              psum_spad_addr_b_mem   <= 1;
+            end
             psum_spad_addr_a_w   <= 2;
             psum_spad_addr_b_w   <= 3;
           end
