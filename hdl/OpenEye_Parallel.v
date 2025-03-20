@@ -991,7 +991,7 @@ module OpenEye_Parallel
               end
             end
           end
-          if (results_ready) begin
+          if (results_ready & (psum_ready_i_reg != 0)) begin
             fsm_psum_cycle <= fsm_psum_cycle + 1;
             for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
               for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
@@ -1029,6 +1029,21 @@ module OpenEye_Parallel
                       end
                     end
                     flat_help_var = 0;
+                  end
+                end
+              end
+            end
+          end else begin
+            if ((fsm_psum_cycle <= 4) & (psum_ready_i_reg == 0)) begin
+              fsm_psum_cycle <= fsm_psum_cycle + 1;
+            end else begin
+              if ((fsm_iact_current_state == CALCULATE_IACT) | (fsm_iact_current_state == IACT_IDLE)) begin
+                fsm_psum_cycle <= 0;
+                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
+                      psum_ready_i_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] <= 1;
+                    end
                   end
                 end
               end
