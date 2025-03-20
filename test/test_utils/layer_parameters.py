@@ -283,9 +283,9 @@ class LayerParameters(object):
         if((layer.output.shape[2] % params.PEs_X)== 0):
             self.used_X_cluster = 1
 
-        self.iact_addr_len = math.ceil((self.used_channels)/(math.ceil(params.DMA_Bits/2)/params.IACT_Addr_Bitwidth))
+        self.iact_addr_len = math.ceil((self.used_channels)/(math.ceil(params.DMA_Bit_AXI/params.Clusters_X)/params.IACT_Addr_Bitwidth))
         self.iact_addr_len = 1
-        self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_Bits/2)/params.IACT_WOH_Bitwidth))
+        self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_Bit_AXI/params.Clusters_X)/params.IACT_WOH_Bitwidth))
 
         self.psum_transmissions_glb = math.ceil(((math.ceil(layer.output.shape[1]/params.NUM_GLB_PSUM) * \
                                     layer.output.shape[2] * math.ceil(layer.output.shape[3]/ self.wght_transmissions_pe)) / \
