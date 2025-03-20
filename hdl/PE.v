@@ -301,8 +301,7 @@ module PE
     LOADING_5          = 5,
     CALCULATING        = 6,
     WAIT_TO_SEND_PSUM  = 7,
-    SEND_PSUM          = 8,
-    SEND_PSUM_LAST     = 9
+    SEND_PSUM          = 8
   } fsm_mode_computing;
 
   assign mux_iact_c_i_w = mux_iact_ready;
@@ -311,10 +310,9 @@ module PE
   assign iact_part_3_w = mux_iact_a_o_w[23:16];
   assign {iact_data_spad_oh,iact_data_spad_pay} = iact_data_SPad_data_r;
   assign {wght_data_spad_oh_2,wght_data_spad_pay_2,wght_data_spad_oh_1,wght_data_spad_pay_1} = wght_data_SPad_data_r;
-  // assign psum_data_o = {adder_2_o_w,adder_1_o_w};
-  assign adder_3_summand_1 = adder_1_o_w;
-  assign adder_3_summand_2 = adder_2_o_w;
-  assign psum_data_o = adder_3_o_w;
+  assign adder_3_summand_1 = SERIAL ? adder_1_o_w : 0;
+  assign adder_3_summand_2 = SERIAL ? adder_2_o_w : 0;
+  assign psum_data_o = SERIAL ? adder_3_o_w : {adder_2_o_w,adder_1_o_w};
   assign wght_addr_SPad_addr = wght_addr_use_vec ? wght_addr_vec : iact_data_spad_oh;
   assign wght_data_SPad_addr = wght_data_use_vec ? wght_data_vec : wght_addr_SPad_data_r;
   assign mult_1_fac_1 = wght_data_spad_pay_1;
@@ -438,6 +436,7 @@ module PE
       fast_cycle                <= 0;
       next_iact                 <= 0;
       next_iact2                <= 0;
+      used_psum_memory          <= 0;
       used_psum_memory_1        <= 0;
       used_psum_memory_2        <= 0;
       use_psum_1                <= 0;
@@ -524,6 +523,7 @@ module PE
           psum_spad_addr_b_mem   <= 1;
           adder_1_en             <= 0;
           adder_2_en             <= 0;
+          adder_3_en             <= 0;
           reuse_psum_spad_a      <= 0;
           reuse_psum_spad_b      <= 0;
           reused_data_a          <= 0;
@@ -1011,7 +1011,7 @@ module PE
           adder_3_en           <= 1;
           psum_select          <= !computing;
           if (!psum_enable_i) begin
-            current_state_computing <= SEND_PSUM_LAST;
+            current_state_computing <= IDLE;
             adder_1_en              <= 1;
             adder_2_en              <= 1;
           end
@@ -1028,12 +1028,6 @@ module PE
             use_psum_2 <= 0;
           end
         end
-
-        SEND_PSUM_LAST : begin
-          adder_3_en <= 0;
-          current_state_computing <= IDLE;
-        end
-
         default : begin
         end
       endcase
