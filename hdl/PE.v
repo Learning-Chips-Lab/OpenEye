@@ -161,8 +161,8 @@ module PE
   reg                                         psum_enable;
   reg                                         psum_enable_2;
 
-  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_1_delay;
-  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/2-1 :0]    psum_data_2_delay;
+  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/PARALLEL_MACS-1 :0]    psum_data_1_delay;
+  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/PARALLEL_MACS-1 :0]    psum_data_2_delay;
   reg                                         mux_iact_ready;
   reg                                         adder_1_en;
   reg                                         adder_2_en;
@@ -310,7 +310,9 @@ module PE
   assign iact_part_3_w = mux_iact_a_o_w[23:16];
   assign {iact_data_spad_oh,iact_data_spad_pay} = iact_data_SPad_data_r;
   assign {wght_data_spad_oh_2,wght_data_spad_pay_2,wght_data_spad_oh_1,wght_data_spad_pay_1} = wght_data_SPad_data_r;
-  assign psum_data_o = {adder_2_o_w,adder_1_o_w};
+  assign adder_3_summand_1 = SERIAL ? adder_1_o_w : 0;
+  assign adder_3_summand_2 = SERIAL ? adder_2_o_w : 0;
+  assign psum_data_o = SERIAL ? TRANS_BITWIDTH_PSUM'(adder_3_o_w) : {adder_2_o_w,adder_1_o_w};
   assign wght_addr_SPad_addr = wght_addr_use_vec ? wght_addr_vec : iact_data_spad_oh;
   assign wght_data_SPad_addr = wght_data_use_vec ? wght_data_vec : wght_addr_SPad_data_r;
   assign mult_1_fac_1 = wght_data_spad_pay_1;
@@ -468,7 +470,12 @@ module PE
       end else begin
         psum_enable                         <= 0;
       end
+      if (SERIAL) begin
+        psum_enable_2                         <= psum_enable;
+        psum_enable_o                         <= psum_enable_2;
+      end else begin
       psum_enable_o                         <= psum_enable;
+      end
       iact_oh_delay_1                       <= iact_data_spad_oh;
       iact_oh_delay_2                       <= iact_oh_delay_1;
       case (current_state_computing)
@@ -519,14 +526,23 @@ module PE
           psum_spad_addr_b_mem   <= 1;
           adder_1_en             <= 0;
           adder_2_en             <= 0;
+          adder_3_en             <= 0;
           reuse_psum_spad_a      <= 0;
           reuse_psum_spad_b      <= 0;
           reused_data_a          <= 0;
           reused_data_b          <= 0;
           use_psum_1             <= 0;
           use_psum_2             <= 0;
-          used_psum_memory       <= 0;
+          if (SERIAL) begin
+            psum_select            <= 0;
+            used_psum_memory_1     <= 0;
+            used_psum_memory_2     <= 0;
+
+          end else begin
           psum_select            <= 1;
+            used_psum_memory       <= 0;
+
+          end
           if (data_mode_reg) begin
             psum_select            <= 0;
             adder_1_en             <= 0;
@@ -1094,6 +1110,36 @@ module PE
   );
 
   // SPad for PSUM
+if (SERIAL) begin
+  SPad_DP #(
+    .DATA_WIDTH(PSUM_DATA),
+    .ADDR_WIDTH(PSUM_ADDR_BITWIDTH),
+
+    .Implementation("pe_psum")
+  ) psum_SPad_A ( 
+    .clk_i(clk_i), 
+    .re_i(psum_data_SPad_en_a_r || psum_enable_i),
+    .we_i(psum_data_SPad_en_a_w_i), 
+    .addr_r_i(psum_spad_addr_a_r),
+    .addr_w_i(psum_spad_addr_a_w),
+    .data_i(psum_spad_data_a_i),
+    .data_o(psum_spad_data_a_o)
+  );
+  SPad_DP #(
+    .DATA_WIDTH(PSUM_DATA),
+    .ADDR_WIDTH(PSUM_ADDR_BITWIDTH),
+
+    .Implementation("pe_psum")
+  ) psum_SPad_B ( 
+    .clk_i(clk_i), 
+    .re_i(psum_data_SPad_en_b_r || psum_enable_i),
+    .we_i(psum_data_SPad_en_b_w_i), 
+    .addr_r_i(psum_spad_addr_b_r),
+    .addr_w_i(psum_spad_addr_b_w),
+    .data_i(psum_spad_data_b_i),
+    .data_o(psum_spad_data_b_o)
+  );
+end else begin
   SPad_DP_RW #(
     .DATA_WIDTH(PSUM_DATA),
     .ADDR_WIDTH(PSUM_ADDR_BITWIDTH)
@@ -1114,6 +1160,9 @@ module PE
     .data_a_o  (psum_spad_data_a_o),
     .data_b_o  (psum_spad_data_b_o)
   );
+end
+  // SPad for PSUM
+  
   
   // Mux to select the correct IACT data from GLB
   mux_iact #(
@@ -1243,8 +1292,31 @@ module PE
     .adder_en_i (adder_2_en)
   );
 
+if (SERIAL) begin
+  // do the addition of both psum spads
+  adder #(
+    .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
+  ) adder_3 (
+    .clk_i      (clk_i),
+    .rst_ni     (rst_ni),
+    .summand_1_i(adder_3_summand_1), 
+    .summand_2_i(adder_3_summand_2),
+    .sum_o      (adder_3_o_w),
+    .adder_en_i (adder_3_en)
+  );
+end
   // mux to select input to adder
   // (this can be either the data of psum SPAD or psum from another PE/router)
+if (SERIAL) begin
+  mux2 #(
+    .DATA_WIDTH(TRANS_BITWIDTH_PSUM*PARALLEL_MACS)
+  ) mux_psum (
+    .a_in ({psum_data_2_delay,psum_data_1_delay}),
+    .b_in ({mult_2_o_w,mult_1_o_w}),
+    .sel_i(psum_select), 
+    .y_o  ({adder_2_summand_2,adder_1_summand_2})
+  );
+end else begin
   mux2 #(
     .DATA_WIDTH(TRANS_BITWIDTH_PSUM)
   ) mux_psum (
@@ -1253,5 +1325,7 @@ module PE
     .sel_i(psum_select), 
     .y_o  ({adder_2_summand_2,adder_1_summand_2})
   );
+
+end
 
 endmodule
