@@ -191,11 +191,14 @@ class WghtStreamMapper(object):
             for data_in_trans in range(data_per_trans):
                 try:
                     spad_word = data_in_trans + data_per_trans * spad_data_trans
-                    value = gtu.to_twos_complement(spad[1][spad_data_trans][data_in_trans][0], self.params.WGHT_Bitwidth)
+                    value = gtu.to_twos_complement(spad[1][spad_data_trans][data_in_trans][0], params.WGHT_Bitwidth)
+                    overhead = gtu.to_twos_complement(spad[1][spad_data_trans][data_in_trans][1], params.WGHT_WOH_Bitwidth - params.WGHT_Bitwidth)
+                    value = (overhead * (2**params.WGHT_Bitwidth)) + value
                     temp_trans = temp_trans + (value << (data_in_trans * params.WGHT_WOH_Bitwidth))
                 except:
                     pass
-            stream.append(temp_trans)
+            if (temp_trans != 0):
+                stream.append(temp_trans)
             line_counter = line_counter + 1
             if (line_counter == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
