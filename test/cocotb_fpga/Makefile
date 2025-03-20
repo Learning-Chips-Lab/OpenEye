@@ -31,8 +31,10 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_DP_RW.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_SP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RST_SYNC.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_DP.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_DP_RW.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_SP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_generic.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_RW_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_SP_generic.v)
 
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/iact_converter.v)
@@ -62,7 +64,7 @@ export LAYER=Convolution
 export NUM_FILTERS=8
 export KERNEL_SIZE=3
 export INPUT_SIZE=16
-export OUTPUT_SIZE=16
+export OUTPUT_SIZE=8
 export STRIDE=1
 export INPUT_CHANNELS=4
 #Amout of parallel MACs

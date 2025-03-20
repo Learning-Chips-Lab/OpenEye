@@ -474,7 +474,7 @@ module PE
         psum_enable_2                         <= psum_enable;
         psum_enable_o                         <= psum_enable_2;
       end else begin
-        psum_enable_o                         <= psum_enable;
+      psum_enable_o                         <= psum_enable;
       end
       iact_oh_delay_1                       <= iact_data_spad_oh;
       iact_oh_delay_2                       <= iact_oh_delay_1;
@@ -539,7 +539,7 @@ module PE
             used_psum_memory_2     <= 0;
 
           end else begin
-            psum_select            <= 1;
+          psum_select            <= 1;
             used_psum_memory       <= 0;
 
           end
@@ -577,8 +577,8 @@ module PE
             use_psum_1       <= 0;
             use_psum_2       <= 0;
             if (SERIAL) begin
-            used_psum_memory_1 <= 0;
-            used_psum_memory_2 <= 0;
+              used_psum_memory_1 <= 0;
+              used_psum_memory_2 <= 0;
             end else begin
             used_psum_memory <= 0;
             end
@@ -613,8 +613,9 @@ module PE
           //Get first WGHT Addr Address
           current_state_computing <= LOADING_2;
           iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          wght_addr_SPad_en_r <= 1;
+          if (iact_addr_max_reg != 0) begin
             iact_addr_SPad_addr     <= iact_addr_SPad_addr + 1;
+          end
           wght_addr_SPad_en_r     <= 1;
         end
 
@@ -632,7 +633,9 @@ module PE
               values_valid            <= 0;
             end else begin
               current_state_computing       <= LOADING_1;
+              if (iact_addr_max_reg != (iact_addr_SPad_addr+1)) begin
                 iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+              end
               iact_addr_SPad_en_r <= 1;
             end
           end else begin
@@ -643,7 +646,9 @@ module PE
             iact_data_SPad_addr <= iact_data_SPad_addr + 1;
             iact_addr_current   <= iact_addr_SPad_data_r;
             iact_addr_SPad_en_r <= 0;
+            if (iact_addr_max_reg != 0) begin
               iact_addr_SPad_addr <= iact_addr_SPad_addr - 1;
+            end
           end
         end
 
@@ -680,7 +685,9 @@ module PE
           end
           iact_addr_SPad_en_r <= 0;
           if (iact_addr_current == 1) begin
+            if (iact_addr_max_reg != (iact_addr_SPad_addr+1)) begin
               iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+            end
           end
         end
 
@@ -729,8 +736,8 @@ module PE
               use_psum_1            <= 0;
               psum_data_SPad_en_a_w <= 1;
               if (SERIAL) begin
-              used_psum_memory_1[(psum_spad_addr_a_w)] <= 1;
-              used_psum_memory_2[(psum_spad_addr_a_w)] <= 1;
+                used_psum_memory_1[(psum_spad_addr_a_w)] <= 1;
+                used_psum_memory_2[(psum_spad_addr_a_w)] <= 1;
               end else begin
               used_psum_memory[(psum_spad_addr_a_w)] <= 1;
               end
@@ -844,7 +851,9 @@ module PE
               next_iact           <= 1;
               iact_addr_count     <= iact_addr_count + 1;
               if (((32'(iact_addr_count) + 1) >= 32'(iact_addr_current)) & ((iact_addr_SPad_addr) < first_spad_words_iact)) begin
+                if (iact_addr_max_reg != (iact_addr_SPad_addr+1)) begin
                   iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+                end
                 iact_addr_SPad_en_r <= 1;
               end
             end
@@ -906,17 +915,17 @@ module PE
             adder_1_en <= 1;
             adder_2_en <= 1;
           if (SERIAL) begin
-          if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
+            if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
               use_psum_1 <= 1;
             end else begin
               use_psum_1 <= 0;
-            used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
+              used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
             end
-          if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
+            if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
               use_psum_2 <= 1;
             end else begin
               use_psum_2 <= 0;
-            used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
+              used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
             end
           end else begin
             if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin 
@@ -959,7 +968,7 @@ module PE
           end
           psum_spad_addr_a_mem   <= 0;
           if (SERIAL) begin
-          psum_spad_addr_b_mem   <= 0;
+            psum_spad_addr_b_mem   <= 0;
           end else begin
             psum_spad_addr_b_mem   <= 1;
           end
@@ -1016,16 +1025,16 @@ module PE
           if (SERIAL) begin
             psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
             psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
-            if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
+            if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin 
               use_psum_1                              <= 1;
               used_psum_memory_1[(psum_spad_addr_a_r)]  <= 0;
-              end else begin
+            end else begin
               use_psum_1 <= 0;
-              end
-            if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin
+            end
+            if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin 
               use_psum_2                              <= 1;
               used_psum_memory_2[(psum_spad_addr_b_r)]  <= 0;
-              end else begin
+            end else begin
               use_psum_2 <= 0;
             end
           end else begin
@@ -1060,17 +1069,17 @@ module PE
                   //used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
                 end
               end else begin
-                if (used_psum_memory[(psum_spad_addr_a_r)]  == 1) begin 
-                  use_psum_1 <= 1;
-                end else begin
-                  use_psum_1 <= 0;
-                  used_psum_memory[(psum_spad_addr_a_r)] <= 1;
-                end
-                if (used_psum_memory[(psum_spad_addr_b_r)]  == 1) begin 
-                  use_psum_2 <= 1;
-                end else begin
-                  use_psum_2 <= 0;
-                  used_psum_memory[(psum_spad_addr_b_r)] <= 1;
+              if (used_psum_memory[(psum_spad_addr_a_r)]  == 1) begin 
+                use_psum_1 <= 1;
+              end else begin
+                use_psum_1 <= 0;
+                used_psum_memory[(psum_spad_addr_a_r)] <= 1;
+              end
+              if (used_psum_memory[(psum_spad_addr_b_r)]  == 1) begin 
+                use_psum_2 <= 1;
+              end else begin
+                use_psum_2 <= 0;
+                used_psum_memory[(psum_spad_addr_b_r)] <= 1;
                 end
               end
             end
@@ -1094,17 +1103,17 @@ module PE
             psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
             psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
             adder_3_en           <= 1;
-          if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin 
-            use_psum_1                              <= 1;
-            used_psum_memory_1[(psum_spad_addr_a_r)]  <= 0;
-          end else begin
-            use_psum_1 <= 0;
-          end
-          if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin 
-            use_psum_2                              <= 1;
-            used_psum_memory_2[(psum_spad_addr_b_r)]  <= 0;
-          end else begin
-            use_psum_2 <= 0;
+            if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin 
+              use_psum_1                              <= 1;
+              used_psum_memory_1[(psum_spad_addr_a_r)]  <= 0;
+            end else begin
+              use_psum_1 <= 0;
+            end
+            if (used_psum_memory_2[(psum_spad_addr_b_r)]  == 1) begin 
+              use_psum_2                              <= 1;
+              used_psum_memory_2[(psum_spad_addr_b_r)]  <= 0;
+            end else begin
+              use_psum_2 <= 0;
             end
           end else begin
             psum_spad_addr_a_mem <= psum_spad_addr_a_r + 2;
