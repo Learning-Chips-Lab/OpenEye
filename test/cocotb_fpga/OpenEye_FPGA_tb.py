@@ -170,7 +170,6 @@ async def single_layer_test(dut):
             layer_parameters = lp.LayerParameters(layer, openeye_parameter)
             time_printer.timestamp("Layer parameters created. ", logger)
             calculated_results = ptu.collect_results(layer, layer_number, layer_parameters, dram)
-            output_order = ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)
             if(logging.DEBUG >= log_level):
                 ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)
                 time_printer.timestamp("Reference data created. ", logger)
@@ -192,7 +191,7 @@ async def single_layer_test(dut):
                 if("Depthwise" in str(layer)):
                     await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
                 elif("Conv" in str(layer)):
-                    await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level, stream, output_order))
+                    await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level, stream))
                 elif("Dense" in str(layer)):
                     await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
                 if(logging.DEBUG >= log_level):
