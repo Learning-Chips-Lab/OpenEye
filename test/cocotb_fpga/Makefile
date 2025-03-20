@@ -108,7 +108,7 @@ export SCRIPT = $(PWD)/../test_utils/vh_file_creator.py
 
 export
 run:
-	@$(PYTHON) $(SCRIPT) && make -f $(shell cocotb-config --makefiles)/Makefile.sim
+	@python $(SCRIPT) && make -f $(shell cocotb-config --makefiles)/Makefile.sim
 
 gtkwave:
 	touch $(abspath $(PWD)/../../hdl/OpenEye_FPGA.v)
