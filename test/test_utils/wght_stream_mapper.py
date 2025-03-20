@@ -124,7 +124,7 @@ class WghtStreamMapper(object):
 
         spad_storage = [0 for _ in range(self.params.Wghts_Addr_per_PE)]
 
-        for words_in_storage in range(math.ceil(params.Wghts_Addr_per_PE)):
+        for words_in_storage in range(params.Wghts_Addr_per_PE):
             if((words_in_storage != (self.layer_params.used_wght_addr_per_PE - 1))):
                 spad_storage[words_in_storage] = \
                     int(words_in_storage * math.ceil(layer_params.used_wght_per_PE/layer_params.kernel_size[0]/2/ int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)))
@@ -202,8 +202,8 @@ class WghtStreamMapper(object):
         return stream
     
 class ConvWghtStreamMapper(WghtStreamMapper):
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_wghts):
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_wghts)
+    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
+        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
 
     def write_wght_data_storage(self, cl_x, cl_y, router):
 
@@ -215,21 +215,37 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         spad_storage = [[[0 for _ in range(2)] for _ in range(2)] for _ in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS))]
         overhead_counter = 0
         kernel_x = 0
-        channel = (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)
+
+        amount_of_channels = ((math.ceil((router+1) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)) - \
+            (math.ceil(router * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)))
+        amout_of_iacts = amount_of_channels * layer_params.kernel_size[1]
+        channel = (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + \
+        math.ceil((math.ceil((router%layer_params.kernel_per_pe_cluster) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)))
         filters_per_calculation = math.ceil(layer_params.used_wght_per_PE/layer_params.used_iact_per_PE)
+
+
         start_current_repetition = int((math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.needed_wght_transmissions) * filters_per_calculation)
+        match layer_params.single_cluster_computation:
+            case 1:
+                start_current_repetition = start_current_repetition + ((cl_x  + cl_y * params.Clusters_X) * layer_params.used_psum_per_PE)
+                amount_of_words = int((layer_params.filters*amout_of_iacts)/params.Clusters/2)
+            case 2:
+                start_current_repetition = start_current_repetition + (cl_y * layer_params.used_psum_per_PE)
+                amount_of_words = int((layer_params.filters*amout_of_iacts)/params.Clusters_Y/2)
+            case _:
+                start_current_repetition = start_current_repetition
+                amount_of_words = int((layer_params.filters*amout_of_iacts)/layer_params.needed_wght_transmissions/2)
+
         filters = start_current_repetition
-                    
-        for words_in_storage in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS)):
-            kernel_row = (cl_y % layer_params.ceil_used_PE_per_clm) * params.PEs_Y + router
-            if(kernel_row < (layer_params.kernel_size[1])):
-                for spad_val_number in range(self.params.PARALLEL_MACS): 
-                    if(channel != int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)):
-                        
-                        try:
-                            spad_storage[words_in_storage][spad_val_number][0] = dram[channel][filters][kernel_row][kernel_x]
-                        except:
-                            spad_storage[words_in_storage][spad_val_number][0] = 0
+
+        for words_in_storage in range(amount_of_words):
+            kernel_row = ((cl_y % layer_params.ceil_used_PE_per_clm) * params.PEs_Y + (router%layer_params.kernel_size[0]))
+            for spad_val_number in range(self.params.PARALLEL_MACS): 
+                if(channel != 1 + int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)): #TODO: Correct this line +1 could be wrong here                    
+                    try:
+                        spad_storage[words_in_storage][spad_val_number][0] = dram[channel][filters][kernel_row][kernel_x]
+                    except:
+                        spad_storage[words_in_storage][spad_val_number][0] = 0
 
                     spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
                     filters = filters + 1
