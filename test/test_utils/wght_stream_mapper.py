@@ -148,7 +148,7 @@ class WghtStreamMapper(object):
             stream = []
             for word in range(len(temp_stream[0][0][0])):
                 for cl_y in range(params.Clusters_Y):
-                    for router in range(params.Wght_Routers):
+                    for router in range(params.NUM_GLB_WGHT):
                         stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
         return stream
     

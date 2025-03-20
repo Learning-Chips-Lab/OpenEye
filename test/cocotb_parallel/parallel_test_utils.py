@@ -303,7 +303,7 @@ def write_psum_file_conv_mp(f, layer, calculated_results, return_dict):
 
 #Collect and get results
 
-def collect_results(layer, layer_number, layer_params, dram):
+def collect_results(layer, layer_number, layer_params, dram, serial):
     #Calculate Bias
     if "Dense" in str(layer):
         calculated_results = [0 for i in range(layer.output.shape[1])]
@@ -351,7 +351,7 @@ def collect_results(layer, layer_number, layer_params, dram):
         semaphore = mp.Semaphore(max_parallel_jobs)
 
         for f in range(layer.output.shape[3]):
-            p = mp.Process(target = calculate_conv_results_mp, args = (f, layer, layer_number, layer_params, dram, calculated_results[f], return_dict, semaphore))
+            p = mp.Process(target = calculate_conv_results_mp, args = (f, layer, layer_number, layer_params, serial, dram, calculated_results[f], return_dict, semaphore))
             p.start()
             jobs.append(p)
         
@@ -537,7 +537,7 @@ def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_
     logger.info("Stream " + str(layer_repetition) + " / " + str(layer_params.needed_total_transmissions) + " calculated.")
     return_dict[layer_repetition] = coordinates
 
-def calculate_conv_results_mp(f, layer, layer_number, layer_params, dram, calculated_results, return_dict, semaphore):
+def calculate_conv_results_mp(f, layer, layer_number, layer_params, serial, dram, calculated_results, return_dict, semaphore):
     with semaphore:
         if(f < layer.kernel.shape[3]):
             for j in range(layer.output.shape[1]):
@@ -552,8 +552,12 @@ def calculate_conv_results_mp(f, layer, layer_number, layer_params, dram, calcul
                                                                     dram.fmap[layer_number][c][x + (i * layer_params.strideX)][y + (j * layer_params.strideY)])
 
                                 else:
-                                    pass
-                                    # zero pad with 1
+                                    if (serial) :
+                                        pass
+                                    else:
+                                        calculated_results[i][j] = int(calculated_results[i][j] + \
+                                            dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)])
+                                     # zero pad with 1
                                     # calculated_results[i][j] = int(calculated_results[i][j] + \
                                     #                                 dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)])
         return_dict[f] = calculated_results
