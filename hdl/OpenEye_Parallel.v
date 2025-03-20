@@ -1016,6 +1016,8 @@ module OpenEye_Parallel
               results_ready           = 0;
               fsm_psum_cycle         <= 0;
               psum_enable_i_reg      <= 0;
+              fsm_psum_last_state    <= CALCULATE_PSUM;
+              fsm_psum_current_state <= GET_RESULTS;
               for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                 for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                   for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
