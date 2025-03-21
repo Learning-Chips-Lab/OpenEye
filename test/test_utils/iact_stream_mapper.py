@@ -37,7 +37,6 @@ class IactStreamMapper(object):
             iact_stream = self.create_complete_iact_stream(iact_stream)
         else :
             values = np.transpose(np.array(self.dram_fmap),axes=[0,2,1])
-            print(values)
             channels, iact_size_x, iact_size_y = values.shape
             
             iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER_B
@@ -52,10 +51,8 @@ class IactStreamMapper(object):
                         v = 0
                         for j in range(self.params.DMA_Bit_AXI//self.params.IACT_Bitwidth):
                             v_tmp = int(vals[i*self.params.DMA_Bit_AXI//self.params.IACT_Bitwidth + j])
-                            if v_tmp < 0:
-                                v_tmp += 256
-                            v = v | (v_tmp << (self.params.IACT_Bitwidth*j))
-
+                            v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
+                            v = v + (v_tmp << (self.params.IACT_Bitwidth*j))
                         iact_stream.append(v)
                 pos += self.params.NUM_BUFFER_B*self.params.IACT_Bitwidth
         return iact_stream
