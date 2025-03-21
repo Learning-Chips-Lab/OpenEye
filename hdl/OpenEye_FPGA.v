@@ -115,13 +115,14 @@ module OpenEye_FPGA
   parameter BUFFER_WIDTH = 12,
 
   parameter real FSM_IACT_RTR_CCLS_A = (CLUSTERS*NUM_GLB_IACT),
-  parameter real FSM_IACT_RTR_CCLS_B = (DMA_BITWIDTH_OLD/ROUTER_MODES_IACT),
+  parameter real FSM_IACT_RTR_CCLS_B = $floor(DMA_BITWIDTH/ROUTER_MODES_IACT),
   parameter real FSM_IACT_RTR_CCLS   = FSM_IACT_RTR_CCLS_A/FSM_IACT_RTR_CCLS_B,
   parameter real FSM_WGHT_RTR_CCLS_A = (CLUSTERS*NUM_GLB_WGHT),
-  parameter real FSM_WGHT_RTR_CCLS_B = (DMA_BITWIDTH_OLD/ROUTER_MODES_WGHT),
+  parameter real FSM_WGHT_RTR_CCLS_B = $floor(DMA_BITWIDTH/ROUTER_MODES_WGHT),
   parameter real FSM_WGHT_RTR_CCLS   = FSM_WGHT_RTR_CCLS_A/FSM_WGHT_RTR_CCLS_B,
   parameter real FSM_PSUM_RTR_CCLS_A = (CLUSTERS*NUM_GLB_PSUM),
-  parameter real FSM_PSUM_RTR_CCLS_B = (DMA_BITWIDTH_OLD/ROUTER_MODES_PSUM),
+  parameter real FSM_PSUM_RTR_CCLS_B = $floor(DMA_BITWIDTH/ROUTER_MODES_PSUM),
+  parameter integer FSM_PSUM_RTR_CCLS_C = DMA_BITWIDTH - (DMA_BITWIDTH % ROUTER_MODES_PSUM),
   parameter real FSM_PSUM_RTR_CCLS   = FSM_PSUM_RTR_CCLS_A/FSM_PSUM_RTR_CCLS_B,
 
   parameter integer FSM_CEIL_IACT_RTR_CCLS = $rtoi($ceil(FSM_IACT_RTR_CCLS)),
@@ -660,13 +661,13 @@ module OpenEye_FPGA
               for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                 for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                   for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
-                    if(((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)>=(fsm_cycle    *(DMA_BITWIDTH_OLD/ROUTER_MODES_IACT)))
-                      &((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)< ((fsm_cycle+1)*(DMA_BITWIDTH_OLD/ROUTER_MODES_IACT))))begin
+                    if(((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)>=(fsm_cycle    *$floor(DMA_BITWIDTH/ROUTER_MODES_IACT)))
+                      &((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)< ((fsm_cycle+1)*$floor(DMA_BITWIDTH/ROUTER_MODES_IACT))))begin
                       for(int i = 0; i < ROUTER_MODES_IACT; i = i + 1)begin
                         router_mode_iact_reg[cc * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
                                            cr * NUM_GLB_IACT * ROUTER_MODES_IACT + 
                                            g * ROUTER_MODES_IACT + i] <=
-                        data_dma_i_reg[(cc*NUM_GLB_IACT+cr*CLUSTER_COLUMNS*NUM_GLB_IACT+g-fsm_cycle*(DMA_BITWIDTH_OLD/ROUTER_MODES_IACT))
+                        data_dma_i_reg[(cc*NUM_GLB_IACT+cr*CLUSTER_COLUMNS*NUM_GLB_IACT+g-fsm_cycle*(DMA_BITWIDTH/ROUTER_MODES_IACT))
                         *ROUTER_MODES_IACT+i];
                       end
                     end
@@ -679,13 +680,13 @@ module OpenEye_FPGA
                 for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                   for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                     for (int g=0; g<NUM_GLB_WGHT; g=g+1) begin
-                      if(((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)  *(DMA_BITWIDTH_OLD/ROUTER_MODES_WGHT)))
-                        &((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH_OLD/ROUTER_MODES_WGHT))))begin
+                      if(((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)  *$floor(DMA_BITWIDTH/ROUTER_MODES_WGHT)))
+                        &((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS)*$floor(DMA_BITWIDTH/ROUTER_MODES_WGHT))))begin
                         for(int i = 0; i < ROUTER_MODES_WGHT; i = i + 1)begin
                           router_mode_wght_reg[cc * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
                                              cr * NUM_GLB_WGHT * ROUTER_MODES_WGHT + 
                                              g * ROUTER_MODES_WGHT + i] <=
-                          data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH_OLD/ROUTER_MODES_WGHT))
+                          data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))
                           +i];
                         end
                       end
@@ -696,13 +697,13 @@ module OpenEye_FPGA
                 for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                   for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                     for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                      if(((cc*NUM_GLB_PSUM+cr*CLUSTER_COLUMNS*NUM_GLB_PSUM+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)  *(DMA_BITWIDTH_OLD/ROUTER_MODES_PSUM)))
-                        &((cc*NUM_GLB_PSUM+cr*CLUSTER_COLUMNS*NUM_GLB_PSUM+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*(DMA_BITWIDTH_OLD/ROUTER_MODES_PSUM))))begin
+                      if(((cc*NUM_GLB_PSUM+cr*CLUSTER_COLUMNS*NUM_GLB_PSUM+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)  *$floor(DMA_BITWIDTH/ROUTER_MODES_PSUM)))
+                        &((cc*NUM_GLB_PSUM+cr*CLUSTER_COLUMNS*NUM_GLB_PSUM+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*$floor(DMA_BITWIDTH/ROUTER_MODES_PSUM))))begin
                         for(int i = 0; i < ROUTER_MODES_PSUM; i = i + 1)begin
                           router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                                              cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + 
                                              g * ROUTER_MODES_PSUM + i] <=
-                          data_dma_i_reg[(cc*NUM_GLB_PSUM*ROUTER_MODES_PSUM+cr*CLUSTER_COLUMNS*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*(ROUTER_MODES_PSUM*DMA_BITWIDTH_OLD/ROUTER_MODES_PSUM))
+                          data_dma_i_reg[(cc*NUM_GLB_PSUM*ROUTER_MODES_PSUM+cr*CLUSTER_COLUMNS*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*FSM_PSUM_RTR_CCLS_C)
                           +i];
                         end
                       end

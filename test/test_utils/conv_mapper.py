@@ -159,10 +159,14 @@ class ConvMapper(LayerMapper):
                                 else:
                                     storage[cl_x][cl_y][router] = 33
                     router_cycle = router_cycle + 1
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bits/params.Iact_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Iact_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
+        if(params.SERIAL and (router_cycle != 0)):
+            router_cycle = 0
+            storage.append(line)
+        
         return storage
 
     def write_router_wght(self, params, layer_params):
@@ -186,10 +190,13 @@ class ConvMapper(LayerMapper):
                         else:
                             storage[cl_x][cl_y][router] = 1
                     router_cycle = router_cycle + 1
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bits/params.Wght_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Wght_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
+        if(params.SERIAL and (router_cycle != 0)):
+            router_cycle = 0
+            storage.append(line)
         return storage
 
     def write_router_psum(self, params, layer_params):
@@ -225,7 +232,7 @@ class ConvMapper(LayerMapper):
                                 else:
                                     storage[cl_x][cl_y][router] = 2
                     router_cycle = router_cycle + 1
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bits/params.Psum_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Psum_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
@@ -233,7 +240,6 @@ class ConvMapper(LayerMapper):
         if(params.SERIAL and (router_cycle != 0)):
             router_cycle = 0
             storage.append(line)
-            line = 0
         return storage
 
     def write_psum_data_glb(self, params, layer_params, layer_repetition, dram, cl_y, router, cycle):

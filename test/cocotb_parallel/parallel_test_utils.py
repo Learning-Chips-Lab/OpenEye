@@ -121,7 +121,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
                                             else:
                                                 dma_line = dma_line
 
-                                    file_dma_ref[layer_repetition].write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+                                    file_dma_ref[layer_repetition].write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                                     dma_line = 0
                 file_dma_ref[layer_repetition].close()
         else:
@@ -176,7 +176,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
                         for cl_x in range(params.Clusters_X):
                             partial_result_a = gtu.to_twos_complement_string(0,20)
                             partial_result_b = gtu.to_twos_complement_string(0,20)
-                            for counter in range(math.floor(params.DMA_Bits/params.PSUM_Bitwidth)):
+                            for counter in range(params.PARALLEL_MACS):
                                 layer_repetition_cycle = math.floor(layer_repetition/layer_params.iact_transmissions_pe)
                                 output = \
                                     counter + \
@@ -433,7 +433,7 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                             if(layer_params.computing_mx[cl_x][cl_y][0][router] == 1):
                                 partial_result_a = gtu.to_twos_complement_string(0,20)
                                 partial_result_b = gtu.to_twos_complement_string(0,20)
-                                for counter in range(math.floor(params.DMA_Bits/params.PSUM_Bitwidth)):
+                                for counter in range(params.PARALLEL_MACS):
                                     match layer_params.single_cluster_computation:
                                         case 1:
                                             x_cor= int(((router + \

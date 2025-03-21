@@ -79,8 +79,7 @@ class OpenEyeParameters(object):
         self.Router_Modes_PSUM = 1
 
         self.poolingmode = 1
-
-        self.DMA_Bits = 48
+        
         self.DMA_Bit_AXI = 64
         self.FSM_CYCLE_BITWIDTH = 1024
         self.FSM_STATES = 9
@@ -100,45 +99,6 @@ def make_vh_file(params, filename):
     txt_file.write("parameter NUM_GLB_PSUM  = "  + str(params.NUM_GLB_PSUM)+ ",\n")
     txt_file.write("parameter NUM_GLB_WGHT = "  + str(params.NUM_GLB_WGHT)+ ",\n")
     txt_file.write("parameter PE_ROWS  = "  + str(params.PEs_Y)+ ",\n")
-    '''
-    txt_file.write("parameter PARALLEL_MACS  = "  + str(params.PARALLEL_MACS)+ ";\n")
-    txt_file.write("\n")
-    txt_file.write("parameter DATA_IACT_BITWIDTH  = "  + str(params.IACT_Bitwidth)+ ";\n")
-    txt_file.write("parameter DATA_PSUM_BITWIDTH  = "  + str(params.PSUM_Bitwidth)+ ";\n")
-    txt_file.write("parameter DATA_WGHT_BITWIDTH  = "  + str(params.WGHT_Bitwidth)+ ";\n")
-    txt_file.write("\n")
-    txt_file.write("parameter TRANS_BITWIDTH_PSUM  = "  + str(params.PSUM_Trans_Bitwidth)+ ";\n")
-    txt_file.write("parameter TRANS_BITWIDTH_IACT  = "  + str(params.IACT_Trans_Bitwidth)+ ";\n")
-    txt_file.write("parameter TRANS_BITWIDTH_WGHT = "  + str(params.WGHT_Trans_Bitwidth)+ ";\n")
-    txt_file.write("\n")
-    txt_file.write("parameter PES = "  + str(params.PEs_Y * params.PEs_X)+ ";\n")
-    txt_file.write("\n")
-    txt_file.write("parameter CLUSTER_COLUMNS  = "  + str(params.Clusters_X)+ ";\n")
-    txt_file.write("parameter CLUSTERS = "  + str(params.Clusters_Y * params.Clusters_X)+ ";\n")
-    txt_file.write("\n")
-    txt_file.write("parameter IACT_PER_PE  = "  + str(params.Iacts_per_PE)+ ";\n")
-    txt_file.write("parameter PSUM_PER_PE  = "  + str(params.Psums_per_PE)+ ";\n")
-    txt_file.write("parameter WGHT_PER_PE = "  + str(params.Wghts_per_PE)+ ";\n")
-    txt_file.write("\n")
-    txt_file.write("parameter IACT_ADDR_PER_PE  = "  + str(params.Iacts_Addr_per_PE)+ ";\n")
-    txt_file.write("parameter WGHT_ADDR_PER_PE  = "  + str(params.Wghts_Addr_per_PE)+ ";\n")
-    txt_file.write("\n")
-    txt_file.write("parameter IACT_MEM_ADDR_WORDS  = "  + str(params.Iact_Mem_Addr_Words)+ ";\n")
-    txt_file.write("parameter IACT_MEM_ADDR_BITS  = $clog2(IACT_MEM_ADDR_WORDS);\n")
-    txt_file.write("parameter IACT_FSM_CYCL_WORDS = IACT_PER_PE + IACT_ADDR_PER_PE;\n")
-    txt_file.write("parameter WGHT_FSM_CYCL_WORDS = WGHT_PER_PE + WGHT_ADDR_PER_PE;\n")
-    txt_file.write("parameter PSUM_MEM_ADDR_WORDS  = "  + str(params.Psum_Mem_Addr_Words)+ ";\n")
-    txt_file.write("parameter PSUM_MEM_ADDR_BITS  = $clog2(PSUM_MEM_ADDR_WORDS);\n")
-    txt_file.write("\n")
-    txt_file.write("parameter ROUTER_MODES_IACT  = "  + str(params.Router_Modes_IACT)+ ";\n")
-    txt_file.write("parameter ROUTER_MODES_WGHT  = "  + str(params.Router_Modes_WGHT)+ ";\n")
-    txt_file.write("parameter ROUTER_MODES_PSUM = "  + str(params.Router_Modes_PSUM)+ ";\n")
-    txt_file.write("\n")
-    txt_file.write("parameter DMA_BITWIDTH  = "  + str(params.DMA_Bits)+ ";\n")
-    txt_file.write("parameter FSM_CYCLE_BITWIDTH  = "  + str(params.FSM_CYCLE_BITWIDTH)+ ";\n")
-    txt_file.write("parameter FSM_STATES = "  + str(params.FSM_STATES)+ ";\n")
-    txt_file.write("\n")
-    '''
     txt_file.close()
 
 def create_vh_file(serial = 0, filename = 'parameters.vh'):
