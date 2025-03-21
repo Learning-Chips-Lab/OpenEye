@@ -84,7 +84,7 @@ module OpenEye_FPGA
   parameter NUM_GLB_WGHT        = 3,
   parameter NUM_GLB_PSUM        = 4,
   
-  parameter CLUSTER_COLUMNS      = 2,
+  parameter CLUSTER_COLUMNS     = 2,
   parameter CLUSTER_ROWS        = 8,
   parameter CLUSTERS            = CLUSTER_COLUMNS * CLUSTER_ROWS,
 
@@ -762,7 +762,7 @@ module OpenEye_FPGA
               buffer_SP_addr_reg[current_buffer_n_1][current_buffer_nx_1] <= current_buffer_addr;
               current_buffer_addr <= buffer_SP_addr_reg[current_buffer_n][current_buffer_nx] + 1; 
 
-              if (current_buffer_nx + 1 == 8) begin
+              if (current_buffer_nx + 1 == RAM_CELLS_Y) begin
                 current_buffer_nx <= 0;
                 
                 if (current_channel + 1 == iact_channels) begin
