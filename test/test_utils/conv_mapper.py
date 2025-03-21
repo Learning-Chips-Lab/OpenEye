@@ -78,9 +78,8 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + (layer_params.psum_delay << 17)
             dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21)
             dma_storage.append(dma_line)
-            for x in reversed(range(4)):
-                dma_line = int(computing_pes[x*48:(x+1)*48],2)
-                dma_storage.append(dma_line)
+            for x in reversed(range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI))):
+                dma_storage.append(int(computing_pes[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI],2))
             dma_storage.extend(self.write_router_iact(params, layer_params))
             dma_storage.extend(self.write_router_wght(params, layer_params))
             dma_storage.extend(self.write_router_psum(params, layer_params))
