@@ -214,7 +214,7 @@ async def write_iact(ptp, dut, stream, oep, lp):
                         try:
                             iact_transmission = iact_transmission + \
                             (stream[x_cluster][y_cluster][router][position] \
-                            << ((router + y_cluster * oep.NUM_GLB_IACT + x_cluster * oep.NUM_GLB_IACT * oep.Clusters_Y) * int(oep.DMA_Bit_AXI/oep.Clusters_X)))
+                            << ((router + y_cluster * oep.NUM_GLB_IACT + x_cluster * oep.NUM_GLB_IACT * oep.Clusters_Y) * oep.IACT_Trans_Bitwidth))
                             iact_enable_signal = iact_enable_signal + 2**(router + y_cluster * oep.NUM_GLB_IACT+ x_cluster * oep.NUM_GLB_IACT * oep.Clusters_Y)
                         except:
                             iact_enable_signal = iact_enable_signal
@@ -252,7 +252,7 @@ async def write_wght(ptp, dut, stream, oep, lp):
                         try:
                             wght_transmission = wght_transmission + \
                             (stream[x_cluster][y_cluster][router][position] \
-                            << ((router + y_cluster * oep.NUM_GLB_WGHT + x_cluster * oep.NUM_GLB_WGHT * oep.Clusters_Y) * int(oep.DMA_Bit_AXI/oep.Clusters_X)))
+                            << ((router + y_cluster * oep.NUM_GLB_WGHT + x_cluster * oep.NUM_GLB_WGHT * oep.Clusters_Y) * oep.WGHT_Trans_Bitwidth))
                             wght_enable_signal = wght_enable_signal + 2**(router + y_cluster * oep.NUM_GLB_WGHT+ x_cluster * oep.NUM_GLB_WGHT * oep.Clusters_Y)
                         except:
                             wght_enable_signal = wght_enable_signal
@@ -286,7 +286,7 @@ async def write_bias(ptp, dut, stream, oep, lp):
                 for router in range(oep.NUM_GLB_PSUM):
                     psum_transmission = psum_transmission + \
                     (stream[x_cluster][y_cluster][router][position] \
-                    << ((router + y_cluster * oep.NUM_GLB_PSUM + x_cluster * oep.NUM_GLB_PSUM * oep.Clusters_Y) * oep.DMA_Bit_AXI))
+                    << ((router + y_cluster * oep.NUM_GLB_PSUM + x_cluster * oep.NUM_GLB_PSUM * oep.Clusters_Y) * oep.PSUM_Trans_Bitwidth))
         cocotb.start_soon(set_input(ptp,(dut.psum_data_i), psum_transmission))
         psum_transmission = 0
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
