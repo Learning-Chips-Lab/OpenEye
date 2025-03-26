@@ -64,7 +64,7 @@ export LAYER=Convolution
 export NUM_FILTERS=8
 export KERNEL_SIZE=3
 export INPUT_SIZE=16
-export OUTPUT_SIZE=8
+export OUTPUT_SIZE=16
 export STRIDE=1
 export INPUT_CHANNELS=4
 #Amout of parallel MACs

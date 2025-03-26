@@ -53,7 +53,7 @@ def make_vh_file(params):
     txt_file.write("parameter ROUTER_MODES_WGHT  = "  + str(params.Router_Modes_WGHT)+ ";\n")
     txt_file.write("parameter ROUTER_MODES_PSUM = "  + str(params.Router_Modes_PSUM)+ ";\n")
     txt_file.write("\n")
-    txt_file.write("parameter DMA_BITWIDTH  = "  + str(params.DMA_Bits)+ ";\n")
+    txt_file.write("parameter DMA_BITWIDTH  = "  + str(params.DMA_Bit_AXI)+ ";\n")
     txt_file.write("parameter FSM_CYCLE_BITWIDTH  = "  + str(params.FSM_CYCLE_BITWIDTH)+ ";\n")
     txt_file.write("parameter FSM_STATES = "  + str(params.FSM_STATES)+ ";\n")
     txt_file.close()
@@ -109,7 +109,7 @@ class OpenEyeParameters():
         self.Poolingmode = 1
         self.Poolingmode = 1
 
-        self.DMA_Bits = 48
+        self.DMA_Bit_AXI = 64
         self.FSM_CYCLE_BITWIDTH = 1024
         self.FSM_STATES = 9
         self.Iact_Router_Bits = 6
@@ -335,7 +335,7 @@ def write_router_reference_files(params, layer_params, file_dma):
                         else:
                             file_i_router.write("100001\n")
                 router_cycle = router_cycle + 1
-                if(router_cycle == math.floor(params.DMA_Bits/params.Iact_Router_Bits)):
+                if(router_cycle == math.floor(params.DMA_Bit_AXI/params.Iact_Router_Bits)):
                     router_cycle = 0
                     
     if(router_cycle != 0):
@@ -353,7 +353,7 @@ def write_router_reference_files(params, layer_params, file_dma):
                     else:
                         file_w_router.write("1\n")
                 router_cycle = router_cycle + 1
-                if(router_cycle == math.floor(params.DMA_Bits/params.Wght_Router_Bits)):
+                if(router_cycle == math.floor(params.DMA_Bit_AXI/params.Wght_Router_Bits)):
                     router_cycle = 0
                         
     if(router_cycle != 0):
@@ -374,7 +374,7 @@ def write_router_reference_files(params, layer_params, file_dma):
                         else:
                             file_p_router.write("10\n")
                 router_cycle = router_cycle + 1
-                if(router_cycle == math.floor(params.DMA_Bits/params.Psum_Router_Bits)):
+                if(router_cycle == math.floor(params.DMA_Bit_AXI/params.Psum_Router_Bits)):
                     router_cycle = 0
     if(router_cycle != 0):
         router_cycle = 0
@@ -397,7 +397,7 @@ def write_working_parameters(params, layer_params, file_dma):
     dma_line = dma_line + ((math.ceil(layer_params.used_PEs_Y/params.PEs_Y)) << 18)
     dma_line = dma_line + (math.ceil(((math.ceil(layer_params.used_PEs_Y/params.PEs_Y))*params.PEs_Y + params.PEs_X - 1)/params.NUM_GLB_IACT) << 22)
     dma_line = dma_line + ((layer_params.used_psum_per_PE)<< 25)
-    file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+    file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
     return dma_line
 
 def write_router_iact(params, layer_params, file_dma):
@@ -425,16 +425,16 @@ def write_router_iact(params, layer_params, file_dma):
                         else:
                             dma_line = dma_line + (33 << (params.Iact_Router_Bits * router_cycle))
                 router_cycle = router_cycle + 1
-                if(router_cycle == math.floor(params.DMA_Bits/params.Iact_Router_Bits)):
+                if(router_cycle == math.floor(params.DMA_Bit_AXI/params.Iact_Router_Bits)):
                     router_cycle = 0
-                    file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+                    file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                     dma_storage.append(dma_line)
                     dma_line = 0
                     
                     
     if(router_cycle != 0):
         router_cycle = 0
-        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
         dma_storage.append(dma_line)
         dma_line = 0
     return dma_storage
@@ -451,15 +451,15 @@ def write_router_wght(params, file_dma):
                 else:
                     dma_line = dma_line + (1 << (params.Wght_Router_Bits * router_cycle))
                 router_cycle = router_cycle + 1
-                if(router_cycle == math.floor(params.DMA_Bits/params.Wght_Router_Bits)):
+                if(router_cycle == math.floor(params.DMA_Bit_AXI/params.Wght_Router_Bits)):
                     router_cycle = 0
-                    file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+                    file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                     dma_storage.append(dma_line)
                     dma_line = 0
                         
     if(router_cycle != 0):
         router_cycle = 0
-        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
         dma_storage.append(dma_line)
         dma_line = 0
 
@@ -483,15 +483,15 @@ def write_router_psum(params, layer_params, file_dma):
                         else:
                             dma_line = dma_line + (2 << (params.Psum_Router_Bits * router_cycle))
                 router_cycle = router_cycle + 1
-                if(router_cycle == math.floor(params.DMA_Bits/params.Psum_Router_Bits)):
+                if(router_cycle == math.floor(params.DMA_Bit_AXI/params.Psum_Router_Bits)):
                     router_cycle = 0
-                    file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+                    file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                     dma_storage.append(dma_line)
                     dma_line = 0
                     
     if(router_cycle != 0):
         router_cycle = 0
-        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
         dma_storage.append(dma_line)
         dma_line = 0    
 
@@ -522,7 +522,7 @@ def write_iact_data(params, layer_params, layer, Inputdata, file_dma):
                                 else:
                                     dma_line = 0
                             
-                        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+                        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                         dma_storage.append(dma_line)
                         dma_line = 0
                         
@@ -556,7 +556,7 @@ def write_iact_data(params, layer_params, layer, Inputdata, file_dma):
                         overhead_counter_before_x_cl = overhead_counter_before_x_cl + 2
                         overhead_counter = overhead_counter + 2
 
-                        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+                        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                         dma_storage.append(dma_line)
                         dma_line = 0
                     overhead_counter = 0
@@ -586,7 +586,7 @@ def write_wght_data(params, layer_params, layer, file_dma):
                     for write_time in range(int(params.WGHT_Trans_Bitwidth/params.WGHT_Addr_Bitwidth)):
                         
                         if(dma_part_data_num != (math.ceil(params.Wghts_Addr_per_PE/(params.WGHT_Trans_Bitwidth/params.WGHT_Addr_Bitwidth)) - 1)) | (write_time == 0):
-                            file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+                            file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                             dma_storage.append(dma_line)
                         dma_line = 0
                             
@@ -622,7 +622,7 @@ def write_wght_data(params, layer_params, layer, file_dma):
                                         channel = channel + 1
                     else:
                         dma_line = 0
-                    file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+                    file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                     dma_storage.append(dma_line)
                     dma_line = 0
     return dma_storage
@@ -646,7 +646,7 @@ def write_psum_data(params, layer_params, layer, file_dma):
                             else:
                                 dma_line = 0
 
-                        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+                        file_dma.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                         dma_storage.append(dma_line)
                         dma_line = 0
 
@@ -737,7 +737,7 @@ def make_ref(params, layer_params, layer, Inputdata):
                                 else:
                                     dma_line = dma_line
 
-                        file_dma_ref.write(bin(dma_line)[2:].zfill(params.DMA_Bits) + "\n")
+                        file_dma_ref.write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                         dma_line = 0
                     
     file_dma_ref.close()
