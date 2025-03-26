@@ -1282,7 +1282,7 @@ module OpenEye_Parallel
                   if (SERIAL) begin 
                     mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(filters_reg));
                   end else begin
-                    mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(32'(filters_reg)+1)/2);
+                    mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(64'(filters_reg)+1)/2);
                   end
                 end
               end
