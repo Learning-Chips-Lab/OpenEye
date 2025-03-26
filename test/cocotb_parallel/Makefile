@@ -29,8 +29,10 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_DP_RW.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_SP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RST_SYNC.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_DP.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_DP_RW.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_SP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_generic.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_RW_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_SP_generic.v)
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
@@ -54,9 +56,9 @@ export LOGGER_LEVEL=0    #Enables Logger Debug Mode
 #export LAYER=FC
 export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
-export INPUT_CHANNELS=2
+export INPUT_CHANNELS=4
 export NUM_FILTERS=16
-export KERNEL_SIZE=5
+export KERNEL_SIZE=3
 export INPUT_SIZE=16
 export OUTPUT_SIZE=256
 export STRIDE=1
@@ -79,18 +81,18 @@ export TRANS_BITWIDTH_WGHT=24
 export TRANS_BITWIDTH_PSUM=20
 
 #Set Number of Router Clusters per Instance
-export NUM_GLB_IACT=4
-export NUM_GLB_WGHT=5
+export NUM_GLB_IACT=3
+export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
 #Set Number of PEelements
-export PE_ROWS=5
+export PE_ROWS=3
 export PE_COLUMNS=4
 
 
 #Set number of Cluster rows need at least to be 2 columns
 export CLUSTER_COLUMNS=2
-export CLUSTER_ROWS=2
+export CLUSTER_ROWS=8
 
 #Number of Words per PE
 export IACT_PER_PE=16
