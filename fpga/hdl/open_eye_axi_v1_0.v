@@ -1,4 +1,4 @@
-`timescale 1 ns / 1 ps
+`timescale 1ns / 1ps
 
 module open_eye_axi_v1_0 #
 (
