@@ -3,9 +3,9 @@
 module iact_converter
 #(
   // TODO wght_size changeable
-  parameter WGHT_SIZE = 3,
+  parameter WGHT_SIZE   = 3,
   parameter PARAMS_SIZE = 32,
-  parameter N_PSUM    = 64
+  parameter N_PSUM      = 64
 ) (
   input                        clk_i,
   input                        rst_ni,

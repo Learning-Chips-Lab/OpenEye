@@ -239,8 +239,6 @@ module OpenEye_Parallel
   ///Register for the iact FSM
   reg  [32-1:0]                        fsm_iact_cycle;
   reg  [6:0]                           fsm_iact_cycle_mod1;
-  reg  [6:0]                           fsm_iact_cycle_mod2;
-  reg  [6:0]                           fsm_iact_cycle_mod3;
   reg  [11:0]                          fsm_iact_cycle_div;
   reg  [6:0]                           fsm_iact_cycle_div_cnt;
   reg  [$clog2(FSM_STATES)-1:0]        fsm_iact_last_state;
@@ -446,7 +444,6 @@ module OpenEye_Parallel
       iact_addr_len_reg          <= 0;
       stride_x_reg               <= 0;
       stride_y_reg               <= 0;
-      iact_addr_len_reg          <= 0;
       bano_cluster_mode_reg      <= 0;
       af_cluster_mode_reg        <= 0;
       pooling_cluster_mode_reg   <= 0;
@@ -553,7 +550,7 @@ module OpenEye_Parallel
             needed_y_cls_reg         <= needed_y_cls_i_w;
             needed_iact_cycles_reg   <= needed_iact_cycles_i_w;
             filters_reg              <= filters_i_w;
-            iact_addr_len_reg        <= iact_addr_len_i_w;
+            iact_addr_len_reg        <= 0;
             wght_addr_len_reg        <= wght_addr_len_i_w;
             bano_cluster_mode_reg    <= bano_cluster_mode_i_w;
             af_cluster_mode_reg      <= af_cluster_mode_i_w;
@@ -650,8 +647,6 @@ module OpenEye_Parallel
       iact_transmitted         <= 0;
       fsm_iact_cycle           <= 0;
       fsm_iact_cycle_mod1      <= 0;
-      fsm_iact_cycle_mod2      <= 0;
-      fsm_iact_cycle_mod3      <= 0;
       fsm_iact_cycle_div       <= 0;
       fsm_iact_cycle_div_cnt   <= 0;
       data_write_enable_iact   <= 1;
@@ -676,8 +671,6 @@ module OpenEye_Parallel
           iact_ready_o           <= iact_ready_o_reg;
           fsm_iact_cycle         <= 0;
           fsm_iact_cycle_mod1    <= 0;
-          fsm_iact_cycle_mod2    <= 0;
-          fsm_iact_cycle_mod3    <= 0;
           fsm_iact_cycle_div     <= 0;
           fsm_iact_cycle_div_cnt <= 0;
 
@@ -735,49 +728,30 @@ module OpenEye_Parallel
             end
           end
 
-          if ((iact_enable_i == 0) & (iact_enable_i_reg != 0) & (data_mode_reg == 0)) begin
+          if (((iact_enable_i == 0) & (iact_enable_i_reg != 0) & (data_mode_reg == 0))
+            | ((compute_i == 1) & (data_mode_reg == 1))) begin
             mem_addr_iact          <= 0;
             fsm_iact_last_state    <= IACT_IDLE;
             fsm_iact_current_state <= CALCULATE_IACT;
             iact_ready_o           <= 0;
-          end
-          
-          if ((compute_i == 1) & (data_mode_reg == 1)) begin
-            mem_addr_iact          <= 0;
-            fsm_iact_last_state    <= IACT_IDLE;
-            fsm_iact_current_state <= CALCULATE_IACT;
-            iact_ready_o           <= 0;
+            data_write_enable_iact <= 0;
           end
 
         end
 
         CALCULATE_IACT : begin
-          data_write_enable_iact <= 0;
           if (iact_ready_o_reg == ((2**(CLUSTERS*NUM_GLB_IACT))-1)) begin
             fsm_iact_cycle <= fsm_iact_cycle + 1;
-            //fsm_iact_cycle_mod3: (fsm_iact_cycle_mod1-IACT_ADDR_PER_PE)%(TRANS_BITWIDTH_IACT/12)
-            if (fsm_iact_cycle_mod3 == ((TRANS_BITWIDTH_IACT/12)-1)) begin
-              fsm_iact_cycle_mod3 <= 0;
-            end else begin
-              if (fsm_iact_cycle_mod1[5:0] >= 6'(iact_addr_len_reg)) begin
-                fsm_iact_cycle_mod3 <= fsm_iact_cycle_mod3 + 1;
+            ///fsm_iact_cycle_mod1: fsm_iact_cycle%IACT_FSM_CYCL_WORDS
+            if (fsm_iact_cycle >= 1) begin
+              if (fsm_iact_cycle_mod1 == ((7'(24/12))-1)) begin
+                fsm_iact_cycle_mod1 <= 0;
+              end else begin
+                fsm_iact_cycle_mod1 <= fsm_iact_cycle_mod1 + 1;
               end
             end
-            ///fsm_iact_cycle_mod2: fsm_iact_cycle_mod1%(TRANS_BITWIDTH_IACT/8)
-            if (fsm_iact_cycle_mod2 == ((TRANS_BITWIDTH_IACT/4)-1)) begin
-              fsm_iact_cycle_mod2 <= 0;
-            end else begin
-              fsm_iact_cycle_mod2 <= fsm_iact_cycle_mod2 + 1;
-            end
-            ///fsm_iact_cycle_mod1: fsm_iact_cycle%IACT_FSM_CYCL_WORDS
-            if (fsm_iact_cycle_mod1 == ((7'(iact_addr_len_reg) + 7'(input_activations_reg))-1)) begin
-              fsm_iact_cycle_mod1 <= 0;
-              fsm_iact_cycle_mod2 <= 0;
-            end else begin
-              fsm_iact_cycle_mod1 <= fsm_iact_cycle_mod1 + 1;
-            end
             ///fsm_iact_cycle_div: ((fsm_iact_cycle - 1)/IACT_FSM_CYCL_WORDS)
-            if (fsm_iact_cycle_div_cnt == ((7'(iact_addr_len_reg) + 7'(input_activations_reg))-1)) begin
+            if (fsm_iact_cycle_div_cnt == ((7'(input_activations_reg))-1)) begin
               fsm_iact_cycle_div <= fsm_iact_cycle_div + 1;
               fsm_iact_cycle_div_cnt <= 0;
             end else begin
@@ -824,11 +798,7 @@ module OpenEye_Parallel
               loop_mod = 0;
 
               flat_help_var = 0;
-              if ((((fsm_iact_cycle != 0) & (6'(fsm_iact_cycle_mod1) < 6'(iact_addr_len_reg))
-              & (0 == fsm_iact_cycle_mod2))  
-              | ((6'(fsm_iact_cycle_mod1) >= 6'(iact_addr_len_reg))
-              & (0 == fsm_iact_cycle_mod3)))
-              & ((((7'(iact_addr_len_reg) + 7'(input_activations_reg))-1) != fsm_iact_cycle_div_cnt) | (needed_iact_cycles_reg != 4'(fsm_iact_cycle_div+12'(1))))) begin
+              if (fsm_iact_cycle_mod1 == 1) begin
                 for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                   for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                     for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
@@ -851,25 +821,23 @@ module OpenEye_Parallel
                   end
                 end
               end else begin
-                if (32'(fsm_iact_cycle+1) <= ((32'(iact_addr_len_reg) + 32'(input_activations_reg))*needed_iact_cycles_reg)) begin
-                  for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                    for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                      for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
-                        iact_enable_comp_reg[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] <= 1;
-                      end
+                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                      iact_enable_comp_reg[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] <= 1;
                     end
                   end
-                end else begin
-                  iact_enable_comp_reg   <= 0;
-                  loop_mod                = 0;
-                  fsm_iact_cycle         <= 0;
-                  fsm_iact_cycle_mod1    <= 0;
-                  fsm_iact_cycle_mod2    <= 0;
-                  fsm_iact_cycle_div     <= 0;
-                  fsm_iact_cycle_div_cnt <= 0;
-                  fsm_iact_last_state    <= CALCULATE_IACT;
-                  fsm_iact_current_state <= WAIT;
                 end
+              end
+              if (32'(fsm_iact_cycle+1) > ((32'(input_activations_reg))*needed_iact_cycles_reg)) begin
+                iact_enable_comp_reg   <= 0;
+                loop_mod                = 0;
+                fsm_iact_cycle         <= 0;
+                fsm_iact_cycle_mod1    <= 0;
+                fsm_iact_cycle_div     <= 0;
+                fsm_iact_cycle_div_cnt <= 0;
+                fsm_iact_last_state    <= CALCULATE_IACT;
+                fsm_iact_current_state <= WAIT;
               end
             end else begin
               for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
@@ -944,7 +912,6 @@ module OpenEye_Parallel
                 loop_mod                = 0;
                 fsm_iact_cycle         <= 0;
                 fsm_iact_cycle_mod1    <= 0;
-                fsm_iact_cycle_mod2    <= 0;
                 fsm_iact_cycle_div     <= 0;
                 fsm_iact_cycle_div_cnt <= 0;
                 fsm_iact_last_state    <= CALCULATE_IACT;

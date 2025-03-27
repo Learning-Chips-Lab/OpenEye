@@ -36,25 +36,29 @@ class IactStreamMapper(object):
                         iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
             iact_stream = self.create_complete_iact_stream(iact_stream)
         else :
-            values = np.transpose(np.array(self.dram_fmap),axes=[0,2,1])
-            channels, iact_size_x, iact_size_y = values.shape
-            
-            iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER_B
-            iact_params = (channels << 48) | (iact_size_x << 32) |(iact_size_y << 16) | iact_stream_cycles
+            if (self.layer_params.used_channels % 2 == 0) :
+                values = np.transpose(np.array(self.dram_fmap),axes=[0,2,1])
+                channels, iact_size_x, iact_size_y = values.shape
+                
+                iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER_B
+                iact_params = (channels << 48) | (iact_size_x << 32) |(iact_size_y << 16) | iact_stream_cycles
 
-            iact_stream = [iact_params]
-            pos = 0
-            while pos < iact_size_x * iact_size_y:
-                for n in range(channels):
-                    vals = values[n].flatten()[pos:pos+64]
-                    for i in range(self.params.NUM_BUFFER_B):
-                        v = 0
-                        for j in range(self.params.DMA_Bit_AXI//self.params.IACT_Bitwidth):
-                            v_tmp = int(vals[i*self.params.DMA_Bit_AXI//self.params.IACT_Bitwidth + j])
-                            v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
-                            v = v + (v_tmp << (self.params.IACT_Bitwidth*j))
-                        iact_stream.append(v)
-                pos += self.params.NUM_BUFFER_B*self.params.IACT_Bitwidth
+                iact_stream = [iact_params]
+                pos = 0
+                while pos < iact_size_x * iact_size_y:
+                    for n in range(self.layer_params.used_channels):
+                        vals = values[n].flatten()[pos:pos+64]
+                        for i in range(self.params.NUM_BUFFER_B):
+                            v = 0
+                            for j in range(self.params.DMA_Bit_AXI//self.params.IACT_Bitwidth):
+                                v_tmp = int(vals[i*self.params.DMA_Bit_AXI//self.params.IACT_Bitwidth + j])
+                                v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
+                                v = v + (v_tmp << (self.params.IACT_Bitwidth*j))
+                            iact_stream.append(v)
+                    pos += self.params.NUM_BUFFER_B*self.params.IACT_Bitwidth
+            else:
+                raise Exception("Not implemented")
+
         return iact_stream
     
     def write_iact_data_glb(self, cl_x, cl_y, router):
@@ -94,8 +98,8 @@ class IactStreamMapper(object):
 
     def write_iact_pe(self, cl_x, cl_y, router, cycle, iact_cycle):
         data_spad = self.write_iact_data_storage(cl_x, cl_y, router, cycle, iact_cycle)
-        addr_spad = self.write_iact_addr_storage(cl_x, cl_y, router, cycle, iact_cycle)
-        return [addr_spad, data_spad]
+        #addr_spad = self.write_iact_addr_storage(cl_x, cl_y, router, cycle, iact_cycle)
+        return data_spad
 
     def write_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
 
@@ -196,7 +200,7 @@ class IactStreamMapper(object):
 
                     current_spad = spad_storage[cl_x][cl_y][router]
                     for cycle in range(len(current_spad)):
-                        stream[cl_x][cl_y][router].extend(self.create_pe_addr_iact_stream(current_spad[cycle]))
+                        #stream[cl_x][cl_y][router].extend(self.create_pe_addr_iact_stream(current_spad[cycle]))
 
                         stream[cl_x][cl_y][router].extend(self.create_pe_data_iact_stream(current_spad[cycle]))
 
@@ -245,8 +249,8 @@ class IactStreamMapper(object):
             for data_in_trans in range(data_per_trans):
                 try:
                     number_of_value = (data_in_trans + spad_data_trans * data_per_trans)
-                    value = gtu.to_twos_complement_string(spad[1][number_of_value][1], 4) + \
-                        gtu.to_twos_complement_string(spad[1][number_of_value][0], self.params.IACT_Bitwidth)
+                    value = gtu.to_twos_complement_string(spad[number_of_value][1], 4) + \
+                        gtu.to_twos_complement_string(spad[number_of_value][0], self.params.IACT_Bitwidth)
                     temp_trans = temp_trans + (int(value,2) << (data_in_trans * params.IACT_WOH_Bitwidth))
                 except:
                     pass

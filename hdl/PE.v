@@ -474,7 +474,7 @@ module PE
         psum_enable_2                         <= psum_enable;
         psum_enable_o                         <= psum_enable_2;
       end else begin
-      psum_enable_o                         <= psum_enable;
+        psum_enable_o                         <= psum_enable;
       end
       iact_oh_delay_1                       <= iact_data_spad_oh;
       iact_oh_delay_2                       <= iact_oh_delay_1;
@@ -1299,7 +1299,7 @@ end
 
   // Parallel to serial converter for iact data and address
   // e.g., converts a 24-bit parallel iact word to multiple 8-bit/4-bit pairs of data and address
-  data_pipeline #(
+  data_pipeline_iact #(
     .DATA_WIDTH      (TRANS_BITWIDTH_IACT),
     .FIRST_SPAD_ADDR (IACT_ADDR_ADDR),
     .FIRST_SPAD_DATA (IACT_ADDR_DATA),

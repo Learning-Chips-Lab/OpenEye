@@ -37,7 +37,7 @@ class PsumStreamMapper(object):
     def write_psum_data_glb(self, cl_x, cl_y, router):
         storage = []
         if (self.params.SERIAL):
-            for cycle in range(self.layer_params.needed_refreshes_mx[self.layer_repetition][1],self.layer_params.needed_refreshes_mx[self.layer_repetition][2]):
+            for cycle in range(math.floor(self.layer_params.needed_refreshes_mx[self.layer_repetition][1]/2),math.ceil(self.layer_params.needed_refreshes_mx[self.layer_repetition][2]/2)):
                 storage.append(self.write_psum_storage(cl_x, cl_y, router, cycle))
         else:
             for cycle in range(math.floor(self.layer_params.needed_refreshes_mx[self.layer_repetition][1]/2),math.ceil(self.layer_params.needed_refreshes_mx[self.layer_repetition][2]/2)):
