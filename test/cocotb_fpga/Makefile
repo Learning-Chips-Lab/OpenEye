@@ -22,6 +22,7 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/PE.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/adder.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/delay_cluster.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/data_pipeline.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/data_pipeline_iact.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/multiplier.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/mux2.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/demux2.v)
@@ -45,8 +46,8 @@ TOPLEVEL = OpenEye_FPGA
 
 # MODULE is the basename of the Python test file
 MODULE = OpenEye_FPGA_tb
-COMPILE_ARGS += -P OpenEye_Parallel.CREATE_VCD=1
-
+#COMPILE_ARGS += -P OpenEye_Parallel.CREATE_VCD=1
+export IVERILOG_DUMPER=fst
 export CLOCK_LEN=10
 export CLOCK_UNIT=ns
 

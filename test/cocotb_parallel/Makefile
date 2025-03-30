@@ -1,10 +1,11 @@
 # Makefile
 
 # defaults
-SIM ?= verilator
-#SIM ?= icarus
+# defaults
+#SIM ?= verilator
+SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
-EXTRA_ARGS += --trace --trace-fst --trace-structs
+#EXTRA_ARGS += --trace-fst --trace-structs
 
 # use VHDL_SOURCES for VHDL files
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_Parallel.v)
@@ -20,6 +21,7 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/PE_cluster.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/PE.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/adder.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/data_pipeline.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/data_pipeline_iact.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/multiplier.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/mux2.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/demux2.v)
@@ -40,7 +42,7 @@ TOPLEVEL = OpenEye_Parallel
 
 # MODULE is the basename of the Python test file
 MODULE = OpenEye_Parallel_tb
-#COMPILE_ARGS += -P OpenEye_Parallel.CREATE_VCD=1
+export IVERILOG_DUMPER=fst
 
 export CLOCK_LEN=10
 export CLOCK_UNIT=ns
@@ -57,7 +59,7 @@ export LOGGER_LEVEL=0    #Enables Logger Debug Mode
 export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
 export INPUT_CHANNELS=4
-export NUM_FILTERS=16
+export NUM_FILTERS=8
 export KERNEL_SIZE=3
 export INPUT_SIZE=16
 export OUTPUT_SIZE=256
