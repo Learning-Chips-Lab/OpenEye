@@ -42,7 +42,7 @@ class IactStreamMapper(object):
             iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER_B
             iact_stream = []
             pos = 0
-            if (False) :
+            if (True) :
                 values_per_word = self.params.DMA_Bit_AXI//(self.params.IACT_Bitwidth)
                 while pos < iact_size_x * iact_size_y * channels:
                     vals = values.flatten()[pos:pos+(values_per_word*self.params.NUM_BUFFER_B)]
