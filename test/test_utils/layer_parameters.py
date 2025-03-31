@@ -72,6 +72,7 @@ class LayerParameters(object):
         self.skipIact = 0
         self.skipWght = 0
         self.skipPsum = 0
+        self.iact_stream_cycles = 1
 
         self.computing_mx = 0
         self.data_mode = 0
@@ -189,6 +190,10 @@ class LayerParameters(object):
         self.strideY = layer.strides[1]
         self.calculate_iact_transmissions(layer,params)
         self.calculate_computing_matrix(layer, params)
+        self.iact_size_x = layer.input.shape[1]
+        self.iact_size_y = layer.input.shape[2]
+        self.channels = layer.input.shape[3]
+        self.iact_stream_cycles = layer.input.shape[1] * layer.input.shape[2] * layer.input.shape[3] // params.NUM_BUFFER_B
         match self.single_cluster_computation:
             case 1:
                 self.complete_iacts_in_design = math.floor((layer.input.shape[1]*layer.input.shape[2])/ \

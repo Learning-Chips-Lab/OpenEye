@@ -37,16 +37,12 @@ class IactStreamMapper(object):
             iact_stream = self.create_complete_iact_stream(iact_stream)
         else :
             #if (self.layer_params.used_channels % 2 == 0) :
+            values = np.transpose(np.array(self.dram_fmap),axes=[0,2,1])
+            channels, iact_size_x, iact_size_y = values.shape
+            iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER_B
+            iact_stream = []
+            pos = 0
             if (False) :
-                values = np.transpose(np.array(self.dram_fmap),axes=[2,1,0])
-                iact_size_x, iact_size_y, channels = values.shape
-                
-                iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER_B
-                iact_params = (channels << 48) | (iact_size_x << 32) |(iact_size_y << 16) | iact_stream_cycles
-
-                iact_stream = [iact_params]
-                pos = 0
-
                 values_per_word = self.params.DMA_Bit_AXI//(self.params.IACT_Bitwidth)
                 while pos < iact_size_x * iact_size_y * channels:
                     vals = values.flatten()[pos:pos+(values_per_word*self.params.NUM_BUFFER_B)]
@@ -60,14 +56,6 @@ class IactStreamMapper(object):
                         iact_stream.append(v)
                     pos += self.params.NUM_BUFFER_B*self.params.IACT_Bitwidth
             else:
-                values = np.transpose(np.array(self.dram_fmap),axes=[0,2,1])
-                channels, iact_size_x, iact_size_y = values.shape
-                
-                iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER_B
-                iact_params = (channels << 48) | (iact_size_x << 32) |(iact_size_y << 16) | iact_stream_cycles
-
-                iact_stream = [iact_params]
-                pos = 0
                 while pos < iact_size_x * iact_size_y:
                     for n in range(self.layer_params.used_channels):
                         vals = values[n].flatten()[pos:pos+64]
@@ -80,7 +68,6 @@ class IactStreamMapper(object):
                             iact_stream.append(v)
                     pos += self.params.NUM_BUFFER_B*self.params.IACT_Bitwidth
                 #raise Exception("Not implemented")
-        print("Check: " + str(len(iact_stream)))
         return iact_stream
     
     def write_iact_data_glb(self, cl_x, cl_y, router):
