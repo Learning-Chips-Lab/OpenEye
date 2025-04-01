@@ -37,8 +37,7 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_SP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_RW_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_SP_generic.v)
-
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/iact_converter.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/iact_stream_constructor.v)
 
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
