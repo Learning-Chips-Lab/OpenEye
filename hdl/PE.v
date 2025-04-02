@@ -28,7 +28,7 @@
 ///    DATA_IACT_BITWIDTH      - Width of input activation data
 ///    DATA_WGHT_BITWIDTH      - Width of weight data
 ///    DATA_PSUM_BITWIDTH      - Width of partial sum data, used in internal accumulator
-///    DATA_IACT_IGNORE_ZEROS  - Number of zeros that can be ignored in sparse input activation data
+///    DATA_IACT_OVERHEAD      - Number of zeros that can be ignored in sparse input activation data
 ///    DATA_WGHT_IGNORE_ZEROS  - Number of zeros that can be ignored in sparse weight data
 ///    IACT_DATA_ADDR          - Number of input activation data words in SPad
 ///    IACT_ADDR_ADDR          - Number of input activation adresses in SPad
@@ -73,7 +73,7 @@ module PE
   parameter integer DATA_IACT_BITWIDTH      = 8,
   parameter integer DATA_WGHT_BITWIDTH      = 8,
   parameter integer DATA_PSUM_BITWIDTH      = 20,
-  parameter integer DATA_IACT_IGNORE_ZEROS  = 4,
+  parameter integer DATA_IACT_OVERHEAD      = 4,
   parameter integer DATA_WGHT_IGNORE_ZEROS  = 4,
 
   parameter integer IACT_DATA_ADDR          = 16,
@@ -96,7 +96,7 @@ module PE
   localparam integer IACT_ADDR_ADDR_BITWIDTH = $clog2(IACT_ADDR_ADDR),
   localparam integer IACT_ADDR_DATA_BITWIDTH = $clog2(IACT_ADDR_DATA),
 
-  localparam integer IACT_DATA_DATA          = DATA_IACT_BITWIDTH + DATA_IACT_IGNORE_ZEROS,
+  localparam integer IACT_DATA_DATA          = DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD,
   localparam integer IACT_DATA_ADDR_BITWIDTH = $clog2(IACT_DATA_ADDR),
   localparam integer IACT_DATA_DATA_BITWIDTH = $clog2(IACT_DATA_DATA),
 
@@ -146,9 +146,9 @@ module PE
   wire [WGHT_ADDR_ADDR_BITWIDTH-1:0]          wght_addr_SPad_addr;
   wire [WGHT_DATA_ADDR_BITWIDTH-1:0]          wght_data_SPad_addr;
   wire [DATA_IACT_BITWIDTH-1:0]               iact_data_spad_pay;
-  wire [DATA_IACT_IGNORE_ZEROS-1:0]           iact_data_spad_oh;
-  reg [DATA_IACT_IGNORE_ZEROS-1:0]            iact_oh_delay_1;
-  reg [DATA_IACT_IGNORE_ZEROS-1:0]            iact_oh_delay_2;
+  wire [DATA_IACT_OVERHEAD-1:0]           iact_data_spad_oh;
+  reg [DATA_IACT_OVERHEAD-1:0]            iact_oh_delay_1;
+  reg [DATA_IACT_OVERHEAD-1:0]            iact_oh_delay_2;
   wire [DATA_WGHT_BITWIDTH-1:0]               wght_data_spad_pay_1;
   wire [DATA_WGHT_IGNORE_ZEROS-1:0]           wght_data_spad_oh_1;
   wire [DATA_WGHT_BITWIDTH-1:0]               wght_data_spad_pay_2;

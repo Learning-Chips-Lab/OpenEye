@@ -90,6 +90,7 @@ module OpenEye_Cluster
   parameter TRANS_BITWIDTH_IACT        = 24,
   parameter TRANS_BITWIDTH_PSUM        = 20,
   parameter TRANS_BITWIDTH_WGHT        = 24,
+  parameter DATA_IACT_OVERHEAD         = 4,
   parameter NUM_GLB_IACT               = 3,
   parameter NUM_GLB_WGHT               = 3,
   parameter NUM_GLB_PSUM               = 4,
@@ -258,9 +259,9 @@ module OpenEye_Cluster
     .DATA_PSUM_BITWIDTH (DATA_PSUM_BITWIDTH),
 
     .TRANS_BITWIDTH_IACT(TRANS_BITWIDTH_IACT),
-    .TRANS_BITWIDTH_PSUM(TRANS_BITWIDTH_PSUM),
     .TRANS_BITWIDTH_WGHT(TRANS_BITWIDTH_WGHT),
-
+    .TRANS_BITWIDTH_PSUM(TRANS_BITWIDTH_PSUM),
+    .DATA_IACT_OVERHEAD (DATA_IACT_OVERHEAD),
     .NUM_GLB_IACT       (NUM_GLB_IACT),
     
     .PE_ROWS            (PE_ROWS),

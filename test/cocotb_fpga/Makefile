@@ -77,7 +77,7 @@ export USE_SPARSE_WEIGHTS=0
 export DATA_IACT_BITWIDTH=8
 export DATA_PSUM_BITWIDTH=20
 export DATA_WGHT_BITWIDTH=8
-export DATA_IACT_IGNORE_ZEROS=4
+export DATA_IACT_OVERHEAD    =4
 export DATA_WGHT_IGNORE_ZEROS=4
 
 #Datawidth for Transportation of Data

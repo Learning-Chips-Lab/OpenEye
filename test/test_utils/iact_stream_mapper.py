@@ -37,37 +37,23 @@ class IactStreamMapper(object):
             iact_stream = self.create_complete_iact_stream(iact_stream)
         else :
             #if (self.layer_params.used_channels % 2 == 0) :
-            values = np.transpose(np.array(self.dram_fmap),axes=[0,2,1])
-            channels, iact_size_x, iact_size_y = values.shape
-            iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER_B
+            values = np.transpose(np.array(self.dram_fmap),axes=[2,1,0])
+            iact_size_x, iact_size_y, channels = values.shape
+            iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER
             iact_stream = []
             pos = 0
-            if (True) :
-                values_per_word = self.params.DMA_Bit_AXI//(self.params.IACT_Bitwidth)
-                while pos < iact_size_x * iact_size_y * channels:
-                    vals = values.flatten()[pos:pos+(values_per_word*self.params.NUM_BUFFER_B)]
-                    for i in range(self.params.NUM_BUFFER_B):
-                        v = 0
-                        for j in range(values_per_word//self.layer_params.used_channels):
-                            for k in range(self.layer_params.used_channels):
-                                v_tmp = int(vals[(i*values_per_word) + (j*self.layer_params.used_channels+k)])
-                                v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
-                                v = v + (v_tmp << (self.params.IACT_Bitwidth*(j*self.layer_params.used_channels+k)))
-                        iact_stream.append(v)
-                    pos += self.params.NUM_BUFFER_B*self.params.IACT_Bitwidth
-            else:
-                while pos < iact_size_x * iact_size_y:
-                    for n in range(self.layer_params.used_channels):
-                        vals = values[n].flatten()[pos:pos+64]
-                        for i in range(self.params.NUM_BUFFER_B):
-                            v = 0
-                            for j in range(self.params.DMA_Bit_AXI//self.params.IACT_Bitwidth):
-                                v_tmp = int(vals[i*self.params.DMA_Bit_AXI//self.params.IACT_Bitwidth + j])
-                                v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
-                                v = v + (v_tmp << (self.params.IACT_Bitwidth*j))
-                            iact_stream.append(v)
-                    pos += self.params.NUM_BUFFER_B*self.params.IACT_Bitwidth
-                #raise Exception("Not implemented")
+            values_per_word = self.params.DMA_Bit_AXI//(self.params.IACT_Bitwidth)
+            while pos < iact_size_x * iact_size_y * channels:
+                vals = values.flatten()[pos:pos+(values_per_word*self.params.NUM_BUFFER)]
+                for i in range(self.params.NUM_BUFFER):
+                    v = 0
+                    for j in range(values_per_word//self.layer_params.used_channels):
+                        for k in range(self.layer_params.used_channels):
+                            v_tmp = int(vals[(i*values_per_word) + (j*self.layer_params.used_channels)+k])
+                            v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
+                            v = v + (v_tmp << (self.params.IACT_Bitwidth*(j*self.layer_params.used_channels+k)))
+                    iact_stream.append(v)
+                pos += self.params.NUM_BUFFER*self.params.IACT_Bitwidth
         return iact_stream
     
     def write_iact_data_glb(self, cl_x, cl_y, router):

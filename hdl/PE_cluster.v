@@ -18,7 +18,7 @@
 ///   DATA_IACT_BITWIDTH     - Width of input activation data
 ///   DATA_WGHT_BITWIDTH     - Width of weight data
 ///   DATA_PSUM_BITWIDTH     - Width of partial sum data, used in internal accumulator
-///   DATA_IACT_IGNORE_ZEROS - Number of zeros that can be ignored in sparse input activation data
+///   DATA_IACT_OVERHEAD     - Number of zeros that can be ignored in sparse input activation data
 ///   DATA_WGHT_IGNORE_ZEROS - Number of zeros that can be ignored in sparse weight data
 ///   TRANS_BITWIDTH_IACT    - Width of iact input port 
 ///   TRANS_BITWIDTH_WGHT    - Width of weight input port
@@ -69,7 +69,7 @@ module PE_cluster
   parameter DATA_IACT_BITWIDTH         = 8,
   parameter DATA_PSUM_BITWIDTH         = 20,
   parameter DATA_WGHT_BITWIDTH         = 8,
-  parameter DATA_IACT_IGNORE_ZEROS     = 4,
+  parameter DATA_IACT_OVERHEAD         = 4,
   parameter DATA_WGHT_IGNORE_ZEROS     = 4,
   parameter TRANS_BITWIDTH_IACT        = 24,
   parameter TRANS_BITWIDTH_WGHT        = 24,
@@ -169,7 +169,7 @@ genvar i,j,g;
             .DATA_IACT_BITWIDTH    (DATA_IACT_BITWIDTH),
             .DATA_WGHT_BITWIDTH    (DATA_WGHT_BITWIDTH),
             .DATA_PSUM_BITWIDTH    (DATA_PSUM_BITWIDTH),
-            .DATA_IACT_IGNORE_ZEROS(DATA_IACT_IGNORE_ZEROS),
+            .DATA_IACT_OVERHEAD    (DATA_IACT_OVERHEAD),
             .DATA_WGHT_IGNORE_ZEROS(DATA_WGHT_IGNORE_ZEROS),
             .IACT_DATA_ADDR        (IACT_DATA_WORDS),
             .IACT_ADDR_ADDR        (IACT_ADDR_WORDS),

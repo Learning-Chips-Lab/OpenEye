@@ -101,6 +101,7 @@ module OpenEye_Parallel
   parameter TRANS_BITWIDTH_IACT = 24,
   parameter TRANS_BITWIDTH_WGHT = 24,
   parameter TRANS_BITWIDTH_PSUM = 40,
+  parameter DATA_IACT_OVERHEAD  = 4,
 
   parameter CLUSTER_COLUMNS      = 2,
 
@@ -1418,6 +1419,7 @@ module OpenEye_Parallel
           .TRANS_BITWIDTH_IACT(TRANS_BITWIDTH_IACT),
           .TRANS_BITWIDTH_PSUM(TRANS_BITWIDTH_PSUM),
           .TRANS_BITWIDTH_WGHT(TRANS_BITWIDTH_WGHT),
+          .DATA_IACT_OVERHEAD (DATA_IACT_OVERHEAD),
 
           .NUM_GLB_IACT       (NUM_GLB_IACT),
           .NUM_GLB_WGHT       (NUM_GLB_WGHT),
