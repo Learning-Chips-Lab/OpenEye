@@ -168,7 +168,7 @@ module OpenEye_FPGA
   parameter RAM_CELLS_ADDR_WIDTH = 12,
   parameter RAM_CELLS_WORD_BITWIDTH = 64,
 
-  localparam  IACT_WORDS_IN_RAM   = $floor(RAM_CELLS_WORD_BITWIDTH/DATA_IACT_BITWIDTH)
+  localparam integer  IACT_WORDS_IN_RAM   = $floor(RAM_CELLS_WORD_BITWIDTH/DATA_IACT_BITWIDTH)
     
 ) (
   //Input DMA
@@ -925,7 +925,7 @@ module OpenEye_FPGA
           if (fsm_cycle == 0) begin
             for (int a=0; a<RAM_CELLS; a++) begin
               buffer_SP_en_r_reg[a] <= 0;
-              if ((current_converter_cycles % 4) == (a/8)) begin
+               if ((current_converter_cycles % (RAM_CELLS/(iact_size/(IACT_WORDS_IN_RAM/iact_channels)))) == (a/(iact_size/(IACT_WORDS_IN_RAM/iact_channels)))) begin
                 buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;  //Austauschen
               end
                 buffer_SP_en_r_reg[a] <= 1;
@@ -955,7 +955,7 @@ module OpenEye_FPGA
           if (fsm_cycle == 4) begin
             for (int a=0; a<CLUSTER_COLUMNS; a++) begin
               for (int b=0; b<CLUSTER_ROWS; b++) begin
-                if (((b/CLUSTER_COLUMNS) == (current_converter_cycles%4)) & (current_converter_cycles < (new_converter_needed_cycles - 2))) begin
+                if (((b/CLUSTER_COLUMNS) == (current_converter_cycles%((CLUSTERS*PE_COLUMNS)/iact_size))) & (current_converter_cycles < (new_converter_needed_cycles - 2))) begin
                   iact_converter_en_enc_reg[a][b] <= 1;
                 end
               end
