@@ -35,7 +35,7 @@ module iact_stream_constructor
   output reg [ADDRWIDTH-1:0]               mem_addr_o,
   output     [WORD_BITWIDTH-1:0]           mem_data_o
 );
-
+  reg [ADDRWIDTH-1:0]     adress_storage;
   reg [PARAM_LENGTH-1:0]  x;
   reg [PARAM_LENGTH-1:0]  xx;
   reg [PARAM_LENGTH-1:0]  y;
@@ -61,7 +61,6 @@ module iact_stream_constructor
   reg [1:0]  cur_x_off;
   reg [0:0]  cur_y_off;
 
-  reg [7:0]  tmp_offset;
   reg        next_cycle;
 
   reg [15:0] pos;
@@ -102,7 +101,6 @@ module iact_stream_constructor
     if (!rst_ni) begin
       fsm_cycle           <= 0;
       fsm_current_state   <= INITIALIZE;
-      mem_addr_o          <= 0;
       x                   <= 0;
       y                   <= 0;
       ch                  <= 0;
@@ -117,7 +115,6 @@ module iact_stream_constructor
       x_off_en            <= 0;
       cur_x_off           <= 0;
       cur_y_off           <= 0;
-      tmp_offset          <= N_PSUM;
       next_cycle          <= 0;
       xx                  <= 0;
       yy                  <= 0;
@@ -134,6 +131,7 @@ module iact_stream_constructor
       ready_o             <= 0;
       mem_en_o            <= 0;
       mem_addr_o          <= 0;
+      adress_storage      <= 0;
       max_cycles          <= 0;
       current_cycle       <= 0;
       iact_router_counter <= 0;
@@ -182,11 +180,12 @@ module iact_stream_constructor
           ready_o           <= 0;
           mem_en_o          <= 0;
           mem_addr_o        <= 0;
+          adress_storage    <= 0;
         end
 
         GET_PARAMETER : begin
           mem_en_o            <= 0;
-          mem_addr_o          <= 0;
+          mem_addr_o          <= adress_storage;
           iact_router_counter <= 0;
           kernel_y_counter    <= 0;
           if (enable_config == 1) begin
@@ -195,19 +194,17 @@ module iact_stream_constructor
             iact_size <= params[(2*PARAMS_SIZE/4)-1:PARAMS_SIZE/4];
             channels  <= params[(PARAMS_SIZE/4)-1:0];
             fsm_cycle <= 1;
+            ready_o   <= 1;
+            mem_addr_o <= 0;
+            adress_storage <= 0;
           end
 
           if (fsm_cycle == 1) begin
-            if (tmp_offset >= iact_size) begin
-              tmp_offset <= tmp_offset - iact_size;
-              y_offset   <= y_offset + 1;
-            end else begin
-              x_offset          <= tmp_offset;
-              tmp_offset        <= N_PSUM;
-              fsm_cycle         <= 0;
-              max_cycles        <= iact_size + 2 * PADDING;
-              fsm_current_state <= CONSTRUCTOR_READY;
-            end
+            fsm_cycle  <= 0;
+            max_cycles <= iact_size + 2 * PADDING;
+          end
+          if (enable_converter == 1) begin
+            fsm_current_state <= WRITE_TO_MEMORY;
           end
         end
 
@@ -239,7 +236,7 @@ module iact_stream_constructor
             if (fsm_cycle % channels != 0) begin
               mem_addr_o <= mem_addr_o + 1;
             end else begin
-              mem_addr_o <= (kernel_y_counter * channels + iact_router_counter * (channels*WGHT_SIZE))/WORDS_PER_TRANS;
+              mem_addr_o <= adress_storage + ((kernel_y_counter * channels + iact_router_counter * (channels*WGHT_SIZE))/WORDS_PER_TRANS);
             end
             //Reset payload to 0
             for (int r=0; r<NUM_GLB_IACT; r++) begin
@@ -251,7 +248,7 @@ module iact_stream_constructor
             if (fsm_cycle % channels == 0) begin
               for (int r=0; r<NUM_GLB_IACT; r++) begin
                 for (int w=0; w<WORDS_PER_TRANS; w++) begin
-                  mem_data_overhead_reg[r][w] <= w;
+                  mem_data_overhead_reg[r][w] <= w  + (4 * (fsm_cycle/2/2/2));
                 end
               end
             end else begin
@@ -285,8 +282,10 @@ module iact_stream_constructor
             byte_var = 0;
           end
           if (fsm_cycle == NEEDED_IACT_CYCLES * channels * WGHT_SIZE - 1) begin  //Router_cycle, 1 channels
-            fsm_cycle <= 0;
-            current_cycle <= current_cycle + 1;
+            fsm_cycle         <= 0;
+            current_cycle     <= current_cycle + 1;
+            y                 <= y + 2;
+            adress_storage    <= mem_addr_o + 1;
             fsm_current_state <= GET_PARAMETER;
           end
         end

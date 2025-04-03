@@ -728,7 +728,7 @@ module OpenEye_FPGA
         end
 
         GET_IACT : begin
-          ready_dma_o <= 1;
+          ready_dma_o         <= 1;
           psum_buffer_SP_en_w <= 0;
 
           for (int a=0; a<RAM_CELLS; a++) begin
@@ -752,10 +752,10 @@ module OpenEye_FPGA
               current_buffer_n <= 0;
             end
 
-            if (fsm_cycle == iact_needed_cycles - 1) begin
-              fsm_cycle <= 0;
+            if (fsm_cycle == (iact_needed_cycles * RAM_CELLS) - 1) begin
+              fsm_cycle         <= 0;
               fsm_current_state <= GET_WGHT;
-              fsm_last_state <= GET_IACT;
+              fsm_last_state    <= GET_IACT;
             end
           end else begin
             for (int a=0; a<RAM_CELLS; a++) begin
@@ -812,12 +812,10 @@ module OpenEye_FPGA
         end
 
         GET_BIAS : begin  
-          ready_dma_o <= 1;
-          wght_enable_i_reg <= 0;
+          ready_dma_o         <= 1;
+          wght_enable_i_reg   <= 0;
           wght_buffer_SP_en_w <= 0;
-
           psum_buffer_SP_en_w <= 0;
-
           if(enable_dma_i_reg) begin    
             //fsm_cycle_mod1: fsm_cycle%CLUSTER_COLUMNS
             if(fsm_cycle_mod1 == (CLUSTER_COLUMNS-1))begin
@@ -825,14 +823,11 @@ module OpenEye_FPGA
             end else begin
               fsm_cycle_mod1 <= fsm_cycle_mod1 + 1;
             end
-
             for(int b=0; b<TRANS_BITWIDTH_PSUM*2; b=b+1)begin
               psum_data_i_reg[fsm_cycle_mod1[0]*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+b]
               <= data_dma_i_reg[b];
             end
             psum_enable_i_reg <= 0;
-
-            
             if((fsm_psum_r + 2) != NUM_GLB_PSUM)begin
               fsm_psum_r <= fsm_psum_r + 2;
             end else begin
@@ -842,12 +837,9 @@ module OpenEye_FPGA
               end else begin
                 fsm_y_cl          <= 0;
                 fsm_cycle         <= fsm_cycle + 1;
-
                 psum_enable_i_reg <= {((CLUSTERS*NUM_GLB_PSUM)){1'b1}};
-
                 psum_buffer_SP_en_w <= 1;
                 psum_buffer_SP_addr <= psum_buffer_SP_addr + 1;
-
                 if(fsm_cycle == (filters_reg*needed_cycles_reg) - 1)begin
                   fsm_cycle      <= 0;
                   fsm_cycle_mod1 <= 0;
@@ -875,11 +867,11 @@ module OpenEye_FPGA
           psum_buffer_SP_en_w <= 0;
 
           psum_buffer_SP_addr <= 0;
-          if (iact_converter_x >= iact_size - 4) begin
+          if (iact_converter_x >= iact_size - PE_COLUMNS) begin
             iact_converter_x <= 0;
             iact_converter_y <= iact_converter_y + 1;
           end else begin
-            iact_converter_x <= iact_converter_x + 4;
+            iact_converter_x <= iact_converter_x + PE_COLUMNS;
           end
 
           iact_converter_params_reg[fsm_col][fsm_row][31:24] <= iact_converter_x;
@@ -917,6 +909,9 @@ module OpenEye_FPGA
 
           if (converters_ready == 1) begin
             fsm_current_state <= CONVERT_IACT;
+            for (int a=0; a<RAM_CELLS; a++) begin
+              buffer_SP_addr_reg[a] <= ~0;
+            end
           end
 
           converter_needed_cycles <= WGHT_SIZE * iact_channels;
@@ -924,26 +919,28 @@ module OpenEye_FPGA
 
         CONVERT_IACT : begin
           fsm_cycle <= fsm_cycle + 1;
-          for (int a=0; a<RAM_CELLS; a++) begin
-            buffer_SP_en_r_reg[a] <= 0;
-            buffer_SP_addr_reg[a] <= 0;
             /*
             if ((
             a < (current_converter_cycles*16/2)
             )&(
             a > (((current_converter_cycles - 3)*16/2) - 1))) begin
             */
-            if (a < (current_converter_cycles*16/2)) begin 
-              buffer_SP_en_r_reg [a] <= 1;
-              buffer_SP_addr_reg [a] <= ((current_converter_cycles-PADDING)/RAM_CELLS);
+          if (fsm_cycle == 0) begin
+            for (int a=0; a<RAM_CELLS; a++) begin
+              buffer_SP_en_r_reg[a] <= 0;
+              if ((current_converter_cycles % 4) == (a/8)) begin
+                buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;  //Austauschen
+              end
+                buffer_SP_en_r_reg[a] <= 1;
             end
           end
-          current_converter_standing_cycles                                     <= current_converter_standing_cycles + 1;
+          current_converter_standing_cycles <= current_converter_standing_cycles + 1;
           if (current_converter_standing_cycles == (new_converter_standing_cycles-1)) begin
             current_converter_standing_cycles <= 0;
             current_converter_cycles <= current_converter_cycles + 1;
             if (current_converter_cycles == (new_converter_needed_cycles - 1)) begin
               current_converter_cycles = 0;
+              fsm_current_state <= WAIT_CYCLE;
             end
           end
           
@@ -961,7 +958,9 @@ module OpenEye_FPGA
           if (fsm_cycle == 4) begin
             for (int a=0; a<CLUSTER_COLUMNS; a++) begin
               for (int b=0; b<CLUSTER_ROWS; b++) begin
-                iact_converter_en_enc_reg[a][b] <= 1;
+                if (((b/CLUSTER_COLUMNS) == (current_converter_cycles%4)) & (current_converter_cycles < (new_converter_needed_cycles - 2))) begin
+                  iact_converter_en_enc_reg[a][b] <= 1;
+                end
               end
             end
           end
@@ -972,15 +971,25 @@ module OpenEye_FPGA
               end
             end
           end
+          if (fsm_cycle == new_converter_standing_cycles-1) begin
+            fsm_cycle <= 0;
+          end
         end
 
         WAIT_CYCLE : begin
           iact_buffer_SP_data_w <= iact_out_reg;
-          iact_buffer_SP_en_w   <= 1;
-          iact_buffer_SP_addr   <= iact_buffer_SP_addr + 1;
+          fsm_cycle             <= fsm_cycle + 1;
           iact_ready            <= 0;
-          fsm_last_state        <= WAIT_CYCLE;
-          fsm_current_state     <= WAIT_CYCLE_2;
+          if (fsm_cycle == 8) begin
+            fsm_cycle             <= 0;
+            fsm_last_state        <= WAIT_CYCLE;
+            fsm_current_state     <= WAIT_CYCLE_2;
+            for (int a=0; a<CLUSTER_COLUMNS; a++) begin
+              for (int b=0; b<CLUSTER_ROWS; b++) begin
+                iact_converter_en_cfg_reg[a][b] <= 1;
+              end
+            end
+          end
         end
 
         WAIT_CYCLE_2 : begin
@@ -989,6 +998,7 @@ module OpenEye_FPGA
           current_buffer_n_1  <= 0;
           current_buffer_addr <= 0;
           current_channel     <= 0;
+          iact_cnt            <= iact_buffer_SP_addr;
           for (int a=0; a<RAM_CELLS; a++) begin
             buffer_SP_addr_reg[a] <= 0;
           end
@@ -1008,8 +1018,8 @@ module OpenEye_FPGA
           iact_converter_y      <= 0;
           iact_last             <= 0;
           iact_buffer_SP_en_w   <= 0;
-          iact_cnt              <= iact_buffer_SP_addr;
-          iact_buffer_SP_addr   <= 0;
+          iact_cnt              <= iact_converter_mem_addr_reg[0][0];
+          iact_buffer_SP_addr   <= ~0;
           fsm_cycle             <= 0;
           fsm_last_state        <= WAIT_CYCLE_2;
           fsm_current_state     <= WRITE_IACT;
@@ -1023,16 +1033,15 @@ module OpenEye_FPGA
           if (fsm_cycle > 1) begin
             iact_data_i_reg   <= iact_buffer_SP_data_r;
             iact_enable_i_reg <= {((CLUSTERS*NUM_GLB_IACT)){1'b1}};
-          end
-
-          if (iact_buffer_SP_addr > iact_cnt  + 1) begin
-            // next cycle?
-            iact_buffer_SP_en_r <= 0;
-            iact_enable_i_reg   <= 0;
-            iact_buffer_SP_addr <= 0;
-            fsm_cycle           <= 0;
-            fsm_current_state   <= WRITE_WGHT;
-            fsm_last_state      <= WRITE_IACT;
+            if (iact_buffer_SP_addr >= iact_cnt + 1) begin
+              // next cycle?
+              iact_buffer_SP_en_r <= 0;
+              iact_enable_i_reg   <= 0;
+              iact_buffer_SP_addr <= 0;
+              fsm_cycle           <= 0;
+              fsm_current_state   <= WRITE_WGHT;
+              fsm_last_state      <= WRITE_IACT;
+            end
           end
         end
 
