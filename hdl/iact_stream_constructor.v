@@ -143,7 +143,6 @@ module iact_stream_constructor
         channels               <= params[(PARAMS_SIZE/4)-1:0];
         ready_o                <= 1;
         mem_addr_o             <= 0;
-        adress_storage         <= 0;
         needed_iact_cycles_reg <= 2;
         wght_size_reg          <= 3;
       end
@@ -169,7 +168,6 @@ module iact_stream_constructor
           channel_offset         <= 0;
           channel_offset_1       <= 0;
           channel_offset_2       <= 0;
-
           ready_o                <= 0;
           mem_en_o               <= 0;
           mem_addr_o             <= 0;
@@ -182,11 +180,12 @@ module iact_stream_constructor
         GET_PARAMETER : begin
           fsm_cycle           <= 0;
           mem_en_o            <= 0;
-          mem_addr_o          <= adress_storage;
+          mem_addr_o          <= 0;
           iact_router_counter <= 0;
           kernel_y_counter    <= 0;
           if (enable_converter == 1) begin
-            padding_reg  <= (wght_size_reg-1)/2;
+            mem_addr_o        <= adress_storage;
+            padding_reg       <= (wght_size_reg-1)/2;
             fsm_current_state <= WRITE_TO_MEMORY;
           end
         end
@@ -194,7 +193,6 @@ module iact_stream_constructor
         WRITE_TO_MEMORY : begin
           fsm_cycle <= fsm_cycle + 1;
           mem_en_o  <= 0;
-
           if (fsm_cycle % 2 == 2 - 1) begin
             mem_en_o  <= 1;
           end
@@ -252,15 +250,10 @@ module iact_stream_constructor
             end else begin
               mem_data_payload_reg[r][w_var] <= storage_w[ram_var][byte_var];
             end
-            w_var    = 0;
-            x_var    = 0;
-            y_var    = 0;
-            byte_var = 0;
           end
           if (fsm_cycle == ((needed_iact_cycles_reg * channels * wght_size_reg) - 1)) begin  //Router_cycle, 1 channels
             fsm_cycle         <= 0;
             current_cycle     <= current_cycle + 1;
-            y                 <= y + 2;
             adress_storage    <= mem_addr_o + 1;
             fsm_current_state <= GET_PARAMETER;
           end
