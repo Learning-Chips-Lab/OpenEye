@@ -218,7 +218,6 @@ module iact_stream_constructor
                 mem_data_payload_reg[r][w] <= 0;
               end
             end
-
             if (fsm_cycle % channels == 0) begin
               for (int r=0; r<NUM_GLB_IACT; r++) begin
                 for (int w=0; w<WORDS_PER_TRANS; w++) begin
@@ -258,7 +257,6 @@ module iact_stream_constructor
             fsm_current_state <= GET_PARAMETER;
           end
         end
-
       endcase
     end
   end

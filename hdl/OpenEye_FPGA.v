@@ -499,11 +499,13 @@ module OpenEye_FPGA
         for (int a=0; a<CLUSTER_COLUMNS; a++) begin
           for (int b=0; b<CLUSTER_ROWS; b++) begin
             if (cluster_array_reg[(a+(b*CLUSTER_COLUMNS))] == 1) begin
+              if (current_converter_cycles < ((max_converter_needed_cycles - 1) - 1)) begin //Include Padding
                 iact_converter_en_enc_reg[a][b] <= 1;
+              end
             end
           end
         end
-        cluster_array_reg <= (cluster_array_reg<<<(iact_size/PE_COLUMNS));
+        cluster_array_reg <= (cluster_array_reg<<(iact_size/PE_COLUMNS) | cluster_array_reg>>(CLUSTERS-(iact_size/PE_COLUMNS)));
       end
     end
   end
@@ -955,6 +957,7 @@ module OpenEye_FPGA
 
         CONVERT_IACT : begin
           fsm_cycle <= fsm_cycle + 1;
+          iact_converter_params_enable <= 0;
           if (fsm_cycle == 0) begin
             for (int a=0; a<RAM_CELLS; a++) begin
               buffer_SP_en_r_reg[a] <= 1;
@@ -1022,7 +1025,7 @@ module OpenEye_FPGA
           fsm_cycle_converter_3 <= 0;
           iact_last             <= 0;
           iact_buffer_SP_en_w   <= 0;
-          iact_cnt              <= kernel_size * iact_channels * needed_iact_cycles_reg / 2;
+          iact_cnt              <= iact_needed_cycles * kernel_size * iact_channels * needed_iact_cycles_reg / 2;
           iact_buffer_SP_addr   <= ~0;
           fsm_cycle             <= 0;
           fsm_last_state        <= WAIT_CYCLE_2;
