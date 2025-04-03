@@ -64,7 +64,6 @@ module OpenEye_FPGA
   parameter IS_TOPLEVEL         = 1,
   parameter SERIAL              = 1,
   parameter PARALLEL_MACS       = 2,
-  parameter PADDING             = 1,
 
   parameter ADDR_IACT_BITWIDTH  = 4,
   parameter ADDR_WGHT_BITWIDTH  = 8,
@@ -114,7 +113,6 @@ module OpenEye_FPGA
   parameter FSM_STATES          = 10,
 
   parameter BUFFER_WIDTH = 12,
-  parameter KERNEL_SIZE = 3, //Remoe later
   parameter real FSM_IACT_RTR_CCLS_A = (CLUSTERS*NUM_GLB_IACT),
   parameter real FSM_IACT_RTR_CCLS_B = $floor(DMA_BITWIDTH/ROUTER_MODES_IACT),
   parameter real FSM_IACT_RTR_CCLS   = FSM_IACT_RTR_CCLS_A/FSM_IACT_RTR_CCLS_B,
@@ -245,6 +243,7 @@ module OpenEye_FPGA
   reg                                           skipWght_reg;
   reg                                           skipPsum_reg;
   reg [$clog2(PE_ROWS)-1:0]                     kernel_per_pe_cluster_reg;
+  reg [3:0]                                     kernel_size;
   reg [DMA_BITWIDTH-1 : 0]                      fifo_data_i;
   reg                                           fifo_read_i;
   reg                                           fifo_write_i;
@@ -452,6 +451,7 @@ module OpenEye_FPGA
       stride_x_reg              <= 0;
       stride_y_reg              <= 0;
       kernel_per_pe_cluster_reg <= 0;
+      kernel_size               <= 0;
       new_stream                <= 0;
 
       fsm_cycle                 <= 0;
@@ -618,15 +618,16 @@ module OpenEye_FPGA
                 input_activations_reg  <= data_dma_i_reg[$clog2(IACT_PER_PE+1)-1+PARAMETER_POS_1_11:PARAMETER_POS_1_11];
               end
               32'd1 : begin
-                iact_write_addr_t_reg <= data_dma_i_reg[1+PARAMETER_POS_2_0:PARAMETER_POS_2_0];
-                iact_write_data_t_reg <= data_dma_i_reg[3+PARAMETER_POS_2_1:PARAMETER_POS_2_1];
-                stride_x_reg          <= data_dma_i_reg[2+PARAMETER_POS_2_2:PARAMETER_POS_2_2];
-                stride_y_reg          <= data_dma_i_reg[2+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
-                skipIact_reg          <= data_dma_i_reg[PARAMETER_POS_2_4:PARAMETER_POS_2_4];
-                skipWght_reg          <= data_dma_i_reg[PARAMETER_POS_2_5:PARAMETER_POS_2_5];
-                skipPsum_reg          <= data_dma_i_reg[PARAMETER_POS_2_6:PARAMETER_POS_2_6];
-                psum_delay_reg        <= data_dma_i_reg[3+PARAMETER_POS_2_7:PARAMETER_POS_2_7];
-                kernel_per_pe_cluster_reg <= data_dma_i_reg[1+PARAMETER_POS_2_8:PARAMETER_POS_2_8];
+                iact_write_addr_t_reg     <= data_dma_i_reg[1+PARAMETER_POS_2_0:PARAMETER_POS_2_0];
+                iact_write_data_t_reg     <= data_dma_i_reg[3+PARAMETER_POS_2_1:PARAMETER_POS_2_1];
+                stride_x_reg              <= data_dma_i_reg[2+PARAMETER_POS_2_2:PARAMETER_POS_2_2];
+                stride_y_reg              <= data_dma_i_reg[2+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
+                skipIact_reg              <= data_dma_i_reg[PARAMETER_POS_2_4:PARAMETER_POS_2_4];
+                skipWght_reg              <= data_dma_i_reg[PARAMETER_POS_2_5:PARAMETER_POS_2_5];
+                skipPsum_reg              <= data_dma_i_reg[PARAMETER_POS_2_6:PARAMETER_POS_2_6];
+                psum_delay_reg            <= data_dma_i_reg[3+PARAMETER_POS_2_7:PARAMETER_POS_2_7];
+                kernel_per_pe_cluster_reg <= data_dma_i_reg[3+PARAMETER_POS_2_8:PARAMETER_POS_2_8];
+                kernel_size               <= data_dma_i_reg[3+PARAMETER_POS_2_9:PARAMETER_POS_2_9];
               end
               32'd2 : begin
                 iact_channels      <= data_dma_i_reg[55:48];
@@ -740,7 +741,7 @@ module OpenEye_FPGA
             current_buffer_n                  <= current_buffer_n + 1;
             current_buffer_n_1                <= current_buffer_n;
           // get iact params
-            new_converter_needed_cycles       <= iact_size + ((KERNEL_SIZE-1));
+            new_converter_needed_cycles       <= iact_size + ((kernel_size-1));
             new_converter_standing_cycles     <= needed_iact_cycles_reg * iact_channels;
 
             buffer_SP_en_w_reg[current_buffer_n]   <= 1;
