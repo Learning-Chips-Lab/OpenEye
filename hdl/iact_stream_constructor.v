@@ -31,12 +31,8 @@ module iact_stream_constructor
 );
   reg [ADDRWIDTH-1:0]     adress_storage;
   reg [PARAM_LENGTH-1:0]  x;
-  reg [PARAM_LENGTH-1:0]  xx;
   reg [PARAM_LENGTH-1:0]  y;
-  reg [PARAM_LENGTH-1:0]  yy;
   reg [PARAM_LENGTH-1:0]  ch;
-  reg [PARAM_LENGTH-1:0]  ch_1;
-  reg [PARAM_LENGTH-1:0]  ch_2;
 
   reg [PARAM_LENGTH-1:0]  iact_size;
   reg [PARAM_LENGTH-1:0]  channels;
@@ -68,24 +64,21 @@ module iact_stream_constructor
   reg [4:0]  channel_offset_1;
   reg [4:0]  channel_offset_2;
 
-  reg        change_state;
-
-  reg [DATA_IACT_BITWIDTH-1:0] mem_data_payload_reg  [NUM_GLB_IACT-1:0][WORDS_PER_TRANS-1:0];
-  reg [DATA_IACT_OVERHEAD-1:0] mem_data_overhead_reg [NUM_GLB_IACT-1:0][WORDS_PER_TRANS-1:0];
-  wire [DATA_IACT_BITWIDTH-1:0] storage_w [RAM_CELLS-1:0][IACT_WORDS_IN_RAM-1:0];
-  reg [PARAM_LENGTH-1:0] iact_router_counter;
-  reg [PARAM_LENGTH-1:0] kernel_y_counter;
-
-  reg [PARAM_LENGTH-1:0] w_var;
-  reg [PARAM_LENGTH-1:0] x_var;
-  reg [PARAM_LENGTH-1:0] y_var;
-  reg [PARAM_LENGTH-1:0] ram_var;
-  reg [PARAM_LENGTH-1:0] byte_var;
+  reg                           change_state;
+  reg [DATA_IACT_BITWIDTH-1:0]  mem_data_payload_reg  [NUM_GLB_IACT-1:0][WORDS_PER_TRANS-1:0];
+  reg [DATA_IACT_OVERHEAD-1:0]  mem_data_overhead_reg [NUM_GLB_IACT-1:0][WORDS_PER_TRANS-1:0];
+  wire [DATA_IACT_BITWIDTH-1:0] storage_w             [RAM_CELLS-1:0][IACT_WORDS_IN_RAM-1:0];
+  reg [PARAM_LENGTH-1:0]        iact_router_counter;
+  reg [PARAM_LENGTH-1:0]        kernel_y_counter;
+  reg [PARAM_LENGTH-1:0]        w_var;
+  reg [PARAM_LENGTH-1:0]        x_var;
+  reg [PARAM_LENGTH-1:0]        y_var;
+  reg [PARAM_LENGTH-1:0]        ram_var;
+  reg [PARAM_LENGTH-1:0]        byte_var;
   typedef enum logic [1:0] {
     INITIALIZE        = 0,
     GET_PARAMETER     = 1,
-    CONSTRUCTOR_READY = 2,
-    WRITE_TO_MEMORY   = 3
+    WRITE_TO_MEMORY   = 2
   } state_t;
 
   generate
@@ -95,50 +88,45 @@ module iact_stream_constructor
   always @(posedge clk_i, negedge rst_ni) begin
     // Reset
     if (!rst_ni) begin
-      fsm_cycle           <= 0;
-      fsm_current_state   <= INITIALIZE;
-      x                   <= 0;
-      y                   <= 0;
-      ch                  <= 0;
-      iact_size           <= 0;
-      channels            <= 0;
-      x_offset            <= 0;
-      y_offset            <= 0;
-      row_cnt             <= 0;
-      y_offset_a          <= 0;
-      y_offset_b          <= 1;
-      channel_offset      <= 0;
-      x_off_en            <= 0;
-      cur_x_off           <= 0;
-      cur_y_off           <= 0;
-      next_cycle          <= 0;
-      xx                  <= 0;
-      yy                  <= 0;
-      pos                 <= 0;
-      n_en_reg            <= 0;
-      cur_y_off_1         <= 0;
-      cur_y_off_2         <= 0;
-      channel_offset_1    <= 0;
-      channel_offset_2    <= 0;
-      ch_1                <= 0;
-      ch_2                <= 0;
-      change_state        <= 0;
-
-      ready_o             <= 0;
-      mem_en_o            <= 0;
-      mem_addr_o          <= 0;
-      adress_storage      <= 0;
-      current_cycle       <= 0;
-      iact_router_counter <= 0;
-      kernel_y_counter    <= 0;
-      padding_reg         <= 0;
+      fsm_cycle              <= 0;
+      fsm_current_state      <= INITIALIZE;
+      x                      <= 0;
+      y                      <= 0;
+      ch                     <= 0;
+      iact_size              <= 0;
+      channels               <= 0;
+      x_offset               <= 0;
+      y_offset               <= 0;
+      row_cnt                <= 0;
+      y_offset_a             <= 0;
+      y_offset_b             <= 1;
+      channel_offset         <= 0;
+      x_off_en               <= 0;
+      cur_x_off              <= 0;
+      cur_y_off              <= 0;
+      next_cycle             <= 0;
+      pos                    <= 0;
+      n_en_reg               <= 0;
+      cur_y_off_1            <= 0;
+      cur_y_off_2            <= 0;
+      channel_offset_1       <= 0;
+      channel_offset_2       <= 0;
+      change_state           <= 0;
+      ready_o                <= 0;
+      mem_en_o               <= 0;
+      mem_addr_o             <= 0;
+      adress_storage         <= 0;
+      current_cycle          <= 0;
+      iact_router_counter    <= 0;
+      kernel_y_counter       <= 0;
+      padding_reg            <= 0;
       needed_iact_cycles_reg <= 0;
       wght_size_reg          <= 0;
-      w_var                = 0;
-      x_var                = 0;
-      y_var                = 0;
-      ram_var              = 0;
-      byte_var             = 0;
+      w_var                   = 0;
+      x_var                   = 0;
+      y_var                   = 0;
+      ram_var                 = 0;
+      byte_var                = 0;
       for (int r=0; r<NUM_GLB_IACT; r=r+1) begin
         for (int w=0; w<WORDS_PER_TRANS; w=w+1) begin
           mem_data_payload_reg[r][w]  <= DATA_IACT_BITWIDTH'(0);
@@ -148,32 +136,39 @@ module iact_stream_constructor
 
 
     end else begin
+      if (enable_config == 1) begin
+        x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
+        y                      <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4];
+        iact_size              <= params[(2*PARAMS_SIZE/4)-1:PARAMS_SIZE/4];
+        channels               <= params[(PARAMS_SIZE/4)-1:0];
+        ready_o                <= 1;
+        mem_addr_o             <= 0;
+        adress_storage         <= 0;
+        needed_iact_cycles_reg <= 2;
+        wght_size_reg          <= 3;
+      end
       case (fsm_current_state)
         INITIALIZE : begin
-          fsm_cycle         <= 0;
-          fsm_current_state <= GET_PARAMETER;
-          iact_size         <= 0;
-          channels          <= 0;
-          x                 <= 0;
-          y                 <= 0;
-          ch                <= 0;
-          ch_1              <= 0;
-          ch_2              <= 0;
-          xx                <= 0;
-          yy                <= 0;
-          pos               <= 0;
-          x_offset          <= 0;
-          y_offset          <= 0;
-          cur_x_off         <= 0;
-          cur_y_off         <= 0;
-          cur_y_off_1       <= 0;
-          cur_y_off_2       <= 0;
-          row_cnt           <= 0;
-          y_offset_a        <= 0;
-          y_offset_b        <= 1;
-          channel_offset    <= 0;
-          channel_offset_1  <= 0;
-          channel_offset_2  <= 0;
+          fsm_cycle              <= 0;
+          fsm_current_state      <= GET_PARAMETER;
+          iact_size              <= 0;
+          channels               <= 0;
+          x                      <= 0;
+          y                      <= 0;
+          ch                     <= 0;
+          pos                    <= 0;
+          x_offset               <= 0;
+          y_offset               <= 0;
+          cur_x_off              <= 0;
+          cur_y_off              <= 0;
+          cur_y_off_1            <= 0;
+          cur_y_off_2            <= 0;
+          row_cnt                <= 0;
+          y_offset_a             <= 0;
+          y_offset_b             <= 1;
+          channel_offset         <= 0;
+          channel_offset_1       <= 0;
+          channel_offset_2       <= 0;
 
           ready_o                <= 0;
           mem_en_o               <= 0;
@@ -185,35 +180,13 @@ module iact_stream_constructor
         end
 
         GET_PARAMETER : begin
+          fsm_cycle           <= 0;
           mem_en_o            <= 0;
           mem_addr_o          <= adress_storage;
           iact_router_counter <= 0;
           kernel_y_counter    <= 0;
-          if (enable_config == 1) begin
-            x         <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
-            y         <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4];
-            iact_size <= params[(2*PARAMS_SIZE/4)-1:PARAMS_SIZE/4];
-            channels  <= params[(PARAMS_SIZE/4)-1:0];
-            fsm_cycle <= 1;
-            ready_o   <= 1;
-            mem_addr_o <= 0;
-            adress_storage <= 0;
-            needed_iact_cycles_reg <= 2;
-            wght_size_reg          <= 3;
-          end
-
-          if (fsm_cycle == 1) begin
-            fsm_cycle  <= 0;
-          end
           if (enable_converter == 1) begin
             padding_reg  <= (wght_size_reg-1)/2;
-            fsm_current_state <= WRITE_TO_MEMORY;
-          end
-        end
-
-        CONSTRUCTOR_READY : begin
-          ready_o <= 1;
-          if (enable_converter == 1) begin
             fsm_current_state <= WRITE_TO_MEMORY;
           end
         end
