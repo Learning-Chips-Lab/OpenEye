@@ -166,7 +166,9 @@ module OpenEye_FPGA
   //Storage RAMs
   parameter RAM_CELLS = 32,
   parameter RAM_CELLS_ADDR_WIDTH = 12,
-  parameter RAM_CELLS_WORD_BITWIDTH = 64
+  parameter RAM_CELLS_WORD_BITWIDTH = 64,
+
+  localparam  IACT_WORDS_IN_RAM   = $floor(RAM_CELLS_WORD_BITWIDTH/DATA_IACT_BITWIDTH)
     
 ) (
   //Input DMA
@@ -920,12 +922,6 @@ module OpenEye_FPGA
 
         CONVERT_IACT : begin
           fsm_cycle <= fsm_cycle + 1;
-            /*
-            if ((
-            a < (current_converter_cycles*16/2)
-            )&(
-            a > (((current_converter_cycles - 3)*16/2) - 1))) begin
-            */
           if (fsm_cycle == 0) begin
             for (int a=0; a<RAM_CELLS; a++) begin
               buffer_SP_en_r_reg[a] <= 0;
@@ -981,7 +977,7 @@ module OpenEye_FPGA
           iact_buffer_SP_data_w <= iact_out_reg;
           fsm_cycle             <= fsm_cycle + 1;
           iact_ready            <= 0;
-          if (fsm_cycle == 8) begin
+          if (fsm_cycle == (iact_channels * 2)) begin
             fsm_cycle             <= 0;
             fsm_last_state        <= WAIT_CYCLE;
             fsm_current_state     <= WAIT_CYCLE_2;
