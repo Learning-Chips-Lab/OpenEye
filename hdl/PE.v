@@ -533,15 +533,12 @@ module PE
           reused_data_b          <= 0;
           use_psum_1             <= 0;
           use_psum_2             <= 0;
+          psum_select            <= 1;
           if (SERIAL) begin
-            psum_select            <= 0;
             used_psum_memory_1     <= 0;
             used_psum_memory_2     <= 0;
-
           end else begin
-          psum_select            <= 1;
             used_psum_memory       <= 0;
-
           end
           if (data_mode_reg) begin
             psum_select            <= 0;
