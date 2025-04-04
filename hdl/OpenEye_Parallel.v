@@ -575,7 +575,7 @@ module OpenEye_Parallel
 
         COMPUTING : begin
 
-          start_new_cycle <= 0;
+          start_new_cycle       <= 0;
           compute_cluster_i_reg <= 0;
           if (iact_transmitted & wght_transmitted & psum_transmitted) begin
             start_new_cycle <= 1;

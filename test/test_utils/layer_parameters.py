@@ -230,7 +230,7 @@ class LayerParameters(object):
                 self.used_channels = 1
         else: 
             assert False
-        self.iact_stream_cycles = layer.input.shape[1] * layer.input.shape[2] * layer.input.shape[3] // params.NUM_BUFFER // (params.DMA_Bit_AXI//params.IACT_Bitwidth)
+        self.iact_stream_cycles = math.ceil(layer.input.shape[1] * layer.input.shape[2] * layer.input.shape[3] / params.NUM_BUFFER / (params.DMA_Bit_AXI//params.IACT_Bitwidth))
         self.diff_iact_layer = math.ceil(layer.input.shape[3]/self.used_channels)
         self.used_iact_per_PE = layer.kernel_size[0] * self.used_channels
 
