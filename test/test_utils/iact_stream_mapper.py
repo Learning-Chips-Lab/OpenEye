@@ -14,7 +14,6 @@ import stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 
-
 class IactStreamMapper(object):
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
         self.params = params
@@ -45,14 +44,17 @@ class IactStreamMapper(object):
             values_per_word = self.params.DMA_Bit_AXI//(self.params.IACT_Bitwidth)
             while pos < iact_size_x * iact_size_y * channels:
                 vals = values.flatten()[pos:pos+(values_per_word*self.params.NUM_BUFFER)]
-                for i in range(self.params.NUM_BUFFER):
-                    v = 0
-                    for j in range(values_per_word//self.layer_params.used_channels):
-                        for k in range(self.layer_params.used_channels):
-                            v_tmp = int(vals[(i*values_per_word) + (j*self.layer_params.used_channels)+k])
-                            v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
-                            v = v + (v_tmp << (self.params.IACT_Bitwidth*(j*self.layer_params.used_channels+k)))
-                    iact_stream.append(v)
+                try:
+                    for i in range(self.params.NUM_BUFFER):
+                        v = 0
+                        for j in range(values_per_word//self.layer_params.used_channels):
+                            for k in range(self.layer_params.used_channels):
+                                v_tmp = int(vals[(i*values_per_word) + (j*self.layer_params.used_channels)+k])
+                                v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
+                                v = v + (v_tmp << (self.params.IACT_Bitwidth*(j*self.layer_params.used_channels+k)))
+                        iact_stream.append(v)
+                except:
+                    pass
                 pos += self.params.NUM_BUFFER*self.params.IACT_Bitwidth
         return iact_stream
     
@@ -97,7 +99,6 @@ class IactStreamMapper(object):
         return data_spad
 
     def write_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
-
         layer_params = self.layer_params
         params = self.params
         layer_repetition = self.layer_repetition

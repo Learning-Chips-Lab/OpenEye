@@ -374,6 +374,7 @@ module OpenEye_FPGA
 
   reg                                                  compute_reg;
   reg  [CLUSTERS*PES-1:0]                              compute_mask_reg;
+  reg  [CLUSTERS*PES-1:0]                              compute_mask_iact_reg;
 
   reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_reg;
   reg  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]   router_mode_wght_reg;
@@ -576,6 +577,7 @@ module OpenEye_FPGA
       af_cluster_mode_reg       <= 0;
       compute_reg               <= 0;
       compute_mask_reg          <= 0;
+      compute_mask_iact_reg     <= 0;
       router_mode_iact_reg      <= 0;
       router_mode_wght_reg      <= 0;
       router_mode_psum_reg      <= 0;
@@ -809,7 +811,7 @@ module OpenEye_FPGA
               current_buffer_n <= 0;
             end
 
-            if (fsm_cycle == (iact_needed_cycles * RAM_CELLS) - 1) begin
+            if (fsm_cycle == ((iact_size*iact_size*iact_channels)/IACT_WORDS_IN_RAM) - 1) begin
               fsm_cycle         <= 0;
               fsm_current_state <= GET_WGHT;
               fsm_last_state    <= GET_IACT;
@@ -1004,7 +1006,6 @@ module OpenEye_FPGA
           current_buffer_n_1  <= 0;
           current_buffer_addr <= 0;
           current_channel     <= 0;
-          iact_cnt            <= iact_buffer_SP_addr;
           for (int a=0; a<RAM_CELLS; a++) begin
             buffer_SP_addr_reg[a] <= 0;
           end
@@ -1041,7 +1042,16 @@ module OpenEye_FPGA
 
           if (fsm_cycle > 1) begin
             wght_data_i_reg <= wght_buffer_SP_data_r;
-            wght_enable_i_reg <= {((CLUSTERS*NUM_GLB_WGHT)){1'b1}};
+            flat_help_var_1 = 0;
+            for (int a = 0; a < CLUSTER_ROWS; a++) begin
+              //if ((a*(PE_ROWS*CLUSTER_COLUMNS)) <= (iact_size*iact_size) - 1) begin
+              if ((a*(PE_COLUMNS*CLUSTER_COLUMNS)) <= (iact_size*iact_size) - 1) begin
+                flat_help_var_1 = flat_help_var_1 + ({(NUM_GLB_WGHT){1'b1}} << (a * NUM_GLB_WGHT));
+              end
+            end
+            flat_help_var_1 = flat_help_var_1 + (flat_help_var_1 << (CLUSTER_ROWS * NUM_GLB_WGHT));
+            wght_enable_i_reg <= flat_help_var_1;
+            flat_help_var_1 = 0;
           end
 
           if (wght_buffer_SP_addr > wght_cnt  + 1) begin

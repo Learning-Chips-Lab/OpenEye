@@ -337,7 +337,6 @@ module OpenEye_Parallel
 
   reg                                                  compute_i_reg;
   reg                                                  status_reg_enable_i_reg;
-  reg                                                  status_set_reg;
   reg                                                  data_mode_i_reg;
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0]                fraction_bit_i_reg;
   reg  [7:0]                                           needed_cycles_i_reg;
@@ -470,7 +469,6 @@ module OpenEye_Parallel
       computing                  <= 0;
       compute_i_reg              <= 0;
       status_reg_enable_i_reg    <= 0;
-      status_set_reg             <= 0;
       data_mode_i_reg            <= 0;
       fraction_bit_i_reg         <= 0;
       needed_cycles_i_reg        <= 0;
@@ -501,29 +499,53 @@ module OpenEye_Parallel
     end else begin
 
       ///Regs for ports
-      compute_i_reg              <= compute_i;
-      status_reg_enable_i_reg    <= status_reg_enable_i;
-      data_mode_i_reg            <= data_mode_i;
-      fraction_bit_i_reg         <= fraction_bit_i;
-      needed_cycles_i_reg        <= needed_cycles_i;
-      needed_x_cls_i_reg         <= needed_x_cls_i;
-      needed_y_cls_i_reg         <= needed_y_cls_i;
-      needed_iact_cycles_i_reg   <= needed_iact_cycles_i;
-      filters_i_reg              <= filters_i;
-      iact_addr_len_i_reg        <= iact_addr_len_i;
-      bano_cluster_mode_i_reg    <= bano_cluster_mode_i;
-      af_cluster_mode_i_reg      <= af_cluster_mode_i;
-      pooling_cluster_mode_i_reg <= pooling_cluster_mode_i;
-      input_activations_i_reg    <= input_activations_i;
-      iact_write_addr_t_i_reg    <= iact_write_addr_t_i;
-      iact_write_data_t_i_reg    <= iact_write_data_t_i;
-      stride_x_i_reg             <= stride_x_i;
-      stride_y_i_reg             <= stride_y_i;
-      kernel_per_pe_cluster_i_reg<= kernel_per_pe_cluster_i;
-      wght_addr_len_i_reg        <= wght_addr_len_i; 
-      compute_mask_i_reg         <= compute_mask_i;
-      if (status_set_reg) begin
-        status_set_reg    <= 0;
+      compute_i_reg               <= compute_i;
+      status_reg_enable_i_reg     <= status_reg_enable_i;
+      data_mode_i_reg             <= data_mode_i;
+      fraction_bit_i_reg          <= fraction_bit_i;
+      needed_cycles_i_reg         <= needed_cycles_i;
+      needed_x_cls_i_reg          <= needed_x_cls_i;
+      needed_y_cls_i_reg          <= needed_y_cls_i;
+      needed_iact_cycles_i_reg    <= needed_iact_cycles_i;
+      filters_i_reg               <= filters_i;
+      iact_addr_len_i_reg         <= iact_addr_len_i;
+      bano_cluster_mode_i_reg     <= bano_cluster_mode_i;
+      af_cluster_mode_i_reg       <= af_cluster_mode_i;
+      pooling_cluster_mode_i_reg  <= pooling_cluster_mode_i;
+      input_activations_i_reg     <= input_activations_i;
+      iact_write_addr_t_i_reg     <= iact_write_addr_t_i;
+      iact_write_data_t_i_reg     <= iact_write_data_t_i;
+      stride_x_i_reg              <= stride_x_i;
+      stride_y_i_reg              <= stride_y_i;
+      kernel_per_pe_cluster_i_reg <= kernel_per_pe_cluster_i;
+      wght_addr_len_i_reg         <= wght_addr_len_i; 
+      compute_mask_i_reg          <= compute_mask_i;
+
+      if (status_reg_enable_i_w) begin
+        data_mode_reg              <= data_mode_i_w;
+        fraction_bit_reg           <= fraction_bit_i_w;
+        needed_cycles_reg          <= needed_cycles_i_w;
+        needed_x_cls_reg           <= needed_x_cls_i_w;
+        needed_y_cls_reg           <= needed_y_cls_i_w;
+        needed_iact_cycles_reg     <= needed_iact_cycles_i_w;
+        filters_reg                <= filters_i_w;
+        iact_addr_len_reg          <= 0;
+        wght_addr_len_reg          <= wght_addr_len_i_w;
+        bano_cluster_mode_reg      <= bano_cluster_mode_i_w;
+        af_cluster_mode_reg        <= af_cluster_mode_i_w;
+        pooling_cluster_mode_reg   <= pooling_cluster_mode_i_w;
+        delay_psum_glb_reg         <= delay_psum_glb_i;
+        input_activations_reg      <= input_activations_i_w;
+        iact_write_addr_t_reg      <= iact_write_addr_t_i_w;
+        iact_write_data_t_reg      <= iact_write_data_t_i_w;
+        stride_x_reg               <= stride_x_i_w;
+        stride_y_reg               <= stride_y_i_w;
+        kernel_per_pe_cluster_i_reg<= kernel_per_pe_cluster_i_w;
+        compute_mask_reg           <= compute_mask_i_w;
+        router_mode_iact_reg       <= router_mode_iact_i;
+        router_mode_iact_storage   <= router_mode_iact_i;
+        router_mode_wght_reg       <= router_mode_wght_i_w;
+        router_mode_psum_reg       <= router_mode_psum_i_w;
       end
       case(fsm_current_state)
 
@@ -541,34 +563,6 @@ module OpenEye_Parallel
           end
           if (compute_i) begin
             finished_cycles   <= 0;
-          end
-
-          if (status_reg_enable_i_w) begin
-            data_mode_reg            <= data_mode_i_w;
-            fraction_bit_reg         <= fraction_bit_i_w;
-            needed_cycles_reg        <= needed_cycles_i_w;
-            needed_x_cls_reg         <= needed_x_cls_i_w;
-            needed_y_cls_reg         <= needed_y_cls_i_w;
-            needed_iact_cycles_reg   <= needed_iact_cycles_i_w;
-            filters_reg              <= filters_i_w;
-            iact_addr_len_reg        <= 0;
-            wght_addr_len_reg        <= wght_addr_len_i_w;
-            bano_cluster_mode_reg    <= bano_cluster_mode_i_w;
-            af_cluster_mode_reg      <= af_cluster_mode_i_w;
-            pooling_cluster_mode_reg <= pooling_cluster_mode_i_w;
-            delay_psum_glb_reg       <= delay_psum_glb_i;
-            input_activations_reg    <= input_activations_i_w;
-            iact_write_addr_t_reg    <= iact_write_addr_t_i_w;
-            iact_write_data_t_reg    <= iact_write_data_t_i_w;
-            stride_x_reg             <= stride_x_i_w;
-            stride_y_reg             <= stride_y_i_w;
-            kernel_per_pe_cluster_i_reg<= kernel_per_pe_cluster_i_w;
-            compute_mask_reg         <= compute_mask_i_w;
-            router_mode_iact_reg     <= router_mode_iact_i;
-            router_mode_iact_storage <= router_mode_iact_i;
-            router_mode_wght_reg     <= router_mode_wght_i_w;
-            router_mode_psum_reg     <= router_mode_psum_i_w;
-            status_set_reg           <= 1;
           end
           flat_help_var = 0;
         end
@@ -591,7 +585,6 @@ module OpenEye_Parallel
           if (fsm_psum_last_state == SEND_RESULTS) begin
             fsm_last_state    <= COMPUTING;
             fsm_current_state <= MAIN_IDLE;
-            status_set_reg    <= 0;
           end
 
         end
