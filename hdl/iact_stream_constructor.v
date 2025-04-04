@@ -136,16 +136,6 @@ module iact_stream_constructor
 
 
     end else begin
-      if (enable_config == 1) begin
-        x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
-        y                      <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4];
-        iact_size              <= params[(2*PARAMS_SIZE/4)-1:PARAMS_SIZE/4];
-        channels               <= params[(PARAMS_SIZE/4)-1:0];
-        ready_o                <= 1;
-        mem_addr_o             <= 0;
-        needed_iact_cycles_reg <= 2;
-        wght_size_reg          <= 3;
-      end
       case (fsm_current_state)
         INITIALIZE : begin
           fsm_cycle              <= 0;
@@ -258,6 +248,16 @@ module iact_stream_constructor
           end
         end
       endcase
+      if (enable_config == 1) begin
+        x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
+        y                      <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4];
+        iact_size              <= params[(2*PARAMS_SIZE/4)-1:PARAMS_SIZE/4];
+        channels               <= params[(PARAMS_SIZE/4)-1:0];
+        ready_o                <= 1;
+        mem_addr_o             <= 0;
+        needed_iact_cycles_reg <= 2;
+        wght_size_reg          <= 3;
+      end
     end
   end
   genvar r, w, b;
