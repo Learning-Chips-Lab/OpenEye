@@ -195,6 +195,7 @@ module data_pipeline
         data_storage          <= 0;
         address_temp          <= 0;
         cycle_counter         <= 0;
+        second_spad_words_o   <= 0;
       end
     end
   end

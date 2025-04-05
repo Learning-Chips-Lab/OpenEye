@@ -44,7 +44,7 @@ module adder
       if(adder_en_i) begin
         sum_o <= summand_1_i + summand_2_i;
       end else begin // Keep output, if `adder_en_i` is low
-        sum_o <= sum_o;
+        sum_o <= 0;
       end
     end
   end

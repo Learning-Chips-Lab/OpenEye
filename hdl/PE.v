@@ -580,7 +580,7 @@ module PE
             used_psum_memory <= 0;
             end
           end
-          if (compute_i & (second_spad_words_iact != 0) & (second_spad_words_wght != 0)) begin 
+          if (compute_i & ((second_spad_words_iact != 0) | (second_spad_words_wght != 0))) begin 
             //Start off
             current_state_computing <= LOADING_1;
             mux_iact_ready        <= 0;

@@ -46,10 +46,12 @@ module data_pipeline_iact
     parameter FIRST_SPAD_DATA           = 8,
     parameter SECOND_SPAD_ADDR          = 96,
     parameter SECOND_SPAD_DATA          = 24,
+    parameter SECOND_PAYLOAD_WIDTH      = 8,
     parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
     parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
     parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
-    parameter SECOND_SPAD_DATA_CYCLE    = DATA_WIDTH / SECOND_SPAD_DATA
+    parameter SECOND_SPAD_DATA_CYCLE    = DATA_WIDTH / SECOND_SPAD_DATA,
+    parameter SECOND_OVERHEAD_WIDTH     = SECOND_SPAD_DATA - SECOND_PAYLOAD_WIDTH
 ) (
     input                                         clk_i,
     input                                         rst_ni,
@@ -78,11 +80,12 @@ module data_pipeline_iact
   reg [$clog2(SECOND_SPAD_ADDR) : 0]      address_temp_1;  // Temporary address storage
   reg [$clog2(SECOND_SPAD_ADDR) : 0]      address_temp_2;  // Temporary address storage
   reg [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;  // Cycle counter for data loading
+  reg [SECOND_PAYLOAD_WIDTH-1 : 0]        payload_reg;
+  reg [SECOND_OVERHEAD_WIDTH-1 : 0]       overhead_reg;
+  reg [SECOND_OVERHEAD_WIDTH-1 : 0]       overhead_delay_reg;
   genvar i;
 
-  for(i=0; i<SECOND_SPAD_DATA; i=i+1) begin
-    assign second_spad_data_o[i] = data_storage_2[i];  // Assign data to the second SPAD output
-  end
+    assign second_spad_data_o = {overhead_delay_reg,payload_reg};  // Assign data to the second SPAD output
 
 
 
@@ -100,6 +103,9 @@ module data_pipeline_iact
       address_temp_1        <= 0;
       address_temp_2        <= 0;
       cycle_counter         <= 0;
+      payload_reg           <= 0;
+      overhead_reg          <= 0;
+      overhead_delay_reg    <= 0;
     end
     else begin
       first_spad_en_o    <= 0;
@@ -113,12 +119,16 @@ module data_pipeline_iact
         address_temp_2      <= address_temp_2 + 1;
         cycle_counter       <= cycle_counter + 1;
 
+        payload_reg         <= SECOND_PAYLOAD_WIDTH'(data_storage_2 >> SECOND_SPAD_DATA);
         data_storage_2      <= data_storage_2 >> SECOND_SPAD_DATA;
-        first_spad_data_o    <= data_storage_2[23:20] + 1;
+        first_spad_data_o   <= overhead_reg + 1;
+        overhead_reg        <= overhead_reg + 1;
+        overhead_delay_reg  <= overhead_reg;
 
         if (cycle_counter == 0) begin
+          payload_reg       <= SECOND_PAYLOAD_WIDTH'(data_i);
           data_storage_2    <= data_i;
-          first_spad_data_o <= data_i[11:8] + 1;
+          first_spad_data_o <= overhead_reg + 1;
         end
         if (cycle_counter == SECOND_SPAD_DATA_CYCLE[$clog2(FIRST_SPAD_DATA_CYCLE):0] - 1) begin
           cycle_counter <= 0;
@@ -139,15 +149,19 @@ module data_pipeline_iact
         end
       end
       if (compute_i) begin // Reset SPAD addresses and state of module
-        first_spad_en_o    <= 0;
-        second_spad_en_o   <= 0;
-        data_storage_1     <= 0;
-        data_storage_2     <= 0;
-        first_spad_data_o  <= 0;
-        address_temp_1     <= 0;
-        address_temp_2     <= 0;
-        cycle_counter      <= 0;
-        first_spad_addr_o  <= 0;
+        first_spad_en_o     <= 0;
+        second_spad_en_o    <= 0;
+        data_storage_1      <= 0;
+        data_storage_2      <= 0;
+        first_spad_data_o   <= 0;
+        address_temp_1      <= 0;
+        address_temp_2      <= 0;
+        cycle_counter       <= 0;
+        first_spad_addr_o   <= 0;
+        second_spad_words_o <= 0;
+        payload_reg         <= 0;
+        overhead_reg        <= 0;
+        overhead_reg        <= 0;
       end
     end
   end
