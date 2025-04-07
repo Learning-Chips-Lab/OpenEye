@@ -84,6 +84,7 @@ module OpenEye_Cluster
   parameter LEFT_CLUSTER               = 0,
   parameter TOP_CLUSTER                = 0,
   parameter BOTTOM_CLUSTER             = 0,
+  parameter PARALLEL_MACS              = 2,
   parameter DATA_IACT_BITWIDTH         = 8,
   parameter DATA_PSUM_BITWIDTH         = 20,
   parameter DATA_WGHT_BITWIDTH         = 8,
@@ -483,9 +484,10 @@ module OpenEye_Cluster
 
   generate for(r=0; r<NUM_GLB_PSUM; r=r+1)begin : af_cluster_gen
     af_cluster #(
+      .SERIAL       (SERIAL),
+      .PARALLEL_MACS(PARALLEL_MACS),
       .DATA_BITWIDTH(TRANS_BITWIDTH_PSUM),
-
-      .MODES(AF_MODES)
+      .MODES        (AF_MODES)
     )af_cluster(
       .clk_i            (clk_i),
       .rst_ni           (rst_n),

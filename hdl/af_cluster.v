@@ -27,46 +27,40 @@
 
 module af_cluster 
 #( 
-  parameter integer            DATA_BITWIDTH   = 40,
-  parameter integer            MODES           = 4
+  parameter  integer SERIAL        = 0,
+  parameter  integer PARALLEL_MACS = 2,
+  parameter  integer DATA_BITWIDTH = 40,
+  parameter  integer MODES         = 4,
+  localparam integer NUM_DATA      = SERIAL ? 1 : PARALLEL_MACS
 ) (
-  input                          clk_i,
-  input                          rst_ni,
-  input  [$clog2(MODES)-1 : 0]   mode_i,
-
-  output                         ready_o,
-  input  [DATA_BITWIDTH-1:0]     data_i,
-  input                          enable_i,
-
-  input                          ready_i,
-  output [DATA_BITWIDTH-1:0]     data_o,
-  output                         enable_o
-
+  input                               clk_i,
+  input                               rst_ni,
+  input  [$clog2(MODES)-1 : 0]        mode_i,
+  output                              ready_o,
+  input  [DATA_BITWIDTH*NUM_DATA-1:0] data_i,
+  input                               enable_i,
+  input                               ready_i,
+  output [DATA_BITWIDTH*NUM_DATA-1:0] data_o,
+  output                              enable_o
 );
 
-  localparam integer HALF_DATA_BITS = DATA_BITWIDTH/2;
+wire [DATA_BITWIDTH-2:0] psum     [NUM_DATA - 1 : 0];
+wire                     sign     [NUM_DATA - 1 : 0];
+wire [DATA_BITWIDTH-1:0] data_out [NUM_DATA - 1 : 0];
 
-wire [HALF_DATA_BITS-2:0] ms_psum;
-wire [HALF_DATA_BITS-2:0] ls_psum;
-wire                      ms_sign;
-wire                      ls_sign;
 
-wire [HALF_DATA_BITS-1:0] ms_data_out;
-wire [HALF_DATA_BITS-1:0] ls_data_out;
-assign {ms_sign,ms_psum,ls_sign,ls_psum} = data_i; //'data_i' gets split in two seperate data blocks
-
-// If `mode_i`is set, use ReLU operator by reading `ms_sign`and `ls_sign`
-assign ms_data_out = mode_i == 0 ? {ms_sign,ms_psum} :
-                     mode_i == 1 ? (ms_sign ? 0 : {1'b0,ms_psum}) :
-                     mode_i == 2 ? (ms_sign ? (ms_psum * 32'd3435973837) >> 35 : {1'b0,ms_psum}) :
-                     0 ;
-assign ls_data_out = mode_i == 0 ? {ls_sign,ls_psum} :
-                     mode_i == 1 ? (ls_sign ? 0 : {1'b0,ls_psum}) :
-                     mode_i == 2 ? ((ls_psum * 32'd3435973837) >> 35 ? 0 : {1'b0,ls_psum})  :
-                     0 ;
+genvar data_pos;
+for (data_pos = 0;data_pos < NUM_DATA; data_pos = data_pos + 1) begin
+  assign sign = data_i[((1+data_pos) * DATA_BITWIDTH)-1]; //'data_i' gets split in two seperate data blocks
+  assign psum = data_i[((1+data_pos) * DATA_BITWIDTH)-2 : data_pos * DATA_BITWIDTH]; //'data_i' gets split in two seperate data blocks
+  assign data_out[data_pos] = mode_i == 0 ? {sign[data_pos],psum[data_pos]} :
+                              mode_i == 1 ? (sign[data_pos] ? 0 : {1'b0,psum[data_pos]}) :
+                              mode_i == 2 ? (sign[data_pos] ? (psum[data_pos] * 32'd3435973837) >> 35 : {1'b0,psum[data_pos]}) : //Approximation of 0.1 multiplier, if below 0
+                              0 ;
+  assign data_o[(DATA_BITWIDTH*(1+data_pos))-1:DATA_BITWIDTH*data_pos] = data_out[data_pos]; // Concatenate both data blocks into one output
+end     
 
 assign ready_o = ready_i; // Pass on ready signal
-assign data_o = {ms_data_out,ls_data_out}; // Concatenate both data blocks into one output
 assign enable_o = enable_i; // Pass on enable signal
 
 endmodule
