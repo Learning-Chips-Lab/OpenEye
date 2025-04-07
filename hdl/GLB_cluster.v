@@ -62,13 +62,15 @@
 
 module GLB_cluster 
 #( 
+  parameter integer SERIAL              = 0,
+  parameter integer PARALLEL_MACS       = 2,
   parameter integer DATA_IACT_BITWIDTH  = 8,
   parameter integer DATA_WGHT_BITWIDTH  = 8,
   parameter integer DATA_PSUM_BITWIDTH  = 20,
 
   parameter integer TRANS_BITWIDTH_IACT = 24,
   parameter integer TRANS_BITWIDTH_WGHT = 24,
-  parameter integer TRANS_BITWIDTH_PSUM = 40,
+  parameter integer TRANS_BITWIDTH_PSUM = SERIAL ? DATA_PSUM_BITWIDTH : DATA_PSUM_BITWIDTH * PARALLEL_MACS,
     
   parameter integer NUM_GLB_IACT        = 3,
   parameter integer NUM_GLB_WGHT        = 3,

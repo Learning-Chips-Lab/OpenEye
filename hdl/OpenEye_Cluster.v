@@ -238,7 +238,7 @@ module OpenEye_Cluster
   
   ///PSUM Wire  
   wire [NUM_GLB_PSUM-1:0]                     pe_router_psum_ready_in;
-  wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] pe_router_psum_data_in;
+  wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] pe_router_psum_data_i;
   wire [NUM_GLB_PSUM-1:0]                     pe_router_psum_enable_in;
   
   wire [NUM_GLB_PSUM-1:0]                     pe_router_psum_ready_out;
@@ -292,7 +292,7 @@ module OpenEye_Cluster
     .pe_psum_enable_o         (enable_dst_top_psum),
 
     .pe_router_psum_ready_i   (pe_router_psum_ready_in),
-    .pe_router_psum_data_i    (pe_router_psum_data_in),
+    .pe_router_psum_data_i    (pe_router_psum_data_i),
     .pe_router_psum_enable_i  (pe_router_psum_enable_in),
 
     .pe_router_psum_ready_o   (pe_router_psum_ready_out),
@@ -331,6 +331,8 @@ module OpenEye_Cluster
   ///GLB Cluster connect to external memory
   /////////////////////////////////////////
   GLB_cluster #(
+    .SERIAL             (SERIAL),
+    .PARALLEL_MACS      (PARALLEL_MACS),
     .DATA_IACT_BITWIDTH (TRANS_BITWIDTH_IACT),
     .DATA_PSUM_BITWIDTH (TRANS_BITWIDTH_PSUM),
     .DATA_WGHT_BITWIDTH (TRANS_BITWIDTH_WGHT),
@@ -614,7 +616,7 @@ module OpenEye_Cluster
       ///DST Port 1
       ///Conncet to: PEs
       .ready_dst_port_1 (pe_router_psum_ready_out[j]),
-      .data_dst_port_1  (pe_router_psum_data_in[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
+      .data_dst_port_1  (pe_router_psum_data_i[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
       .enable_dst_port_1(pe_router_psum_enable_in[j]),
       ///DST Port 2
       ///Conncet to: Router/Port
