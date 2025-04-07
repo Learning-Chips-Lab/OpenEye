@@ -412,10 +412,14 @@ module OpenEye_Cluster
   genvar r, b;
   generate for(r=0; r<NUM_GLB_PSUM; r=r+1)begin : bano_cluster_gen
     bano_cluster #(
-      .DATA_BITWIDTH(TRANS_BITWIDTH_PSUM)
+      .SERIAL       (SERIAL),
+      .PARALLEL_MACS(PARALLEL_MACS),
+      .DATA_BITWIDTH(TRANS_BITWIDTH_PSUM),
+      .BN_OFFSET_BITS (8)
     )bano_cluster(
       .clk_i       (clk_i),
       .rst_ni      (rst_n),
+      .bn_offset_i (8'(0)),
 
       .ready_o     (bano_cluster_ready_out[r]),
       .data_i      (bano_cluster_data_in[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),

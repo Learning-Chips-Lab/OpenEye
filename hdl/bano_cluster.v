@@ -24,23 +24,30 @@
 
 module bano_cluster 
 #( 
-  parameter integer            DATA_BITWIDTH   = 20
+  parameter  integer SERIAL         = 0,
+  parameter  integer PARALLEL_MACS  = 2,
+  parameter  integer DATA_BITWIDTH  = 20,
+  parameter  integer BN_OFFSET_BITS = 8,
+  localparam integer NUM_DATA      = SERIAL ? 1 : PARALLEL_MACS
 ) (
-  input                        clk_i,
-  input                        rst_ni,
-
-  output                       ready_o,
-  input  [DATA_BITWIDTH-1 : 0] data_i,
-  input                        enable_i,
-
-  input                        ready_i,
-  output [DATA_BITWIDTH-1 : 0] data_o,
-  output                       enable_o
+  input                               clk_i,
+  input                               rst_ni,
+  input  [BN_OFFSET_BITS-1:0]         bn_offset_i,
+  output                              ready_o,
+  input  [DATA_BITWIDTH*NUM_DATA-1:0] data_i,
+  input                               enable_i,
+  input                               ready_i,
+  output [DATA_BITWIDTH*NUM_DATA-1:0] data_o,
+  output                              enable_o
 
 );
 
 assign ready_o = ready_i;
-assign data_o = data_i>>0;
 assign enable_o = enable_i;
+genvar data_pos;
+for (data_pos = 0;data_pos < NUM_DATA; data_pos = data_pos + 1) begin
+  assign data_o[(DATA_BITWIDTH*(1+data_pos))-1:DATA_BITWIDTH*data_pos] = (data_i[(DATA_BITWIDTH*(1+data_pos))-1:DATA_BITWIDTH*data_pos]>>bn_offset_i);
+end
+
 
 endmodule

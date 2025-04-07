@@ -48,7 +48,6 @@ wire [DATA_BITWIDTH-2:0] psum     [NUM_DATA - 1 : 0];
 wire                     sign     [NUM_DATA - 1 : 0];
 wire [DATA_BITWIDTH-1:0] data_out [NUM_DATA - 1 : 0];
 
-
 genvar data_pos;
 for (data_pos = 0;data_pos < NUM_DATA; data_pos = data_pos + 1) begin
   assign sign = data_i[((1+data_pos) * DATA_BITWIDTH)-1]; //'data_i' gets split in two seperate data blocks
