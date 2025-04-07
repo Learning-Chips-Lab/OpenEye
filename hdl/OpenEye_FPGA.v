@@ -157,7 +157,7 @@ module OpenEye_FPGA
   
   //Number of Words per PE
   parameter BANO_MODES            = 2,
-  parameter AF_MODES              = 2,
+  parameter AF_MODES              = 4,
 
   // Converter
   parameter BITWIDTH_IACT = TRANS_BITWIDTH_IACT / 2,
@@ -236,7 +236,7 @@ module OpenEye_FPGA
   reg  [$clog2(IACT_ADDR_PER_PE+1)-1:0]         iact_addr_len_reg;
   reg  [$clog2(WGHT_ADDR_PER_PE)-1:0]           wght_addr_len_reg;
   reg  [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0]    bano_cluster_mode_reg;
-  reg  [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0]      af_cluster_mode_reg;
+  reg  [$clog2(AF_MODES)-1:0]      af_cluster_mode_reg;
   reg  [$clog2(IACT_PER_PE+1)-1:0]              input_activations_reg;
   reg  [1:0]                                    iact_write_addr_t_reg;
   reg  [3:0]                                    iact_write_data_t_reg;

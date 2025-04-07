@@ -28,7 +28,7 @@
 module af_cluster 
 #( 
   parameter integer            DATA_BITWIDTH   = 40,
-  parameter integer            MODES           = 2
+  parameter integer            MODES           = 4
 ) (
   input                          clk_i,
   input                          rst_ni,
@@ -56,8 +56,14 @@ wire [HALF_DATA_BITS-1:0] ls_data_out;
 assign {ms_sign,ms_psum,ls_sign,ls_psum} = data_i; //'data_i' gets split in two seperate data blocks
 
 // If `mode_i`is set, use ReLU operator by reading `ms_sign`and `ls_sign`
-assign ms_data_out = mode_i ? (ms_sign ? 0 : {1'b0,ms_psum}) : {ms_sign,ms_psum};
-assign ls_data_out = mode_i ? (ls_sign ? 0 : {1'b0,ls_psum}) : {ls_sign,ls_psum};
+assign ms_data_out = mode_i == 0 ? {ms_sign,ms_psum} :
+                     mode_i == 1 ? (ms_sign ? 0 : {1'b0,ms_psum}) :
+                     mode_i == 2 ? (ms_sign ? (ms_psum * 32'd3435973837) >> 35 : {1'b0,ms_psum}) :
+                     0 ;
+assign ls_data_out = mode_i == 0 ? {ls_sign,ls_psum} :
+                     mode_i == 1 ? (ls_sign ? 0 : {1'b0,ls_psum}) :
+                     mode_i == 2 ? ((ls_psum * 32'd3435973837) >> 35 ? 0 : {1'b0,ls_psum})  :
+                     0 ;
 
 assign ready_o = ready_i; // Pass on ready signal
 assign data_o = {ms_data_out,ls_data_out}; // Concatenate both data blocks into one output

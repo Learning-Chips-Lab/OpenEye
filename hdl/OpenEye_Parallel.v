@@ -121,7 +121,7 @@ module OpenEye_Parallel
 
   parameter FSM_STATES          = 7,
   parameter BANO_MODES          = 2,
-  parameter AF_MODES            = 2,
+  parameter AF_MODES            = 4,
 
   localparam IACT_MEM_ADDR_BITS    = $clog2(IACT_MEM_ADDR_WORDS),
   localparam PSUM_MEM_ADDR_BITS    = $clog2(PSUM_MEM_ADDR_WORDS),
@@ -170,7 +170,7 @@ module OpenEye_Parallel
   input      [$clog2(IACT_ADDR_PER_PE+1)-1:0]                    iact_addr_len_i,
   input      [$clog2(WGHT_ADDR_PER_PE)-1:0]                      wght_addr_len_i,
   input      [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0]               bano_cluster_mode_i,
-  input      [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0]                 af_cluster_mode_i,
+  input      [$clog2(AF_MODES)-1:0]                              af_cluster_mode_i,
   input      [NUM_GLB_PSUM-1:0]                                  pooling_cluster_mode_i,
   input      [3:0]                                               delay_psum_glb_i,
   input      [$clog2(IACT_PER_PE+1)-1:0]                         input_activations_i,
@@ -510,7 +510,7 @@ module OpenEye_Parallel
       filters_i_reg               <= filters_i;
       iact_addr_len_i_reg         <= iact_addr_len_i;
       bano_cluster_mode_i_reg     <= bano_cluster_mode_i;
-      af_cluster_mode_i_reg       <= af_cluster_mode_i;
+      af_cluster_mode_i_reg       <= {NUM_GLB_PSUM{af_cluster_mode_i}};
       pooling_cluster_mode_i_reg  <= pooling_cluster_mode_i;
       input_activations_i_reg     <= input_activations_i;
       iact_write_addr_t_i_reg     <= iact_write_addr_t_i;

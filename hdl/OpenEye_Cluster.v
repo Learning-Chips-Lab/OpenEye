@@ -108,7 +108,7 @@ module OpenEye_Cluster
   parameter PSUM_MEM_ADDR_WORDS        = 384,
   parameter PSUM_MEM_ADDR_BITS         = $clog2(PSUM_MEM_ADDR_WORDS),
   parameter BANO_MODES                 = 2,
-  parameter AF_MODES                   = 2
+  parameter AF_MODES                   = 4
 )( 
   input                                          clk_i,
   input                                          rst_ni,
