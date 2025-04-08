@@ -53,7 +53,7 @@ genvar i;
       b_o = 0;
     end
     for(j=0; j<I_COUNT; j=j+1)begin
-      c_o[j] = c_i | (!(sel_i == j[$clog2(I_COUNT+1)-1:0]));
+      c_o[j] = c_i;
     end
   end
 

@@ -63,8 +63,8 @@ export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
 export NUM_FILTERS=8
 export KERNEL_SIZE=3
-export INPUT_SIZE=16
-export OUTPUT_SIZE=16
+export INPUT_SIZE=4
+export OUTPUT_SIZE=8
 export STRIDE=1
 export INPUT_CHANNELS=4
 #Amout of parallel MACs
@@ -77,7 +77,7 @@ export USE_SPARSE_WEIGHTS=0
 export DATA_IACT_BITWIDTH=8
 export DATA_PSUM_BITWIDTH=20
 export DATA_WGHT_BITWIDTH=8
-export DATA_IACT_OVERHEAD    =4
+export DATA_IACT_OVERHEAD=4
 export DATA_WGHT_IGNORE_ZEROS=4
 
 #Datawidth for Transportation of Data
