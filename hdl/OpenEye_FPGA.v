@@ -332,6 +332,7 @@ module OpenEye_FPGA
   reg iact_converter_en_cfg_reg          [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg iact_converter_en_store_reg        [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg iact_converter_en_enc_reg          [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
+  reg send_data_reg                                                             ;
   reg iact_converter_ready_reg           [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [2:0] iact_converter_n_reg         [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [BUFFER_WIDTH-1:0] iact_converter_mem_addr_reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
@@ -481,6 +482,7 @@ module OpenEye_FPGA
     end
   end
 
+  //Process for sending data to Iact Converters
   always@(posedge clk_i, negedge rst_n) begin
     if(!rst_n)begin
       cluster_array_reg <= 0;
@@ -509,6 +511,53 @@ module OpenEye_FPGA
           end
         end
         cluster_array_reg <= (cluster_array_reg<<(iact_size/PE_COLUMNS) | cluster_array_reg>>(CLUSTERS-(iact_size/PE_COLUMNS)));
+      end
+    end
+  end
+  reg       sending_data;
+  reg       iact_readied;
+  reg [7:0] current_cycle;
+  //Process for sending data to OpenEye
+  always@(posedge clk_i, negedge rst_n) begin
+    if(!rst_n)begin
+      sending_data  <= 0;
+      iact_readied  <= 0;
+      current_cycle <= 0;
+      for (int a=0; a<CLUSTER_COLUMNS; a++) begin
+        for (int b=0; b<CLUSTER_ROWS; b++) begin
+          iact_converter_en_enc_reg[a][b] <= 0;
+        end
+      end
+    end else begin
+      for (int a=0; a<CLUSTER_COLUMNS; a++) begin
+        for (int b=0; b<CLUSTER_ROWS; b++) begin
+          iact_converter_en_enc_reg[a][b] <= 0;
+        end
+      end
+      if (send_data_reg | sending_data) begin 
+        sending_data <= 1;
+        if (!sending_data) begin
+          for (int a=0; a<CLUSTER_COLUMNS; a++) begin
+            for (int b=0; b<CLUSTER_ROWS; b++) begin
+              iact_converter_en_enc_reg[a][b] <= 1;
+            end
+          end
+        end
+        if (current_cycle < needed_cycles_reg - 1) begin
+          if (iact_ready_o_oep_w == 0) begin
+            if (!iact_readied) begin
+              iact_readied   <= 1;
+              current_cycle  <= current_cycle + 1;
+              for (int a=0; a<CLUSTER_COLUMNS; a++) begin
+                for (int b=0; b<CLUSTER_ROWS; b++) begin
+                  iact_converter_en_enc_reg[a][b] <= 1;
+                end
+              end
+            end
+          end else begin
+            iact_readied <= 0;
+          end
+        end
       end
     end
   end
@@ -622,14 +671,10 @@ module OpenEye_FPGA
 
       //new iact regs
       max_converter_needed_cycles       <= 0;
-      for (int a=0; a<CLUSTER_COLUMNS; a++) begin
-        for (int b=0; b<CLUSTER_ROWS; b++) begin
-          iact_converter_en_enc_reg[a][b] <= 0;
-        end
-      end
       new_converter_standing_cycles     <= 0;
       current_converter_cycles          <= 0;
       current_converter_standing_cycles <= 0;
+      send_data_reg                     <= 0;
       
       for (int a=0; a<RAM_CELLS; a++) begin
         buffer_SP_en_r_reg[a]   <= 0;
@@ -1022,32 +1067,18 @@ module OpenEye_FPGA
             buffer_SP_addr_reg[a] <= 0;
           end
           // reset converter Signals
-          for (int a=0; a<CLUSTER_COLUMNS; a++) begin
-            for (int b=0; b<CLUSTER_ROWS; b++) begin
-              iact_converter_en_enc_reg[a][b] <= 1;
-            end
-          end
           fsm_cycle             <= 0;
           fsm_last_state        <= WAIT_CYCLE_2;
-          fsm_current_state     <= WRITE_IACT;
+          fsm_current_state     <= WRITE_WGHT;
+          wght_buffer_SP_addr   <= 0;
+          send_data_reg         <= 1;
         end
 
         WRITE_IACT : begin
-          for (int a=0; a<CLUSTER_COLUMNS; a++) begin
-            for (int b=0; b<CLUSTER_ROWS; b++) begin
-              iact_converter_en_enc_reg[a][b] <= 0;
-            end
-          end
-          fsm_cycle <= fsm_cycle + 1;
-          if (fsm_cycle >= iact_needed_cycles * kernel_size * iact_channels * needed_iact_cycles_reg) begin
-            // next cycle?
-            fsm_cycle           <= 0;
-            fsm_current_state   <= WRITE_WGHT;
-            fsm_last_state      <= WRITE_IACT;
-          end
         end
 
         WRITE_WGHT : begin
+          send_data_reg       <= 0;
           wght_buffer_SP_en_r <= 1;
           wght_buffer_SP_addr <= wght_buffer_SP_addr + 1;
           fsm_cycle           <= fsm_cycle + 1;
@@ -1079,26 +1110,13 @@ module OpenEye_FPGA
         end
         
         WAIT_FOR_RESULTS : begin
-          fsm_cycle <= fsm_cycle + 1;
-          for (int a=0; a<CLUSTER_COLUMNS; a++) begin
-            for (int b=0; b<CLUSTER_ROWS; b++) begin
-              iact_converter_en_enc_reg[a][b] <= 0;
-            end
-          end
+          fsm_cycle        <= fsm_cycle + 1;
           psum_ready_i_reg <= 0;
-          if (fsm_cycle >= 58) begin
+          if (fsm_cycle >= 32) begin
             psum_ready_i_reg <= (2**(CLUSTERS*NUM_GLB_PSUM)) - 1;
             fsm_cycle        <= fsm_cycle;
-            if (fsm_cycle_mod1 <= needed_cycles_reg - 1) begin
-              if (iact_ready_o_oep_w != 0) begin
-                fsm_cycle_mod1  = fsm_cycle_mod1 + 1;
-                fsm_cycle      <= 0;
-                for (int a=0; a<CLUSTER_COLUMNS; a++) begin
-                  for (int b=0; b<CLUSTER_ROWS; b++) begin
-                    iact_converter_en_enc_reg[a][b] <= 1;
-                  end
-                end
-              end
+            if (iact_ready_o_oep_w != 0) begin
+              fsm_cycle <= 0;
             end
           end
           compute_reg           <= 0;
