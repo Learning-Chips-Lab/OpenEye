@@ -106,7 +106,6 @@ export PE_WGHT_ADDR_ADDR=16
 export PSUM_PER_PE=32
 
 # include cocotb's make rules to take care of the simulator setup
-export PYTHON = /home/dlebold/miniconda3/bin/python
 export SCRIPT = $(PWD)/../test_utils/vh_file_creator.py
 
 export
