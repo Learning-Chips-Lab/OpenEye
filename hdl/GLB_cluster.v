@@ -70,7 +70,7 @@ module GLB_cluster
 
   parameter integer TRANS_BITWIDTH_IACT = 24,
   parameter integer TRANS_BITWIDTH_WGHT = 24,
-  parameter integer TRANS_BITWIDTH_PSUM = SERIAL ? DATA_PSUM_BITWIDTH : DATA_PSUM_BITWIDTH * PARALLEL_MACS,
+  parameter integer TRANS_BITWIDTH_PSUM = 1'(SERIAL) ? DATA_PSUM_BITWIDTH : DATA_PSUM_BITWIDTH * PARALLEL_MACS,
     
   parameter integer NUM_GLB_IACT        = 3,
   parameter integer NUM_GLB_WGHT        = 3,
@@ -127,10 +127,8 @@ module GLB_cluster
 
 );
 
-if (SERIAL == 0) begin
-  reg [NUM_GLB_IACT-1:0] router_cluster_iact_enable_o_delay_1;
-  reg [NUM_GLB_IACT-1:0] router_cluster_iact_enable_o_delay_2;
-end
+reg [NUM_GLB_IACT-1:0] router_cluster_iact_enable_o_delay_1;
+reg [NUM_GLB_IACT-1:0] router_cluster_iact_enable_o_delay_2;
 
 reg [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_1;
 reg [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_2;
@@ -138,29 +136,27 @@ reg [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_2;
 genvar glb_cluster,bit_counter;
 generate
   ///IACT GLB Storages
-  if (SERIAL == 0) begin
-    for(glb_cluster = 0; glb_cluster < NUM_GLB_IACT; glb_cluster = glb_cluster + 1) begin : gen_iact
+  for(glb_cluster = 0; glb_cluster < NUM_GLB_IACT - (NUM_GLB_IACT * 1'(SERIAL)); glb_cluster = glb_cluster + 1) begin : gen_iact
 
-      wire  [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_in_w;
-      wire  [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_out_w;
-      wire  [IACT_MEM_ADDR_BITS-1:0]  iact_glb_addr_in_w;
-      wire                            iact_glb_we_in_w;
+    wire  [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_in_w;
+    wire  [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_out_w;
+    wire  [IACT_MEM_ADDR_BITS-1:0]  iact_glb_addr_in_w;
+    wire                            iact_glb_we_in_w;
 
-      RAM_SP #(
-        .DataWidth(TRANS_BITWIDTH_IACT),
-        .AddrWidth(IACT_MEM_ADDR_BITS),
-        .Pipelined(1)
+    RAM_SP #(
+      .DataWidth(TRANS_BITWIDTH_IACT),
+      .AddrWidth(IACT_MEM_ADDR_BITS),
+      .Pipelined(1)
 
-        ,.Implementation(2) // GLB_IACT = 2
-      )iact_glb( 
-        .clk_i(clk_i), 
-        .rd_en_i(iact_glb_we_in_w & !data_write_enable_iact_i),
-        .wr_en_i(iact_glb_we_in_w & data_write_enable_iact_i), 
-        .addr_i(iact_glb_addr_in_w),
-        .data_i(iact_glb_data_in_w),
-        .data_o(iact_glb_data_out_w)
-      );
-    end
+      ,.Implementation(2) // GLB_IACT = 2
+    )iact_glb( 
+      .clk_i(clk_i), 
+      .rd_en_i(iact_glb_we_in_w & !data_write_enable_iact_i),
+      .wr_en_i(iact_glb_we_in_w & data_write_enable_iact_i), 
+      .addr_i(iact_glb_addr_in_w),
+      .data_i(iact_glb_data_in_w),
+      .data_o(iact_glb_data_out_w)
+    );
   end
 
   ///PSUM GLB Storages
@@ -193,7 +189,7 @@ assign router_cluster_wght_data_o = ext_mem_wght_data_i;
 assign router_cluster_wght_enable_o = ext_mem_wght_enable_i;
 assign ext_mem_wght_ready_o = router_cluster_wght_ready_i;
 
-if (SERIAL == 1) begin
+if (1'(SERIAL) == 1) begin
   assign router_cluster_iact_data_o = ext_mem_iact_data_i;
   assign router_cluster_iact_enable_o = ext_mem_iact_enable_i;
   assign ext_mem_iact_ready_o = router_cluster_iact_ready_i;
@@ -238,7 +234,7 @@ integer g;
 
 always@(posedge clk_i, negedge rst_ni) begin
   if(!rst_ni)begin ///Reset
-    if (SERIAL == 0) begin
+    if (1'(SERIAL) == 0) begin
       router_cluster_iact_enable_o_delay_2 <= 0;
       router_cluster_iact_enable_o         <= 0;
     end
@@ -246,7 +242,7 @@ always@(posedge clk_i, negedge rst_ni) begin
     router_cluster_psum_enable_o         <= 0;
   end else begin
     ///Push Enable signals
-    if (SERIAL == 0) begin
+    if (1'(SERIAL) == 0) begin
       for(g = 0; g < NUM_GLB_IACT; g = g + 1)begin
         router_cluster_iact_enable_o_delay_2[g] <= router_cluster_iact_enable_o_delay_1[g];
         router_cluster_iact_enable_o[g] <= router_cluster_iact_enable_o_delay_2[g];
