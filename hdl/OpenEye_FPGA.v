@@ -1030,7 +1030,6 @@ module OpenEye_FPGA
             current_converter_standing_cycles <= 0;
             current_converter_cycles <= current_converter_cycles + 1;
             if (current_converter_cycles == (max_converter_needed_cycles - 1)) begin
-              current_converter_cycles <= 0;
               fsm_current_state <= WAIT_CYCLE;
             end
           end
@@ -1063,6 +1062,7 @@ module OpenEye_FPGA
             send_data_reg       <= 1;
             fsm_last_state      <= WAIT_CYCLE;
             fsm_current_state   <= WAIT_FOR_RESULTS;
+            current_converter_cycles <= 0;
             current_buffer_n    <= 0;
             current_buffer_n_1  <= 0;
             current_buffer_addr <= 0;
