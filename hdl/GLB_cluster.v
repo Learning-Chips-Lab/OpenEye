@@ -158,7 +158,6 @@ generate
       .data_o(iact_glb_data_out_w)
     );
   end
-
   ///PSUM GLB Storages
   for(glb_cluster = 0; glb_cluster < NUM_GLB_PSUM; glb_cluster = glb_cluster + 1) begin : gen_psum
 
@@ -189,7 +188,7 @@ assign router_cluster_wght_data_o = ext_mem_wght_data_i;
 assign router_cluster_wght_enable_o = ext_mem_wght_enable_i;
 assign ext_mem_wght_ready_o = router_cluster_wght_ready_i;
 
-if (1'(SERIAL) == 1) begin
+if (1'(SERIAL) == 1'(1)) begin
   assign router_cluster_iact_data_o = ext_mem_iact_data_i;
   assign router_cluster_iact_enable_o = ext_mem_iact_enable_i;
   assign ext_mem_iact_ready_o = router_cluster_iact_ready_i;
