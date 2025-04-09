@@ -59,7 +59,7 @@ for (data_pos = 0;data_pos < NUM_DATA; data_pos = data_pos + 1) begin
   assign data_o[(DATA_BITWIDTH*(1+data_pos))-1:DATA_BITWIDTH*data_pos] = data_out[data_pos]; // Concatenate both data blocks into one output
 end     
 
-assign ready_o = ready_i; // Pass on ready signal
+assign ready_o  = ready_i; // Pass on ready signal
 assign enable_o = enable_i; // Pass on enable signal
 
 endmodule

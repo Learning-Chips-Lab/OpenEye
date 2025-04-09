@@ -49,8 +49,8 @@ module iact_stream_constructor
   reg  [PARAM_LENGTH-1:0]   current_cycle;
   reg  [15:0]                    pos;
   reg  [3:0]                     padding_reg;
-  reg  [3:0]                     needed_iact_cycles_reg;
-  reg  [3:0]                     current_iact_cycle_reg;
+  reg  [7:0]                     needed_iact_cycles_reg;
+  reg  [7:0]                     current_iact_cycle_reg;
   reg  [3:0]                     wght_size_reg;
   reg                            change_state;
   reg  [DATA_IACT_BITWIDTH-1:0]  mem_data_payload_reg   [NUM_GLB_IACT-1:0][WORDS_PER_TRANS-1:0];
@@ -132,7 +132,7 @@ module iact_stream_constructor
                 if ((32'(32'(pec) + per) >=  (NUM_GLB_IACT *  32'(current_iact_cycle_reg))) 
                 &  (32'(32'(pec) + per)  <  (NUM_GLB_IACT * (32'(current_iact_cycle_reg) + 1)))
                 ) begin
-                  flat_help_var   = (flat_help_var + pec + 64'(per) - NUM_GLB_IACT * current_iact_cycle_reg);
+                  flat_help_var   = (32'(flat_help_var) + 32'(pec) + 32'(per) - 32'(NUM_GLB_IACT) * 32'(current_iact_cycle_reg));
                   for (int b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
                     iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                     <= flat_help_var[b];
@@ -255,7 +255,7 @@ module iact_stream_constructor
               y       <= y + 1;
               y_cycle <= 0;
             end
-            if (router_cycle == (channels/WORDS_PER_CYCLE) - 1) begin
+            if (router_cycle == 8'((32'(channels)/WORDS_PER_CYCLE) - 1)) begin
                 router_cycle        <= 0;
                 iact_router_counter <= iact_router_counter + 1;
                 if (iact_router_counter == needed_iact_cycles_reg - 1) begin
@@ -265,11 +265,11 @@ module iact_stream_constructor
             end
             if (fsm_cycle % (2/WORDS_PER_CYCLE) == 0) begin
               addr_cycle   <= addr_cycle + 1;
-              if (addr_cycle == (channels/WORDS_PER_CYCLE) - 1) begin
+              if (addr_cycle == 8'((32'(channels)/WORDS_PER_CYCLE) - 1)) begin
                 addr_cycle  <= 0;
                 ram_wr_addr <= ram_wr_addr + 1;
               end else begin
-                ram_wr_addr <= address_storage + ((kernel_y_counter * channels + iact_router_counter * (channels*wght_size_reg))/WORDS_PER_TRANS);
+                ram_wr_addr <= address_storage + ADDRWIDTH'((kernel_y_counter * channels + iact_router_counter * (channels*wght_size_reg))/WORDS_PER_TRANS);
               end
               //Reset payload to 0
               for (int r=0; r<NUM_GLB_IACT; r++) begin
@@ -277,7 +277,7 @@ module iact_stream_constructor
                   mem_data_payload_reg[r][w] <= 0;
                 end
               end
-              if (fsm_cycle % (channels/WORDS_PER_CYCLE) == 0) begin
+              if (fsm_cycle % (32'(channels)/WORDS_PER_CYCLE) == 0) begin
                 for (int r=0; r<NUM_GLB_IACT; r++) begin
                   for (int w=0; w<WORDS_PER_TRANS; w++) begin
                     mem_data_overhead_reg[r][w] <= 0;
@@ -292,21 +292,21 @@ module iact_stream_constructor
               end
             end
             for (int r=0; r<NUM_GLB_IACT; r++) begin
-              x_var = (iact_router_counter * NUM_GLB_IACT) + (r + x);
+              x_var = (iact_router_counter * NUM_GLB_IACT) + (8'(r) + x);
               y_var = (y);
-              ram_var = ((((y_var - padding_reg)*iact_size) + (x_var-padding_reg))/2)%RAM_CELLS;
-              byte_var = ((((x_var - padding_reg))*channels) + ((fsm_cycle%(4/WORDS_PER_CYCLE))/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
+              ram_var = ((((y_var - 8'(padding_reg))*iact_size) + (x_var-8'(padding_reg)))/2)%RAM_CELLS;
+              byte_var = 8'(((((32'(x_var) - 32'(padding_reg)))*channels) + ((fsm_cycle%(4/WORDS_PER_CYCLE))/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM);
               for (int w=0; w<WORDS_PER_CYCLE; w++) begin
                 //PADDING
                 if ((
-                ((padding_reg) > x_var)|
-                ((iact_size + padding_reg - 1) < x_var)) | (
-                ((padding_reg) > y_var) |
-                ((iact_size + padding_reg - 1) < y_var)
+                (8'(padding_reg) > x_var)|
+                ((iact_size + 8'(padding_reg) - 1) < x_var)) | (
+                ((8'(padding_reg)) > y_var) |
+                ((iact_size + 8'(padding_reg) - 1) < y_var)
                 )) begin
                   mem_data_payload_reg[r][w] <= 0;
                 end else begin
-                  mem_data_payload_reg[r][w] <= storage_w[ram_var][byte_var + w];
+                  mem_data_payload_reg[r][w] <= storage_w[RAM_CELLS'(ram_var)][32'(byte_var) + w];
                 end
               end
             end

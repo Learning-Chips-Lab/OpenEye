@@ -1578,7 +1578,7 @@ end
     assign iact_addr_len_i_w        = iact_addr_len_i;
     assign wght_addr_len_i_w        = wght_addr_len_i;
     assign bano_cluster_mode_i_w    = bano_cluster_mode_i;
-    assign af_cluster_mode_i_w      = af_cluster_mode_i;
+    assign af_cluster_mode_i_w      = {NUM_GLB_PSUM{af_cluster_mode_i}};
     assign pooling_cluster_mode_i_w = pooling_cluster_mode_i;
     assign delay_psum_glb_i_w       = delay_psum_glb_i;
     assign input_activations_i_w    = input_activations_i;
