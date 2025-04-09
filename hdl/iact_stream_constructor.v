@@ -318,6 +318,11 @@ module iact_stream_constructor
               fsm_current_state <= GET_PARAMETER;
             end
           end
+
+          default : begin
+            fsm_current_state      <= INITIALIZE;
+
+          end
         endcase
         if (enable_config == 1) begin
           x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];

@@ -50,8 +50,8 @@ wire [DATA_BITWIDTH-1:0] data_out [NUM_DATA - 1 : 0];
 
 genvar data_pos;
 for (data_pos = 0;data_pos < NUM_DATA; data_pos = data_pos + 1) begin
-  assign sign = data_i[((1+data_pos) * DATA_BITWIDTH)-1]; //'data_i' gets split in two seperate data blocks
-  assign psum = data_i[((1+data_pos) * DATA_BITWIDTH)-2 : data_pos * DATA_BITWIDTH]; //'data_i' gets split in two seperate data blocks
+  assign sign[data_pos] = data_i[((1+data_pos) * DATA_BITWIDTH)-1]; //'data_i' gets split in two seperate data blocks
+  assign psum[data_pos] = data_i[((1+data_pos) * DATA_BITWIDTH)-2 : data_pos * DATA_BITWIDTH]; //'data_i' gets split in two seperate data blocks
   assign data_out[data_pos] = mode_i == 0 ? {sign[data_pos],psum[data_pos]} :
                               mode_i == 1 ? (sign[data_pos] ? 0 : {1'b0,psum[data_pos]}) :
                               mode_i == 2 ? (sign[data_pos] ? (psum[data_pos] * 32'd3435973837) >> 35 : {1'b0,psum[data_pos]}) : //Approximation of 0.1 multiplier, if below 0

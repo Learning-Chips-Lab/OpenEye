@@ -433,10 +433,10 @@ module OpenEye_FPGA
       end
       if (iact_converter_params_enable | (fsm_iact_params > 0)) begin
         if (fsm_iact_params > 0) begin
-          fsm_iact_params = fsm_iact_params - 1;
+          fsm_iact_params <= fsm_iact_params - 1;
         end
         if (iact_converter_params_enable & (fsm_current_state == CONVERT_IACT)) begin
-          fsm_iact_params = (iact_size/PE_COLUMNS) - 1;
+          fsm_iact_params <= (iact_size/PE_COLUMNS) - 1;
         end
         iact_converter_x <= iact_converter_x + PE_COLUMNS;
         if (iact_converter_x >= iact_size - PE_COLUMNS) begin
@@ -696,7 +696,7 @@ module OpenEye_FPGA
         buffer_SP_data_w_reg[a] <= 0;
       end
 
-      converters_ready             <= 0;
+      converters_ready             = 0;
       converter_needed_cycles      <= 0;
       iact_converter_enc_enable    <= 0;
       iact_converter_params_enable <= 0;
@@ -1030,7 +1030,7 @@ module OpenEye_FPGA
             current_converter_standing_cycles <= 0;
             current_converter_cycles <= current_converter_cycles + 1;
             if (current_converter_cycles == (max_converter_needed_cycles - 1)) begin
-              current_converter_cycles = 0;
+              current_converter_cycles <= 0;
               fsm_current_state <= WAIT_CYCLE;
             end
           end
@@ -1048,7 +1048,7 @@ module OpenEye_FPGA
           if (fsm_cycle == 3) begin
             iact_converter_enc_enable <= 1;
           end
-          if (fsm_cycle == new_converter_standing_cycles-1) begin
+          if (fsm_cycle == new_converter_standing_cycles-7'(1)) begin
             fsm_cycle <= 0;
           end
         end
@@ -1103,7 +1103,7 @@ module OpenEye_FPGA
 
         GET_RESULTS : begin
           fsm_cycle <= fsm_cycle + 1;
-          if (fsm_cycle == psum_cnt) begin
+          if (BUFFER_WIDTH'(fsm_cycle) == psum_cnt) begin
             psum_enable_i_reg <= 0;
           end
           if (psum_enable_o_reg != 0) begin

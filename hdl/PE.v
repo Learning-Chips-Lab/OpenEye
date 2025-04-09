@@ -464,16 +464,17 @@ module PE
       psum_spad_addr_a_w        <= 0;
       psum_spad_addr_b_w        <= 1;
     end else begin  
-      {psum_data_2_delay,psum_data_1_delay} <= TRANS_BITWIDTH_PSUM'(psum_data_i);
       if (psum_ready_i) begin
         psum_enable                         <= psum_enable_i;
       end else begin
         psum_enable                         <= 0;
       end
       if (SERIAL) begin
+        {psum_data_2_delay,psum_data_1_delay} <= (TRANS_BITWIDTH_PSUM*PARALLEL_MACS)'(psum_data_i);
         psum_enable_2                         <= psum_enable;
         psum_enable_o                         <= psum_enable_2;
       end else begin
+        {psum_data_2_delay,psum_data_1_delay} <= TRANS_BITWIDTH_PSUM'(psum_data_i);
         psum_enable_o                         <= psum_enable;
       end
       iact_oh_delay_1                       <= iact_data_spad_oh;
