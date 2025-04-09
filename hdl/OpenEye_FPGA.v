@@ -282,7 +282,8 @@ module OpenEye_FPGA
 
   reg                                                  wght_buffer_SP_en_r;
   reg                                                  wght_buffer_SP_en_w;
-  reg  [BUFFER_WIDTH-1:0]                              wght_buffer_SP_addr;
+  reg  [BUFFER_WIDTH-1:0]                              wght_buffer_SP_wr_addr;
+  reg  [BUFFER_WIDTH-1:0]                              wght_buffer_SP_rd_addr;
   reg  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_w;
   reg  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_r;
 
@@ -379,28 +380,22 @@ module OpenEye_FPGA
   //States of the FSM
   //#######################
 
-  typedef enum logic [4:0] {
+  typedef enum logic [3:0] {
     IDLE               = 0,
     GET_PARAMETERS     = 1,
     GET_ROUTER_CONFIG  = 2,
     GET_IACT           = 3,
     GET_WGHT           = 4,
     GET_BIAS           = 5,
-  
     INIT_CONVERTER     = 6,
     START_CONVERTER    = 7,
     CONVERT_IACT       = 8,
     WAIT_CYCLE         = 9,
-    WAIT_CYCLE_2       = 10,
-
-    WRITE_IACT         = 11,
-    WRITE_WGHT         = 12,
-    WRITE_PSUM         = 13,
-
-    WAIT_FOR_RESULTS   = 14,
-
-    GET_RESULTS        = 15,
-    SEND_RESULTS       = 16
+    WRITE_WGHT         = 10,
+    WRITE_PSUM         = 11,
+    WAIT_FOR_RESULTS   = 12,
+    GET_RESULTS        = 13,
+    SEND_RESULTS       = 14
   } state_t;
 
   state_t fsm_current_state;
@@ -497,36 +492,74 @@ module OpenEye_FPGA
       end
     end
   end
-  reg       sending_data;
-  reg       iact_readied;
-  reg [7:0] current_cycle;
+  reg        sending_data;
+  reg        iact_readied;
+  reg  [7:0] current_cycle;
+  reg  [7:0] fsm_sending_cycle;
+  reg  [31:0] flat_help_var_send;
   //Process for sending data to OpenEye
   wire [CLUSTERS*NUM_GLB_IACT-1:0] iact_ready_o_oep_w;
   always@(posedge clk_i, negedge rst_n) begin
     if(!rst_n)begin
-      sending_data  <= 0;
-      iact_readied  <= 0;
-      current_cycle <= 0;
+      //Reset Registers
+      sending_data           <= 0;
+      iact_readied           <= 0;
+      current_cycle          <= 0;
+      fsm_sending_cycle      <= 0;
+      wght_enable_i_reg      <= 0;
+      wght_data_i_reg        <= 0;
+      wght_buffer_SP_en_r    <= 0;
+      wght_buffer_SP_rd_addr <= 0;
+      compute_reg            <= 0;
+      psum_ready_i_reg       <= 0;
       for (int a=0; a<CLUSTER_COLUMNS; a++) begin
         for (int b=0; b<CLUSTER_ROWS; b++) begin
           iact_converter_en_enc_reg[a][b] <= 0;
         end
       end
     end else begin
+      //Set Registers to 0
       for (int a=0; a<CLUSTER_COLUMNS; a++) begin
         for (int b=0; b<CLUSTER_ROWS; b++) begin
           iact_converter_en_enc_reg[a][b] <= 0;
         end
       end
-      if (send_data_reg | sending_data) begin 
+
+      compute_reg <= 0;
+
+      if (send_data_reg | sending_data) begin
         sending_data <= 1;
+        fsm_sending_cycle <= fsm_sending_cycle + 1;
         if (!sending_data) begin
           for (int a=0; a<CLUSTER_COLUMNS; a++) begin
             for (int b=0; b<CLUSTER_ROWS; b++) begin
               iact_converter_en_enc_reg[a][b] <= 1;
             end
           end
+          wght_buffer_SP_en_r <= 1;
         end
+        if (wght_buffer_SP_en_r) begin
+          wght_buffer_SP_rd_addr <= wght_buffer_SP_rd_addr + 1;
+          if (fsm_sending_cycle > 2) begin
+            wght_data_i_reg <= wght_buffer_SP_data_r;
+            flat_help_var_send = 0;
+            for (int a = 0; a < CLUSTER_ROWS; a++) begin
+              if ((a*(PE_COLUMNS*CLUSTER_COLUMNS)) <= (iact_size*iact_size) - 1) begin
+                flat_help_var_send = flat_help_var_send + ({(NUM_GLB_WGHT){1'b1}} << (a * NUM_GLB_WGHT));
+              end
+            end
+            flat_help_var_send    = flat_help_var_send + (flat_help_var_send << (CLUSTER_ROWS * NUM_GLB_WGHT));
+            wght_enable_i_reg    <= flat_help_var_send;
+            flat_help_var_send    = 0;
+          end
+          if (wght_buffer_SP_rd_addr > wght_cnt  + 2) begin
+            wght_buffer_SP_en_r    <= 0;
+            wght_buffer_SP_rd_addr <= 0;
+            compute_reg            <= 1;
+            wght_enable_i_reg      <= 0;
+          end
+        end
+      
         if (current_cycle < needed_cycles_reg - 1) begin
           if (iact_ready_o_oep_w == 0) begin
             if (!iact_readied) begin
@@ -542,6 +575,23 @@ module OpenEye_FPGA
             iact_readied <= 0;
           end
         end
+      
+        if (current_cycle < needed_cycles_reg) begin
+          if (iact_ready_o_oep_w == 0) begin
+            psum_ready_i_reg <= (2**(CLUSTERS*NUM_GLB_PSUM)) - 1;
+          end else begin
+            psum_ready_i_reg <= 0;
+          end
+        end
+        if (current_cycle == needed_cycles_reg) begin
+          psum_ready_i_reg <= (2**(CLUSTERS*NUM_GLB_PSUM)) - 1;
+        end
+      end else begin
+        //Set Registers to 0
+        fsm_sending_cycle   <= 0;
+        wght_data_i_reg     <= 0;
+        wght_enable_i_reg   <= 0;
+        wght_buffer_SP_en_r <= 0;
       end
     end
   end
@@ -591,18 +641,14 @@ module OpenEye_FPGA
 
       bano_cluster_mode_reg     <= 0;
       af_cluster_mode_reg       <= 0;
-      compute_reg               <= 0;
       compute_mask_reg          <= 0;
       compute_mask_iact_reg     <= 0;
       router_mode_iact_reg      <= 0;
       router_mode_wght_reg      <= 0;
       router_mode_psum_reg      <= 0;
 
-      wght_data_i_reg           <= 0;
-      wght_enable_i_reg         <= 0;
       psum_data_i_reg           <= 0;
       psum_enable_i_reg         <= 0;
-      psum_ready_i_reg          <= 0;
       psum_delay_reg            <= 0;
 
       ready_dma_o               <= 0;
@@ -611,9 +657,8 @@ module OpenEye_FPGA
       iact_buffer_SP_en_r       <= 0;
       iact_buffer_SP_en_w       <= 0;
       iact_buffer_SP_data_w     <= 0;
-      wght_buffer_SP_en_r       <= 0;
+      wght_buffer_SP_wr_addr    <= 0;
       wght_buffer_SP_en_w       <= 0;
-      wght_buffer_SP_addr       <= 0;
       wght_buffer_SP_data_w     <= 0;
       psum_buffer_SP_en_r       <= 0;
       psum_buffer_SP_en_w       <= 0;
@@ -718,9 +763,9 @@ module OpenEye_FPGA
               end
               32'd5 : begin
                 compute_mask_reg[3*DMA_BITWIDTH-1:2*DMA_BITWIDTH] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
-                fsm_last_state    <= GET_PARAMETERS;
-                fsm_current_state <= GET_ROUTER_CONFIG;
-                fsm_cycle         <= 0;
+                fsm_last_state                                    <= GET_PARAMETERS;
+                fsm_current_state                                 <= GET_ROUTER_CONFIG;
+                fsm_cycle                                         <= 0;
               end
               default : begin
                 fsm_last_state    <= GET_PARAMETERS;
@@ -843,7 +888,7 @@ module OpenEye_FPGA
         GET_WGHT : begin
           ready_dma_o <= 1;
           for (int a=0; a<RAM_CELLS; a++) begin
-              buffer_SP_en_w_reg[a] <= 0;
+            buffer_SP_en_w_reg[a] <= 0;
           end
           wght_buffer_SP_en_w <= 0;
 
@@ -854,7 +899,6 @@ module OpenEye_FPGA
               wght_buffer_SP_data_w[CLUSTER_ROWS*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b] 
               <= data_dma_i_reg[TRANS_BITWIDTH_WGHT+b];
             end
-            wght_enable_i_reg <= 0;
             
             if(fsm_wght_r != NUM_GLB_WGHT - 1)begin
               fsm_wght_r <= fsm_wght_r + 1;
@@ -863,11 +907,10 @@ module OpenEye_FPGA
               if((fsm_y_cl + 1) != CLUSTER_ROWS)begin
                 fsm_y_cl <= fsm_y_cl + 1;
               end else begin
-                fsm_y_cl <= 0;
-                fsm_cycle <= fsm_cycle + 1;
-
-                wght_buffer_SP_en_w <= 1;
-                wght_buffer_SP_addr <= wght_buffer_SP_addr + 1;
+                fsm_y_cl               <= 0;
+                fsm_cycle              <= fsm_cycle + 1;
+                wght_buffer_SP_en_w    <= 1;
+                wght_buffer_SP_wr_addr <= wght_buffer_SP_wr_addr + 1;
 
                 if(fsm_cycle == ({27'd0,wght_addr_len_reg} + input_activations_reg * ({26'd0,filters_reg} / PARALLEL_MACS)) - 1)begin
                   fsm_cycle <= 0;
@@ -881,14 +924,11 @@ module OpenEye_FPGA
               end
             end
           end else begin
-            wght_enable_i_reg <= 0;
-            wght_data_i_reg   <= 0;
           end
         end
 
         GET_BIAS : begin  
           ready_dma_o         <= 1;
-          wght_enable_i_reg   <= 0;
           wght_buffer_SP_en_w <= 0;
           psum_buffer_SP_en_w <= 0;
           if(enable_dma_i_reg) begin    
@@ -922,8 +962,8 @@ module OpenEye_FPGA
                   fsm_last_state               <= GET_BIAS;
                   fsm_current_state            <= INIT_CONVERTER;
                   ready_dma_o                  <= 0;
-                  wght_cnt                     <= wght_buffer_SP_addr;
-                  wght_buffer_SP_addr          <= 0;
+                  wght_cnt                     <= wght_buffer_SP_wr_addr;
+                  wght_buffer_SP_wr_addr        <= 0;
                   psum_cnt                     <= psum_buffer_SP_addr + 1;
                   iact_converter_params_enable <= 1;
                 end
@@ -1014,81 +1054,27 @@ module OpenEye_FPGA
         end
 
         WAIT_CYCLE : begin
-          iact_buffer_SP_data_w <= iact_out_reg;
-          fsm_cycle             <= fsm_cycle + 1;
-          iact_ready            <= 0;
+          iact_buffer_SP_data_w     <= iact_out_reg;
+          fsm_cycle                 <= fsm_cycle + 1;
+          iact_ready                <= 0;
           iact_converter_enc_enable <= 0;
           if (fsm_cycle == (iact_channels * 2)) begin
-            fsm_cycle         <= 0;
-            fsm_last_state    <= WAIT_CYCLE;
-            fsm_current_state <= WAIT_CYCLE_2;
-          end
-        end
-
-        WAIT_CYCLE_2 : begin
-          // reset IACT Stream Signals
-          current_buffer_n    <= 0;
-          current_buffer_n_1  <= 0;
-          current_buffer_addr <= 0;
-          current_channel     <= 0;
-          for (int a=0; a<RAM_CELLS; a++) begin
-            buffer_SP_addr_reg[a] <= 0;
-          end
-          // reset converter Signals
-          fsm_cycle             <= 0;
-          fsm_last_state        <= WAIT_CYCLE_2;
-          fsm_current_state     <= WRITE_WGHT;
-          wght_buffer_SP_addr   <= 0;
-          send_data_reg         <= 1;
-        end
-
-        WRITE_IACT : begin
-        end
-
-        WRITE_WGHT : begin
-          send_data_reg       <= 0;
-          wght_buffer_SP_en_r <= 1;
-          wght_buffer_SP_addr <= wght_buffer_SP_addr + 1;
-          fsm_cycle           <= fsm_cycle + 1;
-
-          if (fsm_cycle > 1) begin
-            wght_data_i_reg <= wght_buffer_SP_data_r;
-            flat_help_var_1 = 0;
-            for (int a = 0; a < CLUSTER_ROWS; a++) begin
-              if ((a*(PE_COLUMNS*CLUSTER_COLUMNS)) <= (iact_size*iact_size) - 1) begin
-                flat_help_var_1 = flat_help_var_1 + ({(NUM_GLB_WGHT){1'b1}} << (a * NUM_GLB_WGHT));
-              end
-            end
-            flat_help_var_1 = flat_help_var_1 + (flat_help_var_1 << (CLUSTER_ROWS * NUM_GLB_WGHT));
-            wght_enable_i_reg <= flat_help_var_1;
-            flat_help_var_1 = 0;
-          end
-
-          if (wght_buffer_SP_addr > wght_cnt  + 1) begin
-            // next cycle?
-            wght_buffer_SP_en_r <= 0;
-            wght_enable_i_reg   <= 0;
-            wght_buffer_SP_addr <= 0;
             fsm_cycle           <= 0;
-            compute_reg         <= 1;
-            fsm_cycle_mod1      <= 0;
+            send_data_reg       <= 1;
+            fsm_last_state      <= WAIT_CYCLE;
             fsm_current_state   <= WAIT_FOR_RESULTS;
-            fsm_last_state      <= WRITE_WGHT;
+            current_buffer_n    <= 0;
+            current_buffer_n_1  <= 0;
+            current_buffer_addr <= 0;
+            current_channel     <= 0;
+            for (int a=0; a<RAM_CELLS; a++) begin
+              buffer_SP_addr_reg[a] <= 0;
+            end
           end
         end
         
         WAIT_FOR_RESULTS : begin
-          fsm_cycle        <= fsm_cycle + 1;
-          psum_ready_i_reg <= 0;
-          if (fsm_cycle >= 32) begin
-            psum_ready_i_reg <= (2**(CLUSTERS*NUM_GLB_PSUM)) - 1;
-            fsm_cycle        <= fsm_cycle;
-            if (iact_ready_o_oep_w != 0) begin
-              fsm_cycle <= 0;
-            end
-          end
-          compute_reg           <= 0;
-          status_reg_enable_reg <= 0;
+          send_data_reg         <= 0;
           results_ready          = 1;
           for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
             for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
@@ -1133,7 +1119,6 @@ module OpenEye_FPGA
             fsm_cycle           <= 0;
             fsm_current_state   <= SEND_RESULTS;
             fsm_last_state      <= GET_RESULTS;
-            psum_ready_i_reg    <= 0;
           end
         end
 
@@ -1258,7 +1243,7 @@ module OpenEye_FPGA
       .clk_i   (clk_i), 
       .rd_en_i (wght_buffer_SP_en_r & !wght_buffer_SP_en_w),
       .wr_en_i (wght_buffer_SP_en_w), 
-      .addr_i  (wght_buffer_SP_addr),
+      .addr_i  (wght_buffer_SP_wr_addr | wght_buffer_SP_rd_addr),
       .data_i  (wght_buffer_SP_data_w),
       .data_o  (wght_buffer_SP_data_r)
     );
