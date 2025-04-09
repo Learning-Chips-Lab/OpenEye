@@ -161,8 +161,8 @@ module PE
   reg                                         psum_enable;
   reg                                         psum_enable_2;
 
-  reg [TRANS_BITWIDTH_PSUM/PARALLEL_MACS-1 :0]    psum_data_1_delay;
-  reg [TRANS_BITWIDTH_PSUM/PARALLEL_MACS-1 :0]    psum_data_2_delay;
+  reg [TRANS_BITWIDTH_PSUM-1 :0]    psum_data_1_delay;
+  reg [TRANS_BITWIDTH_PSUM-1 :0]    psum_data_2_delay;
   reg                                         mux_iact_ready;
   reg                                         adder_1_en;
   reg                                         adder_2_en;
