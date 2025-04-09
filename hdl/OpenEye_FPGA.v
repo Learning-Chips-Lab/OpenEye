@@ -168,7 +168,7 @@ module OpenEye_FPGA
   parameter RAM_CELLS_ADDR_WIDTH = 12,
   parameter RAM_CELLS_WORD_BITWIDTH = 64,
 
-  localparam integer  IACT_WORDS_IN_RAM   = $floor(RAM_CELLS_WORD_BITWIDTH/DATA_IACT_BITWIDTH),
+  localparam          IACT_WORDS_IN_RAM   = $floor(RAM_CELLS_WORD_BITWIDTH/DATA_IACT_BITWIDTH),
   localparam integer  WORDS_PER_CYCLE     = 2
     
 ) (
