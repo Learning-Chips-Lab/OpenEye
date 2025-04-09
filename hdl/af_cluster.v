@@ -31,7 +31,7 @@ module af_cluster
   parameter  integer PARALLEL_MACS = 2,
   parameter  integer DATA_BITWIDTH = 40,
   parameter  integer MODES         = 4,
-  localparam integer NUM_DATA      = SERIAL ? 1 : PARALLEL_MACS
+  localparam integer NUM_DATA      = 1'(SERIAL) ? 1 : PARALLEL_MACS
 ) (
   input                               clk_i,
   input                               rst_ni,
