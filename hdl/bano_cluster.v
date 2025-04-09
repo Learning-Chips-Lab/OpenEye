@@ -28,7 +28,7 @@ module bano_cluster
   parameter  integer PARALLEL_MACS  = 2,
   parameter  integer DATA_BITWIDTH  = 20,
   parameter  integer BN_OFFSET_BITS = 8,
-  localparam integer NUM_DATA      = SERIAL ? 1 : PARALLEL_MACS
+  localparam integer NUM_DATA      = 1'(SERIAL) ? 1 : PARALLEL_MACS
 ) (
   input                               clk_i,
   input                               rst_ni,
