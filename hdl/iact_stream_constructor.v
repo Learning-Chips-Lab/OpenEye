@@ -13,10 +13,10 @@ module iact_stream_constructor
   parameter   WORD_BITWIDTH       = 72,
   parameter   ADDRWIDTH           = 1,
   localparam  PES                 = PE_X * PE_Y,
-  localparam  IACT_WORDS_IN_RAM   = $floor(RAM_CELLS_WORDWIDTH/DATA_IACT_BITWIDTH),
+  localparam  IACT_WORDS_IN_RAM   = RAM_CELLS_WORDWIDTH/DATA_IACT_BITWIDTH,
   localparam  IACT_DATA_DATA      = DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD,
-  localparam  BITS_PER_ROUTER     = $floor(WORD_BITWIDTH/NUM_GLB_IACT),
-  localparam  WORDS_PER_TRANS     = $floor(BITS_PER_ROUTER/IACT_DATA_DATA),
+  localparam  BITS_PER_ROUTER     = WORD_BITWIDTH/NUM_GLB_IACT,
+  localparam  WORDS_PER_TRANS     = BITS_PER_ROUTER/IACT_DATA_DATA,
   localparam  PARAMS_SIZE         = 32,
   localparam  PARAM_LENGTH        = 8,
   localparam  WORDS_PER_CYCLE     = 2
