@@ -309,6 +309,11 @@ module iact_stream_constructor
                   mem_data_payload_reg[r][w] <= storage_w[RAM_CELLS'(ram_var)][32'(byte_var) + w];
                 end
               end
+
+              x_var = 0;
+              y_var = 0;
+              ram_var = 0;
+              byte_var = 0;
             end
             if (fsm_cycle == (((needed_iact_cycles_reg * channels * wght_size_reg)/WORDS_PER_CYCLE))) begin
               fsm_cycle         <= 0;
