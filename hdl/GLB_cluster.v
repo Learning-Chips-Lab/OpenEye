@@ -193,7 +193,7 @@ if (1'(SERIAL) == 1'(1)) begin
   assign router_cluster_iact_enable_o = ext_mem_iact_enable_i;
   assign ext_mem_iact_ready_o = router_cluster_iact_ready_i;
 end else begin
-  for(glb_cluster = 0; glb_cluster < NUM_GLB_IACT; glb_cluster = glb_cluster + 1) begin
+  for(glb_cluster = 0; glb_cluster < NUM_GLB_IACT - (NUM_GLB_IACT * SERIAL); glb_cluster = glb_cluster + 1) begin
     assign gen_iact[glb_cluster].iact_glb_we_in_w = ext_mem_iact_enable_i[glb_cluster];
     assign router_cluster_iact_enable_o_delay_1[glb_cluster] = ext_mem_iact_enable_i[glb_cluster] & (!data_write_enable_iact_i);
     for(bit_counter = 0; bit_counter < IACT_MEM_ADDR_BITS; bit_counter = bit_counter + 1) begin
