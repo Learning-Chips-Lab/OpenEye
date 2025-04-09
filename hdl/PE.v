@@ -161,8 +161,8 @@ module PE
   reg                                         psum_enable;
   reg                                         psum_enable_2;
 
-  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/PARALLEL_MACS-1 :0]    psum_data_1_delay;
-  reg [SERIAL ? TRANS_BITWIDTH_PSUM-1 : TRANS_BITWIDTH_PSUM/PARALLEL_MACS-1 :0]    psum_data_2_delay;
+  reg [TRANS_BITWIDTH_PSUM/PARALLEL_MACS-1 :0]    psum_data_1_delay;
+  reg [TRANS_BITWIDTH_PSUM/PARALLEL_MACS-1 :0]    psum_data_2_delay;
   reg                                         mux_iact_ready;
   reg                                         adder_1_en;
   reg                                         adder_2_en;
@@ -310,9 +310,9 @@ module PE
   assign iact_part_3_w = mux_iact_a_o_w[23:16];
   assign {iact_data_spad_oh,iact_data_spad_pay} = iact_data_SPad_data_r;
   assign {wght_data_spad_oh_2,wght_data_spad_pay_2,wght_data_spad_oh_1,wght_data_spad_pay_1} = wght_data_SPad_data_r;
-  assign adder_3_summand_1 = SERIAL ? adder_1_o_w : 0;
-  assign adder_3_summand_2 = SERIAL ? adder_2_o_w : 0;
-  assign psum_data_o = SERIAL ? TRANS_BITWIDTH_PSUM'(adder_3_o_w) : {adder_2_o_w,adder_1_o_w};
+  assign adder_3_summand_1 = 1'(SERIAL) ? adder_1_o_w : 0;
+  assign adder_3_summand_2 = 1'(SERIAL) ? adder_2_o_w : 0;
+  assign psum_data_o = 1'(SERIAL) ? TRANS_BITWIDTH_PSUM'(adder_3_o_w) : TRANS_BITWIDTH_PSUM'({adder_2_o_w,adder_1_o_w});
   assign wght_addr_SPad_addr = wght_addr_use_vec ? wght_addr_vec : iact_data_spad_oh;
   assign wght_data_SPad_addr = wght_data_use_vec ? wght_data_vec : wght_addr_SPad_data_r;
   assign mult_1_fac_1 = wght_data_spad_pay_1;
@@ -464,7 +464,7 @@ module PE
       psum_spad_addr_a_w        <= 0;
       psum_spad_addr_b_w        <= 1;
     end else begin  
-      {psum_data_2_delay,psum_data_1_delay} <= psum_data_i;
+      {psum_data_2_delay,psum_data_1_delay} <= TRANS_BITWIDTH_PSUM'(psum_data_i);
       if (psum_ready_i) begin
         psum_enable                         <= psum_enable_i;
       end else begin
