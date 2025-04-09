@@ -255,34 +255,18 @@ module OpenEye_FPGA
   //Register for the FSM
   reg  [32-1:0]                        fsm_cycle;
   reg  [6:0]                           fsm_cycle_mod1;
-  reg  [11:0]                          fsm_cycle_div;
-  reg  [6:0]                           fsm_cycle_div_cnt;
   // reg  [$clog2(FSM_STATES)-1:0]        fsm_last_state;
   // reg  [$clog2(FSM_STATES)-1:0]        fsm_current_state;
   reg  [$clog2(CLUSTER_COLUMNS)-1:0]    fsm_x_cl;
   reg  [$clog2(CLUSTER_COLUMNS)-1:0]    fsm_x_cl1;
-  reg  [$clog2(CLUSTER_COLUMNS)-1:0]    fsm_x_cl2;
-  reg  [$clog2(CLUSTER_COLUMNS)-1:0]    fsm_x_cl3;
-  reg  [$clog2(CLUSTER_COLUMNS)-1:0]    fsm_x_cl4;
-  reg  [$clog2(CLUSTER_COLUMNS)-1:0]    fsm_x_cl5;
   reg  [$clog2(CLUSTER_ROWS)-1:0]      fsm_y_cl;
   reg  [$clog2(CLUSTER_ROWS)-1:0]      fsm_y_cl1;
-  reg  [$clog2(CLUSTER_ROWS)-1:0]      fsm_y_cl2;
-  reg  [$clog2(CLUSTER_ROWS)-1:0]      fsm_y_cl3;
-  reg  [$clog2(CLUSTER_ROWS)-1:0]      fsm_y_cl4;
-  reg  [$clog2(CLUSTER_ROWS)-1:0]      fsm_y_cl5;
   reg  [$clog2(NUM_GLB_IACT)-1:0]      fsm_iact_r;
   reg  [$clog2(NUM_GLB_WGHT)-1:0]      fsm_wght_r;
   reg  [$clog2(NUM_GLB_PSUM)-1:0]      fsm_psum_r;
   reg  [$clog2(NUM_GLB_PSUM)-1:0]      fsm_psum_r1;
-  reg  [$clog2(NUM_GLB_PSUM)-1:0]      fsm_psum_r2;
-  reg  [$clog2(NUM_GLB_PSUM)-1:0]      fsm_psum_r3;
-  reg  [$clog2(NUM_GLB_PSUM)-1:0]      fsm_psum_r4;
-  reg  [$clog2(NUM_GLB_PSUM)-1:0]      fsm_psum_r5;
   reg  [DMA_BITWIDTH-1:0]              flat_help_var_1;
-  reg  [DMA_BITWIDTH-1:0]              flat_help_var_2;
   reg                                  results_ready;
-  reg  [2:0]                           loop_mod;
   reg  [7:0]                           finished_cycles;
   reg                                  new_stream;
 
@@ -338,8 +322,6 @@ module OpenEye_FPGA
   reg [BUFFER_WIDTH-1:0] iact_converter_mem_addr_reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [3:0] iact_converter_mem_off_reg   [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
 
-  reg [7:0] iact_converter_x;
-  reg [7:0] iact_converter_y;
   reg converters_ready;
 
   // Register for converting IACTS
@@ -363,11 +345,6 @@ module OpenEye_FPGA
   reg [6:0] new_converter_standing_cycles;
   reg [5:0] current_converter_cycles;
   reg [6:0] current_converter_standing_cycles;
-
-  // additional register for fsm
-  reg [7:0]                         fsm_iact_params;
-  reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_col;
-  reg [$clog2(CLUSTER_ROWS)-1:0]    fsm_row;
 
 
   // Register, that configure the chip
@@ -434,6 +411,12 @@ module OpenEye_FPGA
   //#######################
 
   //Process for sending parameters to Iact Converters
+  reg [7:0] fsm_iact_params;
+  reg [7:0] iact_converter_x;
+  reg [7:0] iact_converter_y;
+  // additional register for fsm
+  reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_col;
+  reg [$clog2(CLUSTER_ROWS)-1:0]    fsm_row;
   always@(posedge clk_i, negedge rst_n) begin
     if(!rst_n)begin
       fsm_iact_params  <= 0;
@@ -518,6 +501,7 @@ module OpenEye_FPGA
   reg       iact_readied;
   reg [7:0] current_cycle;
   //Process for sending data to OpenEye
+  wire [CLUSTERS*NUM_GLB_IACT-1:0] iact_ready_o_oep_w;
   always@(posedge clk_i, negedge rst_n) begin
     if(!rst_n)begin
       sending_data  <= 0;
@@ -582,30 +566,16 @@ module OpenEye_FPGA
 
       fsm_cycle                 <= 0;
       fsm_cycle_mod1            <= 0;
-      fsm_cycle_div             <= 0;
-      fsm_cycle_div_cnt         <= 0;
       fsm_last_state            <= IDLE;
       fsm_current_state         <= GET_PARAMETERS;
       fsm_x_cl                  <= 0;
       fsm_x_cl1                 <= 0;
-      fsm_x_cl2                 <= 0;
-      fsm_x_cl3                 <= 0;
-      fsm_x_cl4                 <= 0;
-      fsm_x_cl5                 <= 0;
       fsm_y_cl                  <= 0;
       fsm_y_cl1                 <= 0;
-      fsm_y_cl2                 <= 0;
-      fsm_y_cl3                 <= 0;
-      fsm_y_cl4                 <= 0;
-      fsm_y_cl5                 <= 0;
       fsm_iact_r                <= 0;
       fsm_wght_r                <= 0;
       fsm_psum_r                <= 0;
       fsm_psum_r1               <= 0;
-      fsm_psum_r2               <= 0;
-      fsm_psum_r3               <= 0;
-      fsm_psum_r4               <= 0;
-      fsm_psum_r5               <= 0;
       finished_cycles           <= 0;
 
       skipIact_reg              <= 0;
@@ -613,9 +583,7 @@ module OpenEye_FPGA
       skipPsum_reg              <= 0;
 
       results_ready              = 0;
-      loop_mod                   = 0;
       flat_help_var_1            = 0;
-      flat_help_var_2            = 0;
       enable_dma_o              <= 0;
       fifo_data_i               <= 0;
       fifo_read_i               <= 0;
@@ -1310,7 +1278,6 @@ module OpenEye_FPGA
     wire [$clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0]       iact_choose_i_oep_w;
     wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_oep_w;
     wire [CLUSTERS*NUM_GLB_IACT-1:0]                     iact_enable_i_oep_w;
-    wire [CLUSTERS*NUM_GLB_IACT-1:0]                     iact_ready_o_oep_w;
 
     OpenEye_Parallel #(
       .IS_TOPLEVEL         (0),
