@@ -119,7 +119,7 @@ module OpenEye_Parallel
   parameter ROUTER_MODES_WGHT   = 1,
   parameter ROUTER_MODES_PSUM   = 3,
 
-  parameter FSM_STATES          = 7,
+  parameter FSM_STATES          = 4,
   parameter BANO_MODES          = 2,
   parameter AF_MODES            = 4,
 
@@ -231,25 +231,17 @@ module OpenEye_Parallel
 
   //Register for the main FSM
   reg  [32-1:0]                        fsm_cycle;
-  reg  [$clog2(FSM_STATES)-1:0]        fsm_last_state;
-  reg  [$clog2(FSM_STATES)-1:0]        fsm_current_state;
-  reg  [$clog2(FSM_STATES)-1:0]        fsm_transmission_state;
 
   ///Register for the iact FSM
   reg  [32-1:0]                        fsm_iact_cycle;
   reg  [6:0]                           fsm_iact_cycle_mod1;
   reg  [11:0]                          fsm_iact_cycle_div;
   reg  [6:0]                           fsm_iact_cycle_div_cnt;
-  reg  [$clog2(FSM_STATES)-1:0]        fsm_iact_last_state;
-  reg  [$clog2(FSM_STATES)-1:0]        fsm_iact_current_state;
 
   ///Register for the wght FSM
-  reg  [$clog2(FSM_STATES)-1:0]        fsm_wght_current_state;
 
   ///Register for the psum FSM
   reg  [32-1:0]                        fsm_psum_cycle;
-  reg  [$clog2(FSM_STATES)-1:0]        fsm_psum_last_state;
-  reg  [$clog2(FSM_STATES)-1:0]        fsm_psum_current_state;
 
   reg                                  data_write_enable;
   reg                                  data_write_enable_iact;
@@ -365,34 +357,46 @@ module OpenEye_Parallel
   ///States of the FSM
   ///#######################
 
-  enum bit [2:0] {
+  typedef enum bit [2:0] {
     FIRST_PARAMS  = 0,
     SECOND_PARAMS = 1
   } fsm_transmission_mode;
 
-  enum bit [2:0] {
+  fsm_transmission_mode fsm_transmission_state;
+
+  typedef enum bit [2:0] {
     MAIN_IDLE          = 0,
     COMPUTING          = 1
   } fsm_mode;
 
-  enum bit [2:0] {
+  fsm_mode fsm_last_state;
+  fsm_mode fsm_current_state;
+
+  typedef enum bit [2:0] {
     IACT_IDLE          = 0,
     CALCULATE_IACT     = 1,
     WAIT               = 2
   } fsm_iact_mode;
 
-  enum bit [2:0] {
+  fsm_iact_mode fsm_iact_last_state;
+  fsm_iact_mode fsm_iact_current_state;
+
+  typedef enum bit [2:0] {
     WGHT_READY         = 0,
     WGHT_BUSY          = 1
   } fsm_wght_mode;
 
-  enum bit [2:0] {
+  fsm_wght_mode fsm_wght_current_state;
+
+  typedef enum bit [2:0] {
     PSUM_IDLE          = 0,
     CALCULATE_PSUM     = 1,
     GET_RESULTS        = 2,
     WAIT_FOR_RESULTS   = 3,
     SEND_RESULTS       = 4
   } fsm_psum_mode;
+  fsm_psum_mode fsm_psum_last_state;
+  fsm_psum_mode fsm_psum_current_state;
 
   ///#######################
   ///Process

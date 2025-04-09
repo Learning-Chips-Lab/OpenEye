@@ -997,13 +997,13 @@ module OpenEye_FPGA
             end
           end
           if (converters_ready == 1) begin
-            buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + (iact_size/WORDS_PER_CYCLE))%RAM_CELLS;
+            buffer_SP_addr_upper_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_upper_limit) + (32'(iact_size)/WORDS_PER_CYCLE))%RAM_CELLS);
             fsm_current_state <= CONVERT_IACT;
             for (int a=0; a<RAM_CELLS; a++) begin
               buffer_SP_addr_reg[a] <= ~0;
             end
           end
-          converter_needed_cycles <= WGHT_SIZE * iact_channels;
+          converter_needed_cycles <= 6'(WGHT_SIZE * iact_channels);
         end
 
         CONVERT_IACT : begin
@@ -1021,8 +1021,8 @@ module OpenEye_FPGA
                   buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
                 end
               end
-            buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + (iact_size/WORDS_PER_CYCLE))%RAM_CELLS;
-            buffer_SP_addr_lower_limit <= (buffer_SP_addr_lower_limit + (iact_size/WORDS_PER_CYCLE))%RAM_CELLS;
+            buffer_SP_addr_upper_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_upper_limit) + (32'(iact_size)/WORDS_PER_CYCLE))%RAM_CELLS);
+            buffer_SP_addr_lower_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_lower_limit) + (32'(iact_size)/WORDS_PER_CYCLE))%RAM_CELLS);
             end
           end
           current_converter_standing_cycles <= current_converter_standing_cycles + 1;
@@ -1048,7 +1048,7 @@ module OpenEye_FPGA
           if (fsm_cycle == 3) begin
             iact_converter_enc_enable <= 1;
           end
-          if (fsm_cycle == new_converter_standing_cycles-7'(1)) begin
+          if (7'(fsm_cycle) == 7'(new_converter_standing_cycles)-7'(1)) begin
             fsm_cycle <= 0;
           end
         end

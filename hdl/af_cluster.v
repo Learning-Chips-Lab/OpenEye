@@ -52,9 +52,9 @@ genvar data_pos;
 for (data_pos = 0;data_pos < NUM_DATA; data_pos = data_pos + 1) begin
   assign sign[data_pos] = data_i[((1+data_pos) * DATA_BITWIDTH)-1]; //'data_i' gets split in two seperate data blocks
   assign psum[data_pos] = data_i[((1+data_pos) * DATA_BITWIDTH)-2 : data_pos * DATA_BITWIDTH]; //'data_i' gets split in two seperate data blocks
-  assign data_out[data_pos] = mode_i == 0 ? {sign[data_pos],psum[data_pos]} :
-                              mode_i == 1 ? (sign[data_pos] ? 0 : {1'b0,psum[data_pos]}) :
-                              mode_i == 2 ? (sign[data_pos] ? (psum[data_pos] * 32'd3435973837) >> 35 : {1'b0,psum[data_pos]}) : //Approximation of 0.1 multiplier, if below 0
+  assign data_out[data_pos] = mode_i == ($clog2(MODES))'(0) ? {sign[data_pos],psum[data_pos]} :
+                              mode_i == ($clog2(MODES))'(1) ? (sign[data_pos] ? 0 : {1'b0,psum[data_pos]}) :
+                              mode_i == ($clog2(MODES))'(2) ? (sign[data_pos] ? DATA_BITWIDTH'((psum[data_pos] * 32'd3435973837) >> 35) : {1'b0,psum[data_pos]}) : //Approximation of 0.1 multiplier, if below 0
                               0 ;
   assign data_o[(DATA_BITWIDTH*(1+data_pos))-1:DATA_BITWIDTH*data_pos] = data_out[data_pos]; // Concatenate both data blocks into one output
 end     
