@@ -536,7 +536,6 @@ module OpenEye_Parallel
         router_mode_iact_reg       <= router_mode_iact_i;
         router_mode_iact_storage   <= router_mode_iact_i;
         router_mode_wght_reg       <= router_mode_wght_i;
-        router_mode_psum_reg       <= router_mode_psum_i;
       end
       case(fsm_current_state)
 
@@ -549,7 +548,6 @@ module OpenEye_Parallel
             fsm_current_state <= COMPUTING;
             data_write_enable <= 0;
             computing         <= 1;
-            mem_addr_psum     <= 0;
           end
           if (compute_i) begin
             finished_cycles   <= 0;
@@ -745,7 +743,6 @@ if (SERIAL == 0) begin
             end
             
             if (fsm_iact_last_state == IACT_IDLE) begin
-              mem_addr_psum <= 0;
             end
             if (!data_mode_reg) begin
               for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
@@ -1005,6 +1002,12 @@ end
       results_ready             = 0;
 
     end else begin
+      if (status_reg_enable_i_w) begin
+        router_mode_psum_reg       <= router_mode_psum_i;
+      end
+      if (compute_i_w) begin
+        mem_addr_psum     <= 0;
+      end
       psum_enable_o     <= psum_enable_o_reg;
       psum_enable_i_reg <= psum_enable_i;
       psum_data_i_reg   <= psum_data_i;
