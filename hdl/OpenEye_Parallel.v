@@ -486,7 +486,6 @@ module OpenEye_Parallel
       router_mode_wght_reg       <= 0;
       router_mode_wght_i_reg     <= 0;
       router_mode_psum_i_reg     <= 0;
-      storage_cycles             <= 0;
       iact_pes_per_router        <= 5;
       wght_addr_len_i_reg        <= 0;
       wght_addr_len_reg          <= 0;
@@ -546,7 +545,6 @@ module OpenEye_Parallel
         MAIN_IDLE : begin
           data_write_enable    <= 1;
           computing            <= 0;
-          storage_cycles       <= 0;
           router_mode_wght_reg <= router_mode_wght_i;
           if (compute_i_w) begin
             fsm_last_state    <= MAIN_IDLE;
@@ -1002,6 +1000,7 @@ end
       psum_data_i_reg          <= 0;
       psum_data_o              <= 0;
       psum_choose_reg          <= 0;
+      storage_cycles           <= 0;
       router_mode_psum_reg     <= 0;
       psum_router_set_reg      <= 1;
       results_ready             = 0;
@@ -1033,9 +1032,10 @@ end
       end
       case(fsm_psum_current_state)       
         PSUM_IDLE : begin
-          psum_transmitted <= 0;
-          fsm_psum_cycle   <= 0;
-          fsm_psum_last_state      <= PSUM_IDLE;
+          psum_transmitted     <= 0;
+          fsm_psum_cycle       <= 0;
+          fsm_psum_last_state  <= PSUM_IDLE;
+          storage_cycles       <= 0;
 
           if (computing) begin
             mem_addr_psum          <= 0;
