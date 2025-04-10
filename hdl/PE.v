@@ -545,7 +545,6 @@ module PE
             adder_1_en             <= 0;
             adder_2_en             <= 0;
             if (stride_reg != 0) begin
-              stride_reg <= 0;
               iact_data_position_reg <= PE_Y + PE_X * stride_reg;
             end
             if (32'(iact_data_position_reg) >= NUM_GLB_IACT) begin
