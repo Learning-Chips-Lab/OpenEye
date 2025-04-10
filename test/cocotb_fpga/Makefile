@@ -1,14 +1,14 @@
 # Makefile
 
-# defaults
 # Icarus Verilog
-SIM ?= icarus
-# Verilator
-#SIM ?= verilator
-#TOPLEVEL_LANG ?= verilog
-#COMPILE_ARGS += --trace-fst
-#EXTRA_ARGS += --trace-fst --trace-structs
+#SIM ?= icarus
 
+# Verilator
+SIM ?= verilator
+COMPILE_ARGS += --trace --trace-fst --trace-structs
+EXTRA_ARGS += --trace --trace-fst --trace-structs
+
+TOPLEVEL_LANG ?= verilog
 WAVEFORM=on
 
 # use VHDL_SOURCES for VHDL files
@@ -121,3 +121,6 @@ run:
 gtkwave:
 	touch $(abspath $(PWD)/../../hdl/OpenEye_FPGA.v)
 	gtkwave $(PWD)/sim_build/OpenEye_FPGA.vcd
+
+clean:
+	rm -rf sim_build
