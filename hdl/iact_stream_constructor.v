@@ -35,18 +35,18 @@ module iact_stream_constructor
   output reg [NUM_GLB_IACT-1:0]                 iact_enable_o,
   output reg [(PES*$clog2(NUM_GLB_IACT+1))-1:0] iact_choose_o
 );
-  reg                       ram_wr_en;
-  reg  [ADDRWIDTH-1:0]      ram_wr_addr;
-  wire [WORD_BITWIDTH-1:0]  ram_data_i;
-  reg                       ram_rd_en;
-  reg  [ADDRWIDTH-1:0]      ram_rd_addr;
-  wire [WORD_BITWIDTH-1:0]  ram_data_o;
-  reg  [ADDRWIDTH-1:0]      address_storage;
-  reg  [PARAM_LENGTH-1:0]   x;
-  reg  [PARAM_LENGTH-1:0]   y;
-  reg  [PARAM_LENGTH-1:0]   iact_size;
-  reg  [PARAM_LENGTH-1:0]   channels;
-  reg  [PARAM_LENGTH-1:0]   current_cycle;
+  reg                            ram_wr_en;
+  reg  [ADDRWIDTH-1:0]           ram_wr_addr;
+  wire [WORD_BITWIDTH-1:0]       ram_data_i;
+  reg                            ram_rd_en;
+  reg  [ADDRWIDTH-1:0]           ram_rd_addr;
+  wire [WORD_BITWIDTH-1:0]       ram_data_o;
+  reg  [ADDRWIDTH-1:0]           address_storage;
+  reg  [PARAM_LENGTH-1:0]        x;
+  reg  [PARAM_LENGTH-1:0]        y;
+  reg  [PARAM_LENGTH-1:0]        iact_size;
+  reg  [PARAM_LENGTH-1:0]        channels;
+  reg  [PARAM_LENGTH-1:0]        current_cycle;
   reg  [15:0]                    pos;
   reg  [3:0]                     padding_reg;
   reg  [7:0]                     needed_iact_cycles_reg;
@@ -169,6 +169,9 @@ module iact_stream_constructor
     reg  [7:0]  y_cycle;
     reg  [7:0]  router_cycle;
     reg  [7:0]  addr_cycle;
+    reg  [3:0]  duty_cycle;
+    reg  [3:0]  duty_cycle_th;
+    reg  [3:0]  duty_cycle_reset;
     state_t fsm_current_state;
 
     always @(posedge clk_i, negedge rst_ni) begin
@@ -195,6 +198,9 @@ module iact_stream_constructor
         padding_reg            <= 0;
         needed_iact_cycles_reg <= 0;
         wght_size_reg          <= 0;
+        duty_cycle             <= 0;
+        duty_cycle_th          <= 3; //HERE
+        duty_cycle_reset       <= 3; //HERE
         x_var                   = 0;
         y_var                   = 0;
         ram_var                 = 0;
@@ -225,6 +231,9 @@ module iact_stream_constructor
             padding_reg            <= 0;
             needed_iact_cycles_reg <= 0;
             wght_size_reg          <= 0;
+            duty_cycle             <= 0;
+            duty_cycle_th          <= 3; //HERE
+            duty_cycle_reset       <= 3; //HERE
           end
 
           GET_PARAMETER : begin
@@ -237,90 +246,99 @@ module iact_stream_constructor
             iact_router_counter <= 0;
             kernel_y_counter    <= 0;
             if (enable_store) begin
-              ram_wr_addr        <= address_storage;
+              ram_wr_addr       <= address_storage;
               padding_reg       <= (wght_size_reg-1)/2;
               fsm_current_state <= WRITE_TO_MEMORY;
+              duty_cycle        <= 0;
             end
           end
 
           WRITE_TO_MEMORY : begin
-            fsm_cycle    <= fsm_cycle + 1;
-            y_cycle      <= y_cycle + 1;
-            router_cycle <= router_cycle + 1;
-            ram_wr_en  <= 0;
-            if (fsm_cycle % (2/WORDS_PER_CYCLE) == (2/WORDS_PER_CYCLE) - 1) begin
-              ram_wr_en  <= 1;
+            duty_cycle <= duty_cycle + 1;
+            if (duty_cycle == duty_cycle_reset) begin
+              duty_cycle <= 0;
             end
-            if (y_cycle == ((channels * needed_iact_cycles_reg)/WORDS_PER_CYCLE) - 1) begin
-              y       <= y + 1;
-              y_cycle <= 0;
-            end
-            if (router_cycle == 8'((32'(channels)/WORDS_PER_CYCLE) - 1)) begin
-                router_cycle        <= 0;
-                iact_router_counter <= iact_router_counter + 1;
-                if (iact_router_counter == needed_iact_cycles_reg - 1) begin
-                  iact_router_counter <= 0;
-                  kernel_y_counter    <= kernel_y_counter + 1;
-                end
-            end
-            if (fsm_cycle % (2/WORDS_PER_CYCLE) == 0) begin
-              addr_cycle   <= addr_cycle + 1;
-              if (addr_cycle == 8'((32'(channels)/WORDS_PER_CYCLE) - 1)) begin
-                addr_cycle  <= 0;
-                ram_wr_addr <= ram_wr_addr + 1;
-              end else begin
-                ram_wr_addr <= address_storage + ADDRWIDTH'((kernel_y_counter * channels + iact_router_counter * (channels*wght_size_reg))/WORDS_PER_TRANS);
+            if (duty_cycle <= duty_cycle_th) begin
+              fsm_cycle    <= fsm_cycle + 1;
+              y_cycle      <= y_cycle + 1;
+              router_cycle <= router_cycle + 1;
+              ram_wr_en  <= 0;
+              if (fsm_cycle % (2/WORDS_PER_CYCLE) == (2/WORDS_PER_CYCLE) - 1) begin
+                ram_wr_en  <= 1;
               end
-              //Reset payload to 0
-              for (int r=0; r<NUM_GLB_IACT; r++) begin
-                for (int w=0; w<WORDS_PER_TRANS; w++) begin
-                  mem_data_payload_reg[r][w] <= 0;
-                end
+              if (y_cycle == ((channels * needed_iact_cycles_reg)/WORDS_PER_CYCLE) - 1) begin
+                y       <= y + 1;
+                y_cycle <= 0;
               end
-              if (fsm_cycle % (32'(channels)/WORDS_PER_CYCLE) == 0) begin
-                for (int r=0; r<NUM_GLB_IACT; r++) begin
-                  for (int w=0; w<WORDS_PER_TRANS; w++) begin
-                    mem_data_overhead_reg[r][w] <= 0;
+              if (router_cycle == 8'((32'(channels)/WORDS_PER_CYCLE) - 1)) begin
+                  router_cycle        <= 0;
+                  iact_router_counter <= iact_router_counter + 1;
+                  if (iact_router_counter == needed_iact_cycles_reg - 1) begin
+                    iact_router_counter <= 0;
+                    kernel_y_counter    <= kernel_y_counter + 1;
                   end
-                end
-              end else begin
-                for (int r=0; r<NUM_GLB_IACT; r++) begin
-                  for (int w=0; w<WORDS_PER_TRANS; w++) begin
-                    mem_data_overhead_reg[r][w] <= 0;
-                  end
-                end
               end
-            end
-            for (int r=0; r<NUM_GLB_IACT; r++) begin
-              x_var = (iact_router_counter * NUM_GLB_IACT) + (8'(r) + x);
-              y_var = (y);
-              ram_var = ((((y_var - 8'(padding_reg))*iact_size) + (x_var-8'(padding_reg)))/2)%RAM_CELLS;
-              byte_var = 8'(((((32'(x_var) - 32'(padding_reg)))*channels) + ((fsm_cycle%(4/WORDS_PER_CYCLE))/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM);
-              for (int w=0; w<WORDS_PER_CYCLE; w++) begin
-                //PADDING
-                if ((
-                (8'(padding_reg) > x_var)|
-                ((iact_size + 8'(padding_reg) - 1) < x_var)) | (
-                ((8'(padding_reg)) > y_var) |
-                ((iact_size + 8'(padding_reg) - 1) < y_var)
-                )) begin
-                  mem_data_payload_reg[r][w] <= 0;
+              if (fsm_cycle % (2/WORDS_PER_CYCLE) == 0) begin
+                addr_cycle   <= addr_cycle + 1;
+                if (addr_cycle == 8'((32'(channels)/WORDS_PER_CYCLE) - 1)) begin
+                  addr_cycle  <= 0;
+                  ram_wr_addr <= ram_wr_addr + 1;
                 end else begin
-                  mem_data_payload_reg[r][w] <= storage_w[RAM_CELLS'(ram_var)][32'(byte_var) + w];
+                  ram_wr_addr <= address_storage + ADDRWIDTH'((kernel_y_counter * channels + iact_router_counter * (channels*wght_size_reg))/WORDS_PER_TRANS);
+                end
+                //Reset payload to 0
+                for (int r=0; r<NUM_GLB_IACT; r++) begin
+                  for (int w=0; w<WORDS_PER_TRANS; w++) begin
+                    mem_data_payload_reg[r][w] <= 0;
+                  end
+                end
+                if (fsm_cycle % (32'(channels)/WORDS_PER_CYCLE) == 0) begin
+                  for (int r=0; r<NUM_GLB_IACT; r++) begin
+                    for (int w=0; w<WORDS_PER_TRANS; w++) begin
+                      mem_data_overhead_reg[r][w] <= 0;
+                    end
+                  end
+                end else begin
+                  for (int r=0; r<NUM_GLB_IACT; r++) begin
+                    for (int w=0; w<WORDS_PER_TRANS; w++) begin
+                      mem_data_overhead_reg[r][w] <= 0;
+                    end
+                  end
                 end
               end
+              for (int r=0; r<NUM_GLB_IACT; r++) begin
+                x_var = (iact_router_counter * NUM_GLB_IACT) + (8'(r) + x);
+                y_var = (y);
+                ram_var = ((((y_var - 8'(padding_reg))*iact_size) + (x_var-8'(padding_reg)))/2)%RAM_CELLS;
+                byte_var = 8'(((((32'(x_var) - 32'(padding_reg)))*channels) + ((fsm_cycle%(4/WORDS_PER_CYCLE))/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM);
+                for (int w=0; w<WORDS_PER_CYCLE; w++) begin
+                  //PADDING
+                  if ((
+                  (8'(padding_reg) > x_var)|
+                  ((iact_size + 8'(padding_reg) - 1) < x_var)) | (
+                  ((8'(padding_reg)) > y_var) |
+                  ((iact_size + 8'(padding_reg) - 1) < y_var)
+                  )) begin
+                    mem_data_payload_reg[r][w] <= 0;
+                  end else begin
+                    mem_data_payload_reg[r][w] <= storage_w[RAM_CELLS'(ram_var)][32'(byte_var) + w];
+                  end
+                end
 
-              x_var = 0;
-              y_var = 0;
-              ram_var = 0;
-              byte_var = 0;
-            end
-            if (fsm_cycle == (((needed_iact_cycles_reg * channels * wght_size_reg)/WORDS_PER_CYCLE))) begin
-              fsm_cycle         <= 0;
-              ram_wr_en         <= 0;
-              current_cycle     <= current_cycle + 1;
-              address_storage   <= ram_wr_addr + 1;
-              fsm_current_state <= GET_PARAMETER;
+                x_var = 0;
+                y_var = 0;
+                ram_var = 0;
+                byte_var = 0;
+              end
+              if (fsm_cycle == (((needed_iact_cycles_reg * channels * wght_size_reg)/WORDS_PER_CYCLE))) begin
+                fsm_cycle         <= 0;
+                ram_wr_en         <= 0;
+                current_cycle     <= current_cycle + 1;
+                address_storage   <= ram_wr_addr + 1;
+                fsm_current_state <= GET_PARAMETER;
+              end
+            end else begin
+              ram_wr_en  <= 0;
             end
           end
 
