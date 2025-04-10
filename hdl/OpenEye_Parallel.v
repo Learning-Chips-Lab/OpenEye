@@ -459,7 +459,6 @@ module OpenEye_Parallel
       compute_mask_i_reg         <= 0;
       compute_cluster_i_reg      <= 0;
 
-      results_ready               = 0;
       loop_mod                    = 0;
       flat_help_var               = 0;
 
@@ -1005,6 +1004,7 @@ end
       psum_choose_reg          <= 0;
       router_mode_psum_reg     <= 0;
       psum_router_set_reg      <= 1;
+      results_ready             = 0;
 
     end else begin
       psum_enable_o     <= psum_enable_o_reg;
