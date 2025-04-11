@@ -24,11 +24,13 @@
 
 module bano_cluster 
 #( 
-  parameter  integer SERIAL         = 0,
-  parameter  integer PARALLEL_MACS  = 2,
-  parameter  integer DATA_BITWIDTH  = 20,
-  parameter  integer BN_OFFSET_BITS = 8,
-  localparam integer NUM_DATA      = 1'(SERIAL) ? 1 : PARALLEL_MACS
+  parameter  integer CALC_DATA_WIDTH = 32,
+  parameter  integer ADVANCED_WIDTH  = 64,
+  parameter          SERIAL          = 1'b1,
+  parameter  integer PARALLEL_MACS   = 2,
+  parameter  integer DATA_BITWIDTH   = 20,
+  parameter  integer BN_OFFSET_BITS  = 8,
+  localparam integer NUM_DATA        = SERIAL ? 1 : PARALLEL_MACS
 ) (
   input                               clk_i,
   input                               rst_ni,

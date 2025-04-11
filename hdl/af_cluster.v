@@ -27,15 +27,20 @@
 
 module af_cluster 
 #( 
-  parameter  integer SERIAL        = 0,
-  parameter  integer PARALLEL_MACS = 2,
-  parameter  integer DATA_BITWIDTH = 40,
-  parameter  integer MODES         = 4,
-  localparam integer NUM_DATA      = 1'(SERIAL) ? 1 : PARALLEL_MACS
+  parameter  integer               CALC_DATA_WIDTH = 32,
+  parameter  integer               ADVANCED_WIDTH  = 64,
+  parameter                        SERIAL          = 1'b1,
+  parameter  integer               PARALLEL_MACS   = 2,
+  parameter  integer               DATA_BITWIDTH   = 20,
+  parameter  integer               MODES           = 4,
+  parameter  [ADVANCED_WIDTH-1:0]  DIVISOR         =  {ADVANCED_WIDTH{1'b0}} + 35,
+  parameter  [ADVANCED_WIDTH-1:0]  DIVIDEND        =  {{(ADVANCED_WIDTH-32){1'b0}}, 32'd3435973837},
+  localparam integer               NUM_DATA        = (SERIAL != 0) ? 1 : PARALLEL_MACS,
+  localparam integer               MODE_BITS       = $clog2(MODES)
 ) (
   input                               clk_i,
   input                               rst_ni,
-  input  [$clog2(MODES)-1 : 0]        mode_i,
+  input  [MODE_BITS-1 : 0]            mode_i,
   output                              ready_o,
   input  [DATA_BITWIDTH*NUM_DATA-1:0] data_i,
   input                               enable_i,
@@ -44,18 +49,24 @@ module af_cluster
   output                              enable_o
 );
 
-wire [DATA_BITWIDTH-2:0] psum     [NUM_DATA - 1 : 0];
-wire                     sign     [NUM_DATA - 1 : 0];
-wire [DATA_BITWIDTH-1:0] data_out [NUM_DATA - 1 : 0];
+wire [DATA_BITWIDTH-2:0]  psum                   [NUM_DATA-1:0];
+wire                      sign                   [NUM_DATA-1:0];
+wire [DATA_BITWIDTH-1:0]  data_out               [NUM_DATA-1:0];
+wire [ADVANCED_WIDTH-1:0] result_leaky           [NUM_DATA-1:0];
+wire [DATA_BITWIDTH-1:0]  truncated_result_leaky [NUM_DATA-1:0];
 
 genvar data_pos;
 for (data_pos = 0;data_pos < NUM_DATA; data_pos = data_pos + 1) begin
-  assign sign[data_pos] = data_i[((1+data_pos) * DATA_BITWIDTH)-1]; //'data_i' gets split in two seperate data blocks
-  assign psum[data_pos] = data_i[((1+data_pos) * DATA_BITWIDTH)-2 : data_pos * DATA_BITWIDTH]; //'data_i' gets split in two seperate data blocks
-  assign data_out[data_pos] = mode_i == ($clog2(MODES))'(0) ? {sign[data_pos],psum[data_pos]} :
-                              mode_i == ($clog2(MODES))'(1) ? (sign[data_pos] ? 0 : {1'b0,psum[data_pos]}) :
-                              mode_i == ($clog2(MODES))'(2) ? (sign[data_pos] ? DATA_BITWIDTH'((psum[data_pos] * 32'd3435973837) >> 35) : {1'b0,psum[data_pos]}) : //Approximation of 0.1 multiplier, if below 0
-                              0 ;
+  assign result_leaky[data_pos]           = (psum[data_pos] * DIVIDEND) >> DIVISOR;
+  assign truncated_result_leaky[data_pos] = result_leaky[data_pos][DATA_BITWIDTH-1:0];
+  assign sign[data_pos]                   = data_i[((1+data_pos) * DATA_BITWIDTH)-1]; //'data_i' gets split in two seperate data blocks
+  assign psum[data_pos]                   = data_i[((1+data_pos) * DATA_BITWIDTH)-2 : data_pos * DATA_BITWIDTH]; //'data_i' gets split in two seperate data blocks
+  assign data_out[data_pos] =
+        (mode_i == 0) ? {sign[data_pos],psum[data_pos]} :
+        (mode_i == 1) ? sign[data_pos] ? {DATA_BITWIDTH{1'b0}} : {1'b0,psum[data_pos]} :
+        (mode_i == 2) ? (sign[data_pos] ? truncated_result_leaky[data_pos] : {1'b0, psum[data_pos]})  : //Approximation of 0.1 multiplier, if below 0
+        {DATA_BITWIDTH{1'b0}};
+
   assign data_o[(DATA_BITWIDTH*(1+data_pos))-1:DATA_BITWIDTH*data_pos] = data_out[data_pos]; // Concatenate both data blocks into one output
 end     
 
