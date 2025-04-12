@@ -311,7 +311,7 @@ module OpenEye_FPGA
   reg                               buffer_SP_en_w_reg   [RAM_CELLS-1:0];
   reg [RAM_CELLS_ADDR_WIDTH-1:0]    buffer_SP_addr_reg   [RAM_CELLS-1:0];
   reg [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w_reg [RAM_CELLS-1:0];
-  reg [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_r_reg [RAM_CELLS-1:0];
+  reg [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r_reg;
 
   // Registers for IACT Converter
   reg [31:0] iact_converter_params_reg   [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
@@ -1222,7 +1222,7 @@ module OpenEye_FPGA
   wire                               buffer_SP_en_w   [RAM_CELLS-1:0];
   wire [RAM_CELLS_ADDR_WIDTH-1:0]    buffer_SP_addr   [RAM_CELLS-1:0];
   wire [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w [RAM_CELLS-1:0];
-  wire [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_r [RAM_CELLS-1:0];
+  wire [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r;
 
   assign buffer_SP_en_r = buffer_SP_en_r_reg;
   assign buffer_SP_en_w = buffer_SP_en_w_reg;
@@ -1243,7 +1243,7 @@ module OpenEye_FPGA
         .wr_en_i (buffer_SP_en_w[i]),
         .addr_i  (buffer_SP_addr[i]),
         .data_i  (buffer_SP_data_w[i]),
-        .data_o  (buffer_SP_data_r[i])
+        .data_o  (buffer_SP_data_r[(i+1)*RAM_CELLS_WORD_BITWIDTH-1:i*RAM_CELLS_WORD_BITWIDTH])
       );
     end
 

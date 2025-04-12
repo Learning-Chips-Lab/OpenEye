@@ -41,7 +41,7 @@
 
 module data_pipeline_iact
 #(
-    parameter DATA_WIDTH                = 1,
+    parameter DATA_WIDTH                = 24,
     parameter FIRST_SPAD_ADDR           = 16,
     parameter FIRST_SPAD_DATA           = 8,
     parameter SECOND_SPAD_ADDR          = 96,
@@ -80,12 +80,14 @@ module data_pipeline_iact
   reg [$clog2(SECOND_SPAD_ADDR) : 0]      address_temp_1;  // Temporary address storage
   reg [$clog2(SECOND_SPAD_ADDR) : 0]      address_temp_2;  // Temporary address storage
   reg [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;  // Cycle counter for data loading
-  reg [SECOND_PAYLOAD_WIDTH-1 : 0]        payload_reg;
   reg [SECOND_OVERHEAD_WIDTH-1 : 0]       overhead_reg;
   reg [SECOND_OVERHEAD_WIDTH-1 : 0]       overhead_delay_reg;
+  reg [DATA_WIDTH-1 : 0]                  payload_reg;
+  wire [SECOND_PAYLOAD_WIDTH-1 : 0]       payload_trunc;
   genvar i;
 
-    assign second_spad_data_o = {overhead_delay_reg,payload_reg};  // Assign data to the second SPAD output
+    assign payload_trunc = payload_reg[SECOND_PAYLOAD_WIDTH-1 : 0];
+    assign second_spad_data_o = {overhead_delay_reg,payload_trunc};  // Assign data to the second SPAD output
 
 
 
@@ -114,19 +116,22 @@ module data_pipeline_iact
         first_spad_en_o     <= 1;
         second_spad_en_o    <= 1;
         second_spad_addr_o  <= address_temp_2[SECOND_SPAD_ADDR_BITWIDTH-1:0];
-        second_spad_words_o <= ($clog2(SECOND_SPAD_ADDR+1))'(32'(second_spad_addr_o) + 2);
+        //second_spad_words_o <= ($clog2(SECOND_SPAD_ADDR+1))'(32'(second_spad_addr_o) + 2);
+        second_spad_words_o <= second_spad_addr_o + 2;
 
         address_temp_2      <= address_temp_2 + 1;
         cycle_counter       <= cycle_counter + 1;
 
-        payload_reg         <= SECOND_PAYLOAD_WIDTH'(data_storage_2 >> SECOND_SPAD_DATA);
+        //payload_reg         <= SECOND_PAYLOAD_WIDTH'(data_storage_2 >> SECOND_SPAD_DATA);
+        payload_reg         <= data_storage_2 >> SECOND_SPAD_DATA;
         data_storage_2      <= data_storage_2 >> SECOND_SPAD_DATA;
         first_spad_data_o   <= overhead_reg + 1;
         overhead_reg        <= overhead_reg + 1;
         overhead_delay_reg  <= overhead_reg;
 
         if (cycle_counter == 0) begin
-          payload_reg       <= SECOND_PAYLOAD_WIDTH'(data_i);
+          //payload_reg       <= SECOND_PAYLOAD_WIDTH'(data_i);
+          payload_reg       <= data_i;
           data_storage_2    <= data_i;
           first_spad_data_o <= overhead_reg + 1;
         end

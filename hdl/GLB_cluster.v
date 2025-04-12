@@ -62,7 +62,7 @@
 
 module GLB_cluster 
 #( 
-  parameter integer SERIAL              = 0,
+  parameter         SERIAL              = 1'd0,
   parameter integer PARALLEL_MACS       = 2,
   parameter integer DATA_IACT_BITWIDTH  = 8,
   parameter integer DATA_WGHT_BITWIDTH  = 8,
@@ -70,7 +70,7 @@ module GLB_cluster
 
   parameter integer TRANS_BITWIDTH_IACT = 24,
   parameter integer TRANS_BITWIDTH_WGHT = 24,
-  parameter integer TRANS_BITWIDTH_PSUM = 1'(SERIAL) ? DATA_PSUM_BITWIDTH : DATA_PSUM_BITWIDTH * PARALLEL_MACS,
+  parameter integer TRANS_BITWIDTH_PSUM = SERIAL ? DATA_PSUM_BITWIDTH : DATA_PSUM_BITWIDTH * PARALLEL_MACS,
     
   parameter integer NUM_GLB_IACT        = 3,
   parameter integer NUM_GLB_WGHT        = 3,
@@ -127,16 +127,16 @@ module GLB_cluster
 
 );
 
-reg [NUM_GLB_IACT-1:0] router_cluster_iact_enable_o_delay_1;
-reg [NUM_GLB_IACT-1:0] router_cluster_iact_enable_o_delay_2;
+wire [NUM_GLB_IACT-1:0] router_cluster_iact_enable_o_delay_1;
+reg  [NUM_GLB_IACT-1:0] router_cluster_iact_enable_o_delay_2;
 
-reg [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_1;
-reg [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_2;
+wire [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_1;
+reg  [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_2;
 
 genvar glb_cluster,bit_counter;
 generate
   ///IACT GLB Storages
-  for(glb_cluster = 0; glb_cluster < NUM_GLB_IACT - (NUM_GLB_IACT * 1'(SERIAL)); glb_cluster = glb_cluster + 1) begin : gen_iact
+  for(glb_cluster = 0; glb_cluster < NUM_GLB_IACT - (NUM_GLB_IACT * SERIAL); glb_cluster = glb_cluster + 1) begin : gen_iact
 
     wire  [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_in_w;
     wire  [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_out_w;
@@ -188,7 +188,7 @@ assign router_cluster_wght_data_o = ext_mem_wght_data_i;
 assign router_cluster_wght_enable_o = ext_mem_wght_enable_i;
 assign ext_mem_wght_ready_o = router_cluster_wght_ready_i;
 
-if (1'(SERIAL) == 1'(1)) begin
+if (SERIAL == 1'd1) begin
   assign router_cluster_iact_data_o = ext_mem_iact_data_i;
   assign router_cluster_iact_enable_o = ext_mem_iact_enable_i;
   assign ext_mem_iact_ready_o = router_cluster_iact_ready_i;
@@ -233,7 +233,7 @@ integer g;
 
 always@(posedge clk_i, negedge rst_ni) begin
   if(!rst_ni)begin ///Reset
-    if (1'(SERIAL) == 0) begin
+    if (SERIAL == 1'd0) begin
       router_cluster_iact_enable_o_delay_2 <= 0;
       router_cluster_iact_enable_o         <= 0;
     end
@@ -241,7 +241,7 @@ always@(posedge clk_i, negedge rst_ni) begin
     router_cluster_psum_enable_o         <= 0;
   end else begin
     ///Push Enable signals
-    if (1'(SERIAL) == 0) begin
+    if (SERIAL == 1'd0) begin
       for(g = 0; g < NUM_GLB_IACT; g = g + 1)begin
         router_cluster_iact_enable_o_delay_2[g] <= router_cluster_iact_enable_o_delay_1[g];
         router_cluster_iact_enable_o[g] <= router_cluster_iact_enable_o_delay_2[g];

@@ -30,21 +30,28 @@ module delay_cluster
   input                            clk_i,
   input                            rst_ni,
 
-  output reg                       ready_o,
+  output                           ready_o,
   input      [DATA_BITWIDTH-1 : 0] data_i,
   input                            enable_i,
 
   input                            ready_i,
   output     [DATA_BITWIDTH-1 : 0] data_o,
-  output reg                       enable_o,
+  output                           enable_o,
 
-  input  reg [3 : 0]               delay_psum_glb_i
+  input      [3 : 0]               delay_psum_glb_i
 
 );
 reg [8*DATA_BITWIDTH-1 : 0] data_s;
 reg [7 : 0]                 enable_s;
 reg [7 : 0]                 ready_s;
 
+wire [8*DATA_BITWIDTH-1 : 0] data_w;
+wire [7 : 0]                 enable_w;
+wire [7 : 0]                 ready_w;
+
+assign data_w = {{7*DATA_BITWIDTH{1'b0}},data_i};
+assign enable_w = {{7{1'b0}},enable_i};
+assign ready_w = {{7{1'b0}},ready_i};
 
 assign data_o = (delay_psum_glb_i== 0) ? data_i :
                 (delay_psum_glb_i== 1) ? data_s[1*DATA_BITWIDTH-1 : 0] :
@@ -83,9 +90,9 @@ assign ready_o = (delay_psum_glb_i== 0) ? ready_i :
       enable_s <= 0;
       ready_s  <= 0;
     end else begin
-      data_s   <= (8*DATA_BITWIDTH)'(data_s << DATA_BITWIDTH) + (8*DATA_BITWIDTH)'(data_i);
-      enable_s <= 8'(enable_s << 1) + 8'(enable_i);
-      ready_s  <= 8'(ready_s << 1) + 8'(ready_i);
+      data_s   <= (data_s << DATA_BITWIDTH) + data_w;
+      enable_s <= (enable_s << 1) + enable_w;
+      ready_s  <= (ready_s << 1) + ready_w;
     end
  end
 

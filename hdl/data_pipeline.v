@@ -41,15 +41,16 @@
 
 module data_pipeline 
 #(
-    parameter DATA_WIDTH                = 1,
-    parameter FIRST_SPAD_ADDR           = 16,
-    parameter FIRST_SPAD_DATA           = 8,
-    parameter SECOND_SPAD_ADDR          = 96,
-    parameter SECOND_SPAD_DATA          = 24,
-    parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
-    parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
-    parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
-    parameter SECOND_SPAD_DATA_CYCLE    = DATA_WIDTH / SECOND_SPAD_DATA
+  parameter CALC_DATA_WIDTH           = 32,
+  parameter DATA_WIDTH                = 24,
+  parameter FIRST_SPAD_ADDR           = 16,
+  parameter FIRST_SPAD_DATA           = 8,
+  parameter SECOND_SPAD_ADDR          = 96,
+  parameter SECOND_SPAD_DATA          = 24,
+  parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
+  parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
+  parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
+  parameter SECOND_SPAD_DATA_CYCLE    = DATA_WIDTH / SECOND_SPAD_DATA
 ) (
     input                                        clk_i,
     input                                        rst_ni,
@@ -72,16 +73,17 @@ module data_pipeline
     output reg                                   second_spad_en_o
 );
 
-  enum bit [0:0] {  // Enum for Modes
-    LOADING_ADDR     = 0,  // Mode to load addresses into SPAD
-    LOADING_DATA     = 1   // Mode to load data into SPAD
-  } fsm_mode;
+  localparam LOADING_ADDR = 1'b0;
+  localparam LOADING_DATA = 1'b1;
 
   reg                                     current_state;  // Current state of the FSM
   reg                                     fsm_state;  // FSM state register
   reg [DATA_WIDTH-1 : 0]                  data_storage;  // Temporary storage for data
-  reg [$clog2(SECOND_SPAD_ADDR) : 0]      address_temp;  // Temporary address storage
-  reg [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;  // Cycle counter for data loading
+  reg [CALC_DATA_WIDTH-1 : 0]             address_temp;  // Temporary address storage
+  reg [CALC_DATA_WIDTH-1 : 0]             cycle_counter;  // Cycle counter for data loading
+  wire [CALC_DATA_WIDTH-1:0]              first_spad_max_w;
+
+  assign first_spad_max_w = {{CALC_DATA_WIDTH-$clog2(FIRST_SPAD_ADDR){1'b0}},first_spad_max_i};
   genvar i;
   for(i=0; i<FIRST_SPAD_DATA; i=i+1) begin
     assign first_spad_data_o[i] = data_storage[i];  // Assign data to the first SPAD output
@@ -124,7 +126,7 @@ module data_pipeline
             if (cycle_counter == 0) begin
               data_storage  <= data_i;
               if ((data_i == 0) & (first_spad_data_o != 0)) begin
-                first_spad_words_o <= ($clog2(FIRST_SPAD_ADDR+1)-1)'(first_spad_addr_o) + 1;
+                first_spad_words_o <= first_spad_addr_o + 1;
                 current_state      <= LOADING_DATA;
                 address_temp       <= 0;
                 cycle_counter      <= 0;
@@ -132,18 +134,18 @@ module data_pipeline
             end
             else begin
               if (((data_storage >> FIRST_SPAD_DATA) == 0) & (first_spad_data_o != 0)) begin
-                first_spad_words_o <= ($clog2(FIRST_SPAD_ADDR+1)-1)'(first_spad_addr_o) + 1;
+                first_spad_words_o <= first_spad_addr_o + 1;
                 current_state      <= LOADING_DATA;
                 address_temp       <= 0;
                 cycle_counter      <= 0;
               end
             end
 
-            if (cycle_counter == (FIRST_SPAD_DATA_CYCLE[$clog2(FIRST_SPAD_DATA_CYCLE):0]-1)) begin
+            if (cycle_counter == (FIRST_SPAD_DATA_CYCLE-1)) begin
               cycle_counter <= 0;
             end
-            if ((address_temp == FIRST_SPAD_ADDR - 1) |((32'(address_temp) + 1) == 32'(first_spad_max_i))) begin
-              first_spad_words_o <= ($clog2(FIRST_SPAD_ADDR+1)-1)'(first_spad_addr_o) + 1;
+            if ((address_temp == FIRST_SPAD_ADDR - 1) |((address_temp + 1) == first_spad_max_w)) begin
+              first_spad_words_o <= first_spad_addr_o + 1;
               current_state      <= LOADING_DATA;
               address_temp       <= 0;
               cycle_counter      <= 0;
@@ -160,7 +162,7 @@ module data_pipeline
           if (enable_i == 1) begin
             second_spad_en_o    <= 1;
             second_spad_addr_o  <= address_temp[SECOND_SPAD_ADDR_BITWIDTH-1:0];
-            second_spad_words_o <= ($clog2(SECOND_SPAD_ADDR+1))'(32'(second_spad_addr_o) + 2);
+            second_spad_words_o <= second_spad_addr_o + 2;
 
             address_temp        <= address_temp + 1;
             cycle_counter       <= cycle_counter + 1;
@@ -171,7 +173,7 @@ module data_pipeline
               data_storage  <= data_i;
             end
 
-            if (cycle_counter == SECOND_SPAD_DATA_CYCLE[$clog2(FIRST_SPAD_DATA_CYCLE):0] - 1) begin
+            if (cycle_counter == SECOND_SPAD_DATA_CYCLE - 1) begin
               cycle_counter <= 0;
             end
             if (address_temp == SECOND_SPAD_ADDR - 1) begin
