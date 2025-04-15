@@ -46,8 +46,8 @@ genvar i;
     assign a_w[i] = a_i[(WIDTH*(i+1))-1:(WIDTH*i)];
   end
   always @(*) begin : configure_mux
-    a_o = a_w[$clog2(I_COUNT)'(sel_i)];
-    b_o = b_i[$clog2(I_COUNT)'(sel_i)];
+    a_o = a_w[sel_i];
+    b_o = b_i[sel_i];
     if(sel_i == I_COUNT)begin
       a_o = 0;
       b_o = 0;

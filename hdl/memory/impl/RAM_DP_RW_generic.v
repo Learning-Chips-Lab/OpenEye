@@ -92,15 +92,17 @@ always @(posedge clk_i) begin
         // synopsys translate_off
         // In standard cell memory, concurrent read and write access should not lead to undefined behavior,
         // but it's probably still a good idea not to allow it
-        if (wr_en_a_i && addr_r_a_i == addr_w_a_i) begin
-            $error("Collision between Port A/Read and Port A/Write");
-            memout_a <= {DataWidth{1'bx}};
-        end
+        `ifndef SYNTHESIS
+            if (wr_en_a_i && addr_r_a_i == addr_w_a_i) begin
+                $error("Collision between Port A/Read and Port A/Write");
+                memout_a <= {DataWidth{1'bx}};
+            end
 
-        if (wr_en_b_i && addr_r_a_i == addr_w_b_i) begin
-            $error("Collision between Port A/Read and Port B/Write");
-            memout_a <= {DataWidth{1'bx}};
-        end
+            if (wr_en_b_i && addr_r_a_i == addr_w_b_i) begin
+                $error("Collision between Port A/Read and Port B/Write");
+                memout_a <= {DataWidth{1'bx}};
+            end
+        `endif
         // synopsys translate_on
         // cadence synthesis_on
     end

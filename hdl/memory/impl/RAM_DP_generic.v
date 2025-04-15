@@ -69,8 +69,10 @@ module RAM_DP_generic
         if (!cenA) begin
             if (!cenB && aA == aB) begin
                 // cadence synthesis_off
-                $error("R/W collision in DP sram");
-                memout <= {DataWidth{1'bx}};
+                `ifndef SYNTHESIS
+                    $error("R/W collision in DP sram");
+                    memout <= {DataWidth{1'bx}};
+                `endif
                 // cadence synthesis_on
             end else begin
                 memout <= mem[aA];

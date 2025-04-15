@@ -421,7 +421,7 @@ module OpenEye_Cluster
     )bano_cluster(
       .clk_i       (clk_i),
       .rst_ni      (rst_n),
-      .bn_offset_i (8'(0)),
+      .bn_offset_i (8'd0),
 
       .ready_o     (bano_cluster_ready_out[r]),
       .data_i      (bano_cluster_data_in[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
