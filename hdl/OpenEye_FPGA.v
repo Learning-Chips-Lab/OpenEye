@@ -344,10 +344,10 @@ module OpenEye_FPGA
 
   //New Iact Converter
   reg [5:0] max_converter_needed_cycles;
-  reg [6:0] min_standing_cycles;
+  reg [7:0] min_standing_cycles;
   reg [7:0] needed_standing_cycles;
   reg [5:0] current_converter_cycles;
-  reg [6:0] current_converter_standing_cycles;
+  reg [7:0] current_converter_standing_cycles;
 
 
   // Register, that configure the chip
@@ -519,6 +519,14 @@ module OpenEye_FPGA
         end
       end
     end else begin
+      if (fsm_current_state == GET_PARAMETERS) begin
+        conv_array_reg <= 0;
+        for (a=0; a<CLUSTER_COLUMNS; a++) begin
+          for (b=0; b<CLUSTER_ROWS; b++) begin
+            iact_converter_en_store_reg[a][b] <= 0;
+          end
+        end
+      end
       if (GET_ROUTER_CONFIG == fsm_current_state) begin
         conv_array_reg <= (1<<(iact_size/PE_COLUMNS))-1;
       end
@@ -563,13 +571,31 @@ module OpenEye_FPGA
       wght_buffer_SP_rd_addr <= 0;
       compute_reg            <= 0;
       psum_ready_i_reg       <= 0;
-      flat_help_var_send     = 0;
+      flat_help_var_send      = 0;
       for (a=0; a<CLUSTER_COLUMNS; a++) begin
         for (b=0; b<CLUSTER_ROWS; b++) begin
           iact_converter_en_enc_reg[a][b] <= 0;
         end
       end
     end else begin
+      if (fsm_current_state == GET_PARAMETERS) begin
+        sending_data           <= 0;
+        iact_readied           <= 0;
+        current_cycle          <= 0;
+        fsm_sending_cycle      <= 0;
+        wght_enable_i_reg      <= 0;
+        wght_data_i_reg        <= 0;
+        wght_buffer_SP_en_r    <= 0;
+        wght_buffer_SP_rd_addr <= 0;
+        compute_reg            <= 0;
+        psum_ready_i_reg       <= 0;
+        flat_help_var_send      = 0;
+        for (a=0; a<CLUSTER_COLUMNS; a++) begin
+          for (b=0; b<CLUSTER_ROWS; b++) begin
+            iact_converter_en_enc_reg[a][b] <= 0;
+          end
+        end
+      end
       //Set Registers to 0
       for (a=0; a<CLUSTER_COLUMNS; a++) begin
         for (b=0; b<CLUSTER_ROWS; b++) begin
@@ -916,7 +942,7 @@ module OpenEye_FPGA
             current_buffer_n_1                     <= current_buffer_n;
           // get iact params
             max_converter_needed_cycles            <= 6'(iact_size + 8'(32'(kernel_size)-1));
-            min_standing_cycles              <= 7'((needed_iact_cycles_reg * iact_channels) / WORDS_PER_CYCLE);
+            min_standing_cycles              <= 8'((needed_iact_cycles_reg * iact_channels) / WORDS_PER_CYCLE);
             buffer_SP_en_w_reg[RAM_CELLS'(current_buffer_n)]   <= 1;
             buffer_SP_data_w_reg[RAM_CELLS'(current_buffer_n)] <= data_dma_i_reg;
             buffer_SP_addr_reg[RAM_CELLS'(current_buffer_n_1)] <= current_buffer_addr;
@@ -1042,7 +1068,7 @@ module OpenEye_FPGA
             end
           end
           if (converters_ready == 1) begin
-            buffer_SP_addr_upper_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_upper_limit) + (32'(iact_size)/WORDS_PER_CYCLE))%RAM_CELLS);
+            buffer_SP_addr_upper_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_upper_limit) + ({{24{1'b0}},{iact_size}}/WORDS_PER_CYCLE))%RAM_CELLS);
             fsm_current_state <= CONVERT_IACT;
             for (a=0; a<RAM_CELLS; a++) begin
               buffer_SP_addr_reg[a] <= ~0;
@@ -1066,8 +1092,8 @@ module OpenEye_FPGA
                   buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
                 end
               end
-            buffer_SP_addr_upper_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_upper_limit) + (32'(iact_size)/WORDS_PER_CYCLE))%RAM_CELLS);
-            buffer_SP_addr_lower_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_lower_limit) + (32'(iact_size)/WORDS_PER_CYCLE))%RAM_CELLS);
+            buffer_SP_addr_upper_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_upper_limit) + ({{24{1'b0}},{iact_size}}/WORDS_PER_CYCLE))%RAM_CELLS);
+            buffer_SP_addr_lower_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_lower_limit) + ({{24{1'b0}},{iact_size}}/WORDS_PER_CYCLE))%RAM_CELLS);
             end
           end
           current_converter_standing_cycles <= current_converter_standing_cycles + 1;

@@ -292,6 +292,7 @@ module iact_stream_constructor
                   temp_var = temp_var + kernel_y_counter;
                   temp_var = temp_var * channels;
                   temp_var = (temp_var/WORDS_PER_TRANS);
+                  temp_var = temp_var + address_storage;
                   ram_wr_addr <= temp_var;
                 end
                 //Reset payload to 0
