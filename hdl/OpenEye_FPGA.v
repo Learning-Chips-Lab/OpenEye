@@ -165,6 +165,7 @@ module OpenEye_FPGA
 
   //Storage RAMs
   parameter RAM_CELLS = 32,
+  parameter RAM_CELLS_CLOG2 = $clog2(RAM_CELLS),
   parameter RAM_CELLS_ADDR_WIDTH = 12,
   parameter RAM_CELLS_WORD_BITWIDTH = 64,
 
@@ -245,7 +246,7 @@ module OpenEye_FPGA
   reg                                           skipIact_reg;
   reg                                           skipWght_reg;
   reg                                           skipPsum_reg;
-  reg [$clog2(PE_ROWS)-1:0]                     kernel_per_pe_cluster_reg;
+  reg [4-1:0]                                   kernel_per_pe_cluster_reg;
   reg [3:0]                                     kernel_size;
   reg [DMA_BITWIDTH-1 : 0]                      fifo_data_i;
   reg                                           fifo_read_i;
@@ -278,8 +279,8 @@ module OpenEye_FPGA
   reg                                                  iact_buffer_SP_en_w;
   reg  [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_w;
   wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_r;
-  reg  [$clog2(RAM_CELLS)-1:0]                         buffer_SP_addr_upper_limit;
-  reg  [$clog2(RAM_CELLS)-1:0]                         buffer_SP_addr_lower_limit;
+  reg  [32-1:0]                           buffer_SP_addr_upper_limit;
+  reg  [32-1:0]                           buffer_SP_addr_lower_limit;
 
   reg                                                  wght_buffer_SP_en_r;
   reg                                                  wght_buffer_SP_en_w;
@@ -288,14 +289,14 @@ module OpenEye_FPGA
   reg  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_w;
   reg  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_r;
 
-  reg                                                 psum_buffer_SP_en_r;
-  reg                                                 psum_buffer_SP_en_w;
-  reg [BUFFER_WIDTH-1:0]                              psum_buffer_SP_addr;
-  reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_data_w;
-  reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_data_r;
+  reg                                                  psum_buffer_SP_en_r;
+  reg                                                  psum_buffer_SP_en_w;
+  reg [BUFFER_WIDTH-1:0]                               psum_buffer_SP_addr;
+  reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0]  psum_buffer_SP_data_w;
+  reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0]  psum_buffer_SP_data_r;
 
-  reg [BUFFER_WIDTH-1:0]                              wght_cnt;
-  reg [BUFFER_WIDTH-1:0]                              psum_cnt;
+  reg [BUFFER_WIDTH-1:0]                               wght_cnt;
+  reg [BUFFER_WIDTH-1:0]                               psum_cnt;
 
   // Register for IACT Stream
   reg [7:0] current_buffer_n;
@@ -675,6 +676,8 @@ module OpenEye_FPGA
     temp_var = 0;
   end
 
+  integer cr,cc,g,i;
+  integer temp_var_main;
   always@(posedge clk_i, negedge rst_n) begin
     if(!rst_n)begin
       status_reg_enable_reg     <= 0;
@@ -780,6 +783,8 @@ module OpenEye_FPGA
       iact_converter_enc_enable    <= 0;
       iact_converter_params_enable <= 0;
 
+      temp_var_main                 = 0;
+
     end else begin
       case(fsm_current_state)
 
@@ -814,7 +819,7 @@ module OpenEye_FPGA
                 needed_iact_cycles_reg <= data_dma_i_reg[3+PARAMETER_POS_1_7:PARAMETER_POS_1_7];
                 filters_reg            <= data_dma_i_reg[$clog2(PSUM_PER_PE+1)-1+PARAMETER_POS_1_8:PARAMETER_POS_1_8];
                 iact_addr_len_reg      <= data_dma_i_reg[3+PARAMETER_POS_1_9:PARAMETER_POS_1_9];
-                wght_addr_len_reg      <= $clog2(WGHT_ADDR_PER_PE)'(data_dma_i_reg[4+PARAMETER_POS_1_10:PARAMETER_POS_1_10]);
+                wght_addr_len_reg      <= data_dma_i_reg[3+PARAMETER_POS_1_10:PARAMETER_POS_1_10];
                 input_activations_reg  <= data_dma_i_reg[$clog2(IACT_PER_PE+1)-1+PARAMETER_POS_1_11:PARAMETER_POS_1_11];
               end
               32'd1 : begin
@@ -826,7 +831,7 @@ module OpenEye_FPGA
                 skipWght_reg              <= data_dma_i_reg[PARAMETER_POS_2_5:PARAMETER_POS_2_5];
                 skipPsum_reg              <= data_dma_i_reg[PARAMETER_POS_2_6:PARAMETER_POS_2_6];
                 psum_delay_reg            <= data_dma_i_reg[3+PARAMETER_POS_2_7:PARAMETER_POS_2_7];
-                kernel_per_pe_cluster_reg <= $clog2(PE_ROWS)'(data_dma_i_reg[3+PARAMETER_POS_2_8:PARAMETER_POS_2_8]);
+                kernel_per_pe_cluster_reg <= data_dma_i_reg[3+PARAMETER_POS_2_8:PARAMETER_POS_2_8];
                 kernel_size               <= data_dma_i_reg[3+PARAMETER_POS_2_9:PARAMETER_POS_2_9];
               end
               32'd2 : begin
@@ -861,12 +866,12 @@ module OpenEye_FPGA
           if(enable_dma_i_reg) begin
             fsm_cycle         <= fsm_cycle + 1;
             if(fsm_cycle < FSM_CEIL_IACT_RTR_CCLS)begin
-              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                  for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+              for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                  for (g=0; g<NUM_GLB_IACT; g=g+1) begin
                     if(((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)>=(fsm_cycle    *(DMA_BITWIDTH/ROUTER_MODES_IACT)))
                       &((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)< ((fsm_cycle+1)*(DMA_BITWIDTH/ROUTER_MODES_IACT))))begin
-                      for(int i = 0; i < ROUTER_MODES_IACT; i = i + 1)begin
+                      for(i = 0; i < ROUTER_MODES_IACT; i = i + 1)begin
                         router_mode_iact_reg[cc * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
                                            cr * NUM_GLB_IACT * ROUTER_MODES_IACT + 
                                            g * ROUTER_MODES_IACT + i] <=
@@ -880,12 +885,12 @@ module OpenEye_FPGA
             end else begin
 
               if(fsm_cycle < FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS)begin
-                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                    for (int g=0; g<NUM_GLB_WGHT; g=g+1) begin
+                for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (g=0; g<NUM_GLB_WGHT; g=g+1) begin
                       if(((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_WGHT)))
                         &((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))))begin
-                        for(int i = 0; i < ROUTER_MODES_WGHT; i = i + 1)begin
+                        for(i = 0; i < ROUTER_MODES_WGHT; i = i + 1)begin
                           router_mode_wght_reg[cc * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
                                              cr * NUM_GLB_WGHT * ROUTER_MODES_WGHT + 
                                              g * ROUTER_MODES_WGHT + i] <=
@@ -897,12 +902,12 @@ module OpenEye_FPGA
                   end
                 end
               end else begin
-                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                    for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
+                for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (g=0; g<NUM_GLB_PSUM; g=g+1) begin
                       if(((cc*NUM_GLB_PSUM+cr*CLUSTER_COLUMNS*NUM_GLB_PSUM+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_PSUM)))
                         &((cc*NUM_GLB_PSUM+cr*CLUSTER_COLUMNS*NUM_GLB_PSUM+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_PSUM))))begin
-                        for(int i = 0; i < ROUTER_MODES_PSUM; i = i + 1)begin
+                        for(i = 0; i < ROUTER_MODES_PSUM; i = i + 1)begin
                           router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                                              cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + 
                                              g * ROUTER_MODES_PSUM + i] <=
@@ -941,12 +946,15 @@ module OpenEye_FPGA
             current_buffer_n                       <= current_buffer_n + 1;
             current_buffer_n_1                     <= current_buffer_n;
           // get iact params
-            max_converter_needed_cycles            <= 6'(iact_size + 8'(32'(kernel_size)-1));
-            min_standing_cycles              <= 8'((needed_iact_cycles_reg * iact_channels) / WORDS_PER_CYCLE);
-            buffer_SP_en_w_reg[RAM_CELLS'(current_buffer_n)]   <= 1;
-            buffer_SP_data_w_reg[RAM_CELLS'(current_buffer_n)] <= data_dma_i_reg;
-            buffer_SP_addr_reg[RAM_CELLS'(current_buffer_n_1)] <= current_buffer_addr;
-            current_buffer_addr                                <= buffer_SP_addr_reg[RAM_CELLS'(current_buffer_n)] + 1; 
+            temp_var_main                     = {28'b0,kernel_size} - 1;
+            temp_var_main                     = {24'b0,iact_size} + temp_var_main;
+            max_converter_needed_cycles      <= temp_var_main[6-1:0];
+            temp_var_main                     = (needed_iact_cycles_reg * iact_channels) / WORDS_PER_CYCLE;
+            min_standing_cycles              <= temp_var_main[8-1:0];
+            buffer_SP_en_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]]   <= 1;
+            buffer_SP_data_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]] <= data_dma_i_reg;
+            buffer_SP_addr_reg[current_buffer_n_1[RAM_CELLS_CLOG2-1:0]] <= current_buffer_addr;
+            current_buffer_addr                                <= buffer_SP_addr_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]] + 1; 
 
             if (current_buffer_n == RAM_CELLS - 1) begin
               current_buffer_n <= 0;
@@ -972,8 +980,8 @@ module OpenEye_FPGA
           wght_buffer_SP_en_w <= 0;
 
           if(enable_dma_i_reg) begin
-            if (8'(min_standing_cycles) < 8'(iact_size/PE_COLUMNS)) begin
-              needed_standing_cycles <= 8'(iact_size/PE_COLUMNS);
+            if (min_standing_cycles < iact_size/PE_COLUMNS) begin
+              needed_standing_cycles <= iact_size/PE_COLUMNS;
             end else begin
               needed_standing_cycles <= min_standing_cycles;
             end
@@ -1068,13 +1076,14 @@ module OpenEye_FPGA
             end
           end
           if (converters_ready == 1) begin
-            buffer_SP_addr_upper_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_upper_limit) + ({{24{1'b0}},{iact_size}}/WORDS_PER_CYCLE))%RAM_CELLS);
+            buffer_SP_addr_upper_limit <= ((buffer_SP_addr_upper_limit + ({{24{1'b0}},{iact_size}}/WORDS_PER_CYCLE))%RAM_CELLS);
             fsm_current_state <= CONVERT_IACT;
             for (a=0; a<RAM_CELLS; a++) begin
               buffer_SP_addr_reg[a] <= ~0;
             end
           end
-          converter_needed_cycles <= 6'(WGHT_SIZE * iact_channels);
+          temp_var_main = WGHT_SIZE * iact_channels;
+          converter_needed_cycles <= temp_var_main[6-1:0];
         end
 
         CONVERT_IACT : begin
@@ -1092,8 +1101,8 @@ module OpenEye_FPGA
                   buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
                 end
               end
-            buffer_SP_addr_upper_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_upper_limit) + ({{24{1'b0}},{iact_size}}/WORDS_PER_CYCLE))%RAM_CELLS);
-            buffer_SP_addr_lower_limit <= $clog2(RAM_CELLS)'((32'(buffer_SP_addr_lower_limit) + ({{24{1'b0}},{iact_size}}/WORDS_PER_CYCLE))%RAM_CELLS);
+            buffer_SP_addr_upper_limit <= ((buffer_SP_addr_upper_limit + ({{24{1'b0}},{iact_size}}/WORDS_PER_CYCLE))%RAM_CELLS);
+            buffer_SP_addr_lower_limit <= ((buffer_SP_addr_lower_limit + ({{24{1'b0}},{iact_size}}/WORDS_PER_CYCLE))%RAM_CELLS);
             end
           end
           current_converter_standing_cycles <= current_converter_standing_cycles + 1;
@@ -1119,7 +1128,7 @@ module OpenEye_FPGA
             iact_converter_enc_enable <= 1;
           end
           //if (7'(fsm_cycle) == 7'(min_standing_cycles)-7'(1)) begin HERE
-          if (7'(fsm_cycle) == 7'(needed_standing_cycles)-7'(1)) begin
+          if (fsm_cycle + 1 == {{24'd0},needed_standing_cycles}) begin
             fsm_cycle <= 0;
           end
         end
@@ -1148,9 +1157,9 @@ module OpenEye_FPGA
         WAIT_FOR_RESULTS : begin
           send_data_reg         <= 0;
           results_ready          = 1;
-          for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-            for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-              for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
+          for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+            for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+              for (g=0; g<NUM_GLB_PSUM; g=g+1) begin
                 flat_help_var_1 = 0;
                 for(b=0; b<ROUTER_MODES_PSUM; b=b+1)begin
                   flat_help_var_1[b] = router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g * ROUTER_MODES_PSUM + b];
@@ -1175,7 +1184,7 @@ module OpenEye_FPGA
 
         GET_RESULTS : begin
           fsm_cycle <= fsm_cycle + 1;
-          if (BUFFER_WIDTH'(fsm_cycle) == psum_cnt) begin
+          if (fsm_cycle == {20'd0,{psum_cnt}}) begin
             psum_enable_i_reg <= 0;
           end
           if (psum_enable_o_reg != 0) begin
@@ -1238,6 +1247,7 @@ module OpenEye_FPGA
         default : begin
         end
       endcase
+      temp_var_main = 0;
     
     end
   end
@@ -1252,32 +1262,33 @@ module OpenEye_FPGA
   wire [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w [RAM_CELLS-1:0];
   wire [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r;
 
-  assign buffer_SP_en_r = buffer_SP_en_r_reg;
-  assign buffer_SP_en_w = buffer_SP_en_w_reg;
-  assign buffer_SP_addr = buffer_SP_addr_reg;
-  assign buffer_SP_data_w = buffer_SP_data_w_reg;
+  genvar i_gen,j_gen;
+  for (i_gen = 0; i_gen < RAM_CELLS; i_gen++) begin : BUFFER_A
+    assign buffer_SP_en_r[i_gen] = buffer_SP_en_r_reg[i_gen];
+    assign buffer_SP_en_w[i_gen] = buffer_SP_en_w_reg[i_gen];
+    assign buffer_SP_addr[i_gen] = buffer_SP_addr_reg[i_gen];
+    assign buffer_SP_data_w[i_gen] = buffer_SP_data_w_reg[i_gen];
+  end
   assign buffer_SP_data_r_reg = buffer_SP_data_r;
-
-  genvar i,j;
   generate
     // IACT Converter Buffer
-    for (i = 0; i < RAM_CELLS; i++) begin : BUFFER_A
+    for (i_gen = 0; i_gen < RAM_CELLS; i_gen++) begin : BUFFER_A
       RAM_SP #(
         .DataWidth(RAM_CELLS_WORD_BITWIDTH),
         .AddrWidth(RAM_CELLS_ADDR_WIDTH)
       ) iact_converter_buffer_SP ( 
         .clk_i   (clk_i),
-        .rd_en_i (buffer_SP_en_r[i] & !buffer_SP_en_w[i]),
-        .wr_en_i (buffer_SP_en_w[i]),
-        .addr_i  (buffer_SP_addr[i]),
-        .data_i  (buffer_SP_data_w[i]),
-        .data_o  (buffer_SP_data_r[(i+1)*RAM_CELLS_WORD_BITWIDTH-1:i*RAM_CELLS_WORD_BITWIDTH])
+        .rd_en_i (buffer_SP_en_r[i_gen] & !buffer_SP_en_w[i_gen]),
+        .wr_en_i (buffer_SP_en_w[i_gen]),
+        .addr_i  (buffer_SP_addr[i_gen]),
+        .data_i  (buffer_SP_data_w[i_gen]),
+        .data_o  (buffer_SP_data_r[(i_gen+1)*RAM_CELLS_WORD_BITWIDTH-1:i_gen*RAM_CELLS_WORD_BITWIDTH])
       );
     end
 
     // IACT Converter
-    for (i = 0; i < CLUSTER_COLUMNS; i++) begin : IACT_CONVERTER_X
-      for (j = 0; j < CLUSTER_ROWS; j++) begin : IACT_CONVERTER_Y
+    for (i_gen = 0; i_gen < CLUSTER_COLUMNS; i_gen++) begin : IACT_CONVERTER_X
+      for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen++) begin : IACT_CONVERTER_Y
         wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0]        iact_data_w;
         wire [$clog2(NUM_GLB_IACT+1)*PES-1:0]              iact_choose_w;
         wire [NUM_GLB_IACT-1:0]                            iact_ready_w;
@@ -1295,11 +1306,11 @@ module OpenEye_FPGA
           .clk_i            (clk_i),
           .rst_ni           (rst_ni),
           .storage_i        (buffer_SP_data_r),
-          .params           (iact_converter_params_reg[i][j]),
-          .enable_config    (iact_converter_en_cfg_reg[i][j]),
-          .enable_store     (iact_converter_en_store_reg[i][j]),
-          .enable_converter (iact_converter_en_enc_reg[i][j]),
-          .ready_o          (iact_converter_ready_reg[i][j]),
+          .params           (iact_converter_params_reg[i_gen][j_gen]),
+          .enable_config    (iact_converter_en_cfg_reg[i_gen][j_gen]),
+          .enable_store     (iact_converter_en_store_reg[i_gen][j_gen]),
+          .enable_converter (iact_converter_en_enc_reg[i_gen][j_gen]),
+          .ready_o          (iact_converter_ready_reg[i_gen][j_gen]),
           .iact_ready_i     (iact_ready_w),
           .iact_data_o      (iact_data_w),
           .iact_enable_o    (iact_enable_w),
@@ -1413,7 +1424,7 @@ module OpenEye_FPGA
       .bano_cluster_mode_i    (bano_cluster_mode_reg),
       .af_cluster_mode_i      (af_cluster_mode_reg),
       .pooling_cluster_mode_i (4'd0),
-      .kernel_per_pe_cluster_i(kernel_per_pe_cluster_reg),
+      .kernel_per_pe_cluster_i(kernel_per_pe_cluster_reg[$clog2(PE_ROWS)-1:0]),
       .input_activations_i    (input_activations_reg),
       .iact_write_addr_t_i    (iact_write_addr_t_reg),
       .iact_write_data_t_i    (iact_write_data_t_reg),
@@ -1426,27 +1437,27 @@ module OpenEye_FPGA
       .router_mode_psum_i     (router_mode_psum_reg)
     );
 
-  genvar cc,cr,g,bit_gen,pe;
-  for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-    for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-      for (g=0; g<NUM_GLB_IACT; g=g+1) begin
-        assign IACT_CONVERTER_X[cc].IACT_CONVERTER_Y[cr].iact_ready_w[g] =
-                iact_ready_o_oep_w[cc * CLUSTER_ROWS * NUM_GLB_IACT + cr * NUM_GLB_IACT + g];
-        assign iact_enable_i_oep_w[cc * CLUSTER_ROWS * NUM_GLB_IACT + cr * NUM_GLB_IACT + g] =
-                IACT_CONVERTER_X[cc].IACT_CONVERTER_Y[cr].iact_enable_w[g];
+  genvar cc_gen,cr_gen,g_gen,bit_gen,pe_gen;
+  for (cc_gen=0; cc_gen<CLUSTER_COLUMNS; cc_gen=cc_gen+1) begin
+    for (cr_gen=0; cr_gen<CLUSTER_ROWS; cr_gen=cr_gen+1) begin
+      for (g_gen=0; g_gen<NUM_GLB_IACT; g_gen=g_gen+1) begin
+        assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
+                iact_ready_o_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen];
+        assign iact_enable_i_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen] =
+                IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_enable_w[g_gen];
         for (bit_gen=0; bit_gen<TRANS_BITWIDTH_IACT; bit_gen=bit_gen+1) begin
-          assign  iact_data_i_oep_w[cc * CLUSTER_ROWS * NUM_GLB_IACT * TRANS_BITWIDTH_IACT +
-                                    cr * NUM_GLB_IACT * TRANS_BITWIDTH_IACT + 
-                                    g * TRANS_BITWIDTH_IACT + bit_gen] = 
-                  IACT_CONVERTER_X[cc].IACT_CONVERTER_Y[cr].iact_data_w[g * TRANS_BITWIDTH_IACT+bit_gen];
+          assign  iact_data_i_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * TRANS_BITWIDTH_IACT +
+                                    cr_gen * NUM_GLB_IACT * TRANS_BITWIDTH_IACT + 
+                                    g_gen * TRANS_BITWIDTH_IACT + bit_gen] = 
+                  IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_data_w[g_gen * TRANS_BITWIDTH_IACT+bit_gen];
         end
       end
       localparam IACT_CHOOSE_DATAWIDTH = $clog2(NUM_GLB_IACT+1);
-      for (pe=0; pe<PES; pe=pe+1) begin
+      for (pe_gen=0; pe_gen<PES; pe_gen=pe_gen+1) begin
         for (bit_gen=0; bit_gen<IACT_CHOOSE_DATAWIDTH; bit_gen=bit_gen+1) begin
-          assign  iact_choose_i_oep_w[cc * CLUSTER_ROWS * PES * IACT_CHOOSE_DATAWIDTH +
-                                    cr * PES * IACT_CHOOSE_DATAWIDTH + pe * IACT_CHOOSE_DATAWIDTH + bit_gen] = 
-                  IACT_CONVERTER_X[cc].IACT_CONVERTER_Y[cr].iact_choose_w[pe * IACT_CHOOSE_DATAWIDTH + bit_gen];
+          assign  iact_choose_i_oep_w[cc_gen * CLUSTER_ROWS * PES * IACT_CHOOSE_DATAWIDTH +
+                                    cr_gen * PES * IACT_CHOOSE_DATAWIDTH + pe_gen * IACT_CHOOSE_DATAWIDTH + bit_gen] = 
+                  IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_choose_w[pe_gen * IACT_CHOOSE_DATAWIDTH + bit_gen];
         end
       end
     end
