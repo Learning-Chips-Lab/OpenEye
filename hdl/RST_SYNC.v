@@ -34,7 +34,7 @@ module RST_SYNC
 
     assign rst_no = sync_stages[1];
 
-    always_ff @(posedge clk_i, negedge rst_ni) begin
+    always @(posedge clk_i, negedge rst_ni) begin
         if (rst_ni == 1'b0) begin
             sync_stages <= 0;
         end else begin
