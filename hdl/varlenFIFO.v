@@ -50,6 +50,7 @@ module varlenFIFO
 
 
   // Read & Write process
+  integer b;
   always @(posedge clk_i, negedge rst_ni) begin
     if (!rst_ni) begin  // Reset
       read_ptr      <= 0;
@@ -64,7 +65,7 @@ module varlenFIFO
       if (rd_en) begin // Reading process
         if (count > 0) begin // Check, if there is data to read
           flat_help_var = 0;
-          for (int b=0; b<DATA_WIDTH; b=b+1) begin
+          for (b=0; b<DATA_WIDTH; b=b+1) begin
             flat_help_var[b] = memory[read_ptr * DATA_WIDTH + b];
           end
           data_o        <= flat_help_var;
@@ -83,7 +84,7 @@ module varlenFIFO
 
       if (wr_en && count < DEPTH) begin // Writing process
         flat_help_var = data_i;
-        for (int b=0; b<DATA_WIDTH; b=b+1) begin
+        for (b=0; b<DATA_WIDTH; b=b+1) begin
           memory[write_ptr * DATA_WIDTH + b] = flat_help_var[b];
         end
         flat_help_var      = 0;
