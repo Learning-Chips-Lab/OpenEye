@@ -15,6 +15,7 @@ cmds.f
 *tflite_net
 openeye_env/*
 env/*
+*.ys
 
 !requirements.txt
 
