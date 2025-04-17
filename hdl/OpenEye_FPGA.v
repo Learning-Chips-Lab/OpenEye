@@ -60,6 +60,7 @@
 
 module OpenEye_FPGA
 #(
+  `include "parameters.vh"
   //Set parameters
   parameter IS_TOPLEVEL         = 1,
   parameter SERIAL              = 1,
@@ -77,16 +78,9 @@ module OpenEye_FPGA
   parameter TRANS_BITWIDTH_PSUM = 20,
   parameter DATA_IACT_OVERHEAD  = 4,
 
-  parameter PE_COLUMNS          = 4,
-  parameter PE_ROWS             = 3,
   parameter PES                 = PE_COLUMNS * PE_ROWS,
   
-  parameter NUM_GLB_IACT        = 3,
-  parameter NUM_GLB_WGHT        = 3,
-  parameter NUM_GLB_PSUM        = 4,
-  
   parameter CLUSTER_COLUMNS     = 2,
-  parameter CLUSTER_ROWS        = 8,
   parameter CLUSTERS            = CLUSTER_COLUMNS * CLUSTER_ROWS,
 
   parameter IACT_ADDR_PER_PE    = 9,
@@ -279,8 +273,8 @@ module OpenEye_FPGA
   reg                                                  iact_buffer_SP_en_w;
   reg  [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_w;
   wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_r;
-  reg  [32-1:0]                           buffer_SP_addr_upper_limit;
-  reg  [32-1:0]                           buffer_SP_addr_lower_limit;
+  reg  [32-1:0]                                        buffer_SP_addr_upper_limit;
+  reg  [32-1:0]                                        buffer_SP_addr_lower_limit;
 
   reg                                                  wght_buffer_SP_en_r;
   reg                                                  wght_buffer_SP_en_w;
@@ -308,11 +302,10 @@ module OpenEye_FPGA
   reg [10:0] iact_needed_cycles;
 
   // Register for IACT Converter Buffer
-  reg                               buffer_SP_en_r_reg   [RAM_CELLS-1:0];
-  reg                               buffer_SP_en_w_reg   [RAM_CELLS-1:0];
-  reg [RAM_CELLS_ADDR_WIDTH-1:0]    buffer_SP_addr_reg   [RAM_CELLS-1:0];
-  reg [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w_reg [RAM_CELLS-1:0];
-  reg [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r_reg;
+  reg                                buffer_SP_en_r_reg   [RAM_CELLS-1:0];
+  reg                                buffer_SP_en_w_reg   [RAM_CELLS-1:0];
+  reg  [RAM_CELLS_ADDR_WIDTH-1:0]    buffer_SP_addr_reg   [RAM_CELLS-1:0];
+  reg  [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w_reg [RAM_CELLS-1:0];
 
   // Registers for IACT Converter
   reg [31:0] iact_converter_params_reg   [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
@@ -550,10 +543,10 @@ module OpenEye_FPGA
       end
     end
   end
-  reg        sending_data;
-  reg        iact_readied;
-  reg  [7:0] current_cycle;
-  reg  [7:0] fsm_sending_cycle;
+  reg       sending_data;
+  reg       iact_readied;
+  reg [7:0] current_cycle;
+  reg [7:0] fsm_sending_cycle;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] flat_help_var_send;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] temp_var;
   localparam EXTENDEDBITS = 48 - NUM_GLB_WGHT;
@@ -1261,18 +1254,14 @@ module OpenEye_FPGA
   wire [RAM_CELLS_ADDR_WIDTH-1:0]    buffer_SP_addr   [RAM_CELLS-1:0];
   wire [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w [RAM_CELLS-1:0];
   wire [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r;
-
-  genvar i_gen,j_gen;
-  for (i_gen = 0; i_gen < RAM_CELLS; i_gen++) begin : BUFFER_A
-    assign buffer_SP_en_r[i_gen] = buffer_SP_en_r_reg[i_gen];
-    assign buffer_SP_en_w[i_gen] = buffer_SP_en_w_reg[i_gen];
-    assign buffer_SP_addr[i_gen] = buffer_SP_addr_reg[i_gen];
-    assign buffer_SP_data_w[i_gen] = buffer_SP_data_w_reg[i_gen];
-  end
-  assign buffer_SP_data_r_reg = buffer_SP_data_r;
   generate
+    genvar i_gen,j_gen;
     // IACT Converter Buffer
     for (i_gen = 0; i_gen < RAM_CELLS; i_gen++) begin : BUFFER_A
+      assign buffer_SP_en_r[i_gen]   = buffer_SP_en_r_reg[i_gen];
+      assign buffer_SP_en_w[i_gen]   = buffer_SP_en_w_reg[i_gen];
+      assign buffer_SP_addr[i_gen]   = buffer_SP_addr_reg[i_gen];
+      assign buffer_SP_data_w[i_gen] = buffer_SP_data_w_reg[i_gen];
       RAM_SP #(
         .DataWidth(RAM_CELLS_WORD_BITWIDTH),
         .AddrWidth(RAM_CELLS_ADDR_WIDTH)
