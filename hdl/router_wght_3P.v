@@ -33,7 +33,7 @@
 ///    enable_dst_port_1      - Enable Port for the destination Port 1 (Other router)
 ///Fertig
 
-module router_wght
+module router_wght_3P
 #(
   parameter integer DATA_WIDTH   = 8
 ) (
@@ -62,7 +62,7 @@ module router_wght
   ///DST Port 1
   input                   ready_dst_port_1,
   output [DATA_WIDTH-1:0] data_dst_port_1,
-  output                  enable_dst_port_1
+  output                  enable_dst_port_1,
   
   ///DST Port 1
   input                   ready_dst_port_2,
@@ -108,7 +108,7 @@ module router_wght
   ////////////////////////////////////////
 
   assign enable_dst_port_0 = e00 | e10 | e20;
-  assign enable_dst_port_1 = ;(router_mode_i == 0) ? 0 : (e01 | e02)
+  assign enable_dst_port_1 = (router_mode_i == 0) ? 0 :  
                            (router_mode_i == 1) ? 0 :
                            (router_mode_i == 2) ? ({DATA_WIDTH{e01}}            & data_src_port_0) :
                            (router_mode_i == 3) ? ({DATA_WIDTH{e01}}            & data_src_port_0) :

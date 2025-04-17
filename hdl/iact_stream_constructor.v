@@ -98,7 +98,7 @@ module iact_stream_constructor
             ram_rd_en              <= 0;
             current_iact_cycle_reg <= 0;
             if (enable_store) begin
-              ram_rd_addr            <= 0;
+              ram_rd_addr          <= 0;
             end
             if (enable_converter) begin
               ram_rd_en     <= 1;
@@ -125,7 +125,7 @@ module iact_stream_constructor
                   ram_rd_addr <= ram_rd_addr + 1;
               end
             end
-            flat_help_var   = 0;
+            flat_help_var = 0;
             for (pec=0; pec<PE_X; pec=pec+1) begin
               for (per=0; per<PE_Y; per=per+1) begin
                 if (((pec + per) >=  (NUM_GLB_IACT *  current_iact_cycle_reg)) 
@@ -205,10 +205,6 @@ module iact_stream_constructor
         duty_cycle             <= 0;
         duty_cycle_th          <= 3; //HERE
         duty_cycle_reset       <= 3; //HERE
-        x_var                   = 0;
-        y_var                   = 0;
-        ram_var                 = 0;
-        byte_var                = 0;
         for (r=0; r<NUM_GLB_IACT; r=r+1) begin
           for (w=0; w<WORDS_PER_TRANS; w=w+1) begin
             mem_data_payload_reg[r][w]  <= 0;
@@ -316,11 +312,11 @@ module iact_stream_constructor
                 end
               end
               for (r=0; r<NUM_GLB_IACT; r++) begin
-                x_var = (iact_router_counter * NUM_GLB_IACT) + (r + x);
-                y_var = (y);
-                ram_var = ((((y_var - padding_reg)*iact_size) + (x_var-padding_reg))/2)%RAM_CELLS;
-                byte_var = (((((x_var - padding_reg))*channels) + ((fsm_cycle%(4/WORDS_PER_CYCLE))/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM);
                 for (w=0; w<WORDS_PER_CYCLE; w++) begin
+                  x_var = (iact_router_counter * NUM_GLB_IACT) + (r + x);
+                  y_var = (y);
+                  ram_var = ((((y_var - padding_reg)*iact_size) + (x_var-padding_reg))/2)%RAM_CELLS;
+                  byte_var = (((((x_var - padding_reg))*channels) + ((fsm_cycle%(4/WORDS_PER_CYCLE))/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM);
                   //PADDING
                   if ((
                   (padding_reg > x_var)|
@@ -333,11 +329,6 @@ module iact_stream_constructor
                     mem_data_payload_reg[r][w] <= storage_w[ram_var][byte_var + w];
                   end
                 end
-
-                x_var = 0;
-                y_var = 0;
-                ram_var = 0;
-                byte_var = 0;
               end
               if (fsm_cycle == (((needed_iact_cycles_reg * channels * wght_size_reg)/WORDS_PER_CYCLE))) begin
                 fsm_cycle         <= 0;
