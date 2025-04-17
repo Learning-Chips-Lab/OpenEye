@@ -337,10 +337,10 @@ module OpenEye_FPGA
   reg [5:0] converter_needed_cycles;
 
   //New Iact Converter
-  reg [5:0] max_converter_needed_cycles;
+  reg [7:0] max_converter_needed_cycles;
   reg [7:0] min_standing_cycles;
   reg [7:0] needed_standing_cycles;
-  reg [5:0] current_converter_cycles;
+  reg [7:0] current_converter_cycles;
   reg [7:0] current_converter_standing_cycles;
 
 
@@ -350,7 +350,6 @@ module OpenEye_FPGA
 
   reg                                                  compute_reg;
   reg  [CLUSTERS*PES-1:0]                              compute_mask_reg;
-  reg  [CLUSTERS*PES-1:0]                              compute_mask_iact_reg;
 
   reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_reg;
   reg  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]   router_mode_wght_reg;
@@ -385,11 +384,9 @@ module OpenEye_FPGA
   localparam START_CONVERTER   = 4'd6;
   localparam CONVERT_IACT      = 4'd7;
   localparam WAIT_CYCLE        = 4'd8;
-  localparam WRITE_WGHT        = 4'd9;
-  localparam WRITE_PSUM        = 4'd10;
-  localparam WAIT_FOR_RESULTS  = 4'd11;
-  localparam GET_RESULTS       = 4'd12;
-  localparam SEND_RESULTS      = 4'd13;
+  localparam WAIT_FOR_RESULTS  = 4'd9;
+  localparam GET_RESULTS       = 4'd10;
+  localparam SEND_RESULTS      = 4'd11;
 
   reg [3:0] fsm_current_state;
   reg [3:0] fsm_last_state;
@@ -670,7 +667,6 @@ module OpenEye_FPGA
   end
 
   integer cr,cc,g,i;
-  integer temp_var_main;
   always@(posedge clk_i, negedge rst_n) begin
     if(!rst_n)begin
       status_reg_enable_reg     <= 0;
@@ -717,7 +713,6 @@ module OpenEye_FPGA
       bano_cluster_mode_reg     <= 0;
       af_cluster_mode_reg       <= 0;
       compute_mask_reg          <= 0;
-      compute_mask_iact_reg     <= 0;
       router_mode_iact_reg      <= 0;
       router_mode_wght_reg      <= 0;
       router_mode_psum_reg      <= 0;
@@ -776,7 +771,6 @@ module OpenEye_FPGA
       iact_converter_enc_enable    <= 0;
       iact_converter_params_enable <= 0;
 
-      temp_var_main                 = 0;
 
     end else begin
       case(fsm_current_state)
@@ -939,11 +933,8 @@ module OpenEye_FPGA
             current_buffer_n                       <= current_buffer_n + 1;
             current_buffer_n_1                     <= current_buffer_n;
           // get iact params
-            temp_var_main                     = {28'b0,kernel_size} - 1;
-            temp_var_main                     = {24'b0,iact_size} + temp_var_main;
-            max_converter_needed_cycles      <= temp_var_main[6-1:0];
-            temp_var_main                     = (needed_iact_cycles_reg * iact_channels) / WORDS_PER_CYCLE;
-            min_standing_cycles              <= temp_var_main[8-1:0];
+            max_converter_needed_cycles           <= iact_size + kernel_size - 8'b00000001;
+            min_standing_cycles              <= (needed_iact_cycles_reg * iact_channels) / WORDS_PER_CYCLE[8-1:0];
             buffer_SP_en_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]]   <= 1;
             buffer_SP_data_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]] <= data_dma_i_reg;
             buffer_SP_addr_reg[current_buffer_n_1[RAM_CELLS_CLOG2-1:0]] <= current_buffer_addr;
@@ -1075,8 +1066,7 @@ module OpenEye_FPGA
               buffer_SP_addr_reg[a] <= ~0;
             end
           end
-          temp_var_main = WGHT_SIZE * iact_channels;
-          converter_needed_cycles <= temp_var_main[6-1:0];
+          converter_needed_cycles <= WGHT_SIZE[6-1:0] * iact_channels[6-1:0];
         end
 
         CONVERT_IACT : begin
@@ -1240,8 +1230,6 @@ module OpenEye_FPGA
         default : begin
         end
       endcase
-      temp_var_main = 0;
-    
     end
   end
 

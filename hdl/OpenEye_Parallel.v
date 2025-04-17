@@ -358,10 +358,11 @@ module OpenEye_Parallel
   ///States of the FSM
   ///#######################
 
-  localparam FIRST_PARAMS  = 0;
-  localparam SECOND_PARAMS = 1;
+  localparam IDLE_TRANSMI  = 0;
+  localparam FIRST_PARAMS  = 1;
+  localparam SECOND_PARAMS = 2;
 
-  reg fsm_transmission_state;
+  reg [1:0] fsm_transmission_state;
 
   localparam MAIN_IDLE     = 0;
   localparam COMPUTING     = 1;
@@ -404,17 +405,20 @@ module OpenEye_Parallel
       enable_stream_reg <= 0;
       data_stream_reg   <= 0;
       case (fsm_transmission_state)
-        FIRST_PARAMS : begin
-          if (status_reg_enable_i) begin
-            enable_stream_reg      <= 1;
-            data_stream_reg        <= 8'({wght_addr_len_i,stride_x_i,data_mode_i});
-            fsm_transmission_state <= SECOND_PARAMS;
+        IDLE_TRANSMI : begin
+          if (status_reg_enable_i_reg & (!status_reg_enable_i)) begin
+            fsm_transmission_state <= FIRST_PARAMS;
           end
+        end
+        FIRST_PARAMS : begin
+          enable_stream_reg      <= 1;
+          data_stream_reg        <= 8'({wght_addr_len_i_reg,stride_x_i_reg,data_mode_i_reg});
+          fsm_transmission_state <= SECOND_PARAMS;
         end
         SECOND_PARAMS : begin
           enable_stream_reg      <= 1;
           data_stream_reg        <= 8'({iact_addr_len_i_reg});
-          fsm_transmission_state <= FIRST_PARAMS;
+          fsm_transmission_state <= IDLE_TRANSMI;
         end
         default : begin
         end
