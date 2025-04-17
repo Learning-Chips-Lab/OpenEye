@@ -103,7 +103,7 @@ module OpenEye_Parallel
   parameter TRANS_BITWIDTH_PSUM = 40,
   parameter DATA_IACT_OVERHEAD  = 4,
 
-  parameter CLUSTER_COLUMNS      = 2,
+  parameter CLUSTER_COLUMNS     = 2,
 
   parameter IACT_PER_PE         = 16,
   parameter PSUM_PER_PE         = 32,
@@ -358,46 +358,37 @@ module OpenEye_Parallel
   ///States of the FSM
   ///#######################
 
-  typedef enum bit [2:0] {
-    FIRST_PARAMS  = 0,
-    SECOND_PARAMS = 1
-  } fsm_transmission_mode;
+  localparam FIRST_PARAMS  = 0;
+  localparam SECOND_PARAMS = 1;
 
-  fsm_transmission_mode fsm_transmission_state;
+  reg fsm_transmission_state;
 
-  typedef enum bit [2:0] {
-    MAIN_IDLE          = 0,
-    COMPUTING          = 1
-  } fsm_mode;
+  localparam MAIN_IDLE     = 0;
+  localparam COMPUTING     = 1;
 
-  fsm_mode fsm_last_state;
-  fsm_mode fsm_current_state;
+  reg fsm_last_state;
+  reg fsm_current_state;
 
-  typedef enum bit [2:0] {
-    IACT_IDLE          = 0,
-    CALCULATE_IACT     = 1,
-    WAIT               = 2
-  } fsm_iact_mode;
+  localparam IACT_IDLE          = 0;
+  localparam CALCULATE_IACT     = 1;
+  localparam WAIT               = 2;
 
-  fsm_iact_mode fsm_iact_last_state;
-  fsm_iact_mode fsm_iact_current_state;
+  reg [1:0] fsm_iact_last_state;
+  reg [1:0] fsm_iact_current_state;
 
-  typedef enum bit [2:0] {
-    WGHT_READY         = 0,
-    WGHT_BUSY          = 1
-  } fsm_wght_mode;
+  localparam WGHT_READY         = 0;
+  localparam WGHT_BUSY          = 1;
 
-  fsm_wght_mode fsm_wght_current_state;
+  reg fsm_wght_current_state;
 
-  typedef enum bit [2:0] {
-    PSUM_IDLE          = 0,
-    CALCULATE_PSUM     = 1,
-    GET_RESULTS        = 2,
-    WAIT_FOR_RESULTS   = 3,
-    SEND_RESULTS       = 4
-  } fsm_psum_mode;
-  fsm_psum_mode fsm_psum_last_state;
-  fsm_psum_mode fsm_psum_current_state;
+  localparam PSUM_IDLE          = 0;
+  localparam CALCULATE_PSUM     = 1;
+  localparam GET_RESULTS        = 2;
+  localparam WAIT_FOR_RESULTS   = 3;
+  localparam SEND_RESULTS       = 4;
+
+  reg [2:0] fsm_psum_last_state;
+  reg [2:0] fsm_psum_current_state;
 
   ///#######################
   ///Process
@@ -480,7 +471,6 @@ module OpenEye_Parallel
       stride_x_i_reg             <= 0;
       stride_y_i_reg             <= 0;
       kernel_per_pe_cluster_i_reg<= 0;
-      compute_mask_i_reg         <= 0;
       router_mode_wght_reg       <= 0;
       router_mode_wght_i_reg     <= 0;
       router_mode_psum_i_reg     <= 0;
