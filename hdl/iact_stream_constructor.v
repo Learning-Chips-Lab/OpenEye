@@ -61,10 +61,6 @@ module iact_stream_constructor
   wire [DATA_IACT_BITWIDTH-1:0]  storage_w              [RAM_CELLS-1:0][IACT_WORDS_IN_RAM-1:0];
   reg  [CALC_DATA_WIDTH-1:0]     iact_router_counter;
   reg  [CALC_DATA_WIDTH-1:0]     kernel_y_counter;
-  reg  [CALC_DATA_WIDTH-1:0]     x_var;
-  reg  [CALC_DATA_WIDTH-1:0]     y_var;
-  reg  [CALC_DATA_WIDTH-1:0]     ram_var;
-  reg  [CALC_DATA_WIDTH-1:0]     byte_var;
 
   localparam INITIALIZE      = 2'b0;
   localparam GET_PARAMETER   = 2'b1;
@@ -176,6 +172,10 @@ module iact_stream_constructor
     reg  [CALC_DATA_WIDTH-1:0]   duty_cycle_th;
     reg  [CALC_DATA_WIDTH-1:0]   duty_cycle_reset;
     reg  [1:0]                   fsm_current_state;
+    integer x_var;
+    integer y_var;
+    integer ram_var;
+    integer byte_var;
     integer temp_var;
     integer r,w;
     always @(posedge clk_i, negedge rst_ni) begin
