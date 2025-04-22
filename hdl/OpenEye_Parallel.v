@@ -143,7 +143,7 @@ module OpenEye_Parallel
   ///Ports for GLBs and PEs
   input      [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0]     iact_data_i,
   input      [CLUSTERS*NUM_GLB_IACT-1:0]                         iact_enable_i,
-  output reg [CLUSTERS*NUM_GLB_IACT-1:0]                         iact_ready_o,
+  output     [CLUSTERS*NUM_GLB_IACT-1:0]                         iact_ready_o,
 
   input      [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]     wght_data_i,
   input      [CLUSTERS*NUM_GLB_WGHT-1:0]                         wght_enable_i,
@@ -267,14 +267,14 @@ module OpenEye_Parallel
   reg  [PSUM_MEM_ADDR_BITS-1:0]                        mem_addr_psum_storage;
 
   reg  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_i_reg;
-  reg  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o_reg;
+  wire  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o_reg;
   reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_enable_delay;
   reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_enable_i_reg;
   reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_enable_o_reg;
   reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_ready_i_reg;
-  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_cluster_enable_o_reg;
+  wire  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_cluster_enable_o_reg;
   reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_ready_o_reg;
-  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_ready_o_cluster_reg;
+  wire  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_ready_o_cluster_reg;
 
 
   ///Wires and Regs for Ports
@@ -320,7 +320,7 @@ module OpenEye_Parallel
   reg  [CLUSTERS*NUM_GLB_IACT-1:0]                     iact_ready_o_reg;
   reg  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i_reg;
   reg  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_enable_i_reg;
-  reg  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_ready_o_reg;
+  wire  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_ready_o_reg;
   reg                                                  wght_ready_reg;
 
   reg                                                  compute_i_reg;
@@ -615,7 +615,7 @@ module OpenEye_Parallel
       endcase
     end
   end
-genvar g,b,cc,cr,pec,per;
+integer g,b,cc,cr,pec,per;
 if (SERIAL == 0) begin
   always@(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
@@ -633,7 +633,6 @@ if (SERIAL == 0) begin
       iact_choose_reg          <= {CLUSTERS*PES{NUM_GLB_IACT[$clog2(NUM_GLB_IACT+1)-1:0]}};
       iact_enable_comp_reg     <= 0;
       iact_data_i_reg          <= 0;
-      iact_ready_o             <= 0;
       iact_enable_i_reg        <= 0;
       iact_router_offset       <= 0;
       flat_help_iact_var        = 0;
@@ -644,7 +643,6 @@ if (SERIAL == 0) begin
           data_write_enable_iact <= 1;
           iact_data_i_reg        <= iact_data_i;
           iact_enable_i_reg      <= iact_enable_i;
-          iact_ready_o           <= iact_ready_o_reg;
           fsm_iact_cycle         <= 0;
           fsm_iact_cycle_mod1    <= 0;
           fsm_iact_cycle_div     <= 0;
@@ -709,7 +707,6 @@ if (SERIAL == 0) begin
             mem_addr_iact          <= 0;
             fsm_iact_last_state    <= IACT_IDLE;
             fsm_iact_current_state <= CALCULATE_IACT;
-            iact_ready_o           <= 0;
             data_write_enable_iact <= 0;
           end
 
@@ -1095,11 +1092,11 @@ end
               end
             end
             if ((!SERIAL &
-            (((fsm_psum_cycle >= (filters_reg+1)/2) & !data_mode_reg) |
-            ((fsm_psum_cycle >= (needed_cycles_i_reg+1)/2) & data_mode_reg))) |
+            (((fsm_psum_cycle[$clog2(PSUM_PER_PE+1)-1:0] >= (filters_reg+1)/2) & !data_mode_reg) |
+            ((fsm_psum_cycle[7:0] >= (needed_cycles_i_reg+1)/2) & data_mode_reg))) |
             (SERIAL & 
             (((fsm_psum_cycle >= filters_reg) & !data_mode_reg) |
-            ((fsm_psum_cycle >= (needed_cycles_i_reg+1)/2) & data_mode_reg)))) begin
+            ((fsm_psum_cycle[7:0] >= (needed_cycles_i_reg+1)/2) & data_mode_reg)))) begin
               results_ready           = 0;
               fsm_psum_cycle         <= 0;
               psum_enable_i_reg      <= 0;
@@ -1108,14 +1105,14 @@ end
               for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
                 for (cr_psum=0; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
                   for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
-                    flat_help_psum_var = mem_addr_psum_storage;
+                    //flat_help_psum_var = mem_addr_psum_storage;
                     for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
                       if (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 1) begin
                         mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum] <= 
-                                      flat_help_psum_var[b_psum];
+                                      mem_addr_psum_storage[b_psum];
                       end
                     end
-                    flat_help_psum_var = 0;
+                    //flat_help_psum_var = 0;
                   end
                 end
               end
@@ -1153,10 +1150,8 @@ end
                     <= flat_help_psum_var[b_psum];
                   end
                 end
-                flat_help_psum_var = 0;
-                flat_help_psum_var = router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2];
-
-                results_ready = results_ready & (psum_cluster_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] | (flat_help_psum_var == 0));
+                results_ready = results_ready & (psum_cluster_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] | 
+                (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 0));
               end
             end
           end
@@ -1165,11 +1160,11 @@ end
             fsm_psum_cycle <= fsm_psum_cycle + 1;
           end
           if ((!SERIAL &
-          (((fsm_psum_cycle >= 32'((filters_reg+1)/2)) & !data_mode_reg) |
-          ((fsm_psum_cycle >= 32'((needed_cycles_i_reg+1)/2)) & data_mode_reg))) |
+          (((fsm_psum_cycle[$clog2(PSUM_PER_PE+1)-1:0] >= (filters_reg+1)/2) & !data_mode_reg) |
+          ((fsm_psum_cycle[7:0] >= (needed_cycles_i_reg+1)/2) & data_mode_reg))) |
           (SERIAL & 
-          (((fsm_psum_cycle >= filters_reg) & !data_mode_reg) |
-          ((fsm_psum_cycle >= 32'((needed_cycles_i_reg+1)/2)) & data_mode_reg)))) begin
+          (((fsm_psum_cycle[$clog2(PSUM_PER_PE+1)-1:0] >= filters_reg) & !data_mode_reg) |
+          ((fsm_psum_cycle[7:0] >= (needed_cycles_i_reg+1)/2) & data_mode_reg)))) begin
             if ((finished_cycles == needed_cycles_reg) | (fsm_current_state == MAIN_IDLE) | data_mode_reg) begin
               fsm_psum_last_state    <= GET_RESULTS;
               fsm_psum_current_state <= WAIT_FOR_RESULTS;
@@ -1178,7 +1173,7 @@ end
               fsm_psum_cycle         <= 0;
               psum_transmitted       <= 1;
             end else begin
-              if (((32)'(needed_y_cls_reg) >= 2) & !psum_router_set_reg) begin
+              if ((needed_y_cls_reg >= 2) & !psum_router_set_reg) begin
                 psum_router_set_reg  <= 1;
                 for (cr_psum=1; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
                   for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
@@ -1223,9 +1218,9 @@ end
               fsm_psum_cycle         <= 0;
               if (storage_cycles == 0) begin
                 if (SERIAL) begin 
-                  mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + filters_reg);
+                  mem_addr_psum_storage  <= mem_addr_psum_storage + {{(PSUM_MEM_ADDR_BITS-$clog2(PSUM_PER_PE+1)){1'd0}},filters_reg};
                 end else begin
-                  mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(filters_reg+1)/2);
+                  mem_addr_psum_storage  <= mem_addr_psum_storage + ({{(PSUM_MEM_ADDR_BITS-$clog2(PSUM_PER_PE+1)){1'd0}},filters_reg}+1)/2;
                 end
               end
               psum_ready_i_reg       <= 0;

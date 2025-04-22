@@ -1,5 +1,5 @@
 SRC_DIRS := ../hdl/
-TOP_MODULE := adder
+TOP_MODULE := OpenEye_FPGA
 OUT_JSON := $(TOP_MODULE).json
 VERILOG_SRCS := $(shell find $(SRC_DIRS) -name "*.v" | sort)
 

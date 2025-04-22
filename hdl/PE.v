@@ -160,9 +160,8 @@ module PE
   reg                                         psum_select;
   reg                                         psum_enable;
   reg                                         psum_enable_2;
-
-  reg [TRANS_BITWIDTH_PSUM-1 :0]    psum_data_1_delay;
-  reg [TRANS_BITWIDTH_PSUM-1 :0]    psum_data_2_delay;
+  reg [TRANS_BITWIDTH_PSUM-1 :0]              psum_data_1_delay;
+  reg [TRANS_BITWIDTH_PSUM-1 :0]              psum_data_2_delay;
   reg                                         mux_iact_ready;
   reg                                         adder_1_en;
   reg                                         adder_2_en;
@@ -267,6 +266,7 @@ module PE
   wire [DATA_IACT_BITWIDTH-1:0]               iact_part_1_w;
   wire [DATA_IACT_BITWIDTH-1:0]               iact_part_2_w;
   wire [DATA_IACT_BITWIDTH-1:0]               iact_part_3_w;
+  wire [2*DATA_PSUM_BITWIDTH-1:0]             output_adder;
 
   //Necessary for creating VCD, if this is top
   `ifdef COCOTB_SIM
@@ -280,29 +280,25 @@ module PE
 
   //State machine
   //Writing parameters to PEs
-  enum bit [1:0]{
-    FIRST_PARAMS  = 0,
-    SECOND_PARAMS = 1,
-    THIRD_PARAMS  = 2,
-    FOURTH_PARAMS = 3
-  } fsm_mode_stream;
+  localparam [1:0] FIRST_PARAMS  = 0;
+  localparam [1:0] SECOND_PARAMS = 1;
+  localparam [1:0] THIRD_PARAMS  = 2;
+  localparam [1:0] FOURTH_PARAMS = 3;
   // State machine
   // IDLE: State for loading data into SPADs, wait for continue signal
   // LOADING_1-5: Preperation steps for computation
   // CALCULATING: Operative step for computation. Use of MAC-Operations
   // WAIT_TO_SEND_PSUM: Sets ready signal to 1, if input is 1. Waits for enable singal to proceed
   // SEND_PSUM: Continues outputstream of stored psum. Resumes to IDLE, when finished.
-  enum bit [$clog2(16)-1:0]{
-    IDLE               = 0,
-    LOADING_1          = 1,
-    LOADING_2          = 2,
-    LOADING_3          = 3,
-    LOADING_4          = 4,
-    LOADING_5          = 5,
-    CALCULATING        = 6,
-    WAIT_TO_SEND_PSUM  = 7,
-    SEND_PSUM          = 8
-  } fsm_mode_computing;
+  localparam [$clog2(16)-1:0] IDLE              = 0;
+  localparam [$clog2(16)-1:0] LOADING_1         = 1;
+  localparam [$clog2(16)-1:0] LOADING_2         = 2;
+  localparam [$clog2(16)-1:0] LOADING_3         = 3;
+  localparam [$clog2(16)-1:0] LOADING_4         = 4;
+  localparam [$clog2(16)-1:0] LOADING_5         = 5;
+  localparam [$clog2(16)-1:0] CALCULATING       = 6;
+  localparam [$clog2(16)-1:0] WAIT_TO_SEND_PSUM = 7;
+  localparam [$clog2(16)-1:0] SEND_PSUM         = 8;
 
   assign mux_iact_c_i_w = mux_iact_ready;
   assign iact_part_1_w = mux_iact_a_o_w[7:0];
@@ -310,9 +306,10 @@ module PE
   assign iact_part_3_w = mux_iact_a_o_w[23:16];
   assign {iact_data_spad_oh,iact_data_spad_pay} = iact_data_SPad_data_r;
   assign {wght_data_spad_oh_2,wght_data_spad_pay_2,wght_data_spad_oh_1,wght_data_spad_pay_1} = wght_data_SPad_data_r;
-  assign adder_3_summand_1 = 1'(SERIAL) ? adder_1_o_w : 0;
-  assign adder_3_summand_2 = 1'(SERIAL) ? adder_2_o_w : 0;
-  assign psum_data_o = 1'(SERIAL) ? TRANS_BITWIDTH_PSUM'(adder_3_o_w) : TRANS_BITWIDTH_PSUM'({adder_2_o_w,adder_1_o_w});
+  assign adder_3_summand_1 = SERIAL == 1 ? adder_1_o_w : 0;
+  assign adder_3_summand_2 = SERIAL == 1 ? adder_2_o_w : 0;
+  assign psum_data_o = SERIAL == 1 ? adder_3_o_w : output_adder[TRANS_BITWIDTH_PSUM-1:0];
+  assign output_adder = {adder_2_o_w,adder_1_o_w};
   assign wght_addr_SPad_addr = wght_addr_use_vec ? wght_addr_vec : iact_data_spad_oh;
   assign wght_data_SPad_addr = wght_data_use_vec ? wght_data_vec : wght_addr_SPad_data_r;
   assign mult_1_fac_1 = wght_data_spad_pay_1;
@@ -368,11 +365,11 @@ module PE
       case (current_state_stream)
         FIRST_PARAMS : begin
           if (enable_stream_i) begin
-            current_state_stream <= SECOND_PARAMS;
-            data_mode_reg        <= data_stream_i[0];
-            stride_reg           <= data_stream_i[3:1];
-            wght_addr_max_reg    <= 4'(data_stream_i[7:4]);
-            input_activations_reg<= 3;
+            current_state_stream  <= SECOND_PARAMS;
+            data_mode_reg         <= data_stream_i[0];
+            stride_reg            <= data_stream_i[3:1];
+            wght_addr_max_reg     <= data_stream_i[7:4];
+            input_activations_reg <= 3;
           end
         end
         SECOND_PARAMS : begin
@@ -469,8 +466,8 @@ module PE
       end else begin
         psum_enable                         <= 0;
       end
-      {psum_data_2_delay,psum_data_1_delay} <= (TRANS_BITWIDTH_PSUM*PARALLEL_MACS)'(psum_data_i);
-      if (SERIAL) begin
+      {psum_data_2_delay,psum_data_1_delay} <= {{(TRANS_BITWIDTH_PSUM){1'd0}},psum_data_i};
+      if (SERIAL == 1) begin
         psum_enable_2                         <= psum_enable;
         psum_enable_o                         <= psum_enable_2;
       end else begin
@@ -534,7 +531,7 @@ module PE
           use_psum_1             <= 0;
           use_psum_2             <= 0;
           psum_select            <= 1;
-          if (SERIAL) begin
+          if (SERIAL == 1) begin
             used_psum_memory_1     <= 0;
             used_psum_memory_2     <= 0;
           end else begin
@@ -547,13 +544,13 @@ module PE
             if (stride_reg != 0) begin
               iact_data_position_reg <= PE_Y + PE_X * stride_reg;
             end
-            if (32'(iact_data_position_reg) >= NUM_GLB_IACT) begin
-              iact_data_position_reg <= 8'(32'(iact_data_position_reg) - NUM_GLB_IACT);
+            if (iact_data_position_reg >= NUM_GLB_IACT[7:0]) begin
+              iact_data_position_reg <= iact_data_position_reg - NUM_GLB_IACT[7:0];
             end
-            if (iact_enable_i[$clog2(NUM_GLB_IACT)'(iact_data_position_reg)]) begin
+            if (iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]]) begin
               current_state_computing <= CALCULATING;
               wght_data_SPad_en_r     <= 1;
-              next_iact               <= iact_enable_i[$clog2(NUM_GLB_IACT)'(iact_data_position_reg)];
+              next_iact               <= iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]];
               if (iact_data_position_reg == 0) begin
                 iact_data_current_2 <= iact_part_1_w;
               end else begin
@@ -572,7 +569,7 @@ module PE
             psum_select      <= 1;
             use_psum_1       <= 0;
             use_psum_2       <= 0;
-            if (SERIAL) begin
+            if (SERIAL == 1) begin
               used_psum_memory_1 <= 0;
               used_psum_memory_2 <= 0;
             end else begin
@@ -596,7 +593,7 @@ module PE
             wght_data_use_vec     <= 0;
             use_psum_1            <= 0;
             use_psum_2            <= 0;
-            if (SERIAL) begin
+            if (SERIAL == 1) begin
               used_psum_memory_1 <= 0;
               used_psum_memory_2 <= 0;
             end else begin
@@ -610,9 +607,9 @@ module PE
           current_state_computing <= LOADING_2;
           iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
           if (iact_addr_max_reg != 0) begin
-            iact_addr_SPad_addr     <= iact_addr_SPad_addr + 1;
+            iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
           end
-          wght_addr_SPad_en_r     <= 1;
+          wght_addr_SPad_en_r <= 1;
         end
 
         LOADING_2 : begin
@@ -628,7 +625,7 @@ module PE
               psum_data_SPad_en_b_w   <= 1;
               values_valid            <= 0;
             end else begin
-              current_state_computing       <= LOADING_1;
+              current_state_computing <= LOADING_1;
               if (iact_addr_max_reg != (iact_addr_SPad_addr+1)) begin
                 iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
               end
@@ -649,7 +646,7 @@ module PE
         end
 
         LOADING_3 : begin
-          current_state_computing       <= LOADING_4;
+          current_state_computing <= LOADING_4;
           iact_data_SPad_addr <= iact_data_SPad_addr + 1;
           wght_addr_use_vec   <= 1;
           if (wght_addr_vec == iact_data_spad_oh) begin
@@ -664,7 +661,7 @@ module PE
         end
 
         LOADING_4 : begin
-          current_state_computing       <= LOADING_5;
+          current_state_computing <= LOADING_5;
           wght_data_end       <= wght_addr_SPad_data_r;
           wght_addr_use_vec   <= 1;
           iact_data_current_1 <= iact_data_spad_pay;
@@ -721,14 +718,14 @@ module PE
             //Defaulting Values
             wght_data_SPad_en_r     <= 1;
             wght_data_use_vec       <= 1;
-            next_iact               <= iact_enable_i[$clog2(NUM_GLB_IACT)'(iact_data_position_reg)];
+            next_iact               <= iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]];
             values_valid            <= next_iact;
             computing               <= 1;
             adder_2_en              <= 1;
             use_psum_1              <= adder_1_en;
             use_psum_2              <= 1;
             psum_data_SPad_en_a_w   <= 0;
-            if (((input_activations_reg == 1) | (wght_data_vec+1)==7'(32'(input_activations_reg)-1)) & adder_1_en) begin
+            if (((input_activations_reg == 1) | ((wght_data_vec+2)=={{(4){1'd0}},input_activations_reg})) & adder_1_en) begin
               use_psum_1            <= 0;
               psum_data_SPad_en_a_w <= 1;
               if (SERIAL) begin
@@ -846,7 +843,7 @@ module PE
               iact_data_SPad_addr <= iact_data_SPad_addr + 1;
               next_iact           <= 1;
               iact_addr_count     <= iact_addr_count + 1;
-              if (((32'(iact_addr_count) + 1) >= 32'(iact_addr_current)) & ((iact_addr_SPad_addr) < first_spad_words_iact)) begin
+              if (((iact_addr_count + 1) >= iact_addr_current) & ((iact_addr_SPad_addr) < first_spad_words_iact)) begin
                 if (iact_addr_max_reg != (iact_addr_SPad_addr+1)) begin
                   iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
                 end
@@ -872,7 +869,7 @@ module PE
               values_valid <= 0;
             end
             //Reuse Values of PSUM SPad
-            if (((32'(32'(iact_addr_count)) == 32'(32'(iact_addr_current)+1)) | (iact_addr_count == 0)) & (next_iact)) begin
+            if (((iact_addr_count == iact_addr_current+1) | (iact_addr_count == 0)) & (next_iact)) begin
               current_state_computing<= WAIT_TO_SEND_PSUM;
               wght_addr_vec          <= 0;
               wght_data_vec          <= 0;
@@ -910,7 +907,7 @@ module PE
 
             adder_1_en <= 1;
             adder_2_en <= 1;
-          if (SERIAL) begin
+          if (SERIAL == 1) begin
             if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
               use_psum_1 <= 1;
             end else begin
@@ -963,7 +960,7 @@ module PE
             psum_data_SPad_en_b_w  <= 1;
           end
           psum_spad_addr_a_mem   <= 0;
-          if (SERIAL) begin
+          if (SERIAL == 1) begin
             psum_spad_addr_b_mem   <= 0;
           end else begin
             psum_spad_addr_b_mem   <= 1;
@@ -1051,7 +1048,7 @@ module PE
               end
           end else begin
             if (!data_mode_reg) begin
-              if (SERIAL) begin
+              if (SERIAL == 1) begin
                 if (used_psum_memory_1[(psum_spad_addr_a_r)]  == 1) begin
                   use_psum_1 <= 1;
                 end else begin
@@ -1095,7 +1092,7 @@ module PE
             adder_1_en              <= 1;
             adder_2_en              <= 1;
           end
-          if (SERIAL) begin
+          if (SERIAL == 1) begin
             psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
             psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
             adder_3_en           <= 1;
