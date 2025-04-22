@@ -18,7 +18,7 @@ $(GEN_SCRIPT):
 	done
 	@echo "" >> $(GEN_SCRIPT)
 	@echo "synth_gatemate -top $(TOP_MODULE) -json $(OUT_JSON)" >> $(GEN_SCRIPT)
-	@cat $(GEN_SCRIPT)  # <-- Zeigt sofort, was wirklich geschrieben wurde
+	@cat $(GEN_SCRIPT)
 
 clean:
 	rm -f *.json *.log *.dot *.svg $(GEN_SCRIPT)
