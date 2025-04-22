@@ -412,12 +412,12 @@ module OpenEye_Parallel
         end
         FIRST_PARAMS : begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= 8'({wght_addr_len_i_reg,stride_x_i_reg,data_mode_i_reg});
+          data_stream_reg        <= {wght_addr_len_i_reg,stride_x_i_reg,data_mode_i_reg};
           fsm_transmission_state <= SECOND_PARAMS;
         end
         SECOND_PARAMS : begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= 8'({iact_addr_len_i_reg});
+          data_stream_reg        <= {{4{1'd0}},{iact_addr_len_i_reg}};
           fsm_transmission_state <= IDLE_TRANSMI;
         end
         default : begin
@@ -601,10 +601,10 @@ module OpenEye_Parallel
         WGHT_BUSY : begin
           wght_ready_reg   <= 0;
           wght_transmitted <= 1;
-          if ((compute_cluster_i_reg != 0) & (8'(finished_cycles) == 8'(needed_cycles_i_reg))) begin
+          if ((compute_cluster_i_reg != 0) & (finished_cycles == needed_cycles_i_reg)) begin
             fsm_wght_current_state <= WGHT_READY;
           end
-          if ((data_mode_reg) & (8'(finished_cycles) == 8'(1))) begin
+          if ((data_mode_reg) & (finished_cycles == 1)) begin
             fsm_wght_current_state <= WGHT_READY;
           end
         end
@@ -615,7 +615,7 @@ module OpenEye_Parallel
       endcase
     end
   end
-
+genvar g,b,cc,cr,pec,per;
 if (SERIAL == 0) begin
   always@(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
@@ -630,7 +630,7 @@ if (SERIAL == 0) begin
       router_mode_iact_i_reg   <= 0;
       router_mode_iact_storage <= 0;
       mem_addr_iact            <= 0;
-      iact_choose_reg          <= {CLUSTERS*PES{$clog2(NUM_GLB_IACT+1)'(NUM_GLB_IACT)}};
+      iact_choose_reg          <= {CLUSTERS*PES{NUM_GLB_IACT[$clog2(NUM_GLB_IACT+1)-1:0]}};
       iact_enable_comp_reg     <= 0;
       iact_data_i_reg          <= 0;
       iact_ready_o             <= 0;
@@ -651,13 +651,13 @@ if (SERIAL == 0) begin
           fsm_iact_cycle_div_cnt <= 0;
 
           router_mode_iact_reg     <= router_mode_iact_i;
-          for (int g=0; g<CLUSTERS*NUM_GLB_IACT; g=g+1) begin
+          for (g=0; g<CLUSTERS*NUM_GLB_IACT; g=g+1) begin
             if (iact_enable_i_w[g]) begin
-              for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+              for (b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
                 flat_help_iact_var[b] = mem_addr_iact[g*IACT_MEM_ADDR_BITS+b];
               end
               flat_help_iact_var = flat_help_iact_var + 1;
-              for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+              for (b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
                  mem_addr_iact[g*IACT_MEM_ADDR_BITS+b] <= flat_help_iact_var[b];
               end
               flat_help_iact_var = 0;
@@ -665,24 +665,24 @@ if (SERIAL == 0) begin
           end
 
           flat_help_iact_var      = 0;
-          if (needed_y_cls_i_reg == ($clog2(CLUSTER_ROWS+1))'(2)) begin
-            for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-              for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+          if (needed_y_cls_i_reg == 2) begin
+            for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+              for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                 if ((cr == 1) | (cr == 3) | (cr == 5) | (cr == 7)) begin
                   flat_help_iact_var = 3;
                 end else begin
                   flat_help_iact_var = 0;
                 end
-                for (int b=0; b<4; b=b+1) begin
+                for (b=0; b<4; b=b+1) begin
                   iact_router_offset[cc*CLUSTER_ROWS*4+cr*4+b]
                   <= flat_help_iact_var[b];
                 end
               end
             end
           end else begin
-            if (3'(needed_y_cls_i_reg) == 4) begin
-              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+            if (needed_y_cls_i_reg == 4) begin
+              for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                   if ((cr == 1) | (cr == 5)) begin
                     flat_help_iact_var = 3;
                   end else begin
@@ -694,7 +694,7 @@ if (SERIAL == 0) begin
                       end
                     end
                   end
-                  for (int b=0; b<4; b=b+1) begin
+                  for (b=0; b<4; b=b+1) begin
                     iact_router_offset[cc*CLUSTER_ROWS*4+cr*4+b]
                     <= flat_help_iact_var[b];
                   end
@@ -720,14 +720,14 @@ if (SERIAL == 0) begin
             fsm_iact_cycle <= fsm_iact_cycle + 1;
             ///fsm_iact_cycle_mod1: fsm_iact_cycle%IACT_FSM_CYCL_WORDS
             if (fsm_iact_cycle >= 1) begin
-              if (fsm_iact_cycle_mod1 == ((7'(24/12))-1)) begin
+              if (fsm_iact_cycle_mod1 == ((24/12)-1)) begin
                 fsm_iact_cycle_mod1 <= 0;
               end else begin
                 fsm_iact_cycle_mod1 <= fsm_iact_cycle_mod1 + 1;
               end
             end
             ///fsm_iact_cycle_div: ((fsm_iact_cycle - 1)/IACT_FSM_CYCL_WORDS)
-            if (fsm_iact_cycle_div_cnt == ((7'(input_activations_reg))-1)) begin
+            if (fsm_iact_cycle_div_cnt == input_activations_reg-1) begin
               fsm_iact_cycle_div <= fsm_iact_cycle_div + 1;
               fsm_iact_cycle_div_cnt <= 0;
             end else begin
@@ -739,28 +739,28 @@ if (SERIAL == 0) begin
             if (fsm_iact_last_state == IACT_IDLE) begin
             end
             if (!data_mode_reg) begin
-              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+              for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
                   ///loop_mod: cr%needed_y_cls
-                  if (loop_mod + 1 == 3'(needed_y_cls_reg)) begin
+                  if (loop_mod + 1 == needed_y_cls_reg) begin
                     loop_mod = 0;
                   end
-                  for (int pec=0; pec<PE_COLUMNS; pec=pec+1) begin
-                    for (int per=0; per<PE_ROWS; per=per+1) begin
-                      for (int b=0; b<4; b=b+1) begin
+                  for (pec=0; pec<PE_COLUMNS; pec=pec+1) begin
+                    for (per=0; per<PE_ROWS; per=per+1) begin
+                      for (b=0; b<4; b=b+1) begin
                         flat_help_iact_var[b] = iact_router_offset[cc*CLUSTER_ROWS*4+cr*4+b];
                       end
-                      if ((32'(32'(flat_help_iact_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_reg * kernel_per_pe_cluster_i_reg) + per) >=  (NUM_GLB_IACT *  32'(fsm_iact_cycle_div))) 
-                      &  (32'(32'(flat_help_iact_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_reg * kernel_per_pe_cluster_i_reg) + per)  <  (NUM_GLB_IACT * (32'(fsm_iact_cycle_div) + 1)))
+                      if (((flat_help_iact_var + (loop_mod * PE_ROWS) + (pec * stride_x_reg * kernel_per_pe_cluster_i_reg) + per) >=  (NUM_GLB_IACT *  fsm_iact_cycle_div)) 
+                      &  ((flat_help_iact_var + (loop_mod * PE_ROWS) + (pec * stride_x_reg * kernel_per_pe_cluster_i_reg) + per)  <  (NUM_GLB_IACT * (fsm_iact_cycle_div + 1)))
                       &  (compute_mask_reg[cc * PES * CLUSTER_ROWS + cr * PES + per * PE_COLUMNS + pec] == 1)) begin
-                        flat_help_iact_var   = (flat_help_iact_var + loop_mod * PE_ROWS + pec * stride_x_reg * kernel_per_pe_cluster_i_reg + 64'(per) - NUM_GLB_IACT * fsm_iact_cycle_div);
-                        for (int b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
+                        flat_help_iact_var   = (flat_help_iact_var + loop_mod * PE_ROWS + pec * stride_x_reg * kernel_per_pe_cluster_i_reg + per - NUM_GLB_IACT * fsm_iact_cycle_div);
+                        for (b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
                           iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                           <= flat_help_iact_var[b];
                         end
                       end else begin
                         flat_help_iact_var = NUM_GLB_IACT;
-                        for (int b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
+                        for (b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
                           iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                           <= flat_help_iact_var[b];
                         end
@@ -774,19 +774,19 @@ if (SERIAL == 0) begin
 
               flat_help_iact_var = 0;
               if (fsm_iact_cycle_mod1 == 1) begin
-                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                    for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (g=0; g<NUM_GLB_IACT; g=g+1) begin
                       flat_help_iact_var = 0;
-                      for (int b=0; b<2; b=b+1) begin
+                      for (b=0; b<2; b=b+1) begin
                         flat_help_iact_var[b] = router_mode_iact_reg[cc*CLUSTER_ROWS*NUM_GLB_IACT*ROUTER_MODES_IACT+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT + b + 4];
                       end
                       if ((flat_help_iact_var[0] == 0) & (flat_help_iact_var[1] == 0)) begin
-                        for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+                        for (b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
                           flat_help_iact_var[b] = mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b];
                         end
                         flat_help_iact_var = flat_help_iact_var  +1;
-                        for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+                        for (b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
                           mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b]
                           <= flat_help_iact_var[b];
                         end
@@ -796,15 +796,15 @@ if (SERIAL == 0) begin
                   end
                 end
               end else begin
-                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                    for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (g=0; g<NUM_GLB_IACT; g=g+1) begin
                       iact_enable_comp_reg[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] <= 1;
                     end
                   end
                 end
               end
-              if (32'(fsm_iact_cycle+1) > ((32'(input_activations_reg))*needed_iact_cycles_reg)) begin
+              if (fsm_iact_cycle+1 > ((input_activations_reg)*needed_iact_cycles_reg)) begin
                 iact_enable_comp_reg   <= 0;
                 loop_mod                = 0;
                 fsm_iact_cycle         <= 0;
@@ -815,33 +815,33 @@ if (SERIAL == 0) begin
                 fsm_iact_current_state <= WAIT;
               end
             end else begin
-              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                  for (int pec=0; pec<PE_COLUMNS; pec=pec+1) begin
-                    for (int per=0; per<PE_ROWS; per=per+1) begin
-                      for (int b=0; b<4; b=b+1) begin
+              for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                  for (pec=0; pec<PE_COLUMNS; pec=pec+1) begin
+                    for (per=0; per<PE_ROWS; per=per+1) begin
+                      for (b=0; b<4; b=b+1) begin
                         flat_help_iact_var[b] = iact_router_offset[cc*CLUSTER_ROWS*4+cr*4+b];
                       end
-                      if ((32'(32'(flat_help_iact_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * PE_ROWS) + per)  <  NUM_GLB_IACT * (32'(iact_pes_per_router)))
+                      if (((flat_help_iact_var + loop_mod * PE_ROWS + (pec * PE_ROWS) + per)  <  NUM_GLB_IACT * (iact_pes_per_router))
                       &  (compute_mask_reg[cc * PES * CLUSTER_ROWS + cr * PES + per * PE_COLUMNS + pec] == 1)) begin
-                        if ((32'(32'(flat_help_iact_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  1 * (32'(3)))) begin
+                        if (((flat_help_iact_var + loop_mod * PE_ROWS + (pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  3)) begin
                           flat_help_iact_var = 0;
                         end else begin
-                          if ((32'(32'(flat_help_iact_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  2 * (32'(3)))) begin
+                          if (((flat_help_iact_var + loop_mod * PE_ROWS + (pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  2 * 3)) begin
                             flat_help_iact_var = 1;
                           end else begin
-                            if ((32'(32'(flat_help_iact_var) + 32'(loop_mod) * PE_ROWS + 32'(pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  3 * (32'(3)))) begin
+                            if (((flat_help_iact_var + loop_mod * PE_ROWS + (pec * stride_x_i_reg * kernel_per_pe_cluster_i_reg) + per)  <  3 * 3)) begin
                               flat_help_iact_var = 2;
                             end
                           end
                         end
-                        for (int b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
+                        for (b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
                           iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                           <= flat_help_iact_var[b];
                         end
                       end else begin
                         flat_help_iact_var = NUM_GLB_IACT;
-                        for (int b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
+                        for (b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
                           iact_choose_reg[cc*PES*CLUSTER_ROWS*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
                           <= flat_help_iact_var[b];
                         end
@@ -852,19 +852,19 @@ if (SERIAL == 0) begin
                 end
               end
               if (fsm_iact_cycle != 0) begin
-                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                    for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (g=0; g<NUM_GLB_IACT; g=g+1) begin
                       flat_help_iact_var = 0;
-                      for (int b=0; b<2; b=b+1) begin
+                      for (b=0; b<2; b=b+1) begin
                         flat_help_iact_var[b] = router_mode_iact_reg[cc*CLUSTER_ROWS*NUM_GLB_IACT*ROUTER_MODES_IACT+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT + b + 4];
                       end
                       if ((flat_help_iact_var[0] == 0) & (flat_help_iact_var[1] == 0)) begin
-                        for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+                        for (b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
                           flat_help_iact_var[b] = mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b];
                         end
                         flat_help_iact_var = flat_help_iact_var  +1;
-                        for (int b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
+                        for (b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
                           mem_addr_iact[cc*CLUSTER_ROWS*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+cr*NUM_GLB_IACT*IACT_MEM_ADDR_BITS+g*IACT_MEM_ADDR_BITS + b]
                           <= flat_help_iact_var[b];
                         end
@@ -874,10 +874,10 @@ if (SERIAL == 0) begin
                   end
                 end
               end
-              if (fsm_iact_cycle < ((32'(needed_cycles_i_reg))*32'(input_activations_i_reg))) begin
-                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                  for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                    for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+              if (fsm_iact_cycle < (needed_cycles_i_reg*input_activations_i_reg)) begin
+                for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (g=0; g<NUM_GLB_IACT; g=g+1) begin
                       iact_enable_comp_reg[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] <= 1;
                     end
                   end
@@ -904,17 +904,17 @@ if (SERIAL == 0) begin
             fsm_iact_last_state    <= WAIT;
             fsm_iact_current_state <= CALCULATE_IACT;
             iact_choose_reg        <= 0; //TODO: Change to PE all composition for next iteration
-            if (((32)'(needed_y_cls_reg) >= 2) & (storage_cycles != ($clog2(CLUSTER_ROWS+1))'(32'(needed_y_cls_reg) - 1))) begin
-              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+            if ((needed_y_cls_reg >= 2) & (storage_cycles != (needed_y_cls_reg - 1))) begin
+              for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                for (g=0; g<NUM_GLB_IACT; g=g+1) begin
                   router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+3] <= 0;
                   router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+4] <= 1;
                   router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+5] <= 1;
                 end
               end
-              for (int cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
-                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                  for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+              for (cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
+                for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (g=0; g<NUM_GLB_IACT; g=g+1) begin
                     if (!((router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT] == 1) &
                         (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] == 1) &
                         (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+2] == 0) &
@@ -971,6 +971,7 @@ if (SERIAL == 0) begin
   end
 end
 
+  integer g_psum,b_psum,cc_psum,cr_psum;
   always@(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
       psum_transmitted         <= 0;
@@ -1015,10 +1016,10 @@ end
         if (needed_y_cls_reg == 1) begin
           psum_choose_reg <= (2**(CLUSTER_ROWS*CLUSTER_COLUMNS*NUM_GLB_PSUM)-1);
         end else begin 
-          if (needed_y_cls_reg == ($clog2(CLUSTER_ROWS+1))'(2)) begin
+          if (needed_y_cls_reg == 2) begin
           psum_choose_reg <= {CLUSTER_ROWS{{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{1'b0}}}};
           end else begin
-            if ((needed_y_cls_reg == ($clog2(CLUSTER_ROWS+1))'(4)) & (CLUSTER_ROWS >= 4)) begin
+            if (needed_y_cls_reg == 4 & (CLUSTER_ROWS >= 4)) begin
               //32'(psum_choose_reg) <= {((CLUSTER_ROWS+1)/2){{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{3'b000}}}};
             end else begin
               psum_choose_reg <= (2**(CLUSTER_ROWS*CLUSTER_COLUMNS*NUM_GLB_PSUM)-1);
@@ -1042,14 +1043,14 @@ end
             mem_addr_psum <= 0;
           end
           router_mode_psum_reg     <= router_mode_psum_i;
-          for (int g=0; g<CLUSTERS*NUM_GLB_PSUM; g=g+1) begin
-            if (psum_enable_i_reg[g]) begin
-              for (int b=0; b<PSUM_MEM_ADDR_BITS; b=b+1) begin
-                flat_help_psum_var[b] = mem_addr_psum[g*PSUM_MEM_ADDR_BITS+b];
+          for (g_psum=0; g_psum<CLUSTERS*NUM_GLB_PSUM; g_psum=g_psum+1) begin
+            if (psum_enable_i_reg[g_psum]) begin
+              for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
+                flat_help_psum_var[b_psum] = mem_addr_psum[g_psum*PSUM_MEM_ADDR_BITS+b_psum];
               end
               flat_help_psum_var = flat_help_psum_var + 1;
-              for (int b=0; b<PSUM_MEM_ADDR_BITS; b=b+1) begin
-                 mem_addr_psum[g*PSUM_MEM_ADDR_BITS+b] <= flat_help_psum_var[b];
+              for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
+                 mem_addr_psum[g_psum*PSUM_MEM_ADDR_BITS+b_psum] <= flat_help_psum_var[b_psum];
               end
               flat_help_psum_var = 0;
             end
@@ -1065,55 +1066,53 @@ end
           end
           if (results_ready == 0 & (psum_ready_i_reg != 0)) begin
             results_ready = 1;
-            for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-              for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                  flat_help_psum_var = 0;
-                  flat_help_psum_var = 64'(router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g * ROUTER_MODES_PSUM + 2]);
-                  results_ready = results_ready & (psum_ready_o_cluster_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] | (flat_help_psum_var == 0));
-                  flat_help_psum_var = 0;
+            for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
+              for (cr_psum=0; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
+                for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
+                  results_ready = results_ready & (psum_ready_o_cluster_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] |
+                   (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 0));
                 end
               end
             end
           end
           if (results_ready & (psum_ready_i_reg != 0)) begin
             fsm_psum_cycle <= fsm_psum_cycle + 1;
-            for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-              for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                  if ((fsm_psum_cycle != 0) & (router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g * ROUTER_MODES_PSUM + 2] == 1)) begin
-                    for (int b=0; b<PSUM_MEM_ADDR_BITS; b=b+1) begin
-                      flat_help_psum_var[b] = mem_addr_psum[cc * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g * PSUM_MEM_ADDR_BITS + b];
+            for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
+              for (cr_psum=0; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
+                for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
+                  if ((fsm_psum_cycle != 0) & (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 1)) begin
+                    for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
+                      flat_help_psum_var[b_psum] = mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum];
                     end
                     flat_help_psum_var = flat_help_psum_var + 1;
-                    for (int b=0; b<PSUM_MEM_ADDR_BITS; b=b+1) begin
-                      mem_addr_psum[cc * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g * PSUM_MEM_ADDR_BITS + b] <= flat_help_psum_var[b];
+                    for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
+                      mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum] <= flat_help_psum_var[b_psum];
                     end
                     flat_help_psum_var = 0;
                   end
-                  psum_enable_i_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] <= 1;
+                  psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] <= 1;
                 end
               end
             end
             if ((!SERIAL &
-            (((fsm_psum_cycle >= 32'((32'(filters_reg)+1)/2)) & !data_mode_reg) |
-            ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg))) |
+            (((fsm_psum_cycle >= (filters_reg+1)/2) & !data_mode_reg) |
+            ((fsm_psum_cycle >= (needed_cycles_i_reg+1)/2) & data_mode_reg))) |
             (SERIAL & 
-            (((fsm_psum_cycle >= 32'(filters_reg)) & !data_mode_reg) |
-            ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg)))) begin
+            (((fsm_psum_cycle >= filters_reg) & !data_mode_reg) |
+            ((fsm_psum_cycle >= (needed_cycles_i_reg+1)/2) & data_mode_reg)))) begin
               results_ready           = 0;
               fsm_psum_cycle         <= 0;
               psum_enable_i_reg      <= 0;
               fsm_psum_last_state    <= CALCULATE_PSUM;
               fsm_psum_current_state <= GET_RESULTS;
-              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                  for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                    flat_help_psum_var = 64'(mem_addr_psum_storage);
-                    for (int b=0; b<PSUM_MEM_ADDR_BITS; b=b+1) begin
-                      if (router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g * ROUTER_MODES_PSUM + 2] == 1) begin
-                        mem_addr_psum[cc * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g * PSUM_MEM_ADDR_BITS + b] <= 
-                                      flat_help_psum_var[b];
+              for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
+                for (cr_psum=0; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
+                  for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
+                    flat_help_psum_var = mem_addr_psum_storage;
+                    for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
+                      if (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 1) begin
+                        mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum] <= 
+                                      flat_help_psum_var[b_psum];
                       end
                     end
                     flat_help_psum_var = 0;
@@ -1126,10 +1125,10 @@ end
               fsm_psum_cycle <= fsm_psum_cycle + 1;
             end else begin
               fsm_psum_cycle <= 0;
-              for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-                  for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                    psum_ready_i_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] <= 1;
+              for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
+                for (cr_psum=0; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
+                  for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
+                    psum_ready_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] <= 1;
                   end
                 end
               end
@@ -1140,24 +1139,24 @@ end
         GET_RESULTS : begin
           results_ready     = 1;
           psum_ready_i_reg <= psum_ready_i_reg;
-          for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-            for (int cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
-              for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                if (psum_cluster_enable_o_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g]) begin
+          for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
+            for (cr_psum=0; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
+              for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
+                if (psum_cluster_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum]) begin
                   flat_help_psum_var = 0;
-                  for (int b=0; b<PSUM_MEM_ADDR_BITS; b=b+1) begin
-                    flat_help_psum_var[b] = mem_addr_psum[cc * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g * PSUM_MEM_ADDR_BITS + b];
+                  for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
+                    flat_help_psum_var[b_psum] = mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum];
                   end
                   flat_help_psum_var   = flat_help_psum_var   + 1;
-                  for (int b=0; b<PSUM_MEM_ADDR_BITS; b=b+1) begin
-                    mem_addr_psum[cc * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g * PSUM_MEM_ADDR_BITS + b]
-                    <= flat_help_psum_var[b];
+                  for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
+                    mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum]
+                    <= flat_help_psum_var[b_psum];
                   end
                 end
                 flat_help_psum_var = 0;
-                flat_help_psum_var = 64'(router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g * ROUTER_MODES_PSUM + 2]);
+                flat_help_psum_var = router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2];
 
-                results_ready = results_ready & (psum_cluster_enable_o_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] | (flat_help_psum_var == 0));
+                results_ready = results_ready & (psum_cluster_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] | (flat_help_psum_var == 0));
               end
             end
           end
@@ -1166,11 +1165,11 @@ end
             fsm_psum_cycle <= fsm_psum_cycle + 1;
           end
           if ((!SERIAL &
-          (((fsm_psum_cycle >= 32'((32'(filters_reg)+1)/2)) & !data_mode_reg) |
-          ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg))) |
+          (((fsm_psum_cycle >= 32'((filters_reg+1)/2)) & !data_mode_reg) |
+          ((fsm_psum_cycle >= 32'((needed_cycles_i_reg+1)/2)) & data_mode_reg))) |
           (SERIAL & 
-          (((fsm_psum_cycle >= 32'(filters_reg)) & !data_mode_reg) |
-          ((fsm_psum_cycle >= 32'((32'(needed_cycles_i_reg)+1)/2)) & data_mode_reg)))) begin
+          (((fsm_psum_cycle >= filters_reg) & !data_mode_reg) |
+          ((fsm_psum_cycle >= 32'((needed_cycles_i_reg+1)/2)) & data_mode_reg)))) begin
             if ((finished_cycles == needed_cycles_reg) | (fsm_current_state == MAIN_IDLE) | data_mode_reg) begin
               fsm_psum_last_state    <= GET_RESULTS;
               fsm_psum_current_state <= WAIT_FOR_RESULTS;
@@ -1181,37 +1180,37 @@ end
             end else begin
               if (((32)'(needed_y_cls_reg) >= 2) & !psum_router_set_reg) begin
                 psum_router_set_reg  <= 1;
-                for (int cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
-                  for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                    for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                      router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2] <=
-                      router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2];
+                for (cr_psum=1; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
+                  for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
+                    for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
+                      router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2] <=
+                      router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr_psum-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2];
                     end
                   end
                 end
-                if (storage_cycles != ($clog2(CLUSTER_ROWS+1))'(32'(needed_y_cls_reg) - 1)) begin
-                  for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                    for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                      router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 0;
+                if (storage_cycles != (needed_y_cls_reg - 1)) begin
+                  for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
+                    for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
+                      router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g_psum*ROUTER_MODES_PSUM+2] <= 0;
                     end
                   end
 
                   storage_cycles <= storage_cycles + 1;
 
-                  for (int cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
-                    for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                      for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                        router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2] <=
-                        router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2];
+                  for (cr_psum=1; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
+                    for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
+                      for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
+                        router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2] <=
+                        router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr_psum-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2];
                       end
                     end
                   end
 
 
                 end else begin
-                  for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                    for (int g=0; g<NUM_GLB_PSUM; g=g+1) begin
-                      router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 1;
+                  for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
+                    for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
+                      router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g_psum*ROUTER_MODES_PSUM+2] <= 1;
                     end
                   end
                   storage_cycles       <= 0;
@@ -1224,9 +1223,9 @@ end
               fsm_psum_cycle         <= 0;
               if (storage_cycles == 0) begin
                 if (SERIAL) begin 
-                  mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(filters_reg));
+                  mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + filters_reg);
                 end else begin
-                  mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(64'(filters_reg)+1)/2);
+                  mem_addr_psum_storage  <= 9'(64'(mem_addr_psum_storage) + 64'(filters_reg+1)/2);
                 end
               end
               psum_ready_i_reg       <= 0;
@@ -1243,18 +1242,18 @@ end
           end
         end
         SEND_RESULTS : begin
-          for (int g=0; g<NUM_GLB_PSUM*CLUSTERS; g=g+1) begin
-            psum_ready_i_reg[g]  <= 0;
-            psum_ready_o_reg[g]  <= 1;
-            psum_enable_delay[g] <= psum_enable_i_reg[g];
-            psum_enable_o_reg[g] <= psum_enable_delay[g];
-            if (psum_enable_i_reg[g] == 1) begin
-              for (int b=0; b<PSUM_MEM_ADDR_BITS; b=b+1) begin
-                flat_help_psum_var[b] = mem_addr_psum[g * PSUM_MEM_ADDR_BITS + b];
+          for (g_psum=0; g_psum<NUM_GLB_PSUM*CLUSTERS; g_psum=g_psum+1) begin
+            psum_ready_i_reg[g_psum]  <= 0;
+            psum_ready_o_reg[g_psum]  <= 1;
+            psum_enable_delay[g_psum] <= psum_enable_i_reg[g_psum];
+            psum_enable_o_reg[g_psum] <= psum_enable_delay[g_psum];
+            if (psum_enable_i_reg[g_psum] == 1) begin
+              for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
+                flat_help_psum_var[b_psum] = mem_addr_psum[g_psum * PSUM_MEM_ADDR_BITS + b_psum];
               end
               flat_help_psum_var = flat_help_psum_var   + 1;
-              for (int b=0; b<PSUM_MEM_ADDR_BITS; b=b+1) begin
-                mem_addr_psum[g * PSUM_MEM_ADDR_BITS + b] <= flat_help_psum_var[b];
+              for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
+                mem_addr_psum[g_psum * PSUM_MEM_ADDR_BITS + b_psum] <= flat_help_psum_var[b_psum];
               end
             end
           end
@@ -1525,7 +1524,7 @@ end
       end
     end
 
-  genvar cr,cc,pec,per,g,b;
+  genvar cr_gen,cc_gen,pec_gen,per_gen,g_gen,b_gen;
 
   if (IS_TOPLEVEL) begin
 
@@ -1585,159 +1584,159 @@ end
   end
 
   
-  for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-    for (cr=0; cr<CLUSTER_ROWS; cr=cr+1) begin
+  for (cc_gen=0; cc_gen<CLUSTER_COLUMNS; cc_gen=cc_gen+1) begin
+    for (cr_gen=0; cr_gen<CLUSTER_ROWS; cr_gen=cr_gen+1) begin
 
       ///IACT ASSIGNMENTS
-      for (g=0; g<NUM_GLB_IACT; g=g+1) begin
+      for (g_gen=0; g_gen<NUM_GLB_IACT; g_gen=g_gen+1) begin
         if (SERIAL) begin
-          for (b=0; b<ROUTER_MODES_IACT; b=b+1) begin
-            assign gen_x[cc].gen_y[cr].router_mode_iact_i_w[g*ROUTER_MODES_IACT+b] =
-            router_mode_iact_i[cc * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
-                              cr * NUM_GLB_IACT * ROUTER_MODES_IACT +
-                              g * ROUTER_MODES_IACT + b];
+          for (b_gen=0; b_gen<ROUTER_MODES_IACT; b_gen=b_gen+1) begin
+            assign gen_x[cc_gen].gen_y[cr_gen].router_mode_iact_i_w[g_gen*ROUTER_MODES_IACT+b_gen] =
+            router_mode_iact_i[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
+                              cr_gen * NUM_GLB_IACT * ROUTER_MODES_IACT +
+                              g_gen * ROUTER_MODES_IACT + b_gen];
           end
         end else begin
-          for (b=0; b<ROUTER_MODES_IACT; b=b+1) begin
-            assign gen_x[cc].gen_y[cr].router_mode_iact_i_w[g*ROUTER_MODES_IACT+b] =
-            router_mode_iact_reg[cc * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
-                              cr * NUM_GLB_IACT * ROUTER_MODES_IACT +
-                              g * ROUTER_MODES_IACT + b];
+          for (b_gen=0; b_gen<ROUTER_MODES_IACT; b_gen=b_gen+1) begin
+            assign gen_x[cc_gen].gen_y[cr_gen].router_mode_iact_i_w[g_gen*ROUTER_MODES_IACT+b_gen] =
+            router_mode_iact_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
+                              cr_gen * NUM_GLB_IACT * ROUTER_MODES_IACT +
+                              g_gen * ROUTER_MODES_IACT + b_gen];
           end
         end
-        if (cc == 0) begin
-          assign gen_x[(cc + 1) % CLUSTER_COLUMNS].gen_y[cr].enable_src_side_iact_cluster_w[g] = gen_x[cc].gen_y[cr].enable_dst_side_iact_cluster_w[g];
-          assign gen_x[(cc + 1) % CLUSTER_COLUMNS].gen_y[cr].ready_dst_side_iact_cluster_w[g]  = gen_x[cc].gen_y[cr].ready_src_side_iact_cluster_w[g];
-          for (b=0; b<TRANS_BITWIDTH_IACT; b=b+1) begin
-            assign gen_x[(cc + 1) % CLUSTER_COLUMNS].gen_y[cr].data_src_side_iact_cluster_w[g*TRANS_BITWIDTH_IACT+b] 
-            = gen_x[cc].gen_y[cr].data_dst_side_iact_cluster_w[g * TRANS_BITWIDTH_IACT + b];
+        if (cc_gen == 0) begin
+          assign gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].enable_src_side_iact_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_side_iact_cluster_w[g_gen];
+          assign gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].ready_dst_side_iact_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_side_iact_cluster_w[g_gen];
+          for (b_gen=0; b_gen<TRANS_BITWIDTH_IACT; b_gen=b_gen+1) begin
+            assign gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].data_src_side_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen] 
+            = gen_x[cc_gen].gen_y[cr_gen].data_dst_side_iact_cluster_w[g_gen * TRANS_BITWIDTH_IACT + b_gen];
           end
         end
-        if (cr != CLUSTER_ROWS - 1) begin
-          for (b=0; b<TRANS_BITWIDTH_IACT; b=b+1) begin
-            assign gen_x[cc].gen_y[cr + 1].data_src_top_iact_cluster_w[g*TRANS_BITWIDTH_IACT+b] = 
-            gen_x[cc].gen_y[cr].data_dst_bottom_iact_cluster_w[g*TRANS_BITWIDTH_IACT+b];
+        if (cr_gen != CLUSTER_ROWS - 1) begin
+          for (b_gen=0; b_gen<TRANS_BITWIDTH_IACT; b_gen=b_gen+1) begin
+            assign gen_x[cc_gen].gen_y[cr_gen + 1].data_src_top_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen] = 
+            gen_x[cc_gen].gen_y[cr_gen].data_dst_bottom_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen];
           end
-          assign gen_x[cc].gen_y[cr + 1].enable_src_top_iact_cluster_w[g] = gen_x[cc].gen_y[cr].enable_dst_bottom_iact_cluster_w[g];
-          assign gen_x[cc].gen_y[cr + 1].ready_dst_top_iact_cluster_w[g]  = gen_x[cc].gen_y[cr].ready_src_bottom_iact_cluster_w[g];
+          assign gen_x[cc_gen].gen_y[cr_gen + 1].enable_src_top_iact_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_bottom_iact_cluster_w[g_gen];
+          assign gen_x[cc_gen].gen_y[cr_gen + 1].ready_dst_top_iact_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_bottom_iact_cluster_w[g_gen];
         end
 
-        if (cr != 0) begin
-          for (b=0; b<TRANS_BITWIDTH_IACT; b=b+1) begin
-            assign gen_x[cc].gen_y[cr - 1].data_src_bottom_iact_cluster_w[g*TRANS_BITWIDTH_IACT+b] = 
-            gen_x[cc].gen_y[cr].data_dst_top_iact_cluster_w[g*TRANS_BITWIDTH_IACT+b];
+        if (cr_gen != 0) begin
+          for (b_gen=0; b_gen<TRANS_BITWIDTH_IACT; b_gen=b_gen+1) begin
+            assign gen_x[cc_gen].gen_y[cr_gen - 1].data_src_bottom_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen] = 
+            gen_x[cc_gen].gen_y[cr_gen].data_dst_top_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen];
           end
-          assign gen_x[cc].gen_y[cr - 1].ready_dst_bottom_iact_cluster_w[g]  = gen_x[cc].gen_y[cr].ready_src_top_iact_cluster_w[g];
-          assign gen_x[cc].gen_y[cr - 1].enable_src_bottom_iact_cluster_w[g] = gen_x[cc].gen_y[cr].enable_dst_top_iact_cluster_w[g];
+          assign gen_x[cc_gen].gen_y[cr_gen - 1].ready_dst_bottom_iact_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_top_iact_cluster_w[g_gen];
+          assign gen_x[cc_gen].gen_y[cr_gen - 1].enable_src_bottom_iact_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_top_iact_cluster_w[g_gen];
         end
 
-        for (b=0; b<TRANS_BITWIDTH_IACT; b=b+1) begin
-          assign gen_x[cc].gen_y[cr].iact_data_i_cluster_w[g * TRANS_BITWIDTH_IACT+b] =
-                  iact_data_i_w[cc * CLUSTER_ROWS * NUM_GLB_IACT * TRANS_BITWIDTH_IACT +
-                                  cr * NUM_GLB_IACT * TRANS_BITWIDTH_IACT + 
-                                  g * TRANS_BITWIDTH_IACT + b];
+        for (b_gen=0; b_gen<TRANS_BITWIDTH_IACT; b_gen=b_gen+1) begin
+          assign gen_x[cc_gen].gen_y[cr_gen].iact_data_i_cluster_w[g_gen * TRANS_BITWIDTH_IACT+b_gen] =
+                  iact_data_i_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * TRANS_BITWIDTH_IACT +
+                                  cr_gen * NUM_GLB_IACT * TRANS_BITWIDTH_IACT + 
+                                  g_gen * TRANS_BITWIDTH_IACT + b_gen];
         end
-        for (b=0; b<IACT_MEM_ADDR_BITS; b=b+1) begin
-          assign gen_x[cc].gen_y[cr].iact_addr_i_cluster_w[g * IACT_MEM_ADDR_BITS + b]   =
-          mem_addr_iact[cc * CLUSTER_ROWS * NUM_GLB_IACT * IACT_MEM_ADDR_BITS +
-                        cr * NUM_GLB_IACT * IACT_MEM_ADDR_BITS +
-                        g * IACT_MEM_ADDR_BITS + b];
+        for (b_gen=0; b_gen<IACT_MEM_ADDR_BITS; b_gen=b_gen+1) begin
+          assign gen_x[cc_gen].gen_y[cr_gen].iact_addr_i_cluster_w[g_gen * IACT_MEM_ADDR_BITS + b_gen]   =
+          mem_addr_iact[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * IACT_MEM_ADDR_BITS +
+                        cr_gen * NUM_GLB_IACT * IACT_MEM_ADDR_BITS +
+                        g_gen * IACT_MEM_ADDR_BITS + b_gen];
         end
-        assign gen_x[cc].gen_y[cr].iact_enable_i_cluster_w[g] = (iact_enable_i_w[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] |
-                                                        iact_enable_comp_reg[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g]);
-        assign iact_ready_o[cc*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT+g] = gen_x[cc].gen_y[cr].iact_ready_o_cluster_w[g];
+        assign gen_x[cc_gen].gen_y[cr_gen].iact_enable_i_cluster_w[g_gen] = (iact_enable_i_w[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen] |
+                                                        iact_enable_comp_reg[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen]);
+        assign iact_ready_o[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen] = gen_x[cc_gen].gen_y[cr_gen].iact_ready_o_cluster_w[g_gen];
       end
-      for (pec=0; pec<PE_COLUMNS; pec=pec+1) begin
-        for (per=0; per<PE_ROWS; per=per+1) begin
-          for (b=0; b<$clog2(NUM_GLB_IACT+1); b=b+1) begin
-            assign gen_x[cc].gen_y[cr].iact_choose_cluster_i_w[per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b]
-            = iact_choose_i[cc*CLUSTER_ROWS*PES*$clog2(NUM_GLB_IACT+1)+cr*PES*$clog2(NUM_GLB_IACT+1)+per*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b];
+      for (pec_gen=0; pec_gen<PE_COLUMNS; pec_gen=pec_gen+1) begin
+        for (per_gen=0; per_gen<PE_ROWS; per_gen=per_gen+1) begin
+          for (b_gen=0; b_gen<$clog2(NUM_GLB_IACT+1); b_gen=b_gen+1) begin
+            assign gen_x[cc_gen].gen_y[cr_gen].iact_choose_cluster_i_w[per_gen*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec_gen*$clog2(NUM_GLB_IACT+1)+b_gen]
+            = iact_choose_i[cc_gen*CLUSTER_ROWS*PES*$clog2(NUM_GLB_IACT+1)+cr_gen*PES*$clog2(NUM_GLB_IACT+1)+per_gen*PE_COLUMNS*$clog2(NUM_GLB_IACT+1)+pec_gen*$clog2(NUM_GLB_IACT+1)+b_gen];
           end
-          assign gen_x[cc].gen_y[cr].compute_cluster_i_w[pec*PE_ROWS+per] = compute_cluster_i_reg[cc*CLUSTER_ROWS*PES+cr*PES+pec*PE_ROWS+per];
+          assign gen_x[cc_gen].gen_y[cr_gen].compute_cluster_i_w[pec_gen*PE_ROWS+per_gen] = compute_cluster_i_reg[cc_gen*CLUSTER_ROWS*PES+cr_gen*PES+pec_gen*PE_ROWS+per_gen];
         end
       end
       
       ///WGHT ASSIGNMENTS
-      for (g=0; g<NUM_GLB_WGHT; g=g+1) begin
-        for (b=0; b<ROUTER_MODES_WGHT; b=b+1) begin
-          assign gen_x[cc].gen_y[cr].router_mode_wght_i_w[g*ROUTER_MODES_WGHT+b] =
-                  router_mode_wght_reg[cc * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
-                                     cr * NUM_GLB_WGHT * ROUTER_MODES_WGHT + 
-                                     g * ROUTER_MODES_WGHT + b];
+      for (g_gen=0; g_gen<NUM_GLB_WGHT; g_gen=g_gen+1) begin
+        for (b_gen=0; b_gen<ROUTER_MODES_WGHT; b_gen=b_gen+1) begin
+          assign gen_x[cc_gen].gen_y[cr_gen].router_mode_wght_i_w[g_gen*ROUTER_MODES_WGHT+b_gen] =
+                  router_mode_wght_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
+                                     cr_gen * NUM_GLB_WGHT * ROUTER_MODES_WGHT + 
+                                     g_gen * ROUTER_MODES_WGHT + b_gen];
         end
 
-        assign gen_x[(cc + 1) % CLUSTER_COLUMNS].gen_y[cr].enable_src_side_wght_cluster_w[g] = gen_x[cc].gen_y[cr].enable_dst_side_wght_cluster_w[g];
-        assign gen_x[(cc + 1) % CLUSTER_COLUMNS].gen_y[cr].ready_dst_side_wght_cluster_w[g]  = gen_x[cc].gen_y[cr].ready_src_side_wght_cluster_w[g];
+        assign gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].enable_src_side_wght_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_side_wght_cluster_w[g_gen];
+        assign gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].ready_dst_side_wght_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_side_wght_cluster_w[g_gen];
 
-        for (b=0; b<TRANS_BITWIDTH_WGHT; b=b+1) begin
-          assign gen_x[(cc + 1) % CLUSTER_COLUMNS].gen_y[cr].data_src_side_wght_cluster_w[g*TRANS_BITWIDTH_WGHT+b] =
-          gen_x[cc].gen_y[cr].data_dst_side_wght_cluster_w[g*TRANS_BITWIDTH_WGHT+b];
-          assign gen_x[cc].gen_y[cr].wght_data_i_cluster_w[g * TRANS_BITWIDTH_WGHT+b] = 
-                  wght_data_i_w[cc * CLUSTER_ROWS * NUM_GLB_WGHT * TRANS_BITWIDTH_WGHT +
-                                  cr * NUM_GLB_WGHT * TRANS_BITWIDTH_WGHT + 
-                                  g * TRANS_BITWIDTH_WGHT + b];
+        for (b_gen=0; b_gen<TRANS_BITWIDTH_WGHT; b_gen=b_gen+1) begin
+          assign gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].data_src_side_wght_cluster_w[g_gen*TRANS_BITWIDTH_WGHT+b_gen] =
+          gen_x[cc_gen].gen_y[cr_gen].data_dst_side_wght_cluster_w[g_gen*TRANS_BITWIDTH_WGHT+b_gen];
+          assign gen_x[cc_gen].gen_y[cr_gen].wght_data_i_cluster_w[g_gen * TRANS_BITWIDTH_WGHT+b_gen] = 
+                  wght_data_i_w[cc_gen * CLUSTER_ROWS * NUM_GLB_WGHT * TRANS_BITWIDTH_WGHT +
+                                  cr_gen * NUM_GLB_WGHT * TRANS_BITWIDTH_WGHT + 
+                                  g_gen * TRANS_BITWIDTH_WGHT + b_gen];
         end
-        assign gen_x[cc].gen_y[cr].wght_enable_i_cluster_w[g] = wght_enable_i_w[cc*NUM_GLB_WGHT*CLUSTER_ROWS+cr*NUM_GLB_WGHT+g];
-        assign wght_ready_o_reg[cc*NUM_GLB_WGHT*CLUSTER_ROWS+cr*NUM_GLB_WGHT+g] = gen_x[cc].gen_y[cr].wght_ready_o_cluster_w[g] & (wght_ready_reg != 0);
+        assign gen_x[cc_gen].gen_y[cr_gen].wght_enable_i_cluster_w[g_gen] = wght_enable_i_w[cc_gen*NUM_GLB_WGHT*CLUSTER_ROWS+cr_gen*NUM_GLB_WGHT+g_gen];
+        assign wght_ready_o_reg[cc_gen*NUM_GLB_WGHT*CLUSTER_ROWS+cr_gen*NUM_GLB_WGHT+g_gen] = gen_x[cc_gen].gen_y[cr_gen].wght_ready_o_cluster_w[g_gen] & (wght_ready_reg != 0);
       end
 
       ///PSUM ASSIGNMENTS
-      for (g=0; g<NUM_GLB_PSUM; g=g+1) begin
-        for (b=0; b<ROUTER_MODES_PSUM; b=b+1) begin
-          assign gen_x[cc].gen_y[cr].router_mode_psum_i_w[g*ROUTER_MODES_PSUM+b] =
-          router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
-                             cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
-                             g * ROUTER_MODES_PSUM + b];
+      for (g_gen=0; g_gen<NUM_GLB_PSUM; g_gen=g_gen+1) begin
+        for (b_gen=0; b_gen<ROUTER_MODES_PSUM; b_gen=b_gen+1) begin
+          assign gen_x[cc_gen].gen_y[cr_gen].router_mode_psum_i_w[g_gen*ROUTER_MODES_PSUM+b_gen] =
+          router_mode_psum_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
+                             cr_gen * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
+                             g_gen * ROUTER_MODES_PSUM + b_gen];
         end
-        assign gen_x[cc].gen_y[cr].psum_choose_cluster_i_w[g] = psum_choose_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM + cr * NUM_GLB_PSUM + g];
+        assign gen_x[cc_gen].gen_y[cr_gen].psum_choose_cluster_i_w[g_gen] = psum_choose_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM + cr_gen * NUM_GLB_PSUM + g_gen];
 
-        if (cr != CLUSTER_ROWS - 1) begin
-          for (b=0; b<TRANS_BITWIDTH_PSUM; b=b+1) begin
-            assign gen_x[cc].gen_y[cr + 1].data_src_top_psum_cluster_w[g*TRANS_BITWIDTH_PSUM+b] =
-            gen_x[cc].gen_y[cr].data_dst_bottom_psum_cluster_w[g*TRANS_BITWIDTH_PSUM+b];
+        if (cr_gen != CLUSTER_ROWS - 1) begin
+          for (b_gen=0; b_gen<TRANS_BITWIDTH_PSUM; b_gen=b_gen+1) begin
+            assign gen_x[cc_gen].gen_y[cr_gen + 1].data_src_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+b_gen] =
+            gen_x[cc_gen].gen_y[cr_gen].data_dst_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+b_gen];
           end
-          assign gen_x[cc].gen_y[cr + 1].enable_src_top_psum_cluster_w[g] = gen_x[cc].gen_y[cr].enable_dst_bottom_psum_cluster_w[g];
-          assign gen_x[cc].gen_y[cr + 1].ready_dst_top_psum_cluster_w[g]  = gen_x[cc].gen_y[cr].ready_src_bottom_psum_cluster_w[g];
+          assign gen_x[cc_gen].gen_y[cr_gen + 1].enable_src_top_psum_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_bottom_psum_cluster_w[g_gen];
+          assign gen_x[cc_gen].gen_y[cr_gen + 1].ready_dst_top_psum_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_bottom_psum_cluster_w[g_gen];
         end
 
-        if (cr != 0) begin
-          for (b=0; b<TRANS_BITWIDTH_PSUM; b=b+1) begin
-            assign gen_x[cc].gen_y[cr - 1].data_src_bottom_psum_cluster_w[g*TRANS_BITWIDTH_PSUM+b] = 
-            gen_x[cc].gen_y[cr].data_dst_top_psum_cluster_w[g*TRANS_BITWIDTH_PSUM+b];
+        if (cr_gen != 0) begin
+          for (b_gen=0; b_gen<TRANS_BITWIDTH_PSUM; b_gen=b_gen+1) begin
+            assign gen_x[cc_gen].gen_y[cr_gen - 1].data_src_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+b_gen] = 
+            gen_x[cc_gen].gen_y[cr_gen].data_dst_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+b_gen];
           end
-          assign gen_x[cc].gen_y[cr - 1].ready_dst_bottom_psum_cluster_w[g]  = gen_x[cc].gen_y[cr].ready_src_top_psum_cluster_w[g];
-          assign gen_x[cc].gen_y[cr - 1].enable_src_bottom_psum_cluster_w[g] = gen_x[cc].gen_y[cr].enable_dst_top_psum_cluster_w[g];
+          assign gen_x[cc_gen].gen_y[cr_gen - 1].ready_dst_bottom_psum_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_top_psum_cluster_w[g_gen];
+          assign gen_x[cc_gen].gen_y[cr_gen - 1].enable_src_bottom_psum_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_top_psum_cluster_w[g_gen];
         end
         
-        if (cr == CLUSTER_ROWS - 1) begin
-          for (b=0; b<TRANS_BITWIDTH_PSUM; b=b+1) begin
-            assign gen_x[cc].gen_y[cr].data_src_bottom_psum_cluster_w[g*TRANS_BITWIDTH_PSUM+b] = 0;
+        if (cr_gen == CLUSTER_ROWS - 1) begin
+          for (b_gen=0; b_gen<TRANS_BITWIDTH_PSUM; b_gen=b_gen+1) begin
+            assign gen_x[cc_gen].gen_y[cr_gen].data_src_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+b_gen] = 0;
           end
-          assign gen_x[cc].gen_y[cr].enable_src_bottom_psum_cluster_w[g] = 0;
+          assign gen_x[cc_gen].gen_y[cr_gen].enable_src_bottom_psum_cluster_w[g_gen] = 0;
         end
 
-        for (b=0; b<TRANS_BITWIDTH_PSUM; b=b+1) begin
-          assign gen_x[cc].gen_y[cr].psum_data_i_cluster_w[g * TRANS_BITWIDTH_PSUM + b] = 
-          psum_data_i_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
-                          cr * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
-                          g * TRANS_BITWIDTH_PSUM + b];
-          assign psum_data_o_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
-                                 cr * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
-                                 g * TRANS_BITWIDTH_PSUM + b]
-          = gen_x[cc].gen_y[cr].psum_data_o_cluster_w[g * TRANS_BITWIDTH_PSUM + b];
+        for (b_gen=0; b_gen<TRANS_BITWIDTH_PSUM; b_gen=b_gen+1) begin
+          assign gen_x[cc_gen].gen_y[cr_gen].psum_data_i_cluster_w[g_gen * TRANS_BITWIDTH_PSUM + b_gen] = 
+          psum_data_i_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
+                          cr_gen * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
+                          g_gen * TRANS_BITWIDTH_PSUM + b_gen];
+          assign psum_data_o_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
+                                 cr_gen * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
+                                 g_gen * TRANS_BITWIDTH_PSUM + b_gen]
+          = gen_x[cc_gen].gen_y[cr_gen].psum_data_o_cluster_w[g_gen * TRANS_BITWIDTH_PSUM + b_gen];
         end
-        for (b=0; b<PSUM_MEM_ADDR_BITS; b=b+1) begin
-          assign gen_x[cc].gen_y[cr].psum_addr_i_cluster_w[g * PSUM_MEM_ADDR_BITS + b] =
-          mem_addr_psum[cc * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS +
-                        cr * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS +
-                        g * PSUM_MEM_ADDR_BITS + b];
+        for (b_gen=0; b_gen<PSUM_MEM_ADDR_BITS; b_gen=b_gen+1) begin
+          assign gen_x[cc_gen].gen_y[cr_gen].psum_addr_i_cluster_w[g_gen * PSUM_MEM_ADDR_BITS + b_gen] =
+          mem_addr_psum[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS +
+                        cr_gen * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS +
+                        g_gen * PSUM_MEM_ADDR_BITS + b_gen];
         end
-        assign gen_x[cc].gen_y[cr].psum_enable_i_cluster_w[g] = psum_enable_i_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g];
+        assign gen_x[cc_gen].gen_y[cr_gen].psum_enable_i_cluster_w[g_gen] = psum_enable_i_reg[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen];
 
-        assign psum_ready_o_cluster_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] = gen_x[cc].gen_y[cr].psum_ready_o_cluster_w[g];
+        assign psum_ready_o_cluster_reg[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_ready_o_cluster_w[g_gen];
       
-        assign psum_cluster_enable_o_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] = gen_x[cc].gen_y[cr].psum_enable_o_cluster_w[g];
-        assign gen_x[cc].gen_y[cr].psum_ready_i_cluster_w[g] = psum_ready_i_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g];
+        assign psum_cluster_enable_o_reg[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_enable_o_cluster_w[g_gen];
+        assign gen_x[cc_gen].gen_y[cr_gen].psum_ready_i_cluster_w[g_gen] = psum_ready_i_reg[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen];
       end
     end
   end
