@@ -53,9 +53,9 @@ module RAM_DP_generic
     reg     [DataWidth-1:0]     memout;
 
     generate
-    if (Pipelined) begin 
+    if (Pipelined) begin : gen_pipelined
         always @(posedge clkA) q <= memout;
-    end else begin
+    end else begin : gen_not_pipelined
         always @* q = memout;
     end
     endgenerate

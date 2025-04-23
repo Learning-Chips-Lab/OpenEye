@@ -1206,7 +1206,7 @@ module OpenEye_Parallel
     assign kernel_per_pe_cluster_i_w= kernel_per_pe_cluster_i_reg;
     assign compute_mask_i_w         = compute_mask_i_reg;
 
-  end else begin
+  end else begin : gen_non_pipelined_ports
 
     assign iact_data_i_w            = iact_data_i;
     assign iact_enable_i_w          = iact_enable_i;

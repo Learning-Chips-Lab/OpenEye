@@ -131,12 +131,12 @@ end
 
 // output
 generate
-    if (Pipelined) begin 
+    if (Pipelined) begin  : gen_pipelined
         always @(posedge clk_i) begin
             data_a_o <= memout_a;
             data_b_o <= memout_b;
         end
-    end else begin
+    end else begin : gen_not_pipelined
         always @(*) begin
             data_a_o = memout_a;
             data_b_o = memout_b;

@@ -133,10 +133,10 @@ reg  [NUM_GLB_IACT-1:0] router_cluster_iact_enable_o_delay_2;
 wire [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_1;
 reg  [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_2;
 
-genvar glb_cluster,bit_counter;
+genvar glb_counter,bit_counter;
 generate
   ///IACT GLB Storages
-  for(glb_cluster = 0; glb_cluster < NUM_GLB_IACT - (NUM_GLB_IACT * SERIAL); glb_cluster = glb_cluster + 1) begin : gen_iact
+  for(glb_counter = 0; glb_counter < NUM_GLB_IACT - (NUM_GLB_IACT * SERIAL); glb_counter = glb_counter + 1) begin : gen_iact
 
     wire  [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_in_w;
     wire  [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_out_w;
@@ -159,7 +159,7 @@ generate
     );
   end
   ///PSUM GLB Storages
-  for(glb_cluster = 0; glb_cluster < NUM_GLB_PSUM; glb_cluster = glb_cluster + 1) begin : gen_psum
+  for(glb_counter = 0; glb_counter < NUM_GLB_PSUM; glb_counter = glb_counter + 1) begin : gen_psum
 
         wire  [TRANS_BITWIDTH_PSUM-1:0] psum_glb_data_in_w;
         wire  [TRANS_BITWIDTH_PSUM-1:0] psum_glb_data_out_w;
@@ -188,39 +188,39 @@ assign router_cluster_wght_data_o = ext_mem_wght_data_i;
 assign router_cluster_wght_enable_o = ext_mem_wght_enable_i;
 assign ext_mem_wght_ready_o = router_cluster_wght_ready_i;
 
-if (SERIAL == 1'd1) begin
+if (SERIAL == 1) begin : gen_serial_router
   assign router_cluster_iact_data_o = ext_mem_iact_data_i;
   assign router_cluster_iact_enable_o = ext_mem_iact_enable_i;
   assign ext_mem_iact_ready_o = router_cluster_iact_ready_i;
-end else begin
-  for(glb_cluster = 0; glb_cluster < NUM_GLB_IACT - (NUM_GLB_IACT * SERIAL); glb_cluster = glb_cluster + 1) begin
-    assign router_cluster_iact_enable_o[glb_cluster] = router_cluster_iact_enable_o_delay_2[glb_cluster];
-    assign gen_iact[glb_cluster].iact_glb_we_in_w = ext_mem_iact_enable_i[glb_cluster];
-    assign router_cluster_iact_enable_o_delay_1[glb_cluster] = ext_mem_iact_enable_i[glb_cluster] & (!data_write_enable_iact_i);
+end else begin : gen_parallel_router
+  for(glb_counter = 0; glb_counter < NUM_GLB_IACT - (NUM_GLB_IACT * SERIAL); glb_counter = glb_counter + 1) begin
+    assign router_cluster_iact_enable_o[glb_counter] = router_cluster_iact_enable_o_delay_2[glb_counter];
+    assign gen_iact[glb_counter].iact_glb_we_in_w = ext_mem_iact_enable_i[glb_counter];
+    assign router_cluster_iact_enable_o_delay_1[glb_counter] = ext_mem_iact_enable_i[glb_counter] & (!data_write_enable_iact_i);
     for(bit_counter = 0; bit_counter < IACT_MEM_ADDR_BITS; bit_counter = bit_counter + 1) begin
-      assign gen_iact[glb_cluster].iact_glb_addr_in_w[bit_counter] = ext_mem_iact_addr_i[IACT_MEM_ADDR_BITS*glb_cluster+bit_counter];
+      assign gen_iact[glb_counter].iact_glb_addr_in_w[bit_counter] = ext_mem_iact_addr_i[IACT_MEM_ADDR_BITS*glb_counter+bit_counter];
     end
     for(bit_counter = 0; bit_counter < DATA_IACT_BITWIDTH; bit_counter = bit_counter + 1) begin
-      assign gen_iact[glb_cluster].iact_glb_data_in_w[bit_counter] = ext_mem_iact_data_i[DATA_IACT_BITWIDTH*glb_cluster+bit_counter];
-      assign router_cluster_iact_data_o[DATA_IACT_BITWIDTH*glb_cluster+bit_counter] = gen_iact[glb_cluster].iact_glb_data_out_w[bit_counter];
+      assign gen_iact[glb_counter].iact_glb_data_in_w[bit_counter] = ext_mem_iact_data_i[DATA_IACT_BITWIDTH*glb_counter+bit_counter];
+      assign router_cluster_iact_data_o[DATA_IACT_BITWIDTH*glb_counter+bit_counter] = gen_iact[glb_counter].iact_glb_data_out_w[bit_counter];
     end
   end
 
   assign ext_mem_iact_ready_o = router_cluster_iact_ready_i;
 end
 
-for(glb_cluster = 0; glb_cluster < NUM_GLB_PSUM; glb_cluster = glb_cluster + 1) begin
-  assign gen_psum[glb_cluster].psum_glb_re_in_w = (ext_mem_psum_enable_i[glb_cluster] & !data_write_enable_i);
-  assign gen_psum[glb_cluster].psum_glb_we_in_w = (ext_mem_psum_enable_i[glb_cluster] & data_write_enable_i) | (router_cluster_psum_enable_i[glb_cluster] & (!data_write_enable_i));
-  assign router_cluster_psum_enable_o_delay_1[glb_cluster] = ext_mem_psum_enable_i[glb_cluster] & (!data_write_enable_i);
+for(glb_counter = 0; glb_counter < NUM_GLB_PSUM; glb_counter = glb_counter + 1) begin
+  assign gen_psum[glb_counter].psum_glb_re_in_w = (ext_mem_psum_enable_i[glb_counter] & !data_write_enable_i);
+  assign gen_psum[glb_counter].psum_glb_we_in_w = (ext_mem_psum_enable_i[glb_counter] & data_write_enable_i) | (router_cluster_psum_enable_i[glb_counter] & (!data_write_enable_i));
+  assign router_cluster_psum_enable_o_delay_1[glb_counter] = ext_mem_psum_enable_i[glb_counter] & (!data_write_enable_i);
 
   for(bit_counter = 0; bit_counter < PSUM_MEM_ADDR_BITS; bit_counter = bit_counter + 1) begin
-    assign gen_psum[glb_cluster].psum_glb_addr_in_w[bit_counter] = ext_mem_psum_addr_i[PSUM_MEM_ADDR_BITS*glb_cluster+bit_counter];
+    assign gen_psum[glb_counter].psum_glb_addr_in_w[bit_counter] = ext_mem_psum_addr_i[PSUM_MEM_ADDR_BITS*glb_counter+bit_counter];
   end
   for(bit_counter = 0; bit_counter < DATA_PSUM_BITWIDTH; bit_counter = bit_counter + 1) begin
-    assign ext_mem_psum_data_o[DATA_PSUM_BITWIDTH*glb_cluster+bit_counter] = gen_psum[glb_cluster].psum_glb_data_out_w[bit_counter];
-    assign router_cluster_psum_data_o[DATA_PSUM_BITWIDTH*glb_cluster+bit_counter] = gen_psum[glb_cluster].psum_glb_data_out_w[bit_counter];
-    assign gen_psum[glb_cluster].psum_glb_data_in_w[bit_counter] = ext_mem_psum_data_i[DATA_PSUM_BITWIDTH*glb_cluster+bit_counter] | router_cluster_psum_data_i[DATA_PSUM_BITWIDTH*glb_cluster+bit_counter];
+    assign ext_mem_psum_data_o[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] = gen_psum[glb_counter].psum_glb_data_out_w[bit_counter];
+    assign router_cluster_psum_data_o[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] = gen_psum[glb_counter].psum_glb_data_out_w[bit_counter];
+    assign gen_psum[glb_counter].psum_glb_data_in_w[bit_counter] = ext_mem_psum_data_i[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] | router_cluster_psum_data_i[DATA_PSUM_BITWIDTH*glb_counter+bit_counter];
   end
 end
 

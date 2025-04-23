@@ -254,10 +254,10 @@ genvar i,j,g;
 
     assign  wght_ready_temp [i+PE_COLUMNS*j]= gen_X[i].gen_Y[j].wght_ready_o_w;
 
-      if(j == 0)begin
-        if (PE_ROWS != 1) begin /// Check, wether there are more than one row
+      if (j == 0) begin : gen_first_row
+        if (PE_ROWS != 1) begin : gen_single_row
           assign gen_X[i].gen_Y[j+1].psum_ready_i_w = gen_X[i].gen_Y[j].psum_ready_o_w;
-        end else begin
+        end else begin : gen_multi_row
           assign psum_ready_demux[i].in_w = gen_X[i].gen_Y[j].psum_ready_o_w;
           assign gen_X[i].gen_Y[j].psum_enable_i_w = psum_enable_mux[i].out_w;
           assign gen_X[i].gen_Y[j].psum_data_i_w = psum_data_mux[i].out_w;
@@ -268,8 +268,8 @@ genvar i,j,g;
         assign pe_psum_data_o[(i+1)*TRANS_BITWIDTH_PSUM-1:i*TRANS_BITWIDTH_PSUM]= gen_X[i].gen_Y[j].psum_data_o_w;
         assign pe_router_psum_enable_o[i] = gen_X[i].gen_Y[j].psum_enable_o_w;
         assign pe_router_psum_data_o[(i+1)*TRANS_BITWIDTH_PSUM-1:i*TRANS_BITWIDTH_PSUM] = gen_X[i].gen_Y[j].psum_data_o_w;
-      end else begin
-        if(j == PE_ROWS - 1)begin /// Check wether is bottom row
+      end else begin : gen_not_first_row
+        if(j == PE_ROWS - 1)begin : gen_last_row
           assign psum_ready_demux[i].in_w = gen_X[i].gen_Y[j].psum_ready_o_w;
           assign gen_X[i].gen_Y[j-1].psum_enable_i_w = gen_X[i].gen_Y[j].psum_enable_o_w;
           assign gen_X[i].gen_Y[j-1].psum_data_i_w = gen_X[i].gen_Y[j].psum_data_o_w;

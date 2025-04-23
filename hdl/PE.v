@@ -1374,40 +1374,38 @@ end
     .adder_en_i (adder_2_en)
   );
 
-if (SERIAL) begin
-  // do the addition of both psum spads
-  adder #(
-    .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
-  ) adder_3 (
-    .clk_i      (clk_i),
-    .rst_ni     (rst_ni),
-    .summand_1_i(adder_3_summand_1), 
-    .summand_2_i(adder_3_summand_2),
-    .sum_o      (adder_3_o_w),
-    .adder_en_i (adder_3_en)
-  );
-end
-  // mux to select input to adder
-  // (this can be either the data of psum SPAD or psum from another PE/router)
-if (SERIAL) begin
-  mux2 #(
-    .DATA_WIDTH(TRANS_BITWIDTH_PSUM*PARALLEL_MACS)
-  ) mux_psum (
-    .a_in ({psum_data_2_delay,psum_data_1_delay}),
-    .b_in ({mult_2_o_w,mult_1_o_w}),
-    .sel_i(psum_select), 
-    .y_o  ({adder_2_summand_2,adder_1_summand_2})
-  );
-end else begin
-  mux2 #(
-    .DATA_WIDTH(TRANS_BITWIDTH_PSUM)
-  ) mux_psum (
-    .a_in ({psum_data_2_delay,psum_data_1_delay}),
-    .b_in ({mult_2_o_w,mult_1_o_w}),
-    .sel_i(psum_select), 
-    .y_o  ({adder_2_summand_2,adder_1_summand_2})
-  );
-
-end
-
+  if (SERIAL) begin : gen_serial_adder
+    // do the addition of both psum spads
+    adder #(
+      .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
+    ) adder_3 (
+      .clk_i      (clk_i),
+      .rst_ni     (rst_ni),
+      .summand_1_i(adder_3_summand_1), 
+      .summand_2_i(adder_3_summand_2),
+      .sum_o      (adder_3_o_w),
+      .adder_en_i (adder_3_en)
+    );
+  end
+    // mux to select input to adder
+    // (this can be either the data of psum SPAD or psum from another PE/router)
+  if (SERIAL) begin : gen_serial_psum_multiplexer
+    mux2 #(
+      .DATA_WIDTH(TRANS_BITWIDTH_PSUM*PARALLEL_MACS)
+    ) mux_psum (
+      .a_in ({psum_data_2_delay,psum_data_1_delay}),
+      .b_in ({mult_2_o_w,mult_1_o_w}),
+      .sel_i(psum_select), 
+      .y_o  ({adder_2_summand_2,adder_1_summand_2})
+    );
+  end else begin : gen_parallel_psum_multiplexer
+    mux2 #(
+      .DATA_WIDTH(TRANS_BITWIDTH_PSUM)
+    ) mux_psum (
+      .a_in ({psum_data_2_delay,psum_data_1_delay}),
+      .b_in ({mult_2_o_w,mult_1_o_w}),
+      .sel_i(psum_select), 
+      .y_o  ({adder_2_summand_2,adder_1_summand_2})
+    );
+  end
 endmodule
