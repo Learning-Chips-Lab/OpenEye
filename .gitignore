@@ -36,3 +36,4 @@ doc/source/verilog/*
 *.tflite
 *.onnx
 *.h5
+*.log
