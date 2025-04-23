@@ -1178,7 +1178,7 @@ module OpenEye_Parallel
 
   genvar cr_gen,cc_gen,pec_gen,per_gen,g_gen,b_gen;
 
-  if (IS_TOPLEVEL) begin
+  if (IS_TOPLEVEL) begin : gen_pipelined_ports
 
     assign iact_data_i_w            = iact_data_i_reg;
     assign iact_enable_i_w          = iact_enable_i_reg;
@@ -1241,14 +1241,14 @@ module OpenEye_Parallel
 
       ///IACT ASSIGNMENTS
       for (g_gen=0; g_gen<NUM_GLB_IACT; g_gen=g_gen+1) begin
-        if (SERIAL) begin
+        if (SERIAL) begin : gen_serial_router_mode_iact
           for (b_gen=0; b_gen<ROUTER_MODES_IACT; b_gen=b_gen+1) begin
             assign gen_x[cc_gen].gen_y[cr_gen].router_mode_iact_i_w[g_gen*ROUTER_MODES_IACT+b_gen] =
             router_mode_iact_i[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
                               cr_gen * NUM_GLB_IACT * ROUTER_MODES_IACT +
                               g_gen * ROUTER_MODES_IACT + b_gen];
           end
-        end else begin
+        end else begin : gen_parallel_router_mode_iact
           for (b_gen=0; b_gen<ROUTER_MODES_IACT; b_gen=b_gen+1) begin
             assign gen_x[cc_gen].gen_y[cr_gen].router_mode_iact_i_w[g_gen*ROUTER_MODES_IACT+b_gen] =
             router_mode_iact_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
@@ -1262,7 +1262,7 @@ module OpenEye_Parallel
           assign gen_x[cc_gen].gen_y[cr_gen].data_src_side_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen] 
           = gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].data_dst_side_iact_cluster_w[g_gen * TRANS_BITWIDTH_IACT + b_gen];
         end
-        if (cr_gen != CLUSTER_ROWS - 1) begin
+        if (cr_gen != CLUSTER_ROWS - 1) begin : gen_router_iact_bottom_connect
           for (b_gen=0; b_gen<TRANS_BITWIDTH_IACT; b_gen=b_gen+1) begin
             assign gen_x[cc_gen].gen_y[cr_gen + 1].data_src_top_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen] = 
             gen_x[cc_gen].gen_y[cr_gen].data_dst_bottom_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen];
@@ -1271,7 +1271,7 @@ module OpenEye_Parallel
           assign gen_x[cc_gen].gen_y[cr_gen + 1].ready_dst_top_iact_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_bottom_iact_cluster_w[g_gen];
         end
 
-        if (cr_gen != 0) begin
+        if (cr_gen != 0) begin . gen_router_iact_top_connect
           for (b_gen=0; b_gen<TRANS_BITWIDTH_IACT; b_gen=b_gen+1) begin
             assign gen_x[cc_gen].gen_y[cr_gen - 1].data_src_bottom_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen] = 
             gen_x[cc_gen].gen_y[cr_gen].data_dst_top_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen];
@@ -1279,11 +1279,11 @@ module OpenEye_Parallel
           assign gen_x[cc_gen].gen_y[cr_gen - 1].ready_dst_bottom_iact_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_top_iact_cluster_w[g_gen];
           assign gen_x[cc_gen].gen_y[cr_gen - 1].enable_src_bottom_iact_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_top_iact_cluster_w[g_gen];
         end
-        if (cr_gen == 0) begin
+        if (cr_gen == 0) begin : gen_router_iact_top_edge
           assign gen_x[cc_gen].gen_y[cr_gen].enable_src_top_iact_cluster_w[g_gen] = 0;
           assign gen_x[cc_gen].gen_y[cr_gen].ready_dst_top_iact_cluster_w[g_gen]  = 0;
         end
-        if (cr_gen == CLUSTER_ROWS - 1) begin
+        if (cr_gen == CLUSTER_ROWS - 1) begin : gen_router_iact_bottom_edge
           assign gen_x[cc_gen].gen_y[cr_gen].ready_dst_bottom_iact_cluster_w[g_gen]  = 0;
           assign gen_x[cc_gen].gen_y[cr_gen].enable_src_bottom_iact_cluster_w[g_gen] = 0;
         end
@@ -1347,7 +1347,7 @@ module OpenEye_Parallel
         end
         assign gen_x[cc_gen].gen_y[cr_gen].psum_choose_cluster_i_w[g_gen] = psum_choose_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM + cr_gen * NUM_GLB_PSUM + g_gen];
 
-        if (cr_gen != CLUSTER_ROWS - 1) begin
+        if (cr_gen != CLUSTER_ROWS - 1) begin : gen_router_iact_bottom_connect
           for (b_gen=0; b_gen<TRANS_BITWIDTH_PSUM; b_gen=b_gen+1) begin
             assign gen_x[cc_gen].gen_y[cr_gen + 1].data_src_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+b_gen] =
             gen_x[cc_gen].gen_y[cr_gen].data_dst_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+b_gen];
@@ -1356,7 +1356,7 @@ module OpenEye_Parallel
           assign gen_x[cc_gen].gen_y[cr_gen + 1].ready_dst_top_psum_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_bottom_psum_cluster_w[g_gen];
         end
 
-        if (cr_gen != 0) begin
+        if (cr_gen != 0) begin : gen_router_iact_top_connect
           for (b_gen=0; b_gen<TRANS_BITWIDTH_PSUM; b_gen=b_gen+1) begin
             assign gen_x[cc_gen].gen_y[cr_gen - 1].data_src_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+b_gen] = 
             gen_x[cc_gen].gen_y[cr_gen].data_dst_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+b_gen];
@@ -1365,10 +1365,10 @@ module OpenEye_Parallel
           assign gen_x[cc_gen].gen_y[cr_gen - 1].enable_src_bottom_psum_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_top_psum_cluster_w[g_gen];
         end
         
-        if (cr_gen == 0) begin
+        if (cr_gen == 0) begin : gen_router_iact_top_edge
           assign gen_x[cc_gen].gen_y[cr_gen].enable_src_top_psum_cluster_w[g_gen] = 0;
         end
-        if (cr_gen == CLUSTER_ROWS - 1) begin
+        if (cr_gen == CLUSTER_ROWS - 1) begin : gen_router_iact_bottom_edge
           for (b_gen=0; b_gen<TRANS_BITWIDTH_PSUM; b_gen=b_gen+1) begin
             assign gen_x[cc_gen].gen_y[cr_gen].data_src_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+b_gen] = 0;
           end

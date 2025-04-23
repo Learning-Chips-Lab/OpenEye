@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: SHL-2.1
 // For more details, see the LICENSE file in the root directory of this project.
 
+`timescale 1ns / 1ps
+
 /// Module: RAM_SP
 ///
 /// (R)andom(A)ccess(M)emory_(S)ingle(P)ort is a wrapper module to provide a unified

@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: SHL-2.1
 // For more details, see the LICENSE file in the root directory of this project.
 
+`timescale 1ns / 1ps
+
 /// Module: RST_SYNC
 ///
 /// This module synchronizes an asynchronous reset signal

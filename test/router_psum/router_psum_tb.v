@@ -373,12 +373,5 @@ gen_yy[3].enable_src_port_0   = 0;
       $display("Result1:", result_in_step[3]);
       $display("Result1:", result_in_step[4]);
       $display("Result:",  result);
-
-
-
-
-
     end
-
-
 endmodule

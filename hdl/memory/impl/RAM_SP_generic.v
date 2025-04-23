@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: SHL-2.1
 // For more details, see the LICENSE file in the root directory of this project.
 
+`timescale 1ns / 1ps
+
 /// Module: RAM_SP_generic
 ///
 /// (R)andom(A)ccess(M)emory_(S)ingle(P)ort_generic is a generic implementation of a single port RAM.
