@@ -217,8 +217,6 @@ module PE
   wire [IACT_ADDR_ADDR_BITWIDTH-1 : 0]        first_spad_iact_addr_w;
   wire [IACT_ADDR_DATA-1 : 0]                 first_spad_iact_data_w;
   wire                                        first_spad_iact_en_w;
-  wire                                        fifo_iact_addr_spad_empty_w;
-  wire                                        fifo_iact_addr_spad_full_w;
   wire [IACT_DATA_ADDR_BITWIDTH-1 : 0]        second_spad_iact_addr_w;
   wire [IACT_DATA_DATA-1 : 0 ]                second_spad_iact_data_w;
   wire                                        second_spad_iact_en_w;

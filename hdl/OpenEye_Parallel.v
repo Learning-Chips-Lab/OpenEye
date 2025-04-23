@@ -234,24 +234,13 @@ module OpenEye_Parallel
   reg  [CLUSTERS*PES-1:0]                       compute_cluster_i_reg;
   reg  [CLUSTERS*PES-1:0]                       compute_mask_reg;
 
-  //Register for the main FSM
-  reg  [32-1:0]                        fsm_cycle;
-
-  ///Register for the iact FSM
-  reg  [32-1:0]                        fsm_iact_cycle;
-  reg  [6:0]                           fsm_iact_cycle_mod1;
-  reg  [11:0]                          fsm_iact_cycle_div;
-  reg  [6:0]                           fsm_iact_cycle_div_cnt;
-
   ///Register for the wght FSM
 
   ///Register for the psum FSM
   reg  [32-1:0]                        fsm_psum_cycle;
 
   reg                                  data_write_enable;
-  reg                                  data_write_enable_iact;
   reg  [64-1:0]                        flat_help_psum_var;
-  reg  [64-1:0]                        flat_help_iact_var;
   reg                                  results_ready;
   reg  [2:0]                           loop_mod;
   reg  [7:0]                           finished_cycles;
@@ -449,8 +438,6 @@ module OpenEye_Parallel
       delay_psum_glb_reg         <= 0;
       input_activations_reg      <= 0;
       compute_mask_reg           <= 0;
-
-      fsm_cycle                  <= 0;
       fsm_last_state             <= MAIN_IDLE;
       fsm_current_state          <= MAIN_IDLE;
 
@@ -1064,7 +1051,7 @@ module OpenEye_Parallel
           //////////////////////////////////
           .clk_i                   (clk_i),
           .rst_ni                  (rst_n),
-          .data_write_enable_iact_i(data_write_enable_iact),
+          .data_write_enable_iact_i(1'd0),
           .data_write_enable_i     (data_write_enable),
 
           ///Selection

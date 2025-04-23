@@ -40,7 +40,6 @@
 ///   ROUTER_MODES_IACT      - Amount of bits in the Router for IACT
 ///   ROUTER_MODES_WGHT      - Amount of bits in the Router for WGHT
 ///   ROUTER_MODES_PSUM      - Amount of bits in the Router for PSUM
-///   FSM_STATES             - Amount of fsm states
 ///   BANO_MODES             - Amount of Modes in Batch Normalization
 ///   AF_MODES               - Amount of Modes in AutoFunction CLuster
 ///   CLUSTERS               - Amount of clusters
@@ -114,7 +113,6 @@ module OpenEye_FPGA
 
   parameter DMA_BITWIDTH        = 64,
   parameter FSM_CYCLE_MAX       = 4294967295,
-  parameter FSM_STATES          = 10,
 
   parameter BUFFER_WIDTH = 12,
   parameter real FSM_IACT_RTR_CCLS_A = (CLUSTERS*NUM_GLB_IACT),
@@ -261,8 +259,6 @@ module OpenEye_FPGA
   //Register for the FSM
   reg  [32-1:0]                        fsm_cycle;
   reg  [6:0]                           fsm_cycle_mod1;
-  // reg  [$clog2(FSM_STATES)-1:0]        fsm_last_state;
-  // reg  [$clog2(FSM_STATES)-1:0]        fsm_current_state;
   reg  [$clog2(CLUSTER_COLUMNS)-1:0]    fsm_x_cl;
   reg  [$clog2(CLUSTER_COLUMNS)-1:0]    fsm_x_cl1;
   reg  [$clog2(CLUSTER_ROWS)-1:0]      fsm_y_cl;
@@ -1369,9 +1365,8 @@ module OpenEye_FPGA
 
       .ROUTER_MODES_IACT   (ROUTER_MODES_IACT),
       .ROUTER_MODES_WGHT   (ROUTER_MODES_WGHT),
-      .ROUTER_MODES_PSUM   (ROUTER_MODES_PSUM),
+      .ROUTER_MODES_PSUM   (ROUTER_MODES_PSUM)
 
-      .FSM_STATES          (FSM_STATES)
     )OpenEye_Parallel(
       //Clock and Reset Ports
 

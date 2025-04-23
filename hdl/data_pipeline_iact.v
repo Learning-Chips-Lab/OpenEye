@@ -77,17 +77,14 @@ module data_pipeline_iact
   reg                                     fsm_state;  // FSM state register
   reg [FIRST_SPAD_DATA-1 : 0]             data_storage_1;  // Temporary storage for data
   reg [DATA_WIDTH-1 : 0]                  data_storage_2;  // Temporary storage for data
-  reg [$clog2(SECOND_SPAD_ADDR) : 0]      address_temp_1;  // Temporary address storage
   reg [$clog2(SECOND_SPAD_ADDR) : 0]      address_temp_2;  // Temporary address storage
   reg [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;  // Cycle counter for data loading
   reg [SECOND_OVERHEAD_WIDTH-1 : 0]       overhead_reg;
   reg [SECOND_OVERHEAD_WIDTH-1 : 0]       overhead_delay_reg;
   reg [DATA_WIDTH-1 : 0]                  payload_reg;
-  wire [SECOND_PAYLOAD_WIDTH-1 : 0]       payload_trunc;
   genvar i;
 
-    assign payload_trunc = payload_reg[SECOND_PAYLOAD_WIDTH-1 : 0];
-    assign second_spad_data_o = {overhead_delay_reg,payload_trunc};  // Assign data to the second SPAD output
+    assign second_spad_data_o = {overhead_delay_reg,payload_reg[SECOND_PAYLOAD_WIDTH-1 : 0]};  // Assign data to the second SPAD output
 
 
 
@@ -102,7 +99,6 @@ module data_pipeline_iact
       second_spad_en_o      <= 0;
       data_storage_1        <= 0;
       data_storage_2        <= 0;
-      address_temp_1        <= 0;
       address_temp_2        <= 0;
       cycle_counter         <= 0;
       payload_reg           <= 0;
@@ -159,7 +155,6 @@ module data_pipeline_iact
         data_storage_1      <= 0;
         data_storage_2      <= 0;
         first_spad_data_o   <= 0;
-        address_temp_1      <= 0;
         address_temp_2      <= 0;
         cycle_counter       <= 0;
         first_spad_addr_o   <= 0;
