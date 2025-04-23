@@ -1271,7 +1271,7 @@ module OpenEye_Parallel
           assign gen_x[cc_gen].gen_y[cr_gen + 1].ready_dst_top_iact_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_bottom_iact_cluster_w[g_gen];
         end
 
-        if (cr_gen != 0) begin . gen_router_iact_top_connect
+        if (cr_gen != 0) begin : gen_router_iact_top_connect
           for (b_gen=0; b_gen<TRANS_BITWIDTH_IACT; b_gen=b_gen+1) begin
             assign gen_x[cc_gen].gen_y[cr_gen - 1].data_src_bottom_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen] = 
             gen_x[cc_gen].gen_y[cr_gen].data_dst_top_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+b_gen];
