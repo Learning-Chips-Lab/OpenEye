@@ -174,7 +174,6 @@ module PE
   reg [TRANS_BITWIDTH_IACT-1:0]               mux_iact_a_o_w;
   reg                                         mux_iact_b_o_w;
   wire                                        mux_iact_c_i_w;
-  reg [WGHT_ADDR_DATA-1 : 0]                  wght_addr_current;
   reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_max_reg;
   reg [WGHT_ADDR_ADDR_BITWIDTH-1 : 0]         wght_addr_max_reg;
   reg [IACT_ADDR_DATA-1 : 0]                  iact_addr_current;
