@@ -227,8 +227,8 @@ module PE
   wire [WGHT_DATA_ADDR_BITWIDTH-1 : 0]        second_spad_wght_addr_w;
   wire [WGHT_DATA_DATA-1 : 0 ]                second_spad_wght_data_w;
   wire                                        second_spad_wght_en_w;
-  reg [DATA_PSUM_BITWIDTH-1 : 0]              psum_spad_data_a_i;
-  reg [DATA_PSUM_BITWIDTH-1 : 0]              psum_spad_data_b_i;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]             psum_spad_data_a_i;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]             psum_spad_data_b_i;
   reg [PSUM_ADDR_BITWIDTH-1 : 0]              psum_spad_addr_a_w;
   reg [PSUM_ADDR_BITWIDTH-1 : 0]              psum_spad_addr_b_w;
   reg                                         reuse_psum_spad_a;
