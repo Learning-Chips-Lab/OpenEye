@@ -146,9 +146,9 @@ module PE
   wire [WGHT_ADDR_ADDR_BITWIDTH-1:0]          wght_addr_SPad_addr;
   wire [WGHT_DATA_ADDR_BITWIDTH-1:0]          wght_data_SPad_addr;
   wire [DATA_IACT_BITWIDTH-1:0]               iact_data_spad_pay;
-  wire [DATA_IACT_OVERHEAD-1:0]           iact_data_spad_oh;
-  reg [DATA_IACT_OVERHEAD-1:0]            iact_oh_delay_1;
-  reg [DATA_IACT_OVERHEAD-1:0]            iact_oh_delay_2;
+  wire [DATA_IACT_OVERHEAD-1:0]               iact_data_spad_oh;
+  reg [DATA_IACT_OVERHEAD-1:0]                iact_oh_delay_1;
+  reg [DATA_IACT_OVERHEAD-1:0]                iact_oh_delay_2;
   wire [DATA_WGHT_BITWIDTH-1:0]               wght_data_spad_pay_1;
   wire [DATA_WGHT_IGNORE_ZEROS-1:0]           wght_data_spad_oh_1;
   wire [DATA_WGHT_BITWIDTH-1:0]               wght_data_spad_pay_2;
@@ -212,7 +212,7 @@ module PE
   wire [DATA_PSUM_BITWIDTH-1 : 0]             mult_2_o_w;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_1_o_w;
   wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_2_o_w;
-  wire [DATA_PSUM_BITWIDTH-1 : 0]              adder_3_o_w;
+  wire [DATA_PSUM_BITWIDTH-1 : 0]             adder_3_o_w;
   wire [IACT_ADDR_ADDR_BITWIDTH-1 : 0]        first_spad_iact_addr_w;
   wire [IACT_ADDR_DATA-1 : 0]                 first_spad_iact_data_w;
   wire                                        first_spad_iact_en_w;
