@@ -162,15 +162,14 @@ module iact_stream_constructor
 
     reg signed [7:0]                   y_reg;
     reg signed [7:0]                   x_reg [NUM_GLB_IACT-1:0];
-    integer                      router_loop;
+    integer                            router_loop;
+    reg        [1:0]                   fsm_current_state;
     always @(posedge clk_i, negedge rst_ni) begin
       // Reset
       if (!rst_ni) begin
         y_reg <= 0;
-        for (r=0; r<NUM_GLB_IACT; r++) begin
-          for (w=0; w<WORDS_PER_CYCLE; w++) begin
-            x_reg[r] <= 0;
-          end
+        for (router_loop=0; router_loop<NUM_GLB_IACT; router_loop++) begin
+            x_reg[router_loop] <= 0;
         end
       end else begin
         if ((fsm_current_state == WRITE_TO_MEMORY) | (enable_store & (fsm_current_state == GET_PARAMETER))) begin
@@ -193,7 +192,6 @@ module iact_stream_constructor
     reg  [4-1:0]   duty_cycle;
     reg  [4-1:0]   duty_cycle_th;
     reg  [4-1:0]   duty_cycle_reset;
-    reg  [1:0]                   fsm_current_state;
     reg [8-1:0] ram_var;
     reg [8-1:0] byte_var;
     reg [ADDRWIDTH-1:0] ram_wr_addr_reg;

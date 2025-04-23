@@ -1284,7 +1284,7 @@ module OpenEye_Parallel
                         cr_gen * NUM_GLB_IACT * IACT_MEM_ADDR_BITS +
                         g_gen * IACT_MEM_ADDR_BITS + b_gen];
         end
-        assign gen_x[cc_gen].gen_y[cr_gen].iact_enable_i_cluster_w[g_gen] = (iact_enable_i_w[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen];
+        assign gen_x[cc_gen].gen_y[cr_gen].iact_enable_i_cluster_w[g_gen] = iact_enable_i_w[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen];
         assign iact_ready_o[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen] = gen_x[cc_gen].gen_y[cr_gen].iact_ready_o_cluster_w[g_gen];
       end
       for (pec_gen=0; pec_gen<PE_COLUMNS; pec_gen=pec_gen+1) begin
