@@ -60,7 +60,17 @@
 
 module OpenEye_FPGA
 #(
-  `include "parameters.vh"
+  `ifdef USE_EXTERNAL_PARAMS
+    `include "parameters.vh"
+  `else
+    // Defaultwerte
+    parameter CLUSTER_ROWS  = 8,
+    parameter NUM_GLB_IACT  = 3,
+    parameter PE_COLUMNS    = 4,
+    parameter NUM_GLB_PSUM  = 4,
+    parameter NUM_GLB_WGHT  = 3,
+    parameter PE_ROWS       = 3,
+  `endif
   //Set parameters
   parameter IS_TOPLEVEL         = 1,
   parameter SERIAL              = 1,

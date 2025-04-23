@@ -7,7 +7,7 @@ SIM ?= icarus
 #SIM ?= verilator
 #EXTRA_ARGS += --trace --trace-fst --trace-structs
 #COMPILE_ARGS += --trace --trace-fst --trace-structs
-
+VERILOG_COMPILE_ARGS += -DUSE_EXTERNAL_PARAMS
 TOPLEVEL_LANG ?= verilog
 WAVEFORM=on
 
@@ -51,7 +51,6 @@ TOPLEVEL = OpenEye_FPGA
 # MODULE is the basename of the Python test file
 MODULE = OpenEye_FPGA_tb
 export COCOTB_TRACE=1
-#COMPILE_ARGS += -P OpenEye_Parallel.CREATE_VCD=1
 export IVERILOG_DUMPER=fst
 export CLOCK_LEN=10
 export CLOCK_UNIT=ns
@@ -69,7 +68,7 @@ export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
 export NUM_FILTERS=8
 export KERNEL_SIZE=3
-export INPUT_SIZE=8
+export INPUT_SIZE=16
 export OUTPUT_SIZE=8
 export STRIDE=1
 export INPUT_CHANNELS=4
