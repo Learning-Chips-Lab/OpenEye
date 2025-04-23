@@ -4,9 +4,12 @@ OUT_JSON := $(TOP_MODULE).json
 VERILOG_SRCS := $(shell find $(SRC_DIRS) -name "*.v" | sort)
 
 GEN_SCRIPT := gen_synth.ys
+TIMESTAMP := $(shell date +"%Y%m%d_%H%M%S")
+LOGFILE := yosys_output_$(TIMESTAMP).log
 
 all: $(GEN_SCRIPT)
-	yosys $(GEN_SCRIPT) | tee yosys_output.log
+	yosys $(GEN_SCRIPT) > $(LOGFILE) 2>&1
+	@echo "Yosys output saved to $(LOGFILE)"
 
 $(GEN_SCRIPT):
 	@echo "Verilog sources:"
