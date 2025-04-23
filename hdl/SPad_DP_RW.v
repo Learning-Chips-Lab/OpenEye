@@ -37,9 +37,7 @@
 module SPad_DP_RW 
 #( 
   parameter DATA_WIDTH = 8,
-  parameter ADDR_WIDTH = 10,
-  
-  // Hint for physical implementation
+  parameter ADDR_WIDTH = 10
   parameter Implementation = 0
 ) ( 
   input  wire                       clk_i,

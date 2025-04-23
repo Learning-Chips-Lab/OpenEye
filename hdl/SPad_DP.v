@@ -30,7 +30,8 @@
 module SPad_DP
 #( 
   parameter DATA_WIDTH = 8,
-  parameter ADDR_WIDTH = 10
+  parameter ADDR_WIDTH = 10,
+  parameter Implementation = 0
 ) ( 
   input  wire                     clk_i,
 
