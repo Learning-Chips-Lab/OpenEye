@@ -16,7 +16,7 @@ cmds.f
 openeye_env/*
 env/*
 *.ys
-
+*.json
 !requirements.txt
 
 **/.temp
