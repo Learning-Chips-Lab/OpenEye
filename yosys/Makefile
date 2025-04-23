@@ -6,7 +6,7 @@ VERILOG_SRCS := $(shell find $(SRC_DIRS) -name "*.v" | sort)
 GEN_SCRIPT := gen_synth.ys
 
 all: $(GEN_SCRIPT)
-	yosys  $(GEN_SCRIPT)
+	yosys $(GEN_SCRIPT) | tee yosys_output.log
 
 $(GEN_SCRIPT):
 	@echo "Verilog sources:"
