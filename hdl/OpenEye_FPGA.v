@@ -313,7 +313,7 @@ module OpenEye_FPGA
   reg iact_converter_en_store_reg        [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg iact_converter_en_enc_reg          [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg send_data_reg                                                             ;
-  reg iact_converter_ready_reg           [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
+  wire iact_converter_ready_w           [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [2:0] iact_converter_n_reg         [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [BUFFER_WIDTH-1:0] iact_converter_mem_addr_reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [3:0] iact_converter_mem_off_reg   [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
@@ -1056,7 +1056,7 @@ module OpenEye_FPGA
           converters_ready              = 1;
           for (a=0; a<CLUSTER_COLUMNS; a++) begin
             for (b=0; b<CLUSTER_ROWS; b++) begin
-              converters_ready = converters_ready & iact_converter_ready_reg[a][b];
+              converters_ready = converters_ready & iact_converter_ready_w[a][b];
             end
           end
           if (converters_ready == 1) begin
@@ -1099,7 +1099,7 @@ module OpenEye_FPGA
           converters_ready = 1;
           for (a=0; a<CLUSTER_COLUMNS; a++) begin
             for (b=0; b<CLUSTER_ROWS; b++) begin
-              converters_ready = converters_ready & iact_converter_ready_reg[a][b];
+              converters_ready = converters_ready & iact_converter_ready_w[a][b];
             end
           end
           iact_converter_params_enable <= 0;
@@ -1287,7 +1287,7 @@ module OpenEye_FPGA
           .enable_config    (iact_converter_en_cfg_reg[i_gen][j_gen]),
           .enable_store     (iact_converter_en_store_reg[i_gen][j_gen]),
           .enable_converter (iact_converter_en_enc_reg[i_gen][j_gen]),
-          .ready_o          (iact_converter_ready_reg[i_gen][j_gen]),
+          .ready_o          (iact_converter_ready_w[i_gen][j_gen]),
           .iact_ready_i     (iact_ready_w),
           .iact_data_o      (iact_data_w),
           .iact_enable_o    (iact_enable_w),
