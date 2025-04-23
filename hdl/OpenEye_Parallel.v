@@ -56,7 +56,6 @@
 ///   ROUTER_MODES_IACT      - Amount of bits in the Router for IACT
 ///   ROUTER_MODES_WGHT      - Amount of bits in the Router for WGHT
 ///   ROUTER_MODES_PSUM      - Amount of bits in the Router for PSUM
-///   FSM_STATES             - Amount of fsm states
 ///   BANO_MODES             - Amount of Modes in Batch Normalization
 ///   AF_MODES               - Amount of Modes in AutoFunction CLuster
 ///   CLUSTERS               - Amount of clusters
@@ -129,15 +128,11 @@ module OpenEye_Parallel
   parameter ROUTER_MODES_WGHT   = 1,
   parameter ROUTER_MODES_PSUM   = 3,
 
-  parameter FSM_STATES          = 4,
   parameter BANO_MODES          = 2,
   parameter AF_MODES            = 4,
 
   localparam IACT_MEM_ADDR_BITS    = $clog2(IACT_MEM_ADDR_WORDS),
   localparam PSUM_MEM_ADDR_BITS    = $clog2(PSUM_MEM_ADDR_WORDS),
-
-  localparam IACT_FSM_CYCL_WORDS   = IACT_PER_PE + IACT_ADDR_PER_PE,
-  localparam WGHT_FSM_CYCL_WORDS   = WGHT_PER_PE + WGHT_ADDR_PER_PE,
 
   localparam PES                   = PE_COLUMNS * PE_ROWS,
 

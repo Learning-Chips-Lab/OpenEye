@@ -276,7 +276,7 @@ genvar i,j,g;
 
           assign gen_X[i].gen_Y[j].psum_enable_i_w = psum_enable_mux[i].out_w;
           assign gen_X[i].gen_Y[j].psum_data_i_w = psum_data_mux[i].out_w;
-        end else begin
+        end else begin : gen_not_last_row
           assign gen_X[i].gen_Y[j+1].psum_ready_i_w = gen_X[i].gen_Y[j].psum_ready_o_w;
           assign gen_X[i].gen_Y[j-1].psum_enable_i_w = gen_X[i].gen_Y[j].psum_enable_o_w;
           assign gen_X[i].gen_Y[j-1].psum_data_i_w = gen_X[i].gen_Y[j].psum_data_o_w;
