@@ -27,7 +27,6 @@
 
 module af_cluster 
 #( 
-  parameter  integer               CALC_DATA_WIDTH = 32,
   parameter  integer               ADVANCED_WIDTH  = 64,
   parameter                        SERIAL          = 1'b1,
   parameter  integer               PARALLEL_MACS   = 2,
@@ -38,8 +37,6 @@ module af_cluster
   localparam integer               NUM_DATA        = (SERIAL == 1) ? 1 : PARALLEL_MACS,
   localparam integer               MODE_BITS       = $clog2(MODES)
 ) (
-  input                      clk_i,
-  input                      rst_ni,
   input  [MODE_BITS-1 : 0]   mode_i,
   output                     ready_o,
   input  [DATA_BITWIDTH-1:0] data_i,
@@ -59,11 +56,11 @@ genvar data_pos;
 for (data_pos = 0;data_pos < NUM_DATA; data_pos = data_pos + 1) begin
   assign result_leaky[data_pos]           = (psum[data_pos] * DIVIDEND) >> DIVISOR;
   assign truncated_result_leaky[data_pos] = result_leaky[data_pos][DATA_BITWIDTH-1:0];
-  if (SERIAL == 1) begin 
+  if (SERIAL == 1) begin : gen_serial
     assign sign[data_pos]                   = data_i[((1+data_pos) * DATA_BITWIDTH)-1]; //'data_i' gets split in two seperate data blocks
     assign psum[data_pos]                   = data_i[((1+data_pos) * DATA_BITWIDTH)-2 : data_pos * DATA_BITWIDTH]; //'data_i' gets split in two seperate data blocks
     assign data_o[(DATA_BITWIDTH*(1+data_pos))-1:DATA_BITWIDTH*data_pos] = data_out[data_pos]; // Concatenate both data blocks into one output
-  end else begin
+  end else begin : gen_parallel
     assign sign[data_pos]                   = data_i[((1+data_pos) * DATA_BITWIDTH/NUM_DATA)-1]; //'data_i' gets split in two seperate data blocks
     assign psum[data_pos]                   = data_i[((1+data_pos) * DATA_BITWIDTH/NUM_DATA)-2 : data_pos * DATA_BITWIDTH/NUM_DATA]; //'data_i' gets split in two seperate data blocks
     assign data_o[(DATA_BITWIDTH/NUM_DATA*(1+data_pos))-1:DATA_BITWIDTH/NUM_DATA*data_pos] = data_out[data_pos]; // Concatenate both data blocks into one output

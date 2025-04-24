@@ -419,8 +419,6 @@ module OpenEye_Cluster
       .DATA_BITWIDTH(TRANS_BITWIDTH_PSUM),
       .BN_OFFSET_BITS (8)
     )bano_cluster(
-      .clk_i       (clk_i),
-      .rst_ni      (rst_n),
       .bn_offset_i (8'd0),
 
       .ready_o     (bano_cluster_ready_out[r]),
@@ -495,9 +493,6 @@ module OpenEye_Cluster
       .DATA_BITWIDTH(TRANS_BITWIDTH_PSUM),
       .MODES        (AF_MODES)
     )af_cluster(
-      .clk_i            (clk_i),
-      .rst_ni           (rst_n),
-
       .mode_i           (af_cluster_mode_in[$clog2(AF_MODES)*(r+1)-1:$clog2(AF_MODES)*r]),
 
       .ready_o          (af_cluster_ready_out[r]),

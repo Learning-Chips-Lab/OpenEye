@@ -27,6 +27,7 @@
 
 module multiplier 
 #( 
+  parameter DATATYPE = 0,
   parameter DATA_WIDTH_FAC1 = 8,
   parameter DATA_WIDTH_FAC2 = 8,
   parameter DATA_WIDTH_PROD = 20,
@@ -40,16 +41,32 @@ module multiplier
   output reg signed [DATA_WIDTH_PROD-1:0] product,
   input             [Q_BITWIDTH-1:0]      fraction_bit_i
 );
-
-  always@(posedge clk_i, negedge rst_ni) begin
-    if(!rst_ni) begin ///Reset
-      product <= 0;
-    end else begin
-      if(multiplier_en_i) begin
-        product <= factor_1 * factor_2;
-      end else begin
+  generate
+    if (DATATYPE == 0) begin : gen_integer
+    always@(posedge clk_i, negedge rst_ni) begin
+      if(!rst_ni) begin ///Reset
         product <= 0;
+      end else begin
+        if(multiplier_en_i) begin
+          product <= factor_1 * factor_2;
+        end else begin
+          product <= 0;
+        end
       end
     end
-  end
+    end else begin : gen_fixed_point
+      always@(posedge clk_i, negedge rst_ni) begin
+        if(!rst_ni) begin ///Reset
+          product <= 0;
+        end else begin
+          if(multiplier_en_i) begin
+            product <= (factor_1 * factor_2) >> fraction_bit_i;
+          end else begin
+            product <= 0;
+          end
+        end
+      end
+
+    end
+  endgenerate
 endmodule

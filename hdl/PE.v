@@ -1296,7 +1296,7 @@ end
     .clk_i             (clk_i),
     .rst_ni            (rst_ni),
     .compute_i         (compute_i),
-    .data_mode         (data_mode_reg),
+    //.data_mode         (data_mode_reg), ReAdd later
 
     .data_i            (mux_iact_a_o_w),
     .enable_i          (mux_iact_b_o_w),
