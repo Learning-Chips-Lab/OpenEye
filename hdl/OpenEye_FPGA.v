@@ -259,8 +259,8 @@ module OpenEye_FPGA
   //Register for the FSM
   reg  [32-1:0]                        fsm_cycle;
   reg  [6:0]                           fsm_cycle_mod1;
-  reg  [$clog2(CLUSTER_COLUMNS)-1:0]    fsm_x_cl;
-  reg  [$clog2(CLUSTER_COLUMNS)-1:0]    fsm_x_cl1;
+  reg  [$clog2(CLUSTER_COLUMNS)-1:0]   fsm_x_cl;
+  reg  [$clog2(CLUSTER_COLUMNS)-1:0]   fsm_x_cl1;
   reg  [$clog2(CLUSTER_ROWS)-1:0]      fsm_y_cl;
   reg  [$clog2(CLUSTER_ROWS)-1:0]      fsm_y_cl1;
   reg  [$clog2(NUM_GLB_IACT)-1:0]      fsm_iact_r;
@@ -271,6 +271,7 @@ module OpenEye_FPGA
   reg                                  results_ready;
   reg  [7:0]                           finished_cycles;
   reg                                  new_stream;
+  reg                                  reset_cycle_reg;
 
 
   // Register for the Buffer
@@ -502,6 +503,20 @@ module OpenEye_FPGA
             end
           end
         end
+        if (reset_cycle_reg) begin
+          iact_converter_x <= 0;
+          iact_converter_y <= 0;
+          iact_size        <= 0;
+          iact_channels    <= 0;
+          fsm_col          <= 0;
+          fsm_row          <= 0;
+          for (a=0; a<CLUSTER_COLUMNS; a++) begin
+            for (b=0; b<CLUSTER_ROWS; b++) begin
+              iact_converter_params_reg[a][b] <= 0;
+              iact_converter_en_cfg_reg[a][b] <= 0;
+            end
+          end
+        end
       end
     end
   end
@@ -575,24 +590,6 @@ module OpenEye_FPGA
         end
       end
     end else begin
-      if (fsm_current_state == GET_PARAMETERS) begin
-        sending_data           <= 0;
-        iact_readied           <= 0;
-        current_cycle          <= 0;
-        fsm_sending_cycle      <= 0;
-        wght_enable_i_reg      <= 0;
-        wght_data_i_reg        <= 0;
-        wght_buffer_SP_en_r    <= 0;
-        wght_buffer_SP_rd_addr <= 0;
-        compute_reg            <= 0;
-        psum_ready_i_reg       <= 0;
-        flat_help_var_send      = 0;
-        for (a=0; a<CLUSTER_COLUMNS; a++) begin
-          for (b=0; b<CLUSTER_ROWS; b++) begin
-            iact_converter_en_enc_reg[a][b] <= 0;
-          end
-        end
-      end
       //Set Registers to 0
       for (a=0; a<CLUSTER_COLUMNS; a++) begin
         for (b=0; b<CLUSTER_ROWS; b++) begin
@@ -668,6 +665,24 @@ module OpenEye_FPGA
         wght_enable_i_reg   <= 0;
         wght_buffer_SP_en_r <= 0;
       end
+      if (fsm_current_state == GET_PARAMETERS) begin
+        sending_data           <= 0;
+        iact_readied           <= 0;
+        current_cycle          <= 0;
+        fsm_sending_cycle      <= 0;
+        wght_enable_i_reg      <= 0;
+        wght_data_i_reg        <= 0;
+        wght_buffer_SP_en_r    <= 0;
+        wght_buffer_SP_rd_addr <= 0;
+        compute_reg            <= 0;
+        psum_ready_i_reg       <= 0;
+        flat_help_var_send      = 0;
+        for (a=0; a<CLUSTER_COLUMNS; a++) begin
+          for (b=0; b<CLUSTER_ROWS; b++) begin
+            iact_converter_en_enc_reg[a][b] <= 0;
+          end
+        end
+      end
     end
     temp_var = 0;
   end
@@ -690,7 +705,6 @@ module OpenEye_FPGA
       kernel_per_pe_cluster_reg <= 0;
       kernel_size               <= 0;
       new_stream                <= 0;
-
       fsm_cycle                 <= 0;
       fsm_cycle_mod1            <= 0;
       fsm_last_state            <= IDLE;
@@ -704,32 +718,26 @@ module OpenEye_FPGA
       fsm_psum_r                <= 0;
       fsm_psum_r1               <= 0;
       finished_cycles           <= 0;
-
       skipIact_reg              <= 0;
       skipWght_reg              <= 0;
       skipPsum_reg              <= 0;
-
       results_ready              = 0;
       flat_help_var_1            = 0;
       enable_dma_o              <= 0;
       fifo_data_i               <= 0;
       fifo_read_i               <= 0;
       fifo_write_i              <= 0;
-
       bano_cluster_mode_reg     <= 0;
       af_cluster_mode_reg       <= 0;
       compute_mask_reg          <= 0;
       router_mode_iact_reg      <= 0;
       router_mode_wght_reg      <= 0;
       router_mode_psum_reg      <= 0;
-
       psum_data_i_reg           <= 0;
       psum_enable_i_reg         <= 0;
       psum_delay_reg            <= 0;
-
       ready_dma_o               <= 0;
       last_data_o               <= 0;
-
       iact_buffer_SP_en_r       <= 0;
       iact_buffer_SP_en_w       <= 0;
       iact_buffer_SP_data_w     <= 0;
@@ -740,16 +748,13 @@ module OpenEye_FPGA
       psum_buffer_SP_en_w       <= 0;
       psum_buffer_SP_addr       <= 0;
       psum_buffer_SP_data_w     <= 0;
-
       wght_cnt                  <= 0;
       psum_cnt                  <= 0;
-
       // iact converter
       iact_out_reg               <= 0;
       iact_ready                 <= 0;
       buffer_SP_addr_upper_limit <= 0;
       buffer_SP_addr_lower_limit <= 0;
-
       current_buffer_n          <= 0;
       current_buffer_n_1        <= 0;
       current_buffer_addr       <= 0;
@@ -757,6 +762,7 @@ module OpenEye_FPGA
       iact_size                 <= 0;
       iact_channels             <= 0;
       iact_needed_cycles        <= 1; // params
+      reset_cycle_reg           <= 0;
 
       //new iact regs
       max_converter_needed_cycles       <= 0;
@@ -793,14 +799,18 @@ module OpenEye_FPGA
         end
 
         GET_PARAMETERS : begin
-          enable_dma_o          <= 0;
-          fifo_data_i           <= 0;
-          fifo_read_i           <= 0;
-          fifo_write_i          <= 0;
-          status_reg_enable_reg <= 1;
-          ready_dma_o           <= 1;
+          enable_dma_o               <= 0;
+          fifo_data_i                <= 0;
+          fifo_read_i                <= 0;
+          fifo_write_i               <= 0;
+          status_reg_enable_reg      <= 1;
+          ready_dma_o                <= 1;
+          reset_cycle_reg            <= 1;
+          buffer_SP_addr_lower_limit <= 0;
+          buffer_SP_addr_upper_limit <= 0;
           if(enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
+            reset_cycle_reg       <= 0;
             case(fsm_cycle)
               32'd0 : begin
                 data_mode_reg          <= data_dma_i_reg[PARAMETER_POS_1_0];
@@ -1045,7 +1055,7 @@ module OpenEye_FPGA
                   fsm_current_state            <= START_CONVERTER;
                   ready_dma_o                  <= 0;
                   wght_cnt                     <= wght_buffer_SP_wr_addr;
-                  wght_buffer_SP_wr_addr        <= 0;
+                  wght_buffer_SP_wr_addr       <= 0;
                   psum_cnt                     <= psum_buffer_SP_addr + 1;
                 end
               end
@@ -1289,6 +1299,7 @@ module OpenEye_FPGA
           .clk_i            (clk_i),
           .rst_ni           (rst_ni),
           .storage_i        (buffer_SP_data_r),
+          .reset_cycle_i    (reset_cycle_reg),
           .params           (iact_converter_params_reg[i_gen][j_gen]),
           .enable_config    (iact_converter_en_cfg_reg[i_gen][j_gen]),
           .enable_store     (iact_converter_en_store_reg[i_gen][j_gen]),

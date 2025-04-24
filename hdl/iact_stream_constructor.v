@@ -25,6 +25,7 @@ module iact_stream_constructor
 ) (
   input                                          clk_i,
   input                                          rst_ni,
+  input                                          reset_cycle_i,
   input      [PARAMS_SIZE-1:0]                   params,
   input                                          enable_config,
   input                                          enable_store,
@@ -185,15 +186,15 @@ module iact_stream_constructor
       end
     end
 
-    reg  [8-1:0]   fsm_cycle;
-    reg  [8-1:0]   y_cycle;
-    reg  [8-1:0]   router_cycle;
-    reg  [8-1:0]   addr_cycle;
-    reg  [4-1:0]   duty_cycle;
-    reg  [4-1:0]   duty_cycle_th;
-    reg  [4-1:0]   duty_cycle_reset;
-    reg [8-1:0] ram_var;
-    reg [8-1:0] byte_var;
+    reg  [8-1:0] fsm_cycle;
+    reg  [8-1:0] y_cycle;
+    reg  [8-1:0] router_cycle;
+    reg  [8-1:0] addr_cycle;
+    reg  [4-1:0] duty_cycle;
+    reg  [4-1:0] duty_cycle_th;
+    reg  [4-1:0] duty_cycle_reset;
+    reg  [8-1:0] ram_var;
+    reg  [8-1:0] byte_var;
     reg [ADDRWIDTH-1:0] ram_wr_addr_reg;
     integer r,w;
     always @(posedge clk_i, negedge rst_ni) begin
@@ -365,7 +366,7 @@ module iact_stream_constructor
         endcase
         ram_var  = 0;
         byte_var = 0;
-        if (enable_config) begin
+        if (enable_config) begin 
           x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
           y                      <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4];
           iact_size              <= params[(2*PARAMS_SIZE/4)-1:PARAMS_SIZE/4];
@@ -374,6 +375,9 @@ module iact_stream_constructor
           ram_wr_addr            <= 0;
           needed_iact_cycles_reg <= 2;
           wght_size_reg          <= 3;
+        end
+        if (reset_cycle_i) begin
+          fsm_current_state <= INITIALIZE;
         end
       end
     end
