@@ -242,7 +242,6 @@ module OpenEye_Parallel
   reg                                  data_write_enable;
   reg  [64-1:0]                        flat_help_psum_var;
   reg                                  results_ready;
-  reg  [2:0]                           loop_mod;
   reg  [7:0]                           finished_cycles;
   reg  [$clog2(CLUSTER_ROWS+1)-1:0]    storage_cycles;
 
@@ -456,7 +455,6 @@ module OpenEye_Parallel
       finished_cycles            <= 0;
       compute_mask_i_reg         <= 0;
       compute_cluster_i_reg      <= 0;
-      loop_mod                    = 0;
       computing                  <= 0;
       compute_i_reg              <= 0;
       status_reg_enable_i_reg    <= 0;
