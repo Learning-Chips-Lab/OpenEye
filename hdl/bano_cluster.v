@@ -36,10 +36,10 @@ module bano_cluster
   input                               rst_ni,
   input  [BN_OFFSET_BITS-1:0]         bn_offset_i,
   output                              ready_o,
-  input  [DATA_BITWIDTH*NUM_DATA-1:0] data_i,
+  input  [DATA_BITWIDTH-1:0] data_i,
   input                               enable_i,
   input                               ready_i,
-  output [DATA_BITWIDTH*NUM_DATA-1:0] data_o,
+  output [DATA_BITWIDTH-1:0] data_o,
   output                              enable_o
 
 );

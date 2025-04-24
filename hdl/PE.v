@@ -247,7 +247,6 @@ module PE
   reg [WGHT_DATA_ADDR_BITWIDTH-1:0]           wght_data_start_pre;
   reg                                         wght_start_set;
   reg                                         wght_end_set;
-  reg                                         next_end_set;
   wire [3 : 0]                                first_spad_words_iact;
   wire [4 : 0]                                second_spad_words_iact;
   wire [4 : 0]                                first_spad_words_wght;
@@ -421,7 +420,6 @@ module PE
       wght_data_end_pre         <= 0;
       wght_data_start_pre       <= 0;
       wght_end_set              <= 0;
-      next_end_set              <= 0;
       wght_data_SPad_en_r       <= 0;
       psum_data_SPad_en_a_r     <= 0;
       psum_data_SPad_en_b_r     <= 0;
@@ -488,7 +486,6 @@ module PE
           wght_data_end_pre      <= 0;
           wght_data_start_pre    <= 0;
           wght_end_set           <= 0;
-          next_end_set           <= 0;
           //Read first values
           fast_cycle             <= 0;
           next_iact              <= 0;
@@ -1194,9 +1191,7 @@ module PE
 if (SERIAL) begin : gen_serial_spad
   SPad_DP #(
     .DATA_WIDTH(PSUM_DATA),
-    .ADDR_WIDTH(PSUM_ADDR_BITWIDTH),
-
-    .Implementation("pe_psum")
+    .ADDR_WIDTH(PSUM_ADDR_BITWIDTH)
   ) psum_SPad_A ( 
     .clk_i(clk_i), 
     .re_i(psum_data_SPad_en_a_r || psum_enable_i),

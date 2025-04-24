@@ -383,7 +383,18 @@ module OpenEye_Parallel
 
   reg [2:0] fsm_psum_last_state;
   reg [2:0] fsm_psum_current_state;
+  ///#######################
+  ///Process
+  ///#######################
 
+  always@(posedge clk_i, negedge rst_ni) begin
+    if(!rst_ni) begin ///Reset
+      iact_data_i_reg <= 0;
+    end else begin
+      iact_data_i_reg <= iact_data_i;
+    end
+
+  end
   ///#######################
   ///Process
   ///#######################

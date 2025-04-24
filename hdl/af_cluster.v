@@ -35,18 +35,18 @@ module af_cluster
   parameter  integer               MODES           = 4,
   parameter  [ADVANCED_WIDTH-1:0]  DIVISOR         =  {ADVANCED_WIDTH{1'b0}} + 35,
   parameter  [ADVANCED_WIDTH-1:0]  DIVIDEND        =  {{(ADVANCED_WIDTH-32){1'b0}}, 32'd3435973837},
-  localparam integer               NUM_DATA        = (SERIAL != 0) ? 1 : PARALLEL_MACS,
+  localparam integer               NUM_DATA        = (SERIAL == 1) ? 1 : PARALLEL_MACS,
   localparam integer               MODE_BITS       = $clog2(MODES)
 ) (
-  input                               clk_i,
-  input                               rst_ni,
-  input  [MODE_BITS-1 : 0]            mode_i,
-  output                              ready_o,
-  input  [DATA_BITWIDTH*NUM_DATA-1:0] data_i,
-  input                               enable_i,
-  input                               ready_i,
-  output [DATA_BITWIDTH*NUM_DATA-1:0] data_o,
-  output                              enable_o
+  input                      clk_i,
+  input                      rst_ni,
+  input  [MODE_BITS-1 : 0]   mode_i,
+  output                     ready_o,
+  input  [DATA_BITWIDTH-1:0] data_i,
+  input                      enable_i,
+  input                      ready_i,
+  output [DATA_BITWIDTH-1:0] data_o,
+  output                     enable_o
 );
 
 wire [DATA_BITWIDTH-2:0]  psum                   [NUM_DATA-1:0];
