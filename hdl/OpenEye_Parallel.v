@@ -240,7 +240,6 @@ module OpenEye_Parallel
   reg  [32-1:0]                        fsm_psum_cycle;
 
   reg                                  data_write_enable;
-  reg  [64-1:0]                        flat_help_psum_var;
   reg                                  results_ready;
   reg  [7:0]                           finished_cycles;
   reg  [$clog2(CLUSTER_ROWS+1)-1:0]    storage_cycles;
@@ -638,7 +637,6 @@ module OpenEye_Parallel
       storage_cycles           <= 0;
       router_mode_psum_reg     <= 0;
       psum_router_set_reg      <= 1;
-      flat_help_psum_var        = 0;
       results_ready             = 0;
 
     end else begin
@@ -690,14 +688,8 @@ module OpenEye_Parallel
           router_mode_psum_reg     <= router_mode_psum_i;
           for (g_psum=0; g_psum<CLUSTERS*NUM_GLB_PSUM; g_psum=g_psum+1) begin
             if (psum_enable_i_reg[g_psum]) begin
-              for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
-                flat_help_psum_var[b_psum] = mem_addr_psum[g_psum*PSUM_MEM_ADDR_BITS+b_psum];
-              end
-              flat_help_psum_var = flat_help_psum_var + 1;
-              for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
-                 mem_addr_psum[g_psum*PSUM_MEM_ADDR_BITS+b_psum] <= flat_help_psum_var[b_psum];
-              end
-              flat_help_psum_var = 0;
+              mem_addr_psum[g_psum*PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
+                mem_addr_psum[g_psum*PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] + 1;
             end
           end
         end
@@ -726,14 +718,11 @@ module OpenEye_Parallel
               for (cr_psum=0; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
                 for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
                   if ((fsm_psum_cycle != 0) & (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 1)) begin
-                    for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
-                      flat_help_psum_var[b_psum] = mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum];
-                    end
-                    flat_help_psum_var = flat_help_psum_var + 1;
-                    for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
-                      mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum] <= flat_help_psum_var[b_psum];
-                    end
-                    flat_help_psum_var = 0;
+
+                    mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
+                      mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] + 1;
+
+
                   end
                   psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] <= 1;
                 end
@@ -753,14 +742,11 @@ module OpenEye_Parallel
               for (cc_psum=0; cc_psum<CLUSTER_COLUMNS; cc_psum=cc_psum+1) begin
                 for (cr_psum=0; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
                   for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
-                    //flat_help_psum_var = mem_addr_psum_storage;
-                    for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
-                      if (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 1) begin
-                        mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum] <= 
-                                      mem_addr_psum_storage[b_psum];
-                      end
+                    if (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 1) begin
+                      mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
+                        mem_addr_psum_storage;
+
                     end
-                    //flat_help_psum_var = 0;
                   end
                 end
               end
@@ -788,15 +774,9 @@ module OpenEye_Parallel
             for (cr_psum=0; cr_psum<CLUSTER_ROWS; cr_psum=cr_psum+1) begin
               for (g_psum=0; g_psum<NUM_GLB_PSUM; g_psum=g_psum+1) begin
                 if (psum_cluster_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum]) begin
-                  flat_help_psum_var = 0;
-                  for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
-                    flat_help_psum_var[b_psum] = mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum];
-                  end
-                  flat_help_psum_var   = flat_help_psum_var   + 1;
-                  for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
-                    mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS + b_psum]
-                    <= flat_help_psum_var[b_psum];
-                  end
+                  
+                    mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
+                      mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] + 1;
                 end
                 results_ready = results_ready & (psum_cluster_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] | 
                 (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 0));
@@ -891,16 +871,10 @@ module OpenEye_Parallel
             psum_enable_delay[g_psum] <= psum_enable_i_reg[g_psum];
             psum_enable_o_reg[g_psum] <= psum_enable_delay[g_psum];
             if (psum_enable_i_reg[g_psum] == 1) begin
-              for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
-                flat_help_psum_var[b_psum] = mem_addr_psum[g_psum * PSUM_MEM_ADDR_BITS + b_psum];
-              end
-              flat_help_psum_var = flat_help_psum_var   + 1;
-              for (b_psum=0; b_psum<PSUM_MEM_ADDR_BITS; b_psum=b_psum+1) begin
-                mem_addr_psum[g_psum * PSUM_MEM_ADDR_BITS + b_psum] <= flat_help_psum_var[b_psum];
-              end
+                    mem_addr_psum[g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
+                      mem_addr_psum[g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] + 1;
             end
           end
-          flat_help_psum_var   = 0;
           if (status_reg_enable_i) begin
             mem_addr_psum          <= 0;
             psum_enable_i_reg      <= 0;
