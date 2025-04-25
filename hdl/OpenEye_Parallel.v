@@ -102,41 +102,30 @@ module OpenEye_Parallel
   ///Set parameters
   parameter IS_TOPLEVEL         = 1,
   parameter SERIAL              = 0,
-
   parameter DATA_IACT_BITWIDTH  = 8,
   parameter DATA_PSUM_BITWIDTH  = 20,
   parameter DATA_WGHT_BITWIDTH  = 8,
-
   parameter TRANS_BITWIDTH_IACT = 24,
   parameter TRANS_BITWIDTH_WGHT = 24,
   parameter TRANS_BITWIDTH_PSUM = 40,
   parameter DATA_IACT_OVERHEAD  = 4,
-
   parameter CLUSTER_COLUMNS     = 2,
-
   parameter IACT_PER_PE         = 16,
   parameter PSUM_PER_PE         = 32,
   parameter WGHT_PER_PE         = 96,
-
   parameter IACT_ADDR_PER_PE    = 9,
   parameter WGHT_ADDR_PER_PE    = 16,
-  
   parameter IACT_MEM_ADDR_WORDS = 512,
   parameter PSUM_MEM_ADDR_WORDS = 384,
-
   parameter ROUTER_MODES_IACT   = 6,
   parameter ROUTER_MODES_WGHT   = 1,
   parameter ROUTER_MODES_PSUM   = 3,
-
   parameter BANO_MODES          = 2,
   parameter AF_MODES            = 4,
-
-  localparam IACT_MEM_ADDR_BITS    = $clog2(IACT_MEM_ADDR_WORDS),
-  localparam PSUM_MEM_ADDR_BITS    = $clog2(PSUM_MEM_ADDR_WORDS),
-
-  localparam PES                   = PE_COLUMNS * PE_ROWS,
-
-  localparam CLUSTERS              = CLUSTER_COLUMNS * CLUSTER_ROWS
+  localparam IACT_MEM_ADDR_BITS = $clog2(IACT_MEM_ADDR_WORDS),
+  localparam PSUM_MEM_ADDR_BITS = $clog2(PSUM_MEM_ADDR_WORDS),
+  localparam PES                = PE_COLUMNS * PE_ROWS,
+  localparam CLUSTERS           = CLUSTER_COLUMNS * CLUSTER_ROWS
     
 ) (
   ///Clock and Reset Ports
@@ -144,25 +133,19 @@ module OpenEye_Parallel
   input                                                          clk_i,
   input                                                          rst_ni,
   input                                                          compute_i,
-
   ///Ports for GLBs and PEs
   input      [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0]     iact_data_i,
   input      [CLUSTERS*NUM_GLB_IACT-1:0]                         iact_enable_i,
   output     [CLUSTERS*NUM_GLB_IACT-1:0]                         iact_ready_o,
-
   input      [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]     wght_data_i,
   input      [CLUSTERS*NUM_GLB_WGHT-1:0]                         wght_enable_i,
   output reg [CLUSTERS*NUM_GLB_WGHT-1:0]                         wght_ready_o,
-
   input      [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0]     psum_data_i,
   input      [CLUSTERS*NUM_GLB_PSUM-1:0]                         psum_enable_i,
   output reg [CLUSTERS*NUM_GLB_PSUM-1:0]                         psum_ready_o,
-
   output reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0]     psum_data_o,
   output reg [CLUSTERS*NUM_GLB_PSUM-1:0]                         psum_enable_o,
   input      [CLUSTERS*NUM_GLB_PSUM-1:0]                         psum_ready_i,
-
-  ///Ports for Hyperparameters
   input                                                          status_reg_enable_i,
   input                                                          data_mode_i,
   input      [$clog2(DATA_PSUM_BITWIDTH)-1:0]                    fraction_bit_i,
@@ -233,57 +216,45 @@ module OpenEye_Parallel
   reg  [2:0]                                    stride_y_reg;
   reg  [CLUSTERS*PES-1:0]                       compute_cluster_i_reg;
   reg  [CLUSTERS*PES-1:0]                       compute_mask_reg;
-
-  ///Register for the wght FSM
-
   ///Register for the psum FSM
-  reg  [32-1:0]                        fsm_psum_cycle;
-
-  reg                                  data_write_enable;
-  reg                                  results_ready;
-  reg  [7:0]                           finished_cycles;
-  reg  [$clog2(CLUSTER_ROWS+1)-1:0]    storage_cycles;
+  reg  [32-1:0]                                 fsm_psum_cycle;
+  reg                                           data_write_enable;
+  reg                                           results_ready;
+  reg  [7:0]                                    finished_cycles;
+  reg  [$clog2(CLUSTER_ROWS+1)-1:0]             storage_cycles;
 
   ///Register, that configure the chip
-  reg  [$clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0]       iact_choose_reg;
-  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_choose_reg;
-  reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_reg;
-  reg  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]   router_mode_wght_reg;
-  reg  [ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0]   router_mode_psum_reg;
-  reg                                                  psum_router_set_reg;
-  reg                                                  computing;
-
-  reg  [IACT_MEM_ADDR_BITS*CLUSTERS*NUM_GLB_IACT-1:0]  mem_addr_iact;
-  reg  [PSUM_MEM_ADDR_BITS*CLUSTERS*NUM_GLB_PSUM-1:0]  mem_addr_psum;
-  reg  [PSUM_MEM_ADDR_BITS-1:0]                        mem_addr_psum_storage;
-
-  reg  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_i_reg;
+  reg  [$clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0]        iact_choose_reg;
+  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                      psum_choose_reg;
+  reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]    router_mode_iact_reg;
+  reg  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]    router_mode_wght_reg;
+  reg  [ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0]    router_mode_psum_reg;
+  reg                                                   psum_router_set_reg;
+  reg                                                   computing;
+  reg  [IACT_MEM_ADDR_BITS*CLUSTERS*NUM_GLB_IACT-1:0]   mem_addr_iact;
+  reg  [PSUM_MEM_ADDR_BITS*CLUSTERS*NUM_GLB_PSUM-1:0]   mem_addr_psum;
+  reg  [PSUM_MEM_ADDR_BITS-1:0]                         mem_addr_psum_storage;
+  reg  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0]  psum_data_i_reg;
   wire  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o_reg;
-  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_enable_delay;
-  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_enable_i_reg;
-  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_enable_o_reg;
-  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_ready_i_reg;
+  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                      psum_enable_delay;
+  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                      psum_enable_i_reg;
+  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                      psum_enable_o_reg;
+  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                      psum_ready_i_reg;
   wire  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_cluster_enable_o_reg;
-  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_ready_o_reg;
+  reg  [CLUSTERS*NUM_GLB_PSUM-1:0]                      psum_ready_o_reg;
   wire  [CLUSTERS*NUM_GLB_PSUM-1:0]                     psum_ready_o_cluster_reg;
-
-
   ///Wires and Regs for Ports
-
   wire  [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_w;
   wire  [CLUSTERS*NUM_GLB_IACT-1:0]                     iact_enable_i_w;
   wire  [CLUSTERS*NUM_GLB_IACT-1:0]                     iact_ready_o_w;
   wire  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i_w;
   wire  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_enable_i_w;
   wire  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_ready_o_w;
-
   wire                                                  compute_i_w;
-
   reg                                                   iact_transmitted;
   reg                                                   wght_transmitted;
   reg                                                   psum_transmitted;
   reg                                                   start_new_cycle;
-
   wire                                                  status_reg_enable_i_w;
   wire                                                  data_mode_i_w;
   wire  [$clog2(DATA_PSUM_BITWIDTH)-1:0]                fraction_bit_i_w;
@@ -305,44 +276,42 @@ module OpenEye_Parallel
   wire  [2:0]                                           stride_y_i_w;
   wire  [$clog2(PE_ROWS)-1:0]                           kernel_per_pe_cluster_i_w;
   wire  [CLUSTERS*PES-1:0]                              compute_mask_i_w;
-
-  reg  [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_reg;
-  reg  [CLUSTERS*NUM_GLB_IACT-1:0]                     iact_enable_i_reg;
-  reg  [CLUSTERS*NUM_GLB_IACT-1:0]                     iact_ready_o_reg;
-  reg  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i_reg;
-  reg  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_enable_i_reg;
+  reg  [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0]  iact_data_i_reg;
+  reg  [CLUSTERS*NUM_GLB_IACT-1:0]                      iact_enable_i_reg;
+  reg  [CLUSTERS*NUM_GLB_IACT-1:0]                      iact_ready_o_reg;
+  reg  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]  wght_data_i_reg;
+  reg  [CLUSTERS*NUM_GLB_WGHT-1:0]                      wght_enable_i_reg;
   wire  [CLUSTERS*NUM_GLB_WGHT-1:0]                     wght_ready_o_reg;
-  reg                                                  wght_ready_reg;
-
-  reg                                                  compute_i_reg;
-  reg                                                  status_reg_enable_i_reg;
-  reg                                                  data_mode_i_reg;
-  reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0]                fraction_bit_i_reg;
-  reg  [7:0]                                           needed_cycles_i_reg;
-  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]                 needed_x_cls_i_reg;
-  reg  [$clog2(CLUSTER_ROWS+1)-1:0]                    needed_y_cls_i_reg;
-  reg  [3:0]                                           needed_iact_cycles_i_reg;
-  reg  [$clog2(PSUM_PER_PE+1)-1:0]                     filters_i_reg;
-  reg  [$clog2(IACT_ADDR_PER_PE+1)-1:0]                iact_addr_len_i_reg;
-  reg  [$clog2(WGHT_ADDR_PER_PE)-1:0]                  wght_addr_len_i_reg;
-  reg  [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0]           bano_cluster_mode_i_reg;
-  reg  [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0]             af_cluster_mode_i_reg;
-  reg  [NUM_GLB_PSUM-1:0]                              pooling_cluster_mode_i_reg;
-  reg  [$clog2(IACT_PER_PE+1)-1:0]                     input_activations_i_reg;
-  reg  [1:0]                                           iact_write_addr_t_i_reg;
-  reg  [3:0]                                           iact_write_data_t_i_reg;
-  reg  [2:0]                                           stride_x_i_reg;
-  reg  [2:0]                                           stride_y_i_reg;
-  reg  [$clog2(PE_ROWS)-1:0]                           kernel_per_pe_cluster_i_reg;
-  reg  [CLUSTERS*PES-1:0]                              compute_mask_i_reg;
-  reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_i_reg;
-  reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]   router_mode_iact_storage;
-  reg  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]   router_mode_wght_i_reg;
-  reg  [ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0]   router_mode_psum_i_reg;
-  reg  [4*CLUSTERS-1:0]                                iact_router_offset;
-  reg                                                  enable_stream_reg;
-  reg  [7:0]                                           data_stream_reg;
-  reg  [4:0]                                           iact_pes_per_router;
+  reg                                                   wght_ready_reg;
+  reg                                                   compute_i_reg;
+  reg                                                   status_reg_enable_i_reg;
+  reg                                                   data_mode_i_reg;
+  reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0]                 fraction_bit_i_reg;
+  reg  [7:0]                                            needed_cycles_i_reg;
+  reg  [$clog2(CLUSTER_COLUMNS+1)-1:0]                  needed_x_cls_i_reg;
+  reg  [$clog2(CLUSTER_ROWS+1)-1:0]                     needed_y_cls_i_reg;
+  reg  [3:0]                                            needed_iact_cycles_i_reg;
+  reg  [$clog2(PSUM_PER_PE+1)-1:0]                      filters_i_reg;
+  reg  [$clog2(IACT_ADDR_PER_PE+1)-1:0]                 iact_addr_len_i_reg;
+  reg  [$clog2(WGHT_ADDR_PER_PE)-1:0]                   wght_addr_len_i_reg;
+  reg  [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0]            bano_cluster_mode_i_reg;
+  reg  [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0]              af_cluster_mode_i_reg;
+  reg  [NUM_GLB_PSUM-1:0]                               pooling_cluster_mode_i_reg;
+  reg  [$clog2(IACT_PER_PE+1)-1:0]                      input_activations_i_reg;
+  reg  [1:0]                                            iact_write_addr_t_i_reg;
+  reg  [3:0]                                            iact_write_data_t_i_reg;
+  reg  [2:0]                                            stride_x_i_reg;
+  reg  [2:0]                                            stride_y_i_reg;
+  reg  [$clog2(PE_ROWS)-1:0]                            kernel_per_pe_cluster_i_reg;
+  reg  [CLUSTERS*PES-1:0]                               compute_mask_i_reg;
+  reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]    router_mode_iact_i_reg;
+  reg  [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0]    router_mode_iact_storage;
+  reg  [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0]    router_mode_wght_i_reg;
+  reg  [ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0]    router_mode_psum_i_reg;
+  reg  [4*CLUSTERS-1:0]                                 iact_router_offset;
+  reg                                                   enable_stream_reg;
+  reg  [7:0]                                            data_stream_reg;
+  reg  [4:0]                                            iact_pes_per_router;
 
 
   ///#######################
@@ -361,23 +330,23 @@ module OpenEye_Parallel
   reg fsm_last_state;
   reg fsm_current_state;
 
-  localparam IACT_IDLE          = 0;
-  localparam CALCULATE_IACT     = 1;
-  localparam WAIT               = 2;
+  localparam IACT_IDLE      = 0;
+  localparam CALCULATE_IACT = 1;
+  localparam WAIT           = 2;
 
   reg [1:0] fsm_iact_last_state;
   reg [1:0] fsm_iact_current_state;
 
-  localparam WGHT_READY         = 0;
-  localparam WGHT_BUSY          = 1;
+  localparam WGHT_READY = 0;
+  localparam WGHT_BUSY  = 1;
 
   reg fsm_wght_current_state;
 
-  localparam PSUM_IDLE          = 0;
-  localparam CALCULATE_PSUM     = 1;
-  localparam GET_RESULTS        = 2;
-  localparam WAIT_FOR_RESULTS   = 3;
-  localparam SEND_RESULTS       = 4;
+  localparam PSUM_IDLE        = 0;
+  localparam CALCULATE_PSUM   = 1;
+  localparam GET_RESULTS      = 2;
+  localparam WAIT_FOR_RESULTS = 3;
+  localparam SEND_RESULTS     = 4;
 
   reg [2:0] fsm_psum_last_state;
   reg [2:0] fsm_psum_current_state;
