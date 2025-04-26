@@ -34,62 +34,61 @@
 ///    data_b_o          - Data port out B
 ///
 
-module RAM_DP_RW 
-#(
+module RAM_DP_RW #(
     parameter AddrWidth = 16,
     parameter DataWidth = 32,
     parameter Pipelined = 0,
-    
+
     // Hint for physical implementation.
     parameter Implementation = "generic"
 ) (
     // Common clock
-    input   wire                        clk_i,
+    input wire clk_i,
     // We deliberately leave out a reset here so that it is obvious 
     // that memory content is undefined prior to writing to it
 
     // read enable, active high
-    input   wire                        re_a_i,
-    input   wire                        re_b_i,
+    input wire re_a_i,
+    input wire re_b_i,
     // write enable, active high
     // when both rd_en and wr_en are deasserted, the RAM is inactive
-    input   wire                        we_a_i,
-    input   wire                        we_b_i,
+    input wire we_a_i,
+    input wire we_b_i,
 
     // address input
-    input   wire    [AddrWidth-1:0]     addr_r_a_i,
-    input   wire    [AddrWidth-1:0]     addr_r_b_i,
-    input   wire    [AddrWidth-1:0]     addr_w_a_i,
-    input   wire    [AddrWidth-1:0]     addr_w_b_i,
+    input wire [AddrWidth-1:0] addr_r_a_i,
+    input wire [AddrWidth-1:0] addr_r_b_i,
+    input wire [AddrWidth-1:0] addr_w_a_i,
+    input wire [AddrWidth-1:0] addr_w_b_i,
 
     // data input
-    input   wire    [DataWidth-1:0]     data_a_i,
-    input   wire    [DataWidth-1:0]     data_b_i,
+    input wire [DataWidth-1:0] data_a_i,
+    input wire [DataWidth-1:0] data_b_i,
 
     // data output
-    output  wire    [DataWidth-1:0]     data_a_o,
-    output  wire    [DataWidth-1:0]     data_b_o
+    output wire [DataWidth-1:0] data_a_o,
+    output wire [DataWidth-1:0] data_b_o
 );
 
 
-    RAM_DP_RW_generic #(
-        .AddrWidth          (AddrWidth),
-        .DataWidth          (DataWidth),
-        .Pipelined          (Pipelined)
-    ) impl (
-        .clk_i              (clk_i),
-        .rd_en_a_i          (re_a_i),
-        .rd_en_b_i          (re_b_i),
-        .wr_en_a_i          (we_a_i),
-        .wr_en_b_i          (we_b_i),
-        .addr_r_a_i         (addr_r_a_i),
-        .addr_r_b_i         (addr_r_b_i),
-        .addr_w_a_i         (addr_w_a_i),
-        .addr_w_b_i         (addr_w_b_i),
-        .data_a_i           (data_a_i),
-        .data_b_i           (data_b_i),
-        .data_a_o           (data_a_o),
-        .data_b_o           (data_b_o)
-    );
+  RAM_DP_RW_generic #(
+      .AddrWidth(AddrWidth),
+      .DataWidth(DataWidth),
+      .Pipelined(Pipelined)
+  ) impl (
+      .clk_i     (clk_i),
+      .rd_en_a_i (re_a_i),
+      .rd_en_b_i (re_b_i),
+      .wr_en_a_i (we_a_i),
+      .wr_en_b_i (we_b_i),
+      .addr_r_a_i(addr_r_a_i),
+      .addr_r_b_i(addr_r_b_i),
+      .addr_w_a_i(addr_w_a_i),
+      .addr_w_b_i(addr_w_b_i),
+      .data_a_i  (data_a_i),
+      .data_b_i  (data_b_i),
+      .data_a_o  (data_a_o),
+      .data_b_o  (data_b_o)
+  );
 
 endmodule

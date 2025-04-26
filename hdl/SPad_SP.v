@@ -24,38 +24,37 @@
 ///    data_o           - Data port out
 ///
 
-module SPad_SP
-#( 
-  parameter DATA_WIDTH = 8,
-  parameter ADDR_WIDTH = 10,
-  parameter Implementation = 0
-) ( 
-  input                           clk_i,
+module SPad_SP #(
+    parameter DATA_WIDTH = 8,
+    parameter ADDR_WIDTH = 10,
+    parameter Implementation = 0
+) (
+    input clk_i,
 
-  // Remove reset port to make it clear that the
-  // contents of the spad cannot simply be reset
-  //input                         rst_ni,
+    // Remove reset port to make it clear that the
+    // contents of the spad cannot simply be reset
+    //input                         rst_ni,
 
-  input                      re_i,
-  input                      we_i,
-  input   [ADDR_WIDTH-1:0]   addr_i,
-  input   [DATA_WIDTH-1:0]   data_i,
-  output  [DATA_WIDTH-1:0]   data_o
+    input                   re_i,
+    input                   we_i,
+    input  [ADDR_WIDTH-1:0] addr_i,
+    input  [DATA_WIDTH-1:0] data_i,
+    output [DATA_WIDTH-1:0] data_o
 );
-  
+
   RAM_SP #(
-    .AddrWidth      (ADDR_WIDTH),
-    .DataWidth      (DATA_WIDTH),
-    .Pipelined      (0),
-    
-    .Implementation (Implementation)
+      .AddrWidth(ADDR_WIDTH),
+      .DataWidth(DATA_WIDTH),
+      .Pipelined(0),
+
+      .Implementation(Implementation)
   ) ram (
-    .clk_i          (clk_i),
-    .rd_en_i        (re_i),
-    .wr_en_i        (we_i),
-    .addr_i         (addr_i),
-    .data_i         (data_i),
-    .data_o         (data_o)
+      .clk_i  (clk_i),
+      .rd_en_i(re_i),
+      .wr_en_i(we_i),
+      .addr_i (addr_i),
+      .data_i (data_i),
+      .data_o (data_o)
   );
-  
+
 endmodule

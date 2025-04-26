@@ -33,41 +33,40 @@
 ///    enable_dst_port_1      - Enable Port for the destination Port 1 (Other router)
 ///Fertig
 
-module router_wght_3P
-#(
-  parameter integer DATA_WIDTH   = 8
+module router_wght_3P #(
+    parameter integer DATA_WIDTH = 8
 ) (
-  input  [1:0]            router_mode_i,
-  
-  ///SRC Port 0
-  output                  ready_src_port_0,
-  input  [DATA_WIDTH-1:0] data_src_port_0,
-  input                   enable_src_port_0,
-  
-  ///SRC Port 1
-  output                  ready_src_port_1,
-  input  [DATA_WIDTH-1:0] data_src_port_1,
-  input                   enable_src_port_1,
-  
-  ///SRC Port 2
-  output                  ready_src_port_2,
-  input  [DATA_WIDTH-1:0] data_src_port_2,
-  input                   enable_src_port_2,
-  
-  ///DST Port 0
-  input                   ready_dst_port_0,
-  output [DATA_WIDTH-1:0] data_dst_port_0,
-  output                  enable_dst_port_0,
-  
-  ///DST Port 1
-  input                   ready_dst_port_1,
-  output [DATA_WIDTH-1:0] data_dst_port_1,
-  output                  enable_dst_port_1,
-  
-  ///DST Port 1
-  input                   ready_dst_port_2,
-  output [DATA_WIDTH-1:0] data_dst_port_2,
-  output                  enable_dst_port_2
+    input [1:0] router_mode_i,
+
+    ///SRC Port 0
+    output                  ready_src_port_0,
+    input  [DATA_WIDTH-1:0] data_src_port_0,
+    input                   enable_src_port_0,
+
+    ///SRC Port 1
+    output                  ready_src_port_1,
+    input  [DATA_WIDTH-1:0] data_src_port_1,
+    input                   enable_src_port_1,
+
+    ///SRC Port 2
+    output                  ready_src_port_2,
+    input  [DATA_WIDTH-1:0] data_src_port_2,
+    input                   enable_src_port_2,
+
+    ///DST Port 0
+    input                   ready_dst_port_0,
+    output [DATA_WIDTH-1:0] data_dst_port_0,
+    output                  enable_dst_port_0,
+
+    ///DST Port 1
+    input                   ready_dst_port_1,
+    output [DATA_WIDTH-1:0] data_dst_port_1,
+    output                  enable_dst_port_1,
+
+    ///DST Port 1
+    input                   ready_dst_port_2,
+    output [DATA_WIDTH-1:0] data_dst_port_2,
+    output                  enable_dst_port_2
 );
   ///Signals in Router
   ////////////////////////////////////////Fertig
@@ -103,7 +102,7 @@ module router_wght_3P
                            (router_mode_i == 2) ? ({DATA_WIDTH{e01}}            & data_src_port_0) :
                            (router_mode_i == 3) ? ({DATA_WIDTH{e01}}            & data_src_port_0) :
                            0;
-  
+
   ///Destination Port: Enable
   ////////////////////////////////////////
 
@@ -117,14 +116,14 @@ module router_wght_3P
 
   ///Source Port: Ready
   ////////////////////////////////////////Fertig
-  
+
   assign ready_src_port_0 = r00 & r01 & r02;
   assign ready_src_port_1 = r10 & r11 & r12;
   assign ready_src_port_2 = r00 & r01 & r22;
-  
+
   ///Source Port: Enable
   ////////////////////////////////////////
-  
+
   assign e00 = router_mode_i ? 0 : enable_src_port_0;
   assign e01 = router_mode_i ? 0 : enable_src_port_0;
 
@@ -134,7 +133,7 @@ module router_wght_3P
 
   ///Destination Port: Ready
   ////////////////////////////////////////
-  
+
   assign r00 = router_mode_i ? 1 : ready_dst_port_0;
   assign r10 = router_mode_i ? ready_dst_port_0 : 1;
 

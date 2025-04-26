@@ -39,8 +39,7 @@
 ///    second_spad_en_o:           Enable signal for the second SPAD
 ///
 
-module data_pipeline_iact
-#(
+module data_pipeline_iact #(
     parameter DATA_WIDTH                = 24,
     parameter FIRST_SPAD_ADDR           = 16,
     parameter FIRST_SPAD_DATA           = 4,
@@ -53,61 +52,62 @@ module data_pipeline_iact
     parameter SECOND_SPAD_DATA_CYCLE    = DATA_WIDTH / SECOND_SPAD_DATA,
     parameter SECOND_OVERHEAD_WIDTH     = SECOND_SPAD_DATA - SECOND_PAYLOAD_WIDTH
 ) (
-    input                                         clk_i,
-    input                                         rst_ni,
-    input                                         compute_i,
+    input clk_i,
+    input rst_ni,
+    input compute_i,
     //input                                         data_mode, Insert later
 
-    input      [DATA_WIDTH-1 : 0]                 data_i,
-    input                                         enable_i,
+    input [DATA_WIDTH-1 : 0] data_i,
+    input                    enable_i,
 
-    output reg [$clog2(FIRST_SPAD_ADDR+1)-1 : 0]  first_spad_words_o,
-    input      [$clog2(FIRST_SPAD_ADDR)-1 : 0]    first_spad_max_i,
-    output reg [$clog2(SECOND_SPAD_ADDR+1)-1 : 0] second_spad_words_o, 
+    output reg [ $clog2(FIRST_SPAD_ADDR+1)-1 : 0] first_spad_words_o,
+    input      [   $clog2(FIRST_SPAD_ADDR)-1 : 0] first_spad_max_i,
+    output reg [$clog2(SECOND_SPAD_ADDR+1)-1 : 0] second_spad_words_o,
 
-    output reg [FIRST_SPAD_ADDR_BITWIDTH-1 : 0]   first_spad_addr_o,
-    output reg [FIRST_SPAD_DATA-1 : 0]            first_spad_data_o,
-    output reg                                    first_spad_en_o,
+    output reg [FIRST_SPAD_ADDR_BITWIDTH-1 : 0] first_spad_addr_o,
+    output reg [         FIRST_SPAD_DATA-1 : 0] first_spad_data_o,
+    output reg                                  first_spad_en_o,
 
-    output reg [SECOND_SPAD_ADDR_BITWIDTH-1 : 0]  second_spad_addr_o,
-    output     [SECOND_SPAD_DATA-1 : 0]           second_spad_data_o,
-    output reg                                    second_spad_en_o
+    output reg [SECOND_SPAD_ADDR_BITWIDTH-1 : 0] second_spad_addr_o,
+    output     [         SECOND_SPAD_DATA-1 : 0] second_spad_data_o,
+    output reg                                   second_spad_en_o
 );
 
-  reg [FIRST_SPAD_DATA-1 : 0]             data_storage_1;  // Temporary storage for data
-  reg [DATA_WIDTH-1 : 0]                  data_storage_2;  // Temporary storage for data
-  reg [$clog2(SECOND_SPAD_ADDR) : 0]      address_temp_2;  // Temporary address storage
-  reg [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;  // Cycle counter for data loading
-  reg [SECOND_OVERHEAD_WIDTH-1 : 0]       overhead_reg;
-  reg [SECOND_OVERHEAD_WIDTH-1 : 0]       overhead_delay_reg;
-  reg [SECOND_PAYLOAD_WIDTH-1 : 0]        payload_reg;
-  wire [DATA_WIDTH-1 : 0]                 current_data;
+  reg  [            FIRST_SPAD_DATA-1 : 0] data_storage_1;  // Temporary storage for data
+  reg  [                 DATA_WIDTH-1 : 0] data_storage_2;  // Temporary storage for data
+  reg  [     $clog2(SECOND_SPAD_ADDR) : 0] address_temp_2;  // Temporary address storage
+  reg  [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;  // Cycle counter for data loading
+  reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_reg;
+  reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_delay_reg;
+  reg  [       SECOND_PAYLOAD_WIDTH-1 : 0] payload_reg;
+  wire [                 DATA_WIDTH-1 : 0] current_data;
 
   assign current_data = data_storage_2 >> SECOND_SPAD_DATA;
-    assign second_spad_data_o = {overhead_delay_reg,payload_reg[SECOND_PAYLOAD_WIDTH-1 : 0]};  // Assign data to the second SPAD output
+  assign second_spad_data_o = {
+    overhead_delay_reg, payload_reg[SECOND_PAYLOAD_WIDTH-1 : 0]
+  };  // Assign data to the second SPAD output
 
 
 
-  always@(posedge clk_i, negedge rst_ni) begin
-    if (!rst_ni) begin // Reset
-      first_spad_words_o    <= 0;
-      second_spad_words_o   <= 0;
-      first_spad_data_o     <= 0;
-      first_spad_addr_o     <= 0;
-      first_spad_en_o       <= 0;
-      second_spad_addr_o    <= 0;
-      second_spad_en_o      <= 0;
-      data_storage_1        <= 0;
-      data_storage_2        <= 0;
-      address_temp_2        <= 0;
-      cycle_counter         <= 0;
-      payload_reg           <= 0;
-      overhead_reg          <= 0;
-      overhead_delay_reg    <= 0;
-    end
-    else begin
-      first_spad_en_o    <= 0;
-      first_spad_data_o  <= 0;
+  always @(posedge clk_i, negedge rst_ni) begin
+    if (!rst_ni) begin  // Reset
+      first_spad_words_o  <= 0;
+      second_spad_words_o <= 0;
+      first_spad_data_o   <= 0;
+      first_spad_addr_o   <= 0;
+      first_spad_en_o     <= 0;
+      second_spad_addr_o  <= 0;
+      second_spad_en_o    <= 0;
+      data_storage_1      <= 0;
+      data_storage_2      <= 0;
+      address_temp_2      <= 0;
+      cycle_counter       <= 0;
+      payload_reg         <= 0;
+      overhead_reg        <= 0;
+      overhead_delay_reg  <= 0;
+    end else begin
+      first_spad_en_o   <= 0;
+      first_spad_data_o <= 0;
       if (enable_i == 1) begin
         first_spad_en_o     <= 1;
         second_spad_en_o    <= 1;
@@ -134,8 +134,8 @@ module data_pipeline_iact
           cycle_counter <= 0;
         end
         if (address_temp_2 == SECOND_SPAD_ADDR - 1) begin
-          address_temp_2  <= 0;
-          cycle_counter   <= 0;
+          address_temp_2 <= 0;
+          cycle_counter  <= 0;
         end
         if (first_spad_data_o >= (data_storage_1 + first_spad_max_i)) begin
           data_storage_1    <= data_storage_1 + first_spad_max_i;
@@ -144,11 +144,11 @@ module data_pipeline_iact
       end else begin
         second_spad_en_o   <= 0;
         second_spad_addr_o <= 0;
-        if (second_spad_addr_o != 0) begin 
+        if (second_spad_addr_o != 0) begin
           first_spad_words_o <= first_spad_addr_o + 1;
         end
       end
-      if (compute_i) begin // Reset SPAD addresses and state of module
+      if (compute_i) begin  // Reset SPAD addresses and state of module
         first_spad_en_o     <= 0;
         second_spad_en_o    <= 0;
         data_storage_1      <= 0;
@@ -164,5 +164,5 @@ module data_pipeline_iact
       end
     end
   end
-    
+
 endmodule

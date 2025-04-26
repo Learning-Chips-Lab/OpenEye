@@ -19,14 +19,13 @@
 ///    i      - Input data port
 ///
 
-module demux2 
-#( 
-  parameter DATA_WIDTH = 1
+module demux2 #(
+    parameter DATA_WIDTH = 1
 ) (
-  output     [DATA_WIDTH-1:0] a_out,
-  output     [DATA_WIDTH-1:0] b_out,
-  input                       sel_i,
-  input      [DATA_WIDTH-1:0] i
+    output [DATA_WIDTH-1:0] a_out,
+    output [DATA_WIDTH-1:0] b_out,
+    input                   sel_i,
+    input  [DATA_WIDTH-1:0] i
 );
 
   assign a_out = sel_i & (i);

@@ -54,44 +54,43 @@
 ///    data_dst_port_3      - Data Port for the destination Port 3 (Router below, "South")
 ///    enable_dst_port_3    - Enable Port for the destination Port 3 (Router below, "South")
 
-module router_iact
-#(
-  parameter         LEFT_CLUSTER    = 0,
-  parameter integer DATA_WIDTH      = 8
+module router_iact #(
+    parameter         LEFT_CLUSTER = 0,
+    parameter integer DATA_WIDTH   = 8
 ) (
-  input [5:0]router_mode_i,
-  ///SRC Port C
-  output                  ready_src_port_0,
-  input [DATA_WIDTH-1:0]  data_src_port_0,
-  input                   enable_src_port_0,
-  ///SRC Port N
-  output                  ready_src_port_1,
-  input [DATA_WIDTH-1:0]  data_src_port_1,
-  input                   enable_src_port_1,
-  ///SRC Port EW
-  output                  ready_src_port_2,
-  input [DATA_WIDTH-1:0]  data_src_port_2,
-  input                   enable_src_port_2,
-  ///SRC Port S
-  output                  ready_src_port_3,
-  input [DATA_WIDTH-1:0]  data_src_port_3,
-  input                   enable_src_port_3,
-  ///DST Port C
-  input                   ready_dst_port_0,
-  output[DATA_WIDTH-1:0]  data_dst_port_0,
-  output                  enable_dst_port_0,
-  ///DST Port N
-  input                   ready_dst_port_1,
-  output[DATA_WIDTH-1:0]  data_dst_port_1,
-  output                  enable_dst_port_1,
-  ///DST Port EW
-  input                   ready_dst_port_2,
-  output[DATA_WIDTH-1:0]  data_dst_port_2,
-  output                  enable_dst_port_2,
-  ///DST Port S
-  input                   ready_dst_port_3,
-  output[DATA_WIDTH-1:0]  data_dst_port_3,
-  output                  enable_dst_port_3
+    input  [           5:0] router_mode_i,
+    ///SRC Port C
+    output                  ready_src_port_0,
+    input  [DATA_WIDTH-1:0] data_src_port_0,
+    input                   enable_src_port_0,
+    ///SRC Port N
+    output                  ready_src_port_1,
+    input  [DATA_WIDTH-1:0] data_src_port_1,
+    input                   enable_src_port_1,
+    ///SRC Port EW
+    output                  ready_src_port_2,
+    input  [DATA_WIDTH-1:0] data_src_port_2,
+    input                   enable_src_port_2,
+    ///SRC Port S
+    output                  ready_src_port_3,
+    input  [DATA_WIDTH-1:0] data_src_port_3,
+    input                   enable_src_port_3,
+    ///DST Port C
+    input                   ready_dst_port_0,
+    output [DATA_WIDTH-1:0] data_dst_port_0,
+    output                  enable_dst_port_0,
+    ///DST Port N
+    input                   ready_dst_port_1,
+    output [DATA_WIDTH-1:0] data_dst_port_1,
+    output                  enable_dst_port_1,
+    ///DST Port EW
+    input                   ready_dst_port_2,
+    output [DATA_WIDTH-1:0] data_dst_port_2,
+    output                  enable_dst_port_2,
+    ///DST Port S
+    input                   ready_dst_port_3,
+    output [DATA_WIDTH-1:0] data_dst_port_3,
+    output                  enable_dst_port_3
 );
   ///Signals in Router
   ////////////////////////////////////////
@@ -136,21 +135,21 @@ module router_iact
                          | ({DATA_WIDTH{~e00 & ~e10 & e20}}        & data_src_port_2)
                          | ({DATA_WIDTH{~e00 & ~e10 & ~e20 & e30}} & data_src_port_3);
   ///North
-  assign data_dst_port_1 = ({DATA_WIDTH{e01}}                      & data_src_port_0)
-                         //| ({DATA_WIDTH{~e01 & e11}}               & data_src_port_1)
-                         | ({DATA_WIDTH{~e01 & ~e11 & e21}}        & data_src_port_2)
+  assign data_dst_port_1 = ({DATA_WIDTH{e01}} & data_src_port_0)
+      //| ({DATA_WIDTH{~e01 & e11}}               & data_src_port_1)
+      | ({DATA_WIDTH{~e01 & ~e11 & e21}}        & data_src_port_2)
                          | ({DATA_WIDTH{~e01 & ~e11 & ~e21 & e31}} & data_src_port_3);
   ///East/West
   assign data_dst_port_2 = ({DATA_WIDTH{e02}}                      & data_src_port_0)
                          | ({DATA_WIDTH{~e02 & e12}}               & data_src_port_1)
-                         //| ({DATA_WIDTH{~e02 & ~e12 & e22}}        & data_src_port_2)
-                         | ({DATA_WIDTH{LEFT_CLUSTER}} & ({DATA_WIDTH{~e02 & ~e12 & ~e22 & e32}} & data_src_port_3));
+      //| ({DATA_WIDTH{~e02 & ~e12 & e22}}        & data_src_port_2)
+      | ({DATA_WIDTH{LEFT_CLUSTER}} & ({DATA_WIDTH{~e02 & ~e12 & ~e22 & e32}} & data_src_port_3));
   ///South
   assign data_dst_port_3 = ({DATA_WIDTH{e03}}                      & data_src_port_0)
                          | ({DATA_WIDTH{~e03 & e13}}               & data_src_port_1)
                          | ({DATA_WIDTH{LEFT_CLUSTER}} & ({DATA_WIDTH{~e03 & ~e13 & e23}}        & data_src_port_2));
-                         //| ({DATA_WIDTH{~e03 & ~e13 & ~e23 & e33}} & data_src_port_3);
-  
+  //| ({DATA_WIDTH{~e03 & ~e13 & ~e23 & e33}} & data_src_port_3);
+
   ///Destination Port: Enable
   ////////////////////////////////////////
 
@@ -161,7 +160,7 @@ module router_iact
 
   ///Source Port: Ready
   ////////////////////////////////////////
-  
+
   assign ready_src_port_0 = r00 & r01 & r02 & r03;
   assign ready_src_port_1 = r10 & r12 & r13;
   assign ready_src_port_2 = r20 & r21 & r23;
@@ -170,25 +169,25 @@ module router_iact
   ///Source Port: Enable
   ////////////////////////////////////////
 
-  assign e00 =  (2'd0 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_0 : 0;
-  assign e01 =  (2'd0 == router_mode_i[5:4]) & router_mode_i[1] ? enable_src_port_0 : 0;
-  assign e02 =  (2'd0 == router_mode_i[5:4]) & router_mode_i[2] ? enable_src_port_0 : 0;
-  assign e03 =  (2'd0 == router_mode_i[5:4]) & router_mode_i[3] ? enable_src_port_0 : 0;
+  assign e00 = (2'd0 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_0 : 0;
+  assign e01 = (2'd0 == router_mode_i[5:4]) & router_mode_i[1] ? enable_src_port_0 : 0;
+  assign e02 = (2'd0 == router_mode_i[5:4]) & router_mode_i[2] ? enable_src_port_0 : 0;
+  assign e03 = (2'd0 == router_mode_i[5:4]) & router_mode_i[3] ? enable_src_port_0 : 0;
 
-  assign e10 =  (2'd1 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_1 : 0;
-  assign e11 =  (2'd1 == router_mode_i[5:4]) & router_mode_i[1] ? 0 : 0;
-  assign e12 =  (2'd1 == router_mode_i[5:4]) & router_mode_i[2] ? enable_src_port_1 : 0;
-  assign e13 =  (2'd1 == router_mode_i[5:4]) & router_mode_i[3] ? enable_src_port_1 : 0;
+  assign e10 = (2'd1 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_1 : 0;
+  assign e11 = (2'd1 == router_mode_i[5:4]) & router_mode_i[1] ? 0 : 0;
+  assign e12 = (2'd1 == router_mode_i[5:4]) & router_mode_i[2] ? enable_src_port_1 : 0;
+  assign e13 = (2'd1 == router_mode_i[5:4]) & router_mode_i[3] ? enable_src_port_1 : 0;
 
-  assign e20 =  (2'd2 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_2 : 0;
-  assign e21 =  (2'd2 == router_mode_i[5:4]) & router_mode_i[1] ? enable_src_port_2 : 0;
-  assign e22 =  (2'd2 == router_mode_i[5:4]) & router_mode_i[2] ? 0 : 0;
+  assign e20 = (2'd2 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_2 : 0;
+  assign e21 = (2'd2 == router_mode_i[5:4]) & router_mode_i[1] ? enable_src_port_2 : 0;
+  assign e22 = (2'd2 == router_mode_i[5:4]) & router_mode_i[2] ? 0 : 0;
   assign e23 =  (2'd2 == router_mode_i[5:4]) & router_mode_i[3] ? enable_src_port_2 & LEFT_CLUSTER : 0;
 
-  assign e30 =  (2'd3 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_3 : 0;
-  assign e31 =  (2'd3 == router_mode_i[5:4]) & router_mode_i[1] ? enable_src_port_3 : 0;
+  assign e30 = (2'd3 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_3 : 0;
+  assign e31 = (2'd3 == router_mode_i[5:4]) & router_mode_i[1] ? enable_src_port_3 : 0;
   assign e32 =  (2'd3 == router_mode_i[5:4]) & router_mode_i[2] ? enable_src_port_3 & LEFT_CLUSTER: 0;
-  assign e33 =  (2'd3 == router_mode_i[5:4]) & router_mode_i[3] ? 0 : 0;
+  assign e33 = (2'd3 == router_mode_i[5:4]) & router_mode_i[3] ? 0 : 0;
 
   ///Destination Port: Ready
   ////////////////////////////////////////

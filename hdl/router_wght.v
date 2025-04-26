@@ -33,31 +33,30 @@
 ///    enable_dst_port_1      - Enable Port for the destination Port 1 (Other router)
 ///
 
-module router_wght
-#(
-  parameter integer DATA_WIDTH   = 8
+module router_wght #(
+    parameter integer DATA_WIDTH = 8
 ) (
-  input                   router_mode_i,
-  
-  ///SRC Port 0
-  output                  ready_src_port_0,
-  input  [DATA_WIDTH-1:0] data_src_port_0,
-  input                   enable_src_port_0,
-  
-  ///SRC Port 1
-  output                  ready_src_port_1,
-  input  [DATA_WIDTH-1:0] data_src_port_1,
-  input                   enable_src_port_1,
-  
-  ///DST Port 0
-  input                   ready_dst_port_0,
-  output [DATA_WIDTH-1:0] data_dst_port_0,
-  output                  enable_dst_port_0,
-  
-  ///DST Port 1
-  input                   ready_dst_port_1,
-  output [DATA_WIDTH-1:0] data_dst_port_1,
-  output                  enable_dst_port_1
+    input router_mode_i,
+
+    ///SRC Port 0
+    output                  ready_src_port_0,
+    input  [DATA_WIDTH-1:0] data_src_port_0,
+    input                   enable_src_port_0,
+
+    ///SRC Port 1
+    output                  ready_src_port_1,
+    input  [DATA_WIDTH-1:0] data_src_port_1,
+    input                   enable_src_port_1,
+
+    ///DST Port 0
+    input                   ready_dst_port_0,
+    output [DATA_WIDTH-1:0] data_dst_port_0,
+    output                  enable_dst_port_0,
+
+    ///DST Port 1
+    input                   ready_dst_port_1,
+    output [DATA_WIDTH-1:0] data_dst_port_1,
+    output                  enable_dst_port_1
 );
   ///Signals in Router
   ////////////////////////////////////////
@@ -77,9 +76,8 @@ module router_wght
   assign data_dst_port_0 = ({DATA_WIDTH{e00}}            & data_src_port_0)
                          | ({DATA_WIDTH{~e00 & e10}} & data_src_port_1);
 
-  assign data_dst_port_1 = router_mode_i ? 0 :
-                           ({DATA_WIDTH{e01}}            & data_src_port_0);
-  
+  assign data_dst_port_1 = router_mode_i ? 0 : ({DATA_WIDTH{e01}} & data_src_port_0);
+
   ///Destination Port: Enable
   ////////////////////////////////////////
 
@@ -88,13 +86,13 @@ module router_wght
 
   ///Source Port: Ready
   ////////////////////////////////////////
-  
+
   assign ready_src_port_0 = r00 & r01;
   assign ready_src_port_1 = r10 & r11;
-  
+
   ///Source Port: Enable
   ////////////////////////////////////////
-  
+
   assign e00 = router_mode_i ? 0 : enable_src_port_0;
   assign e01 = router_mode_i ? 0 : enable_src_port_0;
 
@@ -104,7 +102,7 @@ module router_wght
 
   ///Destination Port: Ready
   ////////////////////////////////////////
-  
+
   assign r00 = router_mode_i ? 1 : ready_dst_port_0;
   assign r10 = router_mode_i ? ready_dst_port_0 : 1;
 

@@ -23,37 +23,36 @@
 ///    delay_psum_glb_i - Input port data port
 ///
 
-module delay_cluster 
-#( 
-  parameter integer            DATA_BITWIDTH   = 20
+module delay_cluster #(
+    parameter integer DATA_BITWIDTH = 20
 ) (
-  input                            clk_i,
-  input                            rst_ni,
+    input clk_i,
+    input rst_ni,
 
-  output                           ready_o,
-  input      [DATA_BITWIDTH-1 : 0] data_i,
-  input                            enable_i,
+    output                       ready_o,
+    input  [DATA_BITWIDTH-1 : 0] data_i,
+    input                        enable_i,
 
-  input                            ready_i,
-  output     [DATA_BITWIDTH-1 : 0] data_o,
-  output                           enable_o,
+    input                        ready_i,
+    output [DATA_BITWIDTH-1 : 0] data_o,
+    output                       enable_o,
 
-  input      [3 : 0]               delay_psum_glb_i
+    input [3 : 0] delay_psum_glb_i
 
 );
-reg [8*DATA_BITWIDTH-1 : 0] data_s;
-reg [7 : 0]                 enable_s;
-reg [7 : 0]                 ready_s;
+  reg  [8*DATA_BITWIDTH-1 : 0] data_s;
+  reg  [                7 : 0] enable_s;
+  reg  [                7 : 0] ready_s;
 
-wire [8*DATA_BITWIDTH-1 : 0] data_w;
-wire [7 : 0]                 enable_w;
-wire [7 : 0]                 ready_w;
+  wire [8*DATA_BITWIDTH-1 : 0] data_w;
+  wire [                7 : 0] enable_w;
+  wire [                7 : 0] ready_w;
 
-assign data_w = {{7*DATA_BITWIDTH{1'b0}},data_i};
-assign enable_w = {{7{1'b0}},enable_i};
-assign ready_w = {{7{1'b0}},ready_i};
+  assign data_w = {{7 * DATA_BITWIDTH{1'b0}}, data_i};
+  assign enable_w = {{7{1'b0}}, enable_i};
+  assign ready_w = {{7{1'b0}}, ready_i};
 
-assign data_o = (delay_psum_glb_i== 0) ? data_i :
+  assign data_o = (delay_psum_glb_i== 0) ? data_i :
                 (delay_psum_glb_i== 1) ? data_s[1*DATA_BITWIDTH-1 : 0] :
                 (delay_psum_glb_i== 2) ? data_s[2*DATA_BITWIDTH-1 : 1*DATA_BITWIDTH] :
                 (delay_psum_glb_i== 3) ? data_s[3*DATA_BITWIDTH-1 : 2*DATA_BITWIDTH] :
@@ -63,7 +62,7 @@ assign data_o = (delay_psum_glb_i== 0) ? data_i :
                 (delay_psum_glb_i== 7) ? data_s[7*DATA_BITWIDTH-1 : 6*DATA_BITWIDTH] :
                 (delay_psum_glb_i== 8) ? data_s[8*DATA_BITWIDTH-1 : 7*DATA_BITWIDTH] : 0;
 
-assign enable_o = (delay_psum_glb_i== 0) ? enable_i :
+  assign enable_o = (delay_psum_glb_i== 0) ? enable_i :
                   (delay_psum_glb_i== 1) ? enable_s[0] :
                   (delay_psum_glb_i== 2) ? enable_s[1] :
                   (delay_psum_glb_i== 3) ? enable_s[2] :
@@ -73,7 +72,7 @@ assign enable_o = (delay_psum_glb_i== 0) ? enable_i :
                   (delay_psum_glb_i== 7) ? enable_s[6] :
                   (delay_psum_glb_i== 8) ? enable_s[7] : 0;
 
-assign ready_o = (delay_psum_glb_i== 0) ? ready_i :
+  assign ready_o = (delay_psum_glb_i== 0) ? ready_i :
                  (delay_psum_glb_i== 1) ? ready_s[0] :
                  (delay_psum_glb_i== 2) ? ready_s[1] :
                  (delay_psum_glb_i== 3) ? ready_s[2] :
@@ -84,8 +83,8 @@ assign ready_o = (delay_psum_glb_i== 0) ? ready_i :
                  (delay_psum_glb_i== 8) ? ready_s[7] : 0;
 
 
- always@(posedge clk_i, negedge rst_ni) begin
-    if(!rst_ni) begin: reset
+  always @(posedge clk_i, negedge rst_ni) begin
+    if (!rst_ni) begin : reset
       data_s   <= 0;
       enable_s <= 0;
       ready_s  <= 0;
@@ -94,6 +93,6 @@ assign ready_o = (delay_psum_glb_i== 0) ? ready_i :
       enable_s <= (enable_s << 1) + enable_w;
       ready_s  <= (ready_s << 1) + ready_w;
     end
- end
+  end
 
 endmodule

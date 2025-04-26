@@ -39,100 +39,97 @@
 ///    second_spad_en_o:           Enable signal for the second SPAD
 ///
 
-module data_pipeline 
-#(
-  parameter CALC_DATA_WIDTH           = 32,
-  parameter DATA_WIDTH                = 24,
-  parameter FIRST_SPAD_ADDR           = 16,
-  parameter FIRST_SPAD_DATA           = 8,
-  parameter SECOND_SPAD_ADDR          = 96,
-  parameter SECOND_SPAD_DATA          = 24,
-  parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
-  parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
-  parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
-  parameter SECOND_SPAD_DATA_CYCLE    = DATA_WIDTH / SECOND_SPAD_DATA
+module data_pipeline #(
+    parameter CALC_DATA_WIDTH           = 32,
+    parameter DATA_WIDTH                = 24,
+    parameter FIRST_SPAD_ADDR           = 16,
+    parameter FIRST_SPAD_DATA           = 8,
+    parameter SECOND_SPAD_ADDR          = 96,
+    parameter SECOND_SPAD_DATA          = 24,
+    parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
+    parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
+    parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
+    parameter SECOND_SPAD_DATA_CYCLE    = DATA_WIDTH / SECOND_SPAD_DATA
 ) (
-    input                                        clk_i,
-    input                                        rst_ni,
-    input                                        compute_i,
-    input                                        data_mode,
+    input clk_i,
+    input rst_ni,
+    input compute_i,
+    input data_mode,
 
-    input      [DATA_WIDTH-1 : 0]                data_i,
-    input                                        enable_i,
+    input [DATA_WIDTH-1 : 0] data_i,
+    input                    enable_i,
 
-    output reg [$clog2(FIRST_SPAD_ADDR+1)-1 : 0]  first_spad_words_o,
-    input      [$clog2(FIRST_SPAD_ADDR)-1 : 0]    first_spad_max_i,
-    output reg [$clog2(SECOND_SPAD_ADDR+1)-1 : 0] second_spad_words_o, 
+    output reg [ $clog2(FIRST_SPAD_ADDR+1)-1 : 0] first_spad_words_o,
+    input      [   $clog2(FIRST_SPAD_ADDR)-1 : 0] first_spad_max_i,
+    output reg [$clog2(SECOND_SPAD_ADDR+1)-1 : 0] second_spad_words_o,
 
-    output reg [FIRST_SPAD_ADDR_BITWIDTH-1 : 0]  first_spad_addr_o,
-    output     [FIRST_SPAD_DATA-1 : 0]           first_spad_data_o,
-    output reg                                   first_spad_en_o,
+    output reg [FIRST_SPAD_ADDR_BITWIDTH-1 : 0] first_spad_addr_o,
+    output     [         FIRST_SPAD_DATA-1 : 0] first_spad_data_o,
+    output reg                                  first_spad_en_o,
 
     output reg [SECOND_SPAD_ADDR_BITWIDTH-1 : 0] second_spad_addr_o,
-    output     [SECOND_SPAD_DATA-1 : 0]          second_spad_data_o,
+    output     [         SECOND_SPAD_DATA-1 : 0] second_spad_data_o,
     output reg                                   second_spad_en_o
 );
 
   localparam LOADING_ADDR = 1'b0;
   localparam LOADING_DATA = 1'b1;
 
-  reg                                     current_state;  // Current state of the FSM
-  reg                                     fsm_state;  // FSM state register
-  reg [DATA_WIDTH-1 : 0]                  data_storage;  // Temporary storage for data
-  reg [CALC_DATA_WIDTH-1 : 0]             address_temp;  // Temporary address storage
-  reg [CALC_DATA_WIDTH-1 : 0]             cycle_counter;  // Cycle counter for data loading
-  wire [CALC_DATA_WIDTH-1:0]              first_spad_max_w;
+  reg                          current_state;  // Current state of the FSM
+  reg                          fsm_state;  // FSM state register
+  reg  [     DATA_WIDTH-1 : 0] data_storage;  // Temporary storage for data
+  reg  [CALC_DATA_WIDTH-1 : 0] address_temp;  // Temporary address storage
+  reg  [CALC_DATA_WIDTH-1 : 0] cycle_counter;  // Cycle counter for data loading
+  wire [  CALC_DATA_WIDTH-1:0] first_spad_max_w;
 
-  assign first_spad_max_w = {{CALC_DATA_WIDTH-$clog2(FIRST_SPAD_ADDR){1'b0}},first_spad_max_i};
+  assign first_spad_max_w = {{CALC_DATA_WIDTH - $clog2(FIRST_SPAD_ADDR) {1'b0}}, first_spad_max_i};
   genvar i;
-  for(i=0; i<FIRST_SPAD_DATA; i=i+1) begin
+  for (i = 0; i < FIRST_SPAD_DATA; i = i + 1) begin
     assign first_spad_data_o[i] = data_storage[i];  // Assign data to the first SPAD output
   end
 
-  for(i=0; i<SECOND_SPAD_DATA; i=i+1) begin
+  for (i = 0; i < SECOND_SPAD_DATA; i = i + 1) begin
     assign second_spad_data_o[i] = data_storage[i];  // Assign data to the second SPAD output
   end
 
-  always@(*) begin:fsm_state_comb
+  always @(*) begin : fsm_state_comb
     fsm_state = current_state;  // Combinational logic to update FSM state
   end
 
 
-  always@(posedge clk_i, negedge rst_ni) begin
-    if (!rst_ni) begin // Reset
-      current_state         <= LOADING_ADDR;
-      first_spad_words_o    <= 0;
-      second_spad_words_o   <= 0;
-      first_spad_addr_o     <= 0;
-      first_spad_en_o       <= 0;
-      second_spad_addr_o    <= 0;
-      second_spad_en_o      <= 0;
-      data_storage          <= 0;
-      address_temp          <= 0;
-      cycle_counter         <= 0;
-    end
-    else begin
-      case(fsm_state)
-        LOADING_ADDR : begin // First state, start loading the first SPAD
-          second_spad_en_o  <= 0;
+  always @(posedge clk_i, negedge rst_ni) begin
+    if (!rst_ni) begin  // Reset
+      current_state       <= LOADING_ADDR;
+      first_spad_words_o  <= 0;
+      second_spad_words_o <= 0;
+      first_spad_addr_o   <= 0;
+      first_spad_en_o     <= 0;
+      second_spad_addr_o  <= 0;
+      second_spad_en_o    <= 0;
+      data_storage        <= 0;
+      address_temp        <= 0;
+      cycle_counter       <= 0;
+    end else begin
+      case (fsm_state)
+        LOADING_ADDR: begin  // First state, start loading the first SPAD
+          second_spad_en_o   <= 0;
           second_spad_addr_o <= 0;
           if ((enable_i == 1) & (!data_mode)) begin
             second_spad_words_o <= 0;
-            first_spad_en_o   <= 1;
-            first_spad_addr_o <= address_temp[FIRST_SPAD_ADDR_BITWIDTH-1:0];
-            address_temp      <= address_temp + 1;
-            cycle_counter     <= cycle_counter + 1;
-            data_storage      <= data_storage >> FIRST_SPAD_DATA;
+            first_spad_en_o     <= 1;
+            first_spad_addr_o   <= address_temp[FIRST_SPAD_ADDR_BITWIDTH-1:0];
+            address_temp        <= address_temp + 1;
+            cycle_counter       <= cycle_counter + 1;
+            data_storage        <= data_storage >> FIRST_SPAD_DATA;
             if (cycle_counter == 0) begin
-              data_storage  <= data_i;
+              data_storage <= data_i;
               if ((data_i == 0) & (first_spad_data_o != 0)) begin
                 first_spad_words_o <= first_spad_addr_o + 1;
                 current_state      <= LOADING_DATA;
                 address_temp       <= 0;
                 cycle_counter      <= 0;
               end
-            end
-            else begin
+            end else begin
               if (((data_storage >> FIRST_SPAD_DATA) == 0) & (first_spad_data_o != 0)) begin
                 first_spad_words_o <= first_spad_addr_o + 1;
                 current_state      <= LOADING_DATA;
@@ -141,7 +138,7 @@ module data_pipeline
               end
             end
 
-            if (cycle_counter == (FIRST_SPAD_DATA_CYCLE-1)) begin
+            if (cycle_counter == (FIRST_SPAD_DATA_CYCLE - 1)) begin
               cycle_counter <= 0;
             end
             if ((address_temp == FIRST_SPAD_ADDR - 1) |((address_temp + 1) == first_spad_max_w)) begin
@@ -150,14 +147,13 @@ module data_pipeline
               address_temp       <= 0;
               cycle_counter      <= 0;
             end
-          end
-          else begin
+          end else begin
             first_spad_en_o   <= 0;
             first_spad_addr_o <= 0;
           end
         end
-        LOADING_DATA : begin // Second state, start loading the second SPAD
-          first_spad_en_o <= 0;
+        LOADING_DATA: begin  // Second state, start loading the second SPAD
+          first_spad_en_o   <= 0;
           first_spad_addr_o <= 0;
           if (enable_i == 1) begin
             second_spad_en_o    <= 1;
@@ -170,7 +166,7 @@ module data_pipeline
             data_storage        <= data_storage >> SECOND_SPAD_DATA;
 
             if (cycle_counter == 0) begin
-              data_storage  <= data_i;
+              data_storage <= data_i;
             end
 
             if (cycle_counter == SECOND_SPAD_DATA_CYCLE - 1) begin
@@ -180,26 +176,26 @@ module data_pipeline
               if (enable_i == 1) begin
                 current_state <= LOADING_ADDR;
               end
-              address_temp    <= 0;
-              cycle_counter   <= 0;
+              address_temp  <= 0;
+              cycle_counter <= 0;
             end
           end else begin
             second_spad_en_o   <= 0;
             second_spad_addr_o <= 0;
           end
         end
-        default : begin
+        default: begin
           current_state <= LOADING_ADDR;  // Default state if none match
         end
       endcase
-      if (compute_i) begin // Reset SPAD addresses and state of module
-        current_state         <= LOADING_ADDR;
-        data_storage          <= 0;
-        address_temp          <= 0;
-        cycle_counter         <= 0;
-        second_spad_words_o   <= 0;
+      if (compute_i) begin  // Reset SPAD addresses and state of module
+        current_state       <= LOADING_ADDR;
+        data_storage        <= 0;
+        address_temp        <= 0;
+        cycle_counter       <= 0;
+        second_spad_words_o <= 0;
       end
     end
   end
-    
+
 endmodule

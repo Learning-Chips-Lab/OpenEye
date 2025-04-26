@@ -28,59 +28,58 @@
 ///    q                - Data port out
 ///
 
-module RAM_DP_generic 
-#(
+module RAM_DP_generic #(
     parameter AddrWidth = 12,
     parameter DataWidth = 8,
     parameter Pipelined = 0
 ) (
-    input  wire                     clkA,
-    input  wire                     clkB,
+    input wire clkA,
+    input wire clkB,
 
-    input  wire                     cenA,
-    input  wire                     cenB,
+    input wire cenA,
+    input wire cenB,
 
-    input  wire  [AddrWidth-1:0]    aA,
-    input  wire  [AddrWidth-1:0]    aB,
+    input wire [AddrWidth-1:0] aA,
+    input wire [AddrWidth-1:0] aB,
 
-    input  wire  [DataWidth-1:0]    d,
-    input  wire  [DataWidth-1:0]    bw,
-    output reg   [DataWidth-1:0]     q
+    input  wire [DataWidth-1:0] d,
+    input  wire [DataWidth-1:0] bw,
+    output reg  [DataWidth-1:0] q
 );
 
-    reg     [DataWidth-1:0]     mem[0:(2**AddrWidth)-1];
+  reg [DataWidth-1:0] mem    [0:(2**AddrWidth)-1];
 
-    reg     [DataWidth-1:0]     memout;
+  reg [DataWidth-1:0] memout;
 
-    generate
+  generate
     if (Pipelined) begin : gen_pipelined
-        always @(posedge clkA) q <= memout;
+      always @(posedge clkA) q <= memout;
     end else begin : gen_not_pipelined
-        always @* q = memout;
+      always @* q = memout;
     end
-    endgenerate
+  endgenerate
 
-    // No async. set or reset for FF
-    always @(posedge clkB) begin
-        if (!cenB) begin
-            mem[aB] <= d;
-        end
+  // No async. set or reset for FF
+  always @(posedge clkB) begin
+    if (!cenB) begin
+      mem[aB] <= d;
     end
+  end
 
-    always @(posedge clkA) begin
-        if (!cenA) begin
-            if (!cenB && aA == aB) begin
-                // cadence synthesis_off
-                `ifndef SYNTHESIS
-                    $error("R/W collision in DP sram");
-                    memout <= {DataWidth{1'bx}};
-                `endif
-                // cadence synthesis_on
-            end else begin
-                memout <= mem[aA];
-            end
-        end else begin
-            memout <= {DataWidth{1'bx}};
-        end
+  always @(posedge clkA) begin
+    if (!cenA) begin
+      if (!cenB && aA == aB) begin
+        // cadence synthesis_off
+`ifndef SYNTHESIS
+        $error("R/W collision in DP sram");
+        memout <= {DataWidth{1'bx}};
+`endif
+        // cadence synthesis_on
+      end else begin
+        memout <= mem[aA];
+      end
+    end else begin
+      memout <= {DataWidth{1'bx}};
     end
+  end
 endmodule

@@ -43,41 +43,40 @@
 ///    data_dst_port_2        - Data Port for the destination Port 2 (PE Cluster)
 ///    enable_dst_port_2      - Enable Port for the destination Port 2 (PE Cluster)
 
-module router_psum
-#(
-  parameter integer DATA_WIDTH     = 20
+module router_psum #(
+    parameter integer DATA_WIDTH = 20
 ) (
-  input   [2:0]            router_mode_i,
-  
-  ///SRC Port 0
-  output                   ready_src_port_0,
-  input   [DATA_WIDTH-1:0] data_src_port_0,
-  input                    enable_src_port_0,
-  
-  ///SRC Port 1
-  output                   ready_src_port_1,
-  input   [DATA_WIDTH-1:0] data_src_port_1,
-  input                    enable_src_port_1,
-  
-  ///SRC Port 2
-  output                   ready_src_port_2,
-  input   [DATA_WIDTH-1:0] data_src_port_2,
-  input                    enable_src_port_2,
-  
-  ///DST Port 0
-  input                    ready_dst_port_0,
-  output  [DATA_WIDTH-1:0] data_dst_port_0,
-  output                   enable_dst_port_0,
-  
-  ///DST Port 1
-  input                    ready_dst_port_1,
-  output  [DATA_WIDTH-1:0] data_dst_port_1,
-  output                   enable_dst_port_1,
-  
-  ///DST Port 2
-  input                    ready_dst_port_2,
-  output  [DATA_WIDTH-1:0] data_dst_port_2,
-  output                   enable_dst_port_2
+    input [2:0] router_mode_i,
+
+    ///SRC Port 0
+    output                  ready_src_port_0,
+    input  [DATA_WIDTH-1:0] data_src_port_0,
+    input                   enable_src_port_0,
+
+    ///SRC Port 1
+    output                  ready_src_port_1,
+    input  [DATA_WIDTH-1:0] data_src_port_1,
+    input                   enable_src_port_1,
+
+    ///SRC Port 2
+    output                  ready_src_port_2,
+    input  [DATA_WIDTH-1:0] data_src_port_2,
+    input                   enable_src_port_2,
+
+    ///DST Port 0
+    input                   ready_dst_port_0,
+    output [DATA_WIDTH-1:0] data_dst_port_0,
+    output                  enable_dst_port_0,
+
+    ///DST Port 1
+    input                   ready_dst_port_1,
+    output [DATA_WIDTH-1:0] data_dst_port_1,
+    output                  enable_dst_port_1,
+
+    ///DST Port 2
+    input                   ready_dst_port_2,
+    output [DATA_WIDTH-1:0] data_dst_port_2,
+    output                  enable_dst_port_2
 );
 
   ///Status Signals in Router
@@ -85,7 +84,7 @@ module router_psum
   wire [1:0] l_status;
   wire       h_status;
 
-  assign {h_status,l_status} = router_mode_i;
+  assign {h_status, l_status} = router_mode_i;
 
   ///Signals in Router
   ////////////////////////////////////////
@@ -108,7 +107,7 @@ module router_psum
   wire r20;
   wire r21;
   wire r22;
-  
+
   ///Destination Port: Data
   ////////////////////////////////////////
 
@@ -123,7 +122,7 @@ module router_psum
   assign data_dst_port_2 = ({DATA_WIDTH{e02}}               & data_src_port_0)
                          | ({DATA_WIDTH{~e02 & e12}}        & data_src_port_1)
                          | ({DATA_WIDTH{~e02 & ~e12 & e22}} & data_src_port_2);
-  
+
   ///Destination Port: Enable
   ////////////////////////////////////////
 
@@ -133,7 +132,7 @@ module router_psum
 
   ///Source Port: Ready
   ////////////////////////////////////////
-  
+
   assign ready_src_port_0 = r01 & r02;
   assign ready_src_port_1 = r10 & r12;
   assign ready_src_port_2 = r20 & r21 & r22;
@@ -218,7 +217,7 @@ module router_psum
 
   ///Destination Port: Ready
   ////////////////////////////////////////
-  
+
   assign r00 = (router_mode_i[2:0] == 3'd0) ? 1 :
                (router_mode_i[2:0] == 3'd1) ? 0 :
                (router_mode_i[2:0] == 3'd2) ? 0 :
@@ -243,7 +242,7 @@ module router_psum
                (router_mode_i[2:0] == 3'd5) ? 0 :
                (router_mode_i[2:0] == 3'd6) ? ready_dst_port_0 :
                (router_mode_i[2:0] == 3'd7) ? ready_dst_port_0 : 0;
-  
+
   assign r01 = (router_mode_i[2:0] == 3'd0) ? ready_dst_port_1 :
                (router_mode_i[2:0] == 3'd1) ? 0 :
                (router_mode_i[2:0] == 3'd2) ? 0 :

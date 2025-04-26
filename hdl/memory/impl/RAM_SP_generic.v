@@ -25,41 +25,40 @@
 ///    q               - Data port out
 ///
 
-module RAM_SP_generic 
-#(
+module RAM_SP_generic #(
     parameter AddrWidth = 12,
     parameter DataWidth = 8,
     parameter Pipelined = 0
 ) (
-    input  wire                     clk,
-    input  wire                     cen,
-    input  wire                     rdwen,
-    input  wire  [AddrWidth-1:0]    a,
-    input  wire  [DataWidth-1:0]    d,
-    output reg   [DataWidth-1:0]    q
+    input  wire                 clk,
+    input  wire                 cen,
+    input  wire                 rdwen,
+    input  wire [AddrWidth-1:0] a,
+    input  wire [DataWidth-1:0] d,
+    output reg  [DataWidth-1:0] q
 );
-    localparam Depth = 2 ** AddrWidth;
+  localparam Depth = 2 ** AddrWidth;
 
-    reg     [DataWidth-1:0]     mem[(Depth)];
-    reg     [DataWidth-1:0]     memout;
+  reg [DataWidth-1:0] mem    [(Depth)];
+  reg [DataWidth-1:0] memout;
 
-    generate
+  generate
     if (Pipelined) begin : gen_pipelined
-        always @(posedge clk) q <= memout;
+      always @(posedge clk) q <= memout;
     end else begin : gen_not_pipelined
-        always @* q = memout;
+      always @* q = memout;
     end
-    endgenerate
+  endgenerate
 
-    always @(posedge clk) begin
-        if (!cen && !rdwen) begin
-            mem[a] <= d;
-        end
+  always @(posedge clk) begin
+    if (!cen && !rdwen) begin
+      mem[a] <= d;
     end
+  end
 
-    always @(posedge clk) begin
-        if (!cen && rdwen) begin
-            memout <= mem[a];
-        end
+  always @(posedge clk) begin
+    if (!cen && rdwen) begin
+      memout <= mem[a];
     end
+  end
 endmodule

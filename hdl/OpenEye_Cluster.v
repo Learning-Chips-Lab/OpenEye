@@ -77,135 +77,134 @@
 ///   delay_psum_glb_i        - Chooses the needed delay for the psum data
 ///
 
-module OpenEye_Cluster
-#(
-  parameter IS_TOPLEVEL                = 1,
-  parameter SERIAL                     = 0,
-  parameter LEFT_CLUSTER               = 0,
-  parameter TOP_CLUSTER                = 0,
-  parameter BOTTOM_CLUSTER             = 0,
-  parameter PARALLEL_MACS              = 2,
-  parameter DATA_IACT_BITWIDTH         = 8,
-  parameter DATA_PSUM_BITWIDTH         = 20,
-  parameter DATA_WGHT_BITWIDTH         = 8,
-  parameter TRANS_BITWIDTH_IACT        = 24,
-  parameter TRANS_BITWIDTH_PSUM        = 20,
-  parameter TRANS_BITWIDTH_WGHT        = 24,
-  parameter DATA_IACT_OVERHEAD         = 4,
-  parameter NUM_GLB_IACT               = 3,
-  parameter NUM_GLB_WGHT               = 3,
-  parameter NUM_GLB_PSUM               = 4,
-  parameter PE_ROWS                    = 3,
-  parameter PE_COLUMNS                 = 4,
-  parameter PES                        = PE_ROWS * PE_COLUMNS,
-  parameter CLUSTER_ROWS               = 8,
-  parameter CLUSTER_COLUMNS             = 2,
-  parameter CLUSTERS                   = CLUSTER_COLUMNS * CLUSTER_ROWS,
-  parameter IACT_PER_PE                = 16,
-  parameter WGHT_PER_PE                = 192,
-  parameter PSUM_PER_PE                = 16,
-  parameter IACT_MEM_ADDR_WORDS        = 512,
-  parameter IACT_MEM_ADDR_BITS         = $clog2(IACT_MEM_ADDR_WORDS),
-  parameter PSUM_MEM_ADDR_WORDS        = 384,
-  parameter PSUM_MEM_ADDR_BITS         = $clog2(PSUM_MEM_ADDR_WORDS),
-  parameter BANO_MODES                 = 2,
-  parameter AF_MODES                   = 4
-)( 
-  input                                          clk_i,
-  input                                          rst_ni,
-  input [$clog2(NUM_GLB_IACT+1)*PES-1:0]         iact_choose_i,
-  input [NUM_GLB_PSUM-1:0]                       psum_choose_i,
-  input [PES-1:0]                                compute_i,
-  input                                          data_write_enable_iact_i,
-  input                                          data_write_enable_i,
+module OpenEye_Cluster #(
+    parameter IS_TOPLEVEL         = 1,
+    parameter SERIAL              = 0,
+    parameter LEFT_CLUSTER        = 0,
+    parameter TOP_CLUSTER         = 0,
+    parameter BOTTOM_CLUSTER      = 0,
+    parameter PARALLEL_MACS       = 2,
+    parameter DATA_IACT_BITWIDTH  = 8,
+    parameter DATA_PSUM_BITWIDTH  = 20,
+    parameter DATA_WGHT_BITWIDTH  = 8,
+    parameter TRANS_BITWIDTH_IACT = 24,
+    parameter TRANS_BITWIDTH_PSUM = 20,
+    parameter TRANS_BITWIDTH_WGHT = 24,
+    parameter DATA_IACT_OVERHEAD  = 4,
+    parameter NUM_GLB_IACT        = 3,
+    parameter NUM_GLB_WGHT        = 3,
+    parameter NUM_GLB_PSUM        = 4,
+    parameter PE_ROWS             = 3,
+    parameter PE_COLUMNS          = 4,
+    parameter PES                 = PE_ROWS * PE_COLUMNS,
+    parameter CLUSTER_ROWS        = 8,
+    parameter CLUSTER_COLUMNS     = 2,
+    parameter CLUSTERS            = CLUSTER_COLUMNS * CLUSTER_ROWS,
+    parameter IACT_PER_PE         = 16,
+    parameter WGHT_PER_PE         = 192,
+    parameter PSUM_PER_PE         = 16,
+    parameter IACT_MEM_ADDR_WORDS = 512,
+    parameter IACT_MEM_ADDR_BITS  = $clog2(IACT_MEM_ADDR_WORDS),
+    parameter PSUM_MEM_ADDR_WORDS = 384,
+    parameter PSUM_MEM_ADDR_BITS  = $clog2(PSUM_MEM_ADDR_WORDS),
+    parameter BANO_MODES          = 2,
+    parameter AF_MODES            = 4
+) (
+    input                                  clk_i,
+    input                                  rst_ni,
+    input [$clog2(NUM_GLB_IACT+1)*PES-1:0] iact_choose_i,
+    input [              NUM_GLB_PSUM-1:0] psum_choose_i,
+    input [                       PES-1:0] compute_i,
+    input                                  data_write_enable_iact_i,
+    input                                  data_write_enable_i,
 
-  ///Connections to external Memory
-  /////////////////////////////////////////
-  input  [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0]   ext_mem_iact_data_i,
-  input  [IACT_MEM_ADDR_BITS*NUM_GLB_IACT-1:0]    ext_mem_iact_addr_i,
-  input  [NUM_GLB_IACT-1:0]                       ext_mem_iact_enable_i,
-  output [NUM_GLB_IACT-1:0]                       ext_mem_iact_ready_o,
+    ///Connections to external Memory
+    /////////////////////////////////////////
+    input  [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] ext_mem_iact_data_i,
+    input  [ IACT_MEM_ADDR_BITS*NUM_GLB_IACT-1:0] ext_mem_iact_addr_i,
+    input  [                    NUM_GLB_IACT-1:0] ext_mem_iact_enable_i,
+    output [                    NUM_GLB_IACT-1:0] ext_mem_iact_ready_o,
 
-  input  [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0]   ext_mem_wght_data_i,
-  input  [NUM_GLB_WGHT-1:0]                       ext_mem_wght_enable_i,
-  output [NUM_GLB_WGHT-1:0]                       ext_mem_wght_ready_o,
+    input  [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] ext_mem_wght_data_i,
+    input  [                    NUM_GLB_WGHT-1:0] ext_mem_wght_enable_i,
+    output [                    NUM_GLB_WGHT-1:0] ext_mem_wght_ready_o,
 
-  input  [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0]   ext_mem_psum_data_i,
-  input  [PSUM_MEM_ADDR_BITS*NUM_GLB_PSUM-1:0]    ext_mem_psum_addr_i,
-  input  [NUM_GLB_PSUM-1:0]                       ext_mem_psum_enable_i,
-  output [NUM_GLB_PSUM-1:0]                       ext_mem_psum_ready_o,
+    input  [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] ext_mem_psum_data_i,
+    input  [ PSUM_MEM_ADDR_BITS*NUM_GLB_PSUM-1:0] ext_mem_psum_addr_i,
+    input  [                    NUM_GLB_PSUM-1:0] ext_mem_psum_enable_i,
+    output [                    NUM_GLB_PSUM-1:0] ext_mem_psum_ready_o,
 
-  output [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0]   ext_mem_psum_data_o,
-  output [NUM_GLB_PSUM-1:0]                       ext_mem_psum_enable_o,
-  input  [NUM_GLB_PSUM-1:0]                       ext_mem_psum_ready_i,
+    output [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] ext_mem_psum_data_o,
+    output [                    NUM_GLB_PSUM-1:0] ext_mem_psum_enable_o,
+    input  [                    NUM_GLB_PSUM-1:0] ext_mem_psum_ready_i,
 
-  
-  ///Router Ports
-  /////////////////////////////////////////
-  
-  ///Weights
-  input  [NUM_GLB_WGHT-1:0]                       router_mode_wght_i,
-    
-  output [NUM_GLB_WGHT-1:0]                       enable_dst_side_wght,
-  output [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0]   data_dst_side_wght,
-  input  [NUM_GLB_WGHT-1:0]                       ready_dst_side_wght,
-    
-  input  [NUM_GLB_WGHT-1:0]                       enable_src_side_wght,
-  input  [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0]   data_src_side_wght,
-  output [NUM_GLB_WGHT-1:0]                       ready_src_side_wght,
-    
-  ///Activations
-  input  [6*NUM_GLB_IACT-1:0]                     router_mode_iact_i,
-    
-  output [NUM_GLB_IACT-1:0]                       enable_dst_side_iact,
-  output [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0]   data_dst_side_iact,
-  input  [NUM_GLB_IACT-1:0]                       ready_dst_side_iact,
-    
-  input  [NUM_GLB_IACT-1:0]                       enable_src_side_iact,
-  input  [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0]   data_src_side_iact,
-  output [NUM_GLB_IACT-1:0]                       ready_src_side_iact,
-    
-  output [NUM_GLB_IACT-1:0]                       enable_dst_top_iact,
-  output [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0]   data_dst_top_iact,
-  input  [NUM_GLB_IACT-1:0]                       ready_dst_top_iact,
-    
-  input  [NUM_GLB_IACT-1:0]                       enable_src_top_iact,
-  input  [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0]   data_src_top_iact,
-  output [NUM_GLB_IACT-1:0]                       ready_src_top_iact,
-    
-  output [NUM_GLB_IACT-1:0]                       enable_dst_bottom_iact,
-  output [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0]   data_dst_bottom_iact,
-  input  [NUM_GLB_IACT-1:0]                       ready_dst_bottom_iact,
-    
-  input  [NUM_GLB_IACT-1:0]                       enable_src_bottom_iact,
-  input  [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0]   data_src_bottom_iact,
-  output [NUM_GLB_IACT-1:0]                       ready_src_bottom_iact,
-    
-  ///Psum
-  input  [3*NUM_GLB_PSUM-1:0]                     router_mode_psum_i,
-    
-  output [NUM_GLB_PSUM-1:0]                       enable_dst_top_psum,
-  output [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0]   data_dst_top_psum,
-  input  [NUM_GLB_PSUM-1:0]                       ready_dst_top_psum,
-    
-  input  [NUM_GLB_PSUM-1:0]                       enable_src_top_psum,
-  input  [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0]   data_src_top_psum,
-  output [NUM_GLB_PSUM-1:0]                       ready_src_top_psum,
-    
-  output [NUM_GLB_PSUM-1:0]                       enable_dst_bottom_psum,
-  output [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0]   data_dst_bottom_psum,
-  input  [NUM_GLB_PSUM-1:0]                       ready_dst_bottom_psum,
-    
-  input  [NUM_GLB_PSUM-1:0]                       enable_src_bottom_psum,
-  input  [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0]   data_src_bottom_psum,
-  output [NUM_GLB_PSUM-1:0]                       ready_src_bottom_psum,
-  
-  input                                           enable_stream_i,
-  input  [7:0]                                    data_stream_i,
 
-  input  [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0]    bano_cluster_mode_i,
-  input  [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0]      af_cluster_mode_i,
-  input  [3:0]                                    delay_psum_glb_i
+    ///Router Ports
+    /////////////////////////////////////////
+
+    ///Weights
+    input [NUM_GLB_WGHT-1:0] router_mode_wght_i,
+
+    output [                    NUM_GLB_WGHT-1:0] enable_dst_side_wght,
+    output [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] data_dst_side_wght,
+    input  [                    NUM_GLB_WGHT-1:0] ready_dst_side_wght,
+
+    input  [                    NUM_GLB_WGHT-1:0] enable_src_side_wght,
+    input  [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] data_src_side_wght,
+    output [                    NUM_GLB_WGHT-1:0] ready_src_side_wght,
+
+    ///Activations
+    input [6*NUM_GLB_IACT-1:0] router_mode_iact_i,
+
+    output [                    NUM_GLB_IACT-1:0] enable_dst_side_iact,
+    output [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_dst_side_iact,
+    input  [                    NUM_GLB_IACT-1:0] ready_dst_side_iact,
+
+    input  [                    NUM_GLB_IACT-1:0] enable_src_side_iact,
+    input  [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_src_side_iact,
+    output [                    NUM_GLB_IACT-1:0] ready_src_side_iact,
+
+    output [                    NUM_GLB_IACT-1:0] enable_dst_top_iact,
+    output [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_dst_top_iact,
+    input  [                    NUM_GLB_IACT-1:0] ready_dst_top_iact,
+
+    input  [                    NUM_GLB_IACT-1:0] enable_src_top_iact,
+    input  [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_src_top_iact,
+    output [                    NUM_GLB_IACT-1:0] ready_src_top_iact,
+
+    output [                    NUM_GLB_IACT-1:0] enable_dst_bottom_iact,
+    output [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_dst_bottom_iact,
+    input  [                    NUM_GLB_IACT-1:0] ready_dst_bottom_iact,
+
+    input  [                    NUM_GLB_IACT-1:0] enable_src_bottom_iact,
+    input  [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_src_bottom_iact,
+    output [                    NUM_GLB_IACT-1:0] ready_src_bottom_iact,
+
+    ///Psum
+    input [3*NUM_GLB_PSUM-1:0] router_mode_psum_i,
+
+    output [                    NUM_GLB_PSUM-1:0] enable_dst_top_psum,
+    output [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_dst_top_psum,
+    input  [                    NUM_GLB_PSUM-1:0] ready_dst_top_psum,
+
+    input  [                    NUM_GLB_PSUM-1:0] enable_src_top_psum,
+    input  [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_src_top_psum,
+    output [                    NUM_GLB_PSUM-1:0] ready_src_top_psum,
+
+    output [                    NUM_GLB_PSUM-1:0] enable_dst_bottom_psum,
+    output [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_dst_bottom_psum,
+    input  [                    NUM_GLB_PSUM-1:0] ready_dst_bottom_psum,
+
+    input  [                    NUM_GLB_PSUM-1:0] enable_src_bottom_psum,
+    input  [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_src_bottom_psum,
+    output [                    NUM_GLB_PSUM-1:0] ready_src_bottom_psum,
+
+    input       enable_stream_i,
+    input [7:0] data_stream_i,
+
+    input [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i,
+    input [  $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i,
+    input [                                3:0] delay_psum_glb_i
 );
   ///#######################
   ///Reset synchronization
@@ -213,93 +212,93 @@ module OpenEye_Cluster
   wire rst_n;
 
   RST_SYNC rst_sync_top (
-    .clk_i        (clk_i),
-    .rst_ni       (rst_ni),
-    .rst_no       (rst_n)
+      .clk_i (clk_i),
+      .rst_ni(rst_ni),
+      .rst_no(rst_n)
   );
 
   /////////////////////////////////////////
   ///Wires to lead to PEs
   /////////////////////////////////////////
-  
+
   ///WGHT Wire  
-  wire [NUM_GLB_WGHT-1:0]                     pe_wght_ready;
+  wire [                    NUM_GLB_WGHT-1:0] pe_wght_ready;
   wire [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] pe_wght_data;
-  wire [NUM_GLB_WGHT-1:0]                     pe_wght_enable;
-  
+  wire [                    NUM_GLB_WGHT-1:0] pe_wght_enable;
+
   ///IACT Wire
-  wire [NUM_GLB_IACT-1:0]                     router_cluster_iact_ready;
+  wire [                    NUM_GLB_IACT-1:0] router_cluster_iact_ready;
   wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] router_cluster_iact_data;
-  wire [NUM_GLB_IACT-1:0]                     router_cluster_iact_enable;
-  
-  wire [NUM_GLB_IACT-1:0]                     pe_iact_ready;
+  wire [                    NUM_GLB_IACT-1:0] router_cluster_iact_enable;
+
+  wire [                    NUM_GLB_IACT-1:0] pe_iact_ready;
   wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] pe_iact_data;
-  wire [NUM_GLB_IACT-1:0]                     pe_iact_enable;
-  
+  wire [                    NUM_GLB_IACT-1:0] pe_iact_enable;
+
   ///PSUM Wire  
-  wire [NUM_GLB_PSUM-1:0]                     pe_router_psum_ready_in;
+  wire [                    NUM_GLB_PSUM-1:0] pe_router_psum_ready_in;
   wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] pe_router_psum_data_i;
-  wire [NUM_GLB_PSUM-1:0]                     pe_router_psum_enable_in;
-  
-  wire [NUM_GLB_PSUM-1:0]                     pe_router_psum_ready_out;
+  wire [                    NUM_GLB_PSUM-1:0] pe_router_psum_enable_in;
+
+  wire [                    NUM_GLB_PSUM-1:0] pe_router_psum_ready_out;
   wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] pe_router_psum_data_out;
-  wire [NUM_GLB_PSUM-1:0]                     pe_router_psum_enable_out;
-  
-  
+  wire [                    NUM_GLB_PSUM-1:0] pe_router_psum_enable_out;
+
+
   /////////////////////////////////////////
   ///PEs Cluster
   /////////////////////////////////////////
-  
+
   PE_cluster #(
-    .IS_TOPLEVEL        (0),
-    .SERIAL             (SERIAL),
-    .TOP_CLUSTER        (TOP_CLUSTER),
+      .IS_TOPLEVEL(0),
+      .SERIAL     (SERIAL),
+      .TOP_CLUSTER(TOP_CLUSTER),
 
-    .DATA_IACT_BITWIDTH (DATA_IACT_BITWIDTH),
-    .DATA_WGHT_BITWIDTH (DATA_WGHT_BITWIDTH),
-    .DATA_PSUM_BITWIDTH (DATA_PSUM_BITWIDTH),
+      .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
+      .DATA_WGHT_BITWIDTH(DATA_WGHT_BITWIDTH),
+      .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
 
-    .TRANS_BITWIDTH_IACT(TRANS_BITWIDTH_IACT),
-    .TRANS_BITWIDTH_WGHT(TRANS_BITWIDTH_WGHT),
-    .TRANS_BITWIDTH_PSUM(TRANS_BITWIDTH_PSUM),
-    .DATA_IACT_OVERHEAD (DATA_IACT_OVERHEAD),
-    .NUM_GLB_IACT       (NUM_GLB_IACT),
-    
-    .PE_ROWS            (PE_ROWS),
-    .PE_COLUMNS         (PE_COLUMNS)
-  )pe_cluster(
-    .clk_i                    (clk_i),
-    .rst_ni                   (rst_n),
-    .iact_choose_i            (iact_choose_i),
-    .psum_choose_i            (psum_choose_i),
-    .compute_i                (compute_i),
-    
+      .TRANS_BITWIDTH_IACT(TRANS_BITWIDTH_IACT),
+      .TRANS_BITWIDTH_WGHT(TRANS_BITWIDTH_WGHT),
+      .TRANS_BITWIDTH_PSUM(TRANS_BITWIDTH_PSUM),
+      .DATA_IACT_OVERHEAD (DATA_IACT_OVERHEAD),
+      .NUM_GLB_IACT       (NUM_GLB_IACT),
 
-    .pe_iact_data             (pe_iact_data),
-    .pe_iact_enable           (pe_iact_enable),
-    .pe_iact_ready            (pe_iact_ready),
-    
-    .pe_wght_data             (pe_wght_data),
-    .pe_wght_enable           (pe_wght_enable),
-    .pe_wght_ready            (pe_wght_ready),
-    
-    .pe_psum_ready_i          (ready_dst_top_psum),
-    .pe_psum_data_i           (data_src_bottom_psum),
-    .pe_psum_enable_i         (enable_src_bottom_psum),
+      .PE_ROWS   (PE_ROWS),
+      .PE_COLUMNS(PE_COLUMNS)
+  ) pe_cluster (
+      .clk_i        (clk_i),
+      .rst_ni       (rst_n),
+      .iact_choose_i(iact_choose_i),
+      .psum_choose_i(psum_choose_i),
+      .compute_i    (compute_i),
 
-    .pe_psum_ready_o          (ready_src_bottom_psum),
-    .pe_psum_data_o           (data_dst_top_psum),
-    .pe_psum_enable_o         (enable_dst_top_psum),
 
-    .pe_router_psum_ready_i   (pe_router_psum_ready_in),
-    .pe_router_psum_data_i    (pe_router_psum_data_i),
-    .pe_router_psum_enable_i  (pe_router_psum_enable_in),
+      .pe_iact_data  (pe_iact_data),
+      .pe_iact_enable(pe_iact_enable),
+      .pe_iact_ready (pe_iact_ready),
 
-    .pe_router_psum_ready_o   (pe_router_psum_ready_out),
-    .pe_router_psum_data_o    (pe_router_psum_data_out),
-    .pe_router_psum_enable_o  (pe_router_psum_enable_out),
-    .enable_stream_i          (enable_stream_i),
-    .data_stream_i            (data_stream_i)
+      .pe_wght_data  (pe_wght_data),
+      .pe_wght_enable(pe_wght_enable),
+      .pe_wght_ready (pe_wght_ready),
+
+      .pe_psum_ready_i (ready_dst_top_psum),
+      .pe_psum_data_i  (data_src_bottom_psum),
+      .pe_psum_enable_i(enable_src_bottom_psum),
+
+      .pe_psum_ready_o (ready_src_bottom_psum),
+      .pe_psum_data_o  (data_dst_top_psum),
+      .pe_psum_enable_o(enable_dst_top_psum),
+
+      .pe_router_psum_ready_i (pe_router_psum_ready_in),
+      .pe_router_psum_data_i  (pe_router_psum_data_i),
+      .pe_router_psum_enable_i(pe_router_psum_enable_in),
+
+      .pe_router_psum_ready_o (pe_router_psum_ready_out),
+      .pe_router_psum_data_o  (pe_router_psum_data_out),
+      .pe_router_psum_enable_o(pe_router_psum_enable_out),
+      .enable_stream_i        (enable_stream_i),
+      .data_stream_i          (data_stream_i)
 
   );
 
@@ -307,85 +306,85 @@ module OpenEye_Cluster
   /////////////////////////////////////////
   ///Wires to lead to GLBs
   /////////////////////////////////////////
-  
+
   ///WGHT Wire
-  wire [NUM_GLB_WGHT-1:0]                     glb_cluster_wght_ready;
+  wire [                    NUM_GLB_WGHT-1:0] glb_cluster_wght_ready;
   wire [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] glb_cluster_wght_data;
-  wire [NUM_GLB_WGHT-1:0]                     glb_cluster_wght_enable;
-  
+  wire [                    NUM_GLB_WGHT-1:0] glb_cluster_wght_enable;
+
   ///IACT Wire
-  wire [NUM_GLB_IACT-1:0]                     glb_cluster_iact_ready;
+  wire [                    NUM_GLB_IACT-1:0] glb_cluster_iact_ready;
   wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] glb_cluster_iact_data;
-  wire [NUM_GLB_IACT-1:0]                     glb_cluster_iact_enable;
-  
+  wire [                    NUM_GLB_IACT-1:0] glb_cluster_iact_enable;
+
   ///PSUM Wire  
-  wire [NUM_GLB_PSUM-1:0]                     glb_cluster_psum_ready_r;
+  wire [                    NUM_GLB_PSUM-1:0] glb_cluster_psum_ready_r;
   wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] glb_cluster_psum_data_r;
-  wire [NUM_GLB_PSUM-1:0]                     glb_cluster_psum_enable_r;
-  
-  wire [NUM_GLB_PSUM-1:0]                     glb_cluster_psum_ready_w;
+  wire [                    NUM_GLB_PSUM-1:0] glb_cluster_psum_enable_r;
+
+  wire [                    NUM_GLB_PSUM-1:0] glb_cluster_psum_ready_w;
   wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] glb_cluster_psum_data_w;
-  wire [NUM_GLB_PSUM-1:0]                     glb_cluster_psum_enable_w;
+  wire [                    NUM_GLB_PSUM-1:0] glb_cluster_psum_enable_w;
 
   /////////////////////////////////////////
   ///GLB Cluster connect to external memory
   /////////////////////////////////////////
   GLB_cluster #(
-    .SERIAL             (SERIAL),
-    .PARALLEL_MACS      (PARALLEL_MACS),
-    .DATA_IACT_BITWIDTH (TRANS_BITWIDTH_IACT),
-    .DATA_PSUM_BITWIDTH (TRANS_BITWIDTH_PSUM),
-    .DATA_WGHT_BITWIDTH (TRANS_BITWIDTH_WGHT),
-    .NUM_GLB_IACT       (NUM_GLB_IACT),
-    .NUM_GLB_WGHT       (NUM_GLB_WGHT),
-    .NUM_GLB_PSUM       (NUM_GLB_PSUM),
-    .IACT_MEM_ADDR_WORDS(IACT_MEM_ADDR_WORDS),
-    .PSUM_MEM_ADDR_WORDS(PSUM_MEM_ADDR_WORDS)
-  )glb_cluster (
-    .clk_i                       (clk_i),
-    .rst_ni                      (rst_n),
-    .data_write_enable_iact_i    (data_write_enable_iact_i),
-    .data_write_enable_i         (data_write_enable_i),
-    
-    ///Ext. Memory
-    /////////////////////////////////////////
-    
-    .ext_mem_iact_data_i         (ext_mem_iact_data_i),
-    .ext_mem_iact_addr_i         (ext_mem_iact_addr_i),
-    .ext_mem_iact_enable_i       (ext_mem_iact_enable_i),
-    .ext_mem_iact_ready_o        (ext_mem_iact_ready_o),
-    
-    .ext_mem_wght_data_i         (ext_mem_wght_data_i),
-    .ext_mem_wght_enable_i       (ext_mem_wght_enable_i),
-    .ext_mem_wght_ready_o        (ext_mem_wght_ready_o),
-    
-    .ext_mem_psum_ready_i        (ext_mem_psum_ready_i),
-    .ext_mem_psum_data_o         (ext_mem_psum_data_o),
-    .ext_mem_psum_enable_o       (ext_mem_psum_enable_o),
+      .SERIAL             (SERIAL),
+      .PARALLEL_MACS      (PARALLEL_MACS),
+      .DATA_IACT_BITWIDTH (TRANS_BITWIDTH_IACT),
+      .DATA_PSUM_BITWIDTH (TRANS_BITWIDTH_PSUM),
+      .DATA_WGHT_BITWIDTH (TRANS_BITWIDTH_WGHT),
+      .NUM_GLB_IACT       (NUM_GLB_IACT),
+      .NUM_GLB_WGHT       (NUM_GLB_WGHT),
+      .NUM_GLB_PSUM       (NUM_GLB_PSUM),
+      .IACT_MEM_ADDR_WORDS(IACT_MEM_ADDR_WORDS),
+      .PSUM_MEM_ADDR_WORDS(PSUM_MEM_ADDR_WORDS)
+  ) glb_cluster (
+      .clk_i                   (clk_i),
+      .rst_ni                  (rst_n),
+      .data_write_enable_iact_i(data_write_enable_iact_i),
+      .data_write_enable_i     (data_write_enable_i),
 
-    .ext_mem_psum_data_i         (ext_mem_psum_data_i),
-    .ext_mem_psum_addr_i         (ext_mem_psum_addr_i),
-    .ext_mem_psum_enable_i       (ext_mem_psum_enable_i),
-    .ext_mem_psum_ready_o        (ext_mem_psum_ready_o),
-  
-    ///Router Cluster
-    /////////////////////////////////////////
-    
-    .router_cluster_iact_data_o  (glb_cluster_iact_data),
-    .router_cluster_iact_enable_o(glb_cluster_iact_enable),
-    .router_cluster_iact_ready_i (glb_cluster_iact_ready),
-    
-    .router_cluster_wght_data_o  (glb_cluster_wght_data),
-    .router_cluster_wght_enable_o(glb_cluster_wght_enable),
-    .router_cluster_wght_ready_i (glb_cluster_wght_ready),
-    
-    .router_cluster_psum_data_o  (glb_cluster_psum_data_r),
-    .router_cluster_psum_enable_o(glb_cluster_psum_enable_r),
-    .router_cluster_psum_ready_i (glb_cluster_psum_ready_r),
-    
-    .router_cluster_psum_data_i  (glb_cluster_psum_data_w),
-    .router_cluster_psum_enable_i(glb_cluster_psum_enable_w),
-    .router_cluster_psum_ready_o (glb_cluster_psum_ready_w)
+      ///Ext. Memory
+      /////////////////////////////////////////
+
+      .ext_mem_iact_data_i  (ext_mem_iact_data_i),
+      .ext_mem_iact_addr_i  (ext_mem_iact_addr_i),
+      .ext_mem_iact_enable_i(ext_mem_iact_enable_i),
+      .ext_mem_iact_ready_o (ext_mem_iact_ready_o),
+
+      .ext_mem_wght_data_i  (ext_mem_wght_data_i),
+      .ext_mem_wght_enable_i(ext_mem_wght_enable_i),
+      .ext_mem_wght_ready_o (ext_mem_wght_ready_o),
+
+      .ext_mem_psum_ready_i (ext_mem_psum_ready_i),
+      .ext_mem_psum_data_o  (ext_mem_psum_data_o),
+      .ext_mem_psum_enable_o(ext_mem_psum_enable_o),
+
+      .ext_mem_psum_data_i  (ext_mem_psum_data_i),
+      .ext_mem_psum_addr_i  (ext_mem_psum_addr_i),
+      .ext_mem_psum_enable_i(ext_mem_psum_enable_i),
+      .ext_mem_psum_ready_o (ext_mem_psum_ready_o),
+
+      ///Router Cluster
+      /////////////////////////////////////////
+
+      .router_cluster_iact_data_o  (glb_cluster_iact_data),
+      .router_cluster_iact_enable_o(glb_cluster_iact_enable),
+      .router_cluster_iact_ready_i (glb_cluster_iact_ready),
+
+      .router_cluster_wght_data_o  (glb_cluster_wght_data),
+      .router_cluster_wght_enable_o(glb_cluster_wght_enable),
+      .router_cluster_wght_ready_i (glb_cluster_wght_ready),
+
+      .router_cluster_psum_data_o  (glb_cluster_psum_data_r),
+      .router_cluster_psum_enable_o(glb_cluster_psum_enable_r),
+      .router_cluster_psum_ready_i (glb_cluster_psum_ready_r),
+
+      .router_cluster_psum_data_i  (glb_cluster_psum_data_w),
+      .router_cluster_psum_enable_i(glb_cluster_psum_enable_w),
+      .router_cluster_psum_ready_o (glb_cluster_psum_ready_w)
   );
 
 
@@ -397,130 +396,133 @@ module OpenEye_Cluster
   ///Wires to lead to Batch Normalization
   /////////////////////////////////////////
 
-  wire [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0]  bano_cluster_mode_in;
+  wire [ $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_in;
 
-  wire [NUM_GLB_PSUM-1:0]                     bano_cluster_ready_in;
+  wire [                    NUM_GLB_PSUM-1:0] bano_cluster_ready_in;
   wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] bano_cluster_data_in;
-  wire [NUM_GLB_PSUM-1:0]                     bano_cluster_enable_in;
+  wire [                    NUM_GLB_PSUM-1:0] bano_cluster_enable_in;
 
-  wire [NUM_GLB_PSUM-1:0]                     bano_cluster_ready_out;
+  wire [                    NUM_GLB_PSUM-1:0] bano_cluster_ready_out;
   wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] bano_cluster_data_out;
-  wire [NUM_GLB_PSUM-1:0]                     bano_cluster_enable_out;
+  wire [                    NUM_GLB_PSUM-1:0] bano_cluster_enable_out;
 
   /////////////////////////////////////////
   ///Batch Normalization Cluster
   /////////////////////////////////////////
 
   genvar r, b;
-  generate for(r=0; r<NUM_GLB_PSUM; r=r+1)begin : bano_cluster_gen
-    bano_cluster #(
-      .SERIAL       (SERIAL),
-      .PARALLEL_MACS(PARALLEL_MACS),
-      .DATA_BITWIDTH(TRANS_BITWIDTH_PSUM),
-      .BN_OFFSET_BITS (8)
-    )bano_cluster(
-      .bn_offset_i (8'd0),
+  generate
+    for (r = 0; r < NUM_GLB_PSUM; r = r + 1) begin : bano_cluster_gen
+      bano_cluster #(
+          .SERIAL        (SERIAL),
+          .PARALLEL_MACS (PARALLEL_MACS),
+          .DATA_BITWIDTH (TRANS_BITWIDTH_PSUM),
+          .BN_OFFSET_BITS(8)
+      ) bano_cluster (
+          .bn_offset_i(8'd0),
 
-      .ready_o     (bano_cluster_ready_out[r]),
-      .data_i      (bano_cluster_data_in[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
-      .enable_i    (bano_cluster_enable_in[r]),
+          .ready_o (bano_cluster_ready_out[r]),
+          .data_i  (bano_cluster_data_in[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
+          .enable_i(bano_cluster_enable_in[r]),
 
-      .ready_i     (bano_cluster_ready_in[r]),
-      .data_o      (bano_cluster_data_out[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
-      .enable_o    (bano_cluster_enable_out[r])
-    );
-  end
+          .ready_i (bano_cluster_ready_in[r]),
+          .data_o  (bano_cluster_data_out[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
+          .enable_o(bano_cluster_enable_out[r])
+      );
+    end
   endgenerate
 
   /////////////////////////////////////////
   ///Wires to lead to Pooling
   /////////////////////////////////////////
 
-  wire [NUM_GLB_PSUM-1:0]                       delay_cluster_ready_in;
-  wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0]   delay_cluster_data_in;
-  wire [NUM_GLB_PSUM-1:0]                       delay_cluster_enable_in;
+  wire [                    NUM_GLB_PSUM-1:0] delay_cluster_ready_in;
+  wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] delay_cluster_data_in;
+  wire [                    NUM_GLB_PSUM-1:0] delay_cluster_enable_in;
 
-  wire [NUM_GLB_PSUM-1:0]                       delay_cluster_ready_out;
-  wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0]   delay_cluster_data_out;
-  wire [NUM_GLB_PSUM-1:0]                       delay_cluster_enable_out;
+  wire [                    NUM_GLB_PSUM-1:0] delay_cluster_ready_out;
+  wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] delay_cluster_data_out;
+  wire [                    NUM_GLB_PSUM-1:0] delay_cluster_enable_out;
 
   /////////////////////////////////////////
   ///Pooling Cluster
   /////////////////////////////////////////
 
-  generate for(r=0; r<NUM_GLB_PSUM; r=r+1)begin : delay_cluster_gen
-    delay_cluster #(
-      .DATA_BITWIDTH(TRANS_BITWIDTH_PSUM)
-    )delay_cluster(
-      .clk_i       (clk_i),
-      .rst_ni      (rst_n),
+  generate
+    for (r = 0; r < NUM_GLB_PSUM; r = r + 1) begin : delay_cluster_gen
+      delay_cluster #(
+          .DATA_BITWIDTH(TRANS_BITWIDTH_PSUM)
+      ) delay_cluster (
+          .clk_i (clk_i),
+          .rst_ni(rst_n),
 
-      .ready_o     (delay_cluster_ready_out[r]),
-      .data_i      (delay_cluster_data_in[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
-      .enable_i    (delay_cluster_enable_in[r]),
+          .ready_o (delay_cluster_ready_out[r]),
+          .data_i  (delay_cluster_data_in[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
+          .enable_i(delay_cluster_enable_in[r]),
 
-      .ready_i     (delay_cluster_ready_in[r]),
-      .data_o      (delay_cluster_data_out[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
-      .enable_o    (delay_cluster_enable_out[r]),
+          .ready_i (delay_cluster_ready_in[r]),
+          .data_o  (delay_cluster_data_out[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
+          .enable_o(delay_cluster_enable_out[r]),
 
-      .delay_psum_glb_i(delay_psum_glb_i)
-    );
-  end
+          .delay_psum_glb_i(delay_psum_glb_i)
+      );
+    end
   endgenerate
   /////////////////////////////////////////
   ///Wires to lead to Activation Functions
   /////////////////////////////////////////
 
-  wire [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0]    af_cluster_mode_in;
+  wire [$clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_in;
   assign af_cluster_mode_in = af_cluster_mode_i;
 
-  wire [NUM_GLB_PSUM-1:0]                     af_cluster_ready_in;
+  wire [                    NUM_GLB_PSUM-1:0] af_cluster_ready_in;
   wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] af_cluster_data_in;
-  wire [NUM_GLB_PSUM-1:0]                     af_cluster_enable_in;
+  wire [                    NUM_GLB_PSUM-1:0] af_cluster_enable_in;
 
-  wire [NUM_GLB_PSUM-1:0]                     af_cluster_ready_out;
+  wire [                    NUM_GLB_PSUM-1:0] af_cluster_ready_out;
   wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] af_cluster_data_out;
-  wire [NUM_GLB_PSUM-1:0]                     af_cluster_enable_out;
+  wire [                    NUM_GLB_PSUM-1:0] af_cluster_enable_out;
 
   /////////////////////////////////////////
   ///AF Cluster
   /////////////////////////////////////////
 
-  generate for(r=0; r<NUM_GLB_PSUM; r=r+1)begin : af_cluster_gen
-    af_cluster #(
-      .SERIAL       (SERIAL),
-      .PARALLEL_MACS(PARALLEL_MACS),
-      .DATA_BITWIDTH(TRANS_BITWIDTH_PSUM),
-      .MODES        (AF_MODES)
-    )af_cluster(
-      .mode_i           (af_cluster_mode_in[$clog2(AF_MODES)*(r+1)-1:$clog2(AF_MODES)*r]),
+  generate
+    for (r = 0; r < NUM_GLB_PSUM; r = r + 1) begin : af_cluster_gen
+      af_cluster #(
+          .SERIAL       (SERIAL),
+          .PARALLEL_MACS(PARALLEL_MACS),
+          .DATA_BITWIDTH(TRANS_BITWIDTH_PSUM),
+          .MODES        (AF_MODES)
+      ) af_cluster (
+          .mode_i(af_cluster_mode_in[$clog2(AF_MODES)*(r+1)-1:$clog2(AF_MODES)*r]),
 
-      .ready_o          (af_cluster_ready_out[r]),
-      .data_i           (af_cluster_data_in[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
-      .enable_i         (af_cluster_enable_in[r]),
+          .ready_o (af_cluster_ready_out[r]),
+          .data_i  (af_cluster_data_in[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
+          .enable_i(af_cluster_enable_in[r]),
 
-      .ready_i          (af_cluster_ready_in[r]),
-      .data_o           (af_cluster_data_out[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
-      .enable_o         (af_cluster_enable_out[r])
-    );
-  end
+          .ready_i (af_cluster_ready_in[r]),
+          .data_o  (af_cluster_data_out[TRANS_BITWIDTH_PSUM*(r+1)-1:TRANS_BITWIDTH_PSUM*r]),
+          .enable_o(af_cluster_enable_out[r])
+      );
+    end
   endgenerate
 
   /////////////////////////////////////////
   ///Assigments for post-collected results
   /////////////////////////////////////////
-  for(r=0; r<NUM_GLB_PSUM; r=r+1)begin : post_result_assig_gen_cluster
+  for (r = 0; r < NUM_GLB_PSUM; r = r + 1) begin : post_result_assig_gen_cluster
 
     assign af_cluster_ready_in[r]       = delay_cluster_ready_out[r];
-    assign delay_cluster_enable_in[r] = af_cluster_enable_out[r];
+    assign delay_cluster_enable_in[r]   = af_cluster_enable_out[r];
 
-    assign delay_cluster_ready_in[r]  = bano_cluster_ready_out[r];
+    assign delay_cluster_ready_in[r]    = bano_cluster_ready_out[r];
     assign bano_cluster_enable_in[r]    = delay_cluster_enable_out[r];
 
     assign bano_cluster_ready_in[r]     = glb_cluster_psum_ready_w[r];
     assign glb_cluster_psum_enable_w[r] = bano_cluster_enable_out[r];
 
-    for(b=0; b<TRANS_BITWIDTH_PSUM; b=b+1)begin : post_result_assig_gen_bits
+    for (b = 0; b < TRANS_BITWIDTH_PSUM; b = b + 1) begin : post_result_assig_gen_bits
       assign delay_cluster_data_in[TRANS_BITWIDTH_PSUM*r+b] = af_cluster_data_out[TRANS_BITWIDTH_PSUM*r+b];
       assign bano_cluster_data_in[TRANS_BITWIDTH_PSUM*r+b]    = delay_cluster_data_out[TRANS_BITWIDTH_PSUM*r+b];
       assign glb_cluster_psum_data_w[TRANS_BITWIDTH_PSUM*r+b] = bano_cluster_data_out[TRANS_BITWIDTH_PSUM*r+b];
@@ -530,126 +532,129 @@ module OpenEye_Cluster
   /////////////////////////////////////////
   ///Router Clusters
   /////////////////////////////////////////
-        
+
   genvar i;
-  generate for (i=0; i<NUM_GLB_IACT; i = i+1) begin : router_iact_gen
-    router_iact #(
-      .LEFT_CLUSTER(LEFT_CLUSTER),
-      .DATA_WIDTH(TRANS_BITWIDTH_IACT)
-    )router_iact(
-      .router_mode_i    (router_mode_iact_i[6*(i+1)-1:6*i]),
-      ///SRC Port 0
-      ///Conncet to: GLB
-      .ready_src_port_0 (glb_cluster_iact_ready[i]),
-      .data_src_port_0  (glb_cluster_iact_data[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
-      .enable_src_port_0(glb_cluster_iact_enable[i]),
-      ///SRC Port 1
-      ///Conncet to: Router/Port
-      .ready_src_port_1 (ready_src_top_iact[i]),
-      .data_src_port_1  (data_src_top_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
-      .enable_src_port_1(enable_src_top_iact[i]),
-      ///SRC Port 2
-      ///Conncet to: Router/Port
-      .ready_src_port_2 (ready_src_side_iact[i]),
-      .data_src_port_2  (data_src_side_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
-      .enable_src_port_2(enable_src_side_iact[i]),
-      ///SRC Port 3
-      ///Conncet to: Router/Port
-      .ready_src_port_3 (ready_src_bottom_iact[i]),
-      .data_src_port_3  (data_src_bottom_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
-      .enable_src_port_3(enable_src_bottom_iact[i]),
-      ///DST Port 0
-      ///Conncet to: PEs
-      .ready_dst_port_0 (pe_iact_ready[i]),
-      .data_dst_port_0  (pe_iact_data[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
-      .enable_dst_port_0(pe_iact_enable[i]),
-      ///DST Port 1
-      ///Conncet to: Router/Port
-      .ready_dst_port_1 (ready_dst_top_iact[i]),
-      .data_dst_port_1  (data_dst_top_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
-      .enable_dst_port_1(enable_dst_top_iact[i]),
-      ///DST Port 2
-      ///Conncet to: Router/Port
-      .ready_dst_port_2 (ready_dst_side_iact[i]),
-      .data_dst_port_2  (data_dst_side_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
-      .enable_dst_port_2(enable_dst_side_iact[i]),
-      ///DST Port 3
-      ///Conncet to: Router/Port
-      .ready_dst_port_3 (ready_dst_bottom_iact[i]),
-      .data_dst_port_3  (data_dst_bottom_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
-      .enable_dst_port_3(enable_dst_bottom_iact[i])
-    );
-  end
+  generate
+    for (i = 0; i < NUM_GLB_IACT; i = i + 1) begin : router_iact_gen
+      router_iact #(
+          .LEFT_CLUSTER(LEFT_CLUSTER),
+          .DATA_WIDTH  (TRANS_BITWIDTH_IACT)
+      ) router_iact (
+          .router_mode_i(router_mode_iact_i[6*(i+1)-1:6*i]),
+          ///SRC Port 0
+          ///Conncet to: GLB
+          .ready_src_port_0(glb_cluster_iact_ready[i]),
+          .data_src_port_0  (glb_cluster_iact_data[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
+          .enable_src_port_0(glb_cluster_iact_enable[i]),
+          ///SRC Port 1
+          ///Conncet to: Router/Port
+          .ready_src_port_1(ready_src_top_iact[i]),
+          .data_src_port_1(data_src_top_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
+          .enable_src_port_1(enable_src_top_iact[i]),
+          ///SRC Port 2
+          ///Conncet to: Router/Port
+          .ready_src_port_2(ready_src_side_iact[i]),
+          .data_src_port_2(data_src_side_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
+          .enable_src_port_2(enable_src_side_iact[i]),
+          ///SRC Port 3
+          ///Conncet to: Router/Port
+          .ready_src_port_3(ready_src_bottom_iact[i]),
+          .data_src_port_3(data_src_bottom_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
+          .enable_src_port_3(enable_src_bottom_iact[i]),
+          ///DST Port 0
+          ///Conncet to: PEs
+          .ready_dst_port_0(pe_iact_ready[i]),
+          .data_dst_port_0(pe_iact_data[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
+          .enable_dst_port_0(pe_iact_enable[i]),
+          ///DST Port 1
+          ///Conncet to: Router/Port
+          .ready_dst_port_1(ready_dst_top_iact[i]),
+          .data_dst_port_1(data_dst_top_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
+          .enable_dst_port_1(enable_dst_top_iact[i]),
+          ///DST Port 2
+          ///Conncet to: Router/Port
+          .ready_dst_port_2(ready_dst_side_iact[i]),
+          .data_dst_port_2(data_dst_side_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
+          .enable_dst_port_2(enable_dst_side_iact[i]),
+          ///DST Port 3
+          ///Conncet to: Router/Port
+          .ready_dst_port_3(ready_dst_bottom_iact[i]),
+          .data_dst_port_3(data_dst_bottom_iact[TRANS_BITWIDTH_IACT*(i+1)-1:TRANS_BITWIDTH_IACT*i]),
+          .enable_dst_port_3(enable_dst_bottom_iact[i])
+      );
+    end
   endgenerate
 
   genvar j;
-  generate for(j=0; j<NUM_GLB_PSUM; j=j+1) begin : router_psum_gen
-    router_psum #(
-      .DATA_WIDTH(TRANS_BITWIDTH_PSUM)
-    )router_psum(
-      .router_mode_i    (router_mode_psum_i[3*(j+1)-1:3*j]),
-      ///SRC Port 0
-      ///Conncet to: GLB
-      .ready_src_port_0 (glb_cluster_psum_ready_r[j]),
-      .data_src_port_0  (glb_cluster_psum_data_r[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
-      .enable_src_port_0(glb_cluster_psum_enable_r[j]),
-      ///SRC Port 1
-      ///Conncet to: PEs
-      .ready_src_port_1 (pe_router_psum_ready_in[j]),
-      .data_src_port_1  (pe_router_psum_data_out[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
-      .enable_src_port_1(pe_router_psum_enable_out[j]),
-      ///SRC Port 2
-      ///Conncet to: Router/Port
-      .ready_src_port_2 (ready_src_top_psum[j]),
-      .data_src_port_2  (data_src_top_psum[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
-      .enable_src_port_2(enable_src_top_psum[j]),
-      ///DST Port 0
-      ///Conncet to: AF Cluster
-      .ready_dst_port_0 (af_cluster_ready_out[j]),
-      .data_dst_port_0  (af_cluster_data_in[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
-      .enable_dst_port_0(af_cluster_enable_in[j]),
-      ///DST Port 1
-      ///Conncet to: PEs
-      .ready_dst_port_1 (pe_router_psum_ready_out[j]),
-      .data_dst_port_1  (pe_router_psum_data_i[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
-      .enable_dst_port_1(pe_router_psum_enable_in[j]),
-      ///DST Port 2
-      ///Conncet to: Router/Port
-      .ready_dst_port_2 (ready_dst_bottom_psum[j]),
-      .data_dst_port_2  (data_dst_bottom_psum[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
-      .enable_dst_port_2(enable_dst_bottom_psum[j])
-    );
-  end
+  generate
+    for (j = 0; j < NUM_GLB_PSUM; j = j + 1) begin : router_psum_gen
+      router_psum #(
+          .DATA_WIDTH(TRANS_BITWIDTH_PSUM)
+      ) router_psum (
+          .router_mode_i(router_mode_psum_i[3*(j+1)-1:3*j]),
+          ///SRC Port 0
+          ///Conncet to: GLB
+          .ready_src_port_0(glb_cluster_psum_ready_r[j]),
+          .data_src_port_0  (glb_cluster_psum_data_r[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
+          .enable_src_port_0(glb_cluster_psum_enable_r[j]),
+          ///SRC Port 1
+          ///Conncet to: PEs
+          .ready_src_port_1(pe_router_psum_ready_in[j]),
+          .data_src_port_1  (pe_router_psum_data_out[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
+          .enable_src_port_1(pe_router_psum_enable_out[j]),
+          ///SRC Port 2
+          ///Conncet to: Router/Port
+          .ready_src_port_2(ready_src_top_psum[j]),
+          .data_src_port_2(data_src_top_psum[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
+          .enable_src_port_2(enable_src_top_psum[j]),
+          ///DST Port 0
+          ///Conncet to: AF Cluster
+          .ready_dst_port_0(af_cluster_ready_out[j]),
+          .data_dst_port_0(af_cluster_data_in[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
+          .enable_dst_port_0(af_cluster_enable_in[j]),
+          ///DST Port 1
+          ///Conncet to: PEs
+          .ready_dst_port_1(pe_router_psum_ready_out[j]),
+          .data_dst_port_1  (pe_router_psum_data_i[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
+          .enable_dst_port_1(pe_router_psum_enable_in[j]),
+          ///DST Port 2
+          ///Conncet to: Router/Port
+          .ready_dst_port_2(ready_dst_bottom_psum[j]),
+          .data_dst_port_2(data_dst_bottom_psum[TRANS_BITWIDTH_PSUM*(j+1)-1:TRANS_BITWIDTH_PSUM*j]),
+          .enable_dst_port_2(enable_dst_bottom_psum[j])
+      );
+    end
   endgenerate
 
   genvar k;
-  generate for(k=0; k<NUM_GLB_WGHT; k=k+1) begin : router_wght_gen
+  generate
+    for (k = 0; k < NUM_GLB_WGHT; k = k + 1) begin : router_wght_gen
 
-    router_wght #(
-        .DATA_WIDTH(TRANS_BITWIDTH_WGHT)
-    )router_wght(
-        .router_mode_i    (router_mode_wght_i[k]),
-        ///SRC Port 0
-        ///Conncet to: GLB
-        .ready_src_port_0 (glb_cluster_wght_ready[k]),
-        .data_src_port_0  (glb_cluster_wght_data[TRANS_BITWIDTH_WGHT*(k+1)-1:TRANS_BITWIDTH_WGHT*k]),
-        .enable_src_port_0(glb_cluster_wght_enable[k]),
-        ///SRC Port 1
-        ///Conncet to: Router/Port
-        .ready_src_port_1 (ready_src_side_wght[k]),
-        .data_src_port_1  (data_src_side_wght[TRANS_BITWIDTH_WGHT*(k+1)-1:TRANS_BITWIDTH_WGHT*k]),
-        .enable_src_port_1(enable_src_side_wght[k]),
-        ///DST Port 0
-        ///Conncet to: PEs
-        .ready_dst_port_0 (pe_wght_ready[k]),
-        .data_dst_port_0  (pe_wght_data[TRANS_BITWIDTH_WGHT*(k+1)-1:TRANS_BITWIDTH_WGHT*k]),
-        .enable_dst_port_0(pe_wght_enable[k]),
-        ///DST Port 1
-        ///Conncet to: Router/Port
-        .ready_dst_port_1 (ready_dst_side_wght[k]),
-        .data_dst_port_1  (data_dst_side_wght[TRANS_BITWIDTH_WGHT*(k+1)-1:TRANS_BITWIDTH_WGHT*k]),
-        .enable_dst_port_1(enable_dst_side_wght[k])
+      router_wght #(
+          .DATA_WIDTH(TRANS_BITWIDTH_WGHT)
+      ) router_wght (
+          .router_mode_i(router_mode_wght_i[k]),
+          ///SRC Port 0
+          ///Conncet to: GLB
+          .ready_src_port_0(glb_cluster_wght_ready[k]),
+          .data_src_port_0  (glb_cluster_wght_data[TRANS_BITWIDTH_WGHT*(k+1)-1:TRANS_BITWIDTH_WGHT*k]),
+          .enable_src_port_0(glb_cluster_wght_enable[k]),
+          ///SRC Port 1
+          ///Conncet to: Router/Port
+          .ready_src_port_1(ready_src_side_wght[k]),
+          .data_src_port_1(data_src_side_wght[TRANS_BITWIDTH_WGHT*(k+1)-1:TRANS_BITWIDTH_WGHT*k]),
+          .enable_src_port_1(enable_src_side_wght[k]),
+          ///DST Port 0
+          ///Conncet to: PEs
+          .ready_dst_port_0(pe_wght_ready[k]),
+          .data_dst_port_0(pe_wght_data[TRANS_BITWIDTH_WGHT*(k+1)-1:TRANS_BITWIDTH_WGHT*k]),
+          .enable_dst_port_0(pe_wght_enable[k]),
+          ///DST Port 1
+          ///Conncet to: Router/Port
+          .ready_dst_port_1(ready_dst_side_wght[k]),
+          .data_dst_port_1(data_dst_side_wght[TRANS_BITWIDTH_WGHT*(k+1)-1:TRANS_BITWIDTH_WGHT*k]),
+          .enable_dst_port_1(enable_dst_side_wght[k])
       );
-  end
+    end
   endgenerate
 endmodule

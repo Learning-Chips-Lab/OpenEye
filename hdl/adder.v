@@ -25,25 +25,24 @@
 ///   sum_o:            Sum output
 ///
 
-module adder 
-#( 
-  parameter DATA_WIDTH_SUM = 20
+module adder #(
+    parameter DATA_WIDTH_SUM = 20
 ) (
-  input                             clk_i,
-  input                             rst_ni,
-  input                             adder_en_i,
-  input signed [DATA_WIDTH_SUM-1:0] summand_1_i,
-  input signed [DATA_WIDTH_SUM-1:0] summand_2_i,
-  output reg signed [DATA_WIDTH_SUM-1:0] sum_o
+    input                                  clk_i,
+    input                                  rst_ni,
+    input                                  adder_en_i,
+    input  signed     [DATA_WIDTH_SUM-1:0] summand_1_i,
+    input  signed     [DATA_WIDTH_SUM-1:0] summand_2_i,
+    output reg signed [DATA_WIDTH_SUM-1:0] sum_o
 );
 
-  always@(posedge clk_i, negedge rst_ni) begin
-    if(!rst_ni) begin // Reset
-      sum_o<= 0;
+  always @(posedge clk_i, negedge rst_ni) begin
+    if (!rst_ni) begin  // Reset
+      sum_o <= 0;
     end else begin
-      if(adder_en_i) begin
+      if (adder_en_i) begin
         sum_o <= summand_1_i + summand_2_i;
-      end else begin // Keep output, if `adder_en_i` is low
+      end else begin  // Keep output, if `adder_en_i` is low
         sum_o <= 0;
       end
     end
