@@ -56,7 +56,7 @@ module varlenFIFO #(
       count         <= 0;
       data_o        <= 0;
       write_ptr     <= 0;
-      flat_help_var <= 0;
+      flat_help_var  = 0;
       empty         <= 1;
       full          <= 0;
     end else begin
