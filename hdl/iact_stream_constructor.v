@@ -34,7 +34,8 @@ module iact_stream_constructor #(
     input      [                 NUM_GLB_IACT-1:0] iact_ready_i,
     output reg [ NUM_GLB_IACT*BITS_PER_ROUTER-1:0] iact_data_o,
     output reg [                 NUM_GLB_IACT-1:0] iact_enable_o,
-    output reg [ (PES*$clog2(NUM_GLB_IACT+1))-1:0] iact_choose_o
+    output reg [ (PES*$clog2(NUM_GLB_IACT+1))-1:0] iact_choose_o,
+    input      [                            4-1:0] needed_cycles_i
 );
   reg                           ram_wr_en;
   reg  [         ADDRWIDTH-1:0] ram_wr_addr;
@@ -162,6 +163,12 @@ module iact_stream_constructor #(
 
     reg signed [7:0] y_reg;
     reg signed [7:0] x_reg             [NUM_GLB_IACT-1:0];
+    wire       [7:0] x_test ;
+    assign x_test = x_reg[0];
+    wire       [7:0] b_test ;
+    assign b_test = byte_var;
+    wire       [7:0] r_test ;
+    assign r_test = ram_var;
     integer          router_loop;
     reg        [1:0] fsm_current_state;
     always @(posedge clk_i, negedge rst_ni) begin
@@ -180,6 +187,10 @@ module iact_stream_constructor #(
           end
         end
         if (enable_config) begin
+          for (router_loop = 0; router_loop < NUM_GLB_IACT; router_loop++) begin
+            x_reg[router_loop] <= (iact_router_counter * NUM_GLB_IACT[7:0]) + (router_loop[7:0] +
+            params[PARAMS_SIZE-1:3*PARAMS_SIZE/4]) - {{(8 - 4){1'd0}},padding_reg};
+          end
           y_reg <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4] - {{(8 - 4) {1'd0}}, padding_reg};
         end
       end
@@ -191,7 +202,6 @@ module iact_stream_constructor #(
     reg [8-1:0] addr_cycle;
     reg [4-1:0] duty_cycle;
     reg [4-1:0] duty_cycle_th;
-    reg [4-1:0] duty_cycle_reset;
     reg [8-1:0] ram_var;
     reg [8-1:0] byte_var;
     reg [ADDRWIDTH-1:0] ram_wr_addr_reg;
@@ -223,7 +233,6 @@ module iact_stream_constructor #(
         wght_size_reg          <= 0;
         duty_cycle             <= 0;
         duty_cycle_th          <= 3;  //HERE
-        duty_cycle_reset       <= 3;  //HERE
         ram_var  = 0;
         byte_var = 0;
         for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
@@ -254,7 +263,6 @@ module iact_stream_constructor #(
             wght_size_reg          <= 0;
             duty_cycle             <= 0;
             duty_cycle_th          <= 3;  //HERE
-            duty_cycle_reset       <= 3;  //HERE
           end
 
           GET_PARAMETER: begin
@@ -278,7 +286,7 @@ module iact_stream_constructor #(
           WRITE_TO_MEMORY: begin
             duty_cycle <= duty_cycle + 1;
             ram_wr_addr_reg <= (iact_router_counter * wght_size_reg) + {{(ADDRWIDTH-8){1'd0}},kernel_y_counter};
-            if (duty_cycle == duty_cycle_reset) begin
+            if (duty_cycle == needed_cycles_i) begin
               duty_cycle <= 0;
             end
             if (duty_cycle <= duty_cycle_th) begin
@@ -355,6 +363,21 @@ module iact_stream_constructor #(
               end
             end else begin
               ram_wr_en <= 0;
+              if (enable_store) begin
+                fsm_cycle           <= 0;
+                address_storage     <= ram_wr_addr + 1;
+                current_cycle       <= current_cycle + 1;
+                y_cycle             <= 1;
+                router_cycle        <= 1;
+                addr_cycle          <= 0;
+                ram_wr_en           <= 0;
+                ram_wr_addr_reg     <= 0;
+                iact_router_counter <= 0;
+                kernel_y_counter    <= 0;
+                ram_wr_addr         <= ram_wr_addr + 1;
+                fsm_current_state   <= WRITE_TO_MEMORY;
+                duty_cycle          <= 0;
+              end
             end
           end
 

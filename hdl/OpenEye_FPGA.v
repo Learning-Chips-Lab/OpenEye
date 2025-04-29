@@ -441,26 +441,31 @@ module OpenEye_FPGA #(
             )-1:0]][fsm_row[$clog2(
                 CLUSTER_ROWS
             )-1:0]][31:24] <= iact_converter_x;
+
             iact_converter_params_reg[fsm_col[$clog2(
                 CLUSTER_COLUMNS
             )-1:0]][fsm_row[$clog2(
                 CLUSTER_ROWS
             )-1:0]][23:16] <= iact_converter_y;
+
             iact_converter_params_reg[fsm_col[$clog2(
                 CLUSTER_COLUMNS
             )-1:0]][fsm_row[$clog2(
                 CLUSTER_ROWS
             )-1:0]][15:8] <= iact_size;
+
             iact_converter_params_reg[fsm_col[$clog2(
                 CLUSTER_COLUMNS
             )-1:0]][fsm_row[$clog2(
                 CLUSTER_ROWS
             )-1:0]][7:0] <= iact_channels;
+
             iact_converter_en_cfg_reg[fsm_col[$clog2(
                 CLUSTER_COLUMNS
             )-1:0]][fsm_row[$clog2(
                 CLUSTER_ROWS
             )-1:0]] <= 1;
+
             fsm_col <= fsm_col + 1;
             if (fsm_col == CLUSTER_COLUMNS - 1) begin
               fsm_col <= 0;
@@ -471,13 +476,6 @@ module OpenEye_FPGA #(
             end
           end
         end else begin
-          if (GET_WGHT == fsm_current_state) begin
-            for (a = 0; a < CLUSTER_COLUMNS; a++) begin
-              for (b = 0; b < CLUSTER_ROWS; b++) begin
-                iact_converter_params_reg[a][b] <= 1;
-              end
-            end
-          end
           for (a = 0; a < CLUSTER_COLUMNS; a++) begin
             for (b = 0; b < CLUSTER_ROWS; b++) begin
               iact_converter_en_cfg_reg[a][b] <= 0;
@@ -487,59 +485,62 @@ module OpenEye_FPGA #(
             if (iact_converter_params_enable) begin
               for (a = 0; a < CLUSTER_COLUMNS; a++) begin
                 for (b = 0; b < CLUSTER_ROWS; b++) begin
-                  if (conv_array_reg[(a+(b*CLUSTER_COLUMNS))] == 1) begin
+                  if (param_array_reg[(a+(b*CLUSTER_COLUMNS))] == 1) begin
                     if (current_converter_cycles < ((max_converter_needed_cycles - 1))) begin //Include Padding
-                      iact_converter_params_reg[a][b] <= 1;
+                      iact_converter_en_cfg_reg[a][b] <= 1;
                     end
                   end
                 end
               end
-              param_array_reg <= (conv_array_reg<<(iact_size/PE_COLUMNS) | conv_array_reg>>(CLUSTERS-(iact_size/PE_COLUMNS)));
+              param_array_reg <= (param_array_reg<<(iact_size/PE_COLUMNS) | param_array_reg>>(CLUSTERS-(iact_size/PE_COLUMNS)));
             end
             if (fsm_iact_params > 0) begin
               fsm_iact_params <= fsm_iact_params - 1;
             end
             if (iact_converter_params_enable & (fsm_current_state == CONVERT_IACT)) begin
-              fsm_iact_params <= fsm_iact_params + (iact_size / PE_COLUMNS) - 1;
+              fsm_iact_params <= fsm_iact_params + (iact_size / PE_COLUMNS);
             end
-            iact_converter_x <= iact_converter_x + PE_COLUMNS;
-            if (iact_converter_x >= iact_size - PE_COLUMNS) begin
-              iact_converter_x <= 0;
-              iact_converter_y <= iact_converter_y + 1;
-            end
-            iact_converter_params_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]][31:24] <= iact_converter_x;
-            iact_converter_params_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]][23:16] <= iact_converter_y;
-            iact_converter_params_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]][15:8] <= iact_size;
-            iact_converter_params_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]][7:0] <= iact_channels;
-            iact_converter_en_cfg_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]] <= 1;
-            fsm_col <= fsm_col + 1;
-            if (fsm_col == (CLUSTER_COLUMNS - 1)) begin
-              fsm_col <= 0;
-              fsm_row <= fsm_row + 1;
-              if (fsm_row == (CLUSTER_ROWS - 1)) begin
-                fsm_row <= 0;
+            if (fsm_iact_params > 0) begin
+              iact_converter_x <= iact_converter_x + PE_COLUMNS;
+              if (iact_converter_x >= iact_size - PE_COLUMNS) begin
+                iact_converter_x <= 0;
+                iact_converter_y <= iact_converter_y + 1;
+              end
+              iact_converter_params_reg[fsm_col[$clog2(
+                  CLUSTER_COLUMNS
+              )-1:0]][fsm_row[$clog2(
+                  CLUSTER_ROWS
+              )-1:0]][31:24] <= iact_converter_x;
+
+              iact_converter_params_reg[fsm_col[$clog2(
+                  CLUSTER_COLUMNS
+              )-1:0]][fsm_row[$clog2(
+                  CLUSTER_ROWS
+              )-1:0]][23:16] <= iact_converter_y;
+
+              iact_converter_params_reg[fsm_col[$clog2(
+                  CLUSTER_COLUMNS
+              )-1:0]][fsm_row[$clog2(
+                  CLUSTER_ROWS
+              )-1:0]][15:8] <= iact_size;
+
+              iact_converter_params_reg[fsm_col[$clog2(
+                  CLUSTER_COLUMNS
+              )-1:0]][fsm_row[$clog2(
+                  CLUSTER_ROWS
+              )-1:0]][7:0] <= iact_channels;
+
+              fsm_col <= fsm_col + 1;
+              if (fsm_col == (CLUSTER_COLUMNS - 1)) begin
+                fsm_col <= 0;
+                fsm_row <= fsm_row + 1;
+                if (fsm_row == (CLUSTER_ROWS - 1)) begin
+                  fsm_row <= 0;
+                end
               end
             end
+          end else begin
+            param_array_reg <= conv_array_reg;
           end
         end
         if (reset_cycle_reg) begin
@@ -1031,7 +1032,8 @@ module OpenEye_FPGA #(
 
           if (enable_dma_i_reg) begin
             if (min_standing_cycles < iact_size / PE_COLUMNS) begin
-              needed_standing_cycles <= iact_size / PE_COLUMNS;
+              needed_standing_cycles <= math.ceil(CLUSTERS/math.floor(64/16));
+              needed_standing_cycles <= math.ceil(CLUSTERS/math.floor(64/20));
             end else begin
               needed_standing_cycles <= min_standing_cycles;
             end
@@ -1168,13 +1170,11 @@ module OpenEye_FPGA #(
               converters_ready = converters_ready & iact_converter_ready_w[a][b];
             end
           end
-          iact_converter_params_enable <= 0;
-          if ((fsm_cycle == 0) & (current_converter_cycles > 3)) begin
-            iact_converter_params_enable <= 1;
-          end
           iact_converter_enc_enable <= 0;
+          iact_converter_params_enable <= 0;
           if (fsm_cycle == 3) begin
-            iact_converter_enc_enable <= 1;
+            iact_converter_enc_enable    <= 1;
+            iact_converter_params_enable <= 1;
           end
           //if (7'(fsm_cycle) == 7'(min_standing_cycles)-7'(1)) begin HERE
           if (fsm_cycle + 1 == {{24'd0}, needed_standing_cycles}) begin
@@ -1373,7 +1373,8 @@ module OpenEye_FPGA #(
             .iact_ready_i    (iact_ready_w),
             .iact_data_o     (iact_data_w),
             .iact_enable_o   (iact_enable_w),
-            .iact_choose_o   (iact_choose_w)
+            .iact_choose_o   (iact_choose_w),
+            .needed_cycles_i (needed_standing_cycles[3:0]-1)
         );
       end
     end
