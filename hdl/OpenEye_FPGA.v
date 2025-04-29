@@ -274,13 +274,13 @@ module OpenEye_FPGA #(
 
 
   // Register for the Buffer
-
+  reg buffer_select;
   reg iact_buffer_SP_en_r;
   reg iact_buffer_SP_en_w;
   reg [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_w;
-  wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_r;
   reg [32-1:0] buffer_SP_addr_upper_limit;
   reg [32-1:0] buffer_SP_addr_lower_limit;
+  wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_r;
 
   reg wght_buffer_SP_en_r;
   reg wght_buffer_SP_en_w;
@@ -760,6 +760,7 @@ module OpenEye_FPGA #(
       skipIact_reg              <= 0;
       skipWght_reg              <= 0;
       skipPsum_reg              <= 0;
+      buffer_select             <= 0;
       results_ready   = 0;
       flat_help_var_1 = 0;
       enable_dma_o                      <= 0;
@@ -998,12 +999,12 @@ module OpenEye_FPGA #(
             current_buffer_n <= current_buffer_n + 1;
             current_buffer_n_1 <= current_buffer_n;
             // get iact params
-            max_converter_needed_cycles <= iact_size + {{4{1'd0}}, kernel_size} - 8'b00000001;
-            min_standing_cycles              <= (needed_iact_cycles_reg * iact_channels) / WORDS_PER_CYCLE[8-1:0];
-            buffer_SP_en_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]] <= 1;
+            max_converter_needed_cycles                                 <= iact_size + {{4{1'd0}}, kernel_size} - 8'b00000001;
+            min_standing_cycles                                         <= (needed_iact_cycles_reg * iact_channels) / WORDS_PER_CYCLE[8-1:0];
+            buffer_SP_en_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]]   <= 1;
             buffer_SP_data_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]] <= data_dma_i_reg;
             buffer_SP_addr_reg[current_buffer_n_1[RAM_CELLS_CLOG2-1:0]] <= current_buffer_addr;
-            current_buffer_addr <= buffer_SP_addr_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]] + 1;
+            current_buffer_addr                                         <= buffer_SP_addr_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]] + 1;
 
             if (current_buffer_n == RAM_CELLS - 1) begin
               current_buffer_n <= 0;
@@ -1302,30 +1303,45 @@ module OpenEye_FPGA #(
   //Wires
   //#######################
 
-  wire                                         buffer_SP_en_r   [RAM_CELLS-1:0];
-  wire                                         buffer_SP_en_w   [RAM_CELLS-1:0];
-  wire [             RAM_CELLS_ADDR_WIDTH-1:0] buffer_SP_addr   [RAM_CELLS-1:0];
-  wire [          RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w [RAM_CELLS-1:0];
-  wire [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r;
+
+  wire                                           buffer_SP_en_r     [1:0][RAM_CELLS-1:0];
+  wire                                           buffer_SP_en_w     [1:0][RAM_CELLS-1:0];
+  wire [             RAM_CELLS_ADDR_WIDTH-1:0]   buffer_SP_addr     [1:0][RAM_CELLS-1:0];
+  wire [          RAM_CELLS_WORD_BITWIDTH-1:0]   buffer_SP_data_w   [1:0][RAM_CELLS-1:0];
+  wire [2*RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r_w;
+  wire [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0]   buffer_SP_data_r;
+
+  for (j_gen = 0; j_gen < RAM_CELLS; j_gen++) begin : gen_RAM_wires
+    assign buffer_SP_en_r[0][j_gen] = buffer_select ? 0 : buffer_SP_en_r_reg[j_gen];
+    assign buffer_SP_en_r[1][j_gen] = buffer_select ? buffer_SP_en_r_reg[j_gen] : 0;
+    assign buffer_SP_en_w[0][j_gen] = buffer_select ? 0 : buffer_SP_en_w_reg[j_gen];
+    assign buffer_SP_en_w[1][j_gen] = buffer_select ? buffer_SP_en_w_reg[j_gen] : 0;
+    assign buffer_SP_addr[0][j_gen] = buffer_select ? 0 : buffer_SP_addr_reg[j_gen];
+    assign buffer_SP_addr[1][j_gen] = buffer_select ? buffer_SP_addr_reg[j_gen] : 0;
+    assign buffer_SP_data_w[0][j_gen] = buffer_select ? 0 : buffer_SP_data_w_reg[j_gen];
+    assign buffer_SP_data_w[1][j_gen] = buffer_select ? buffer_SP_data_w_reg[j_gen] : 0;
+    assign buffer_SP_data_r           = buffer_select ? buffer_SP_data_r_w[RAM_CELLS_WORD_BITWIDTH*RAM_CELLS+:RAM_CELLS_WORD_BITWIDTH*RAM_CELLS] :
+    buffer_SP_data_r_w[0+:RAM_CELLS_WORD_BITWIDTH*RAM_CELLS];
+  end
+
   generate
     genvar i_gen, j_gen;
-    // IACT Converter Buffer
-    for (i_gen = 0; i_gen < RAM_CELLS; i_gen++) begin : BUFFER_A
-      assign buffer_SP_en_r[i_gen]   = buffer_SP_en_r_reg[i_gen];
-      assign buffer_SP_en_w[i_gen]   = buffer_SP_en_w_reg[i_gen];
-      assign buffer_SP_addr[i_gen]   = buffer_SP_addr_reg[i_gen];
-      assign buffer_SP_data_w[i_gen] = buffer_SP_data_w_reg[i_gen];
-      RAM_SP #(
-          .DataWidth(RAM_CELLS_WORD_BITWIDTH),
-          .AddrWidth(RAM_CELLS_ADDR_WIDTH)
-      ) iact_converter_buffer_SP (
-          .clk_i(clk_i),
-          .rd_en_i(buffer_SP_en_r[i_gen] & !buffer_SP_en_w[i_gen]),
-          .wr_en_i(buffer_SP_en_w[i_gen]),
-          .addr_i(buffer_SP_addr[i_gen]),
-          .data_i(buffer_SP_data_w[i_gen]),
-          .data_o  (buffer_SP_data_r[(i_gen+1)*RAM_CELLS_WORD_BITWIDTH-1:i_gen*RAM_CELLS_WORD_BITWIDTH])
-      );
+    // Converter Buffer
+    for (i_gen = 0; i_gen < 2; i_gen++) begin : BUFFER_LAYER_NUM
+      for (j_gen = 0; j_gen < RAM_CELLS; j_gen++) begin : BUFFER_A
+        RAM_SP #(
+            .DataWidth(RAM_CELLS_WORD_BITWIDTH),
+            .AddrWidth(RAM_CELLS_ADDR_WIDTH)
+        ) iact_converter_buffer_SP (
+            .clk_i(clk_i),
+            .rd_en_i(buffer_SP_en_r[i_gen][j_gen] & !buffer_SP_en_w[i_gen][j_gen]),
+            .wr_en_i(buffer_SP_en_w[i_gen][j_gen]),
+            .addr_i(buffer_SP_addr[i_gen][j_gen]),
+            .data_i(buffer_SP_data_w[i_gen][j_gen]),
+            .data_o(buffer_SP_data_r_w[i_gen*RAM_CELLS_WORD_BITWIDTH*RAM_CELLS+j_gen*RAM_CELLS_WORD_BITWIDTH+:
+                                    RAM_CELLS_WORD_BITWIDTH])
+        );
+      end
     end
 
     // IACT Converter
