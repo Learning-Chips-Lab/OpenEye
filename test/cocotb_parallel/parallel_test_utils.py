@@ -392,13 +392,13 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                                     cl_x * params.PEs_X + \
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                     ((cl_y%layer_params.used_Y_cluster) + refresh*layer_params.used_Y_cluster) * (params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster)) \
-                                    % (layer.output.shape[2] + layer_params.add_up)))
+                                    % (layer.output.shape[1] + layer_params.add_up)))
 
                                     y_cor= int(((router + \
                                     cl_x * params.PEs_X + \
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                     ((cl_y%layer_params.used_Y_cluster) + refresh*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
-                                    / (layer.output.shape[2] + layer_params.add_up)))
+                                    / (layer.output.shape[1] + layer_params.add_up)))
                                     filter = psum_pe
                                     try:
                                         if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
@@ -441,33 +441,33 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                                         case 1:
                                             x_cor= int(((router + \
                                             (refresh * params.PEs_X)) \
-                                            % (layer.output.shape[2] + layer_params.add_up)))
+                                            % (layer.output.shape[1] + layer_params.add_up)))
 
                                             y_cor= int(((router + \
                                             (refresh * params.PEs_X)) \
-                                            / (layer.output.shape[2] + layer_params.add_up)))
+                                            / (layer.output.shape[1] + layer_params.add_up)))
                                             filter = 2 * psum_pe + counter + (2 * psum_pe_upper * (cl_y * params.Clusters_X + cl_x))
                                         case 2:
                                             x_cor= int((((cl_x * params.PEs_X) + router + \
                                             (refresh * (params.PEs_X * params.Clusters_X))) \
-                                            % (layer.output.shape[2] + layer_params.add_up)))
+                                            % (layer.output.shape[1] + layer_params.add_up)))
 
                                             y_cor= int(((router + \
                                             (refresh * (params.PEs_X * params.Clusters_X))) \
-                                            / (layer.output.shape[2] + layer_params.add_up)))
+                                            / (layer.output.shape[1] + layer_params.add_up)))
                                             filter = 2 * psum_pe + counter + (2 * psum_pe_upper * cl_y)
                                         case _:
                                             x_cor= int(((router + \
                                             cl_x * params.PEs_X + \
                                             math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                             ((cl_y%layer_params.used_Y_cluster) + refresh*layer_params.used_Y_cluster) * (params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster)) \
-                                            % (layer.output.shape[2] + layer_params.add_up)))
+                                            % (layer.output.shape[1] + layer_params.add_up)))
 
                                             y_cor= int(((router + \
                                             cl_x * params.PEs_X + \
                                             math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                             ((cl_y%layer_params.used_Y_cluster) + refresh*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
-                                            / (layer.output.shape[2] + layer_params.add_up)))
+                                            / (layer.output.shape[1] + layer_params.add_up)))
 
                                             filter = 2 * psum_pe + counter
 
@@ -504,20 +504,20 @@ def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_
                         for counter in range(math.floor(params.PSUM_Trans_Bitwidth/params.PSUM_Bitwidth)):
                             match layer_params.single_cluster_computation:
                                 case 1:
-                                    x_cor= int(((router + (2*refresh+counter) * params.PEs_X ) % (layer.output.shape[2] + layer_params.add_up)))
-                                    y_cor= int(((router + (2*refresh+counter) * params.PEs_X ) / (layer.output.shape[2] + layer_params.add_up))) + \
+                                    x_cor= int(((router + (2*refresh+counter) * params.PEs_X ) % (layer.output.shape[1] + layer_params.add_up)))
+                                    y_cor= int(((router + (2*refresh+counter) * params.PEs_X ) / (layer.output.shape[1] + layer_params.add_up))) + \
                                         max_refresh * 2 * math.floor(layer_repetition/layer_params.iact_transmissions_pe)
 
                                     filter_number = cl_x + (layer_repetition * params.Clusters) + (cl_y * params.Clusters_X) 
                                 case 2:
-                                    x_cor= int(((router + cl_x * params.PEs_X + ((2*refresh+counter) * params.PEs_X * params.Clusters_X)) % (layer.output.shape[2] + layer_params.add_up)))
-                                    y_cor= int(((router + cl_x * params.PEs_X + ((2*refresh+counter) * params.PEs_X * params.Clusters_X)) / (layer.output.shape[2] + layer_params.add_up))) + \
+                                    x_cor= int(((router + cl_x * params.PEs_X + ((2*refresh+counter) * params.PEs_X * params.Clusters_X)) % (layer.output.shape[1] + layer_params.add_up)))
+                                    y_cor= int(((router + cl_x * params.PEs_X + ((2*refresh+counter) * params.PEs_X * params.Clusters_X)) / (layer.output.shape[1] + layer_params.add_up))) + \
                                         max_refresh * 2 * math.floor(layer_repetition/layer_params.iact_transmissions_pe)
 
                                     filter_number = (layer_repetition * params.Clusters_Y) + cl_y  
                                 case _:
-                                    x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + (2*refresh+counter) * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % (layer.output.shape[2] + layer_params.add_up)))
-                                    y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + (2*refresh+counter) * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / (layer.output.shape[2] + layer_params.add_up))) + \
+                                    x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + (2*refresh+counter) * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % (layer.output.shape[1] + layer_params.add_up)))
+                                    y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + (2*refresh+counter) * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / (layer.output.shape[1] + layer_params.add_up))) + \
                                         max_refresh * 2 * math.floor(layer_repetition/layer_params.iact_transmissions_pe)
                                     filter_number = math.floor(layer_repetition%layer_params.iact_transmissions_pe)
 
@@ -550,8 +550,6 @@ def calculate_conv_results_mp(f, layer, layer_number, layer_params, serial, dram
                             for y in range(0 - math.floor(layer.kernel_size[1]/2),math.ceil(layer.kernel_size[1]/2)):
                                 if((((x + j * layer_params.strideX) >= 0) & ((x + j * layer_params.strideX) < (layer.output.shape[1] * layer_params.strideX))) & \
                                 (((y + i * layer_params.strideY) >= 0) & ((y + i * layer_params.strideY) < (layer.output.shape[2] * layer_params.strideY)))):
-                                    print("X: " + str(x + (j * layer_params.strideX)))
-                                    print("Y: " + str(y + (i * layer_params.strideY)))
                                     calculated_results[j][i] = int(calculated_results[j][i] + \
                                                                     dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)] * \
                                                                     dram.fmap[layer_number][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
