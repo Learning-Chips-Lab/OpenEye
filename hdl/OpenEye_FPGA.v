@@ -1003,7 +1003,7 @@ module OpenEye_FPGA #(
             current_buffer_n <= current_buffer_n + 1;
             current_buffer_n_1 <= current_buffer_n;
             // get iact params
-            max_converter_needed_cycles                                 <= iact_size_x + {{4{1'd0}}, kernel_size} - 8'b00000001;
+            max_converter_needed_cycles                                 <= iact_size_y + {{4{1'd0}}, kernel_size} - 8'b00000001;
             min_standing_cycles                                         <= (needed_iact_cycles_reg * iact_channels) / WORDS_PER_CYCLE[8-1:0];
             buffer_SP_en_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]]   <= 1;
             buffer_SP_data_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]] <= data_dma_i_reg;
