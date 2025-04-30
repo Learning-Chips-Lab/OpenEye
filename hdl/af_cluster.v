@@ -34,7 +34,7 @@ module af_cluster #(
     parameter [ADVANCED_WIDTH-1:0] DIVISOR = {ADVANCED_WIDTH{1'b0}} + 35,
     parameter [ADVANCED_WIDTH-1:0] DIVIDEND = {{(ADVANCED_WIDTH - 32) {1'b0}}, 32'd3435973837}
 ) (
-    input  [  MODE_BITS-1 : 0] mode_i,
+    input  [$clog2(MODES)-1:0] mode_i,
     output                     ready_o,
     input  [DATA_BITWIDTH-1:0] data_i,
     input                      enable_i,

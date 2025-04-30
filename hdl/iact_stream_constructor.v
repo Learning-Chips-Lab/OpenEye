@@ -163,12 +163,12 @@ module iact_stream_constructor #(
 
     reg signed [7:0] y_reg;
     reg signed [7:0] x_reg             [NUM_GLB_IACT-1:0];
-    wire       [7:0] x_test ;
+    /*wire       [7:0] x_test ;
     assign x_test = x_reg[0];
     wire       [7:0] b_test ;
     assign b_test = byte_var;
     wire       [7:0] r_test ;
-    assign r_test = ram_var;
+    assign r_test = ram_var;*/
     integer          router_loop;
     reg        [1:0] fsm_current_state;
     always @(posedge clk_i, negedge rst_ni) begin
@@ -286,7 +286,7 @@ module iact_stream_constructor #(
           WRITE_TO_MEMORY: begin
             duty_cycle <= duty_cycle + 1;
             ram_wr_addr_reg <= (iact_router_counter * wght_size_reg) + {{(ADDRWIDTH-8){1'd0}},kernel_y_counter};
-            if (duty_cycle == needed_cycles_i) begin
+            if (duty_cycle == needed_cycles_i - 1) begin
               duty_cycle <= 0;
             end
             if (duty_cycle <= duty_cycle_th) begin

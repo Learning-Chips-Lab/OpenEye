@@ -7,19 +7,19 @@ import logging
 
 logger = logging.getLogger("cocotb")
 
-def create_layer(layer_mode, filters, kernelsize, inputsize, strides, channels,outputsize):
+def create_layer(layer_mode, filters, kernelsize, inputsize_x,  inputsize_y, strides, channels,outputsize):
     logger.debug("Start compiling.")
     model = tf.keras.models.Sequential()
     match layer_mode:
         case "Convolution":
-            model.add(tf.keras.layers.Conv2D(filters, (kernelsize, kernelsize), padding="SAME", input_shape=(inputsize, inputsize, channels), strides = strides))
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize, kernelsize), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "Depthwise_Convolution":
-            model.add(tf.keras.layers.DepthwiseConv2D((kernelsize, kernelsize), padding="SAME", input_shape=(inputsize, inputsize, channels), strides = strides))
+            model.add(tf.keras.layers.DepthwiseConv2D((kernelsize, kernelsize), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "FC":
-            model.add(tf.keras.Input(shape =(inputsize,)))
+            model.add(tf.keras.Input(shape =(inputsize_x,)))
             model.add(tf.keras.layers.Dense(outputsize, use_bias = True))
         case "Pooling":
-            model.add(tf.keras.Input(shape =(inputsize, inputsize, channels)))
+            model.add(tf.keras.Input(shape =(inputsize_x, inputsize_y, channels)))
             model.add(tf.keras.layers.AveragePooling2D(pool_size = inputsize, padding="valid"))
         case _:
             logger.debug("Layer not detected!")

@@ -50,5 +50,6 @@ status_dict = {
   "router_iact": 21,
   "router_wght": 22,
   "router_psum": 23,
-  "psum_delay": 24
+  "psum_delay": 24,
+  "needed_standing_cycles": 25
 }

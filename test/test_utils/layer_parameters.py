@@ -57,6 +57,8 @@ class LayerParameters(object):
         self.used_channels = 1
         self.channel_repetition = 4
         self.single_cluster_computation = 0
+        self.iact_size_x = 0
+        self.iact_size_y = 0
 
         self.iact_transmissions_pe = 1
         self.wght_transmissions_pe = 1
@@ -77,6 +79,8 @@ class LayerParameters(object):
         self.computing_mx = 0
         self.data_mode = 0
 
+        #FPGA parameters
+        self.needed_standing_cycles = 0
 
         if "Depthwise" in str(layer):
             logger.debug("Depthwise Convolution Layer")
@@ -190,8 +194,6 @@ class LayerParameters(object):
         self.strideY = layer.strides[1]
         self.calculate_iact_transmissions(layer,params)
         self.calculate_computing_matrix(layer, params)
-        self.iact_size_x = layer.input.shape[1]
-        self.iact_size_y = layer.input.shape[2]
         self.channels = layer.input.shape[3]
         match self.single_cluster_computation:
             case 1:
@@ -362,15 +364,12 @@ class LayerParameters(object):
         logger.debug("Needed transmissions WGHT    : " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions PSUM    : " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions TOTAL   : " + str(self.needed_total_transmissions))
-        print("Refreshes: " + str(self.Used_refreshes))
-        print("self.used_channels : " + str(self.used_channels))
-        print("layer.kernel_size[0] : " + str(layer.kernel_size[0]))
-        print("self.needed_Iact_writes : " + str(self.needed_Iact_writes))
-        print("self.needed_iact_transmissions : " + str(self.iact_transmissions_pe))
-        print("self.needed_iact_transmissions : " + str(self.iact_transmissions_glb))
-        print("self.needed_iact_transmissions : " + str(self.needed_iact_transmissions))
-        print("self.needed_wght_transmissions : " + str(self.needed_wght_transmissions))
-        print("self.needed_psum_transmissions : " + str(self.needed_psum_transmissions))
+
+        self.iact_size_x = layer.input.shape[1]
+        self.iact_size_y = layer.input.shape[2]
+        #FPGA parameters
+        self.needed_standing_cycles = math.ceil(params.Clusters/math.floor((params.Clusters*params.PEs_X)/self.iact_size_x))
+        self.needed_standing_cycles = max(self.needed_standing_cycles,4)
  
     def write_convdw_layer(self, layer, params):
         """ Write the weights and bias of a Conv2D layer to a file. """

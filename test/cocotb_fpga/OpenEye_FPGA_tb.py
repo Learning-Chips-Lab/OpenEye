@@ -77,9 +77,14 @@ async def single_layer_test(dut):
         logger.debug("KERNEL_SIZE not set")
 
     try:
-        inputsize = int((os.getenv("INPUT_SIZE")))
+        inputsize_x = int((os.getenv("INPUT_SIZE_X")))
     except:
-        logger.debug("INPUT_SIZE not set")
+        logger.debug("INPUT_SIZE_X not set")
+
+    try:
+        inputsize_y = int((os.getenv("INPUT_SIZE_Y")))
+    except:
+        logger.debug("INPUT_SIZE_Y not set")
 
     try:
         outputsize = int((os.getenv("OUTPUT_SIZE")))
@@ -137,7 +142,7 @@ async def single_layer_test(dut):
 
     #Here If-Condition test, wether use model or single Layer
     if(use_random):
-        model = data_create.create_layer(layer_mode, filters, kernelsize, inputsize, strides, channels, outputsize)
+        model = data_create.create_layer(layer_mode, filters, kernelsize, inputsize_x, inputsize_y, strides, channels, outputsize)
     else:
         model = tflite2model.create_model_from_tflite(use_random)
     #load_model_function

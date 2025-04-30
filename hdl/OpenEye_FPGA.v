@@ -791,6 +791,7 @@ module OpenEye_FPGA #(
       psum_buffer_SP_data_w             <= 0;
       wght_cnt                          <= 0;
       psum_cnt                          <= 0;
+      needed_standing_cycles            <= 0;
       // iact converter
       iact_out_reg                      <= 0;
       iact_ready                        <= 0;
@@ -889,9 +890,10 @@ module OpenEye_FPGA #(
                 kernel_size               <= data_dma_i_reg[3+PARAMETER_POS_2_9:PARAMETER_POS_2_9];
               end
               32'd2: begin
-                iact_channels      <= data_dma_i_reg[55:48];
-                iact_size          <= data_dma_i_reg[39:32];
-                iact_needed_cycles <= data_dma_i_reg[10:0];
+                needed_standing_cycles <= data_dma_i_reg[59:56];
+                iact_channels          <= data_dma_i_reg[55:48];
+                iact_size              <= data_dma_i_reg[39:32];
+                iact_needed_cycles     <= data_dma_i_reg[10:0];
               end
               32'd3: begin
                 compute_mask_reg[DMA_BITWIDTH-1:0] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
@@ -1031,12 +1033,6 @@ module OpenEye_FPGA #(
           wght_buffer_SP_en_w <= 0;
 
           if (enable_dma_i_reg) begin
-            if (min_standing_cycles < iact_size / PE_COLUMNS) begin
-              needed_standing_cycles <= math.ceil(CLUSTERS/math.floor(64/16));
-              needed_standing_cycles <= math.ceil(CLUSTERS/math.floor(64/20));
-            end else begin
-              needed_standing_cycles <= min_standing_cycles;
-            end
             for (b = 0; b < TRANS_BITWIDTH_WGHT; b = b + 1) begin
               wght_buffer_SP_data_w[fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b]
               <= data_dma_i_reg[b];
@@ -1117,6 +1113,7 @@ module OpenEye_FPGA #(
             psum_enable_i_reg <= 0;
           end
         end
+        
         START_CONVERTER: begin
           psum_enable_i_reg   <= 0;
           psum_buffer_SP_en_w <= 0;
@@ -1374,7 +1371,7 @@ module OpenEye_FPGA #(
             .iact_data_o     (iact_data_w),
             .iact_enable_o   (iact_enable_w),
             .iact_choose_o   (iact_choose_w),
-            .needed_cycles_i (needed_standing_cycles[3:0]-1)
+            .needed_cycles_i (needed_standing_cycles[3:0])
         );
       end
     end
