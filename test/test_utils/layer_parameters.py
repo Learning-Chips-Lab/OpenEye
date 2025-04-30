@@ -286,7 +286,10 @@ class LayerParameters(object):
         self.ceil_used_PE_per_clm = math.ceil(used_PEs_per_clm)
 
         self.used_Y_cluster = (math.ceil(self.used_PEs_Y/params.PEs_Y))
-        self.psum_delay = int(max([((self.used_wght_per_PE/2/self.used_iact_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
+        if (params.SERIAL) :
+                self.psum_delay = int(max([(math.ceil(self.used_channels) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
+        else :
+            self.psum_delay = int(max([(math.ceil(self.needed_refreshes_mx[layer_repetition][0]/2) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
         if((layer.output.shape[2] % params.PEs_X)== 0):
             self.used_X_cluster = 1
 
@@ -506,7 +509,10 @@ class LayerParameters(object):
                 self.needed_refreshes_mx[layer_repetition][1] = math.floor((math.floor(layer_repetition/self.iact_transmissions_pe)/ \
                     self.needed_total_transmissions) * self.Used_refreshes)
                 self.needed_refreshes_mx[layer_repetition][0] = self.needed_refreshes_mx[layer_repetition][2] - self.needed_refreshes_mx[layer_repetition][1]
-            self.psum_delay = int(max([(math.ceil(self.needed_refreshes_mx[layer_repetition][0]/2) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
+            if (params.SERIAL == 1) :
+                self.psum_delay = int(max([(math.ceil(self.used_channels) - 4) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
+            else :
+                self.psum_delay = int(max([(math.ceil(self.needed_refreshes_mx[layer_repetition][0]/2) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
             logger.debug("Cycles: " + str(self.needed_refreshes_mx))
             logger.debug("Needed transmissions: " + str(self.needed_iact_transmissions))
             logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
