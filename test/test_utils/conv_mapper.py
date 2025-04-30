@@ -79,7 +79,7 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21)
             dma_line = dma_line + (layer_params.kernel_size[1] << 25)
             dma_storage.append(dma_line)
-            dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.channels << 48) | (layer_params.iact_size_x << 32) |(layer_params.iact_size_y << 16) | layer_params.iact_stream_cycles
+            dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
             dma_storage.append(dma_line)
             for x in reversed(range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI))):
                 dma_storage.append(int(computing_pes[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI],2))

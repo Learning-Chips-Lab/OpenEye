@@ -249,8 +249,8 @@ def write_iact_file(layer, layer_number, dram):
             iact_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/iact/iact_ref' + '_' +  str(c) + '.csv')
             for y in range(0 - math.floor(layer.kernel_size[1]/2),layer.input.shape[2] + math.ceil(layer.kernel_size[1]/2) - 1):
                 for x in range(0 - math.floor(layer.kernel_size[0]/2),layer.input.shape[1] + math.ceil(layer.kernel_size[0]/2) - 1):
-                    if(((x >= 0) & (x  < layer.input.shape[2])) & \
-                        ((y >= 0) & (y < layer.input.shape[1]))):
+                    if(((x >= 0) & (x  < layer.input.shape[1])) & \
+                        ((y >= 0) & (y < layer.input.shape[2]))):
                         iact_ref[c].write(str(int(dram.fmap[layer_number][c][x][y])).rjust(5) + ";")
                     else:
                         iact_ref[c].write(str(1).rjust(5) + ";")
@@ -295,9 +295,9 @@ def write_psum_file(layer, layer_number, dram, calculated_results):
 
 def write_psum_file_conv_mp(f, layer, calculated_results, return_dict):
     psum_ref = ""
-    for x in range(layer.output.shape[1]):
-        for y in range(layer.output.shape[2]):
-            psum_ref = psum_ref + (str(calculated_results[f][y][x]).rjust(8) + ";")
+    for y in range(layer.output.shape[2]):
+        for x in range(layer.output.shape[1]):
+            psum_ref = psum_ref + (str(calculated_results[f][x][y]).rjust(8) + ";")
         psum_ref = psum_ref + ("\n")
     return_dict[f] = psum_ref
 
@@ -319,7 +319,7 @@ def collect_results(layer, layer_number, layer_params, dram, serial):
         calculated_results = return_dict
 
     elif "Depthwise" in str(layer):
-        calculated_results = [[[0 for i in range(layer.output.shape[1])] for j in range(layer.output.shape[2])]for k in range(layer.output.shape[3])]
+        calculated_results = [[[0 for i in range(layer.output.shape[2])] for j in range(layer.output.shape[1])]for k in range(layer.output.shape[3])]
         for j in range(layer.output.shape[1]):
             for i in range(layer.output.shape[2]):
                 for f in range(layer.output.shape[3]):
@@ -338,11 +338,11 @@ def collect_results(layer, layer_number, layer_params, dram, serial):
                                 calculated_results[c][i][j] = int(calculated_results[c][i][j] + \
                                                                 dram.weights[layer_number][c][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)])
     elif "Conv" in str(layer):
-        calculated_results = [[[0 for i in range(layer.output.shape[1])] for j in range(layer.output.shape[2])]for k in range(layer.output.shape[3])]
+        calculated_results = [[[0 for i in range(layer.output.shape[2])] for j in range(layer.output.shape[1])]for k in range(layer.output.shape[3])]
         for j in range(layer.output.shape[1]):
             for i in range(layer.output.shape[2]):
                 for f in range(layer.output.shape[3]):
-                    calculated_results[f][i][j] = int(calculated_results[f][i][j] + int(layer.bias[f]))
+                    calculated_results[f][j][i] = int(calculated_results[f][j][i] + int(layer.bias[f]))
 
         manager = mp.Manager()
         return_dict = manager.dict()
@@ -359,6 +359,9 @@ def collect_results(layer, layer_number, layer_params, dram, serial):
             jobs[proc].join()
 
         calculated_results = return_dict
+    print (str(calculated_results[0][0][0]))
+    print (str(calculated_results[0][1][0]))
+    print (str(calculated_results[0][2][0]))
     return calculated_results
 
 def calculate_dense_results_mp(x, layer, layer_number, dram, calculated_results,return_dict):
@@ -545,17 +548,19 @@ def calculate_conv_results_mp(f, layer, layer_number, layer_params, serial, dram
                     for x in range(0 - math.floor(layer.kernel_size[0]/2),math.ceil(layer.kernel_size[0]/2)):
                         for c in range(layer.input.shape[3]):
                             for y in range(0 - math.floor(layer.kernel_size[1]/2),math.ceil(layer.kernel_size[1]/2)):
-                                if((((x + i * layer_params.strideX) >= 0) & ((x + i * layer_params.strideX) < (layer.output.shape[2] * layer_params.strideX))) & \
-                                (((y + j * layer_params.strideY) >= 0) & ((y + j * layer_params.strideY) < (layer.output.shape[1] * layer_params.strideY)))):
-                                    calculated_results[i][j] = int(calculated_results[i][j] + \
+                                if((((x + j * layer_params.strideX) >= 0) & ((x + j * layer_params.strideX) < (layer.output.shape[1] * layer_params.strideX))) & \
+                                (((y + i * layer_params.strideY) >= 0) & ((y + i * layer_params.strideY) < (layer.output.shape[2] * layer_params.strideY)))):
+                                    print("X: " + str(x + (j * layer_params.strideX)))
+                                    print("Y: " + str(y + (i * layer_params.strideY)))
+                                    calculated_results[j][i] = int(calculated_results[j][i] + \
                                                                     dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)] * \
-                                                                    dram.fmap[layer_number][c][x + (i * layer_params.strideX)][y + (j * layer_params.strideY)])
+                                                                    dram.fmap[layer_number][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
 
                                 else:
                                     if (serial) :
                                         pass
                                     else:
-                                        calculated_results[i][j] = int(calculated_results[i][j] + \
+                                        calculated_results[j][i] = int(calculated_results[j][i] + \
                                             dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)])
                                      # zero pad with 1
                                     # calculated_results[i][j] = int(calculated_results[i][j] + \

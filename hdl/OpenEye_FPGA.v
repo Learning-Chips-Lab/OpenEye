@@ -1371,7 +1371,9 @@ module OpenEye_FPGA #(
             .iact_data_o     (iact_data_w),
             .iact_enable_o   (iact_enable_w),
             .iact_choose_o   (iact_choose_w),
-            .needed_cycles_i (needed_standing_cycles[3:0])
+            .needed_cycles_i (needed_standing_cycles[3:0]),
+            .iact_size_xi    (iact_size_x),
+            .iact_size_yi    (iact_size_y)
         );
       end
     end

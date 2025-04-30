@@ -35,7 +35,9 @@ module iact_stream_constructor #(
     output reg [ NUM_GLB_IACT*BITS_PER_ROUTER-1:0] iact_data_o,
     output reg [                 NUM_GLB_IACT-1:0] iact_enable_o,
     output reg [ (PES*$clog2(NUM_GLB_IACT+1))-1:0] iact_choose_o,
-    input      [                            4-1:0] needed_cycles_i
+    input      [                            4-1:0] needed_cycles_i,
+    input      [                            8-1:0] iact_size_xi,
+    input      [                            8-1:0] iact_size_yi
 );
   reg                           ram_wr_en;
   reg  [         ADDRWIDTH-1:0] ram_wr_addr;
@@ -46,7 +48,6 @@ module iact_stream_constructor #(
   reg  [         ADDRWIDTH-1:0] address_storage;
   reg  [                 8-1:0] x;
   reg  [                 8-1:0] y;
-  reg  [                 8-1:0] iact_size;
   reg  [                 8-1:0] channels;
   reg  [                 8-1:0] current_cycle;
   reg  [                 8-1:0] pos;
@@ -216,7 +217,6 @@ module iact_stream_constructor #(
         fsm_current_state      <= INITIALIZE;
         x                      <= 0;
         y                      <= 0;
-        iact_size              <= 0;
         channels               <= 0;
         pos                    <= 0;
         change_state           <= 0;
@@ -249,7 +249,6 @@ module iact_stream_constructor #(
             router_cycle           <= 0;
             addr_cycle             <= 0;
             fsm_current_state      <= GET_PARAMETER;
-            iact_size              <= 0;
             channels               <= 0;
             x                      <= 0;
             y                      <= 0;
@@ -339,14 +338,14 @@ module iact_stream_constructor #(
               end
               for (r = 0; r < NUM_GLB_IACT; r++) begin
                 for (w = 0; w < WORDS_PER_CYCLE; w++) begin
-                  ram_var = (((y_reg * iact_size) + x_reg[r]) / 2) % RAM_CELLS;
+                  ram_var = (((y_reg * iact_size_xi) + x_reg[r]) / 2) % RAM_CELLS;
                   byte_var = (((x_reg[r]*channels) + ((fsm_cycle%(4/WORDS_PER_CYCLE))/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM);
                   //PADDING
                   if ((
                   (0 > x_reg[r])|
-                  ((iact_size - 1) < x_reg[r])) | (
+                  ((iact_size_xi - 1) < x_reg[r])) | (
                   (0 > y_reg) |
-                  ((iact_size - 1) < y_reg)
+                  ((iact_size_yi - 1) < y_reg)
                   )) begin
                     mem_data_payload_reg[r][w] <= 0;
                   end else begin
@@ -391,7 +390,6 @@ module iact_stream_constructor #(
         if (enable_config) begin
           x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
           y                      <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4];
-          iact_size              <= params[(2*PARAMS_SIZE/4)-1:PARAMS_SIZE/4];
           channels               <= params[(PARAMS_SIZE/4)-1:0];
           ready_o                <= 1;
           ram_wr_addr            <= 0;
