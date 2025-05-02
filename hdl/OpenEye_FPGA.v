@@ -1308,15 +1308,16 @@ module OpenEye_FPGA #(
   wire [2*RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r_w;
   wire [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0]   buffer_SP_data_r;
 
-  for (j_gen = 0; j_gen < RAM_CELLS; j_gen++) begin : gen_RAM_wires
-    assign buffer_SP_en_r[0][j_gen] = buffer_select ? 0 : buffer_SP_en_r_reg[j_gen];
-    assign buffer_SP_en_r[1][j_gen] = buffer_select ? buffer_SP_en_r_reg[j_gen] : 0;
-    assign buffer_SP_en_w[0][j_gen] = buffer_select ? 0 : buffer_SP_en_w_reg[j_gen];
-    assign buffer_SP_en_w[1][j_gen] = buffer_select ? buffer_SP_en_w_reg[j_gen] : 0;
-    assign buffer_SP_addr[0][j_gen] = buffer_select ? 0 : buffer_SP_addr_reg[j_gen];
-    assign buffer_SP_addr[1][j_gen] = buffer_select ? buffer_SP_addr_reg[j_gen] : 0;
-    assign buffer_SP_data_w[0][j_gen] = buffer_select ? 0 : buffer_SP_data_w_reg[j_gen];
-    assign buffer_SP_data_w[1][j_gen] = buffer_select ? buffer_SP_data_w_reg[j_gen] : 0;
+  genvar k_gen;
+  for (k_gen = 0; k_gen < RAM_CELLS; k_gen++) begin : gen_RAM_wires
+    assign buffer_SP_en_r[0][k_gen] = buffer_select ? 0 : buffer_SP_en_r_reg[k_gen];
+    assign buffer_SP_en_r[1][k_gen] = buffer_select ? buffer_SP_en_r_reg[k_gen] : 0;
+    assign buffer_SP_en_w[0][k_gen] = buffer_select ? 0 : buffer_SP_en_w_reg[k_gen];
+    assign buffer_SP_en_w[1][k_gen] = buffer_select ? buffer_SP_en_w_reg[k_gen] : 0;
+    assign buffer_SP_addr[0][k_gen] = buffer_select ? 0 : buffer_SP_addr_reg[k_gen];
+    assign buffer_SP_addr[1][k_gen] = buffer_select ? buffer_SP_addr_reg[k_gen] : 0;
+    assign buffer_SP_data_w[0][k_gen] = buffer_select ? 0 : buffer_SP_data_w_reg[k_gen];
+    assign buffer_SP_data_w[1][k_gen] = buffer_select ? buffer_SP_data_w_reg[k_gen] : 0;
     assign buffer_SP_data_r           = buffer_select ? buffer_SP_data_r_w[RAM_CELLS_WORD_BITWIDTH*RAM_CELLS+:RAM_CELLS_WORD_BITWIDTH*RAM_CELLS] :
     buffer_SP_data_r_w[0+:RAM_CELLS_WORD_BITWIDTH*RAM_CELLS];
   end
