@@ -126,10 +126,10 @@ module iact_stream_constructor #(
             flat_help_var = 0;
             for (pec = 0; pec < PE_X; pec = pec + 1) begin
               for (per = 0; per < PE_Y; per = per + 1) begin
-                if (((pec[3:0] + per[3:0]) >=  (NUM_GLB_IACT[3:0] *  current_iact_cycle_reg[3:0])) 
-                &  (pec[3:0] + per[3:0])  <  (NUM_GLB_IACT[3:0] * (current_iact_cycle_reg[3:0] + 1))
+                if (((pec[3:0] + per[3:0]) >=  (NUM_GLB_IACT[3:0] *  (current_iact_cycle_reg[3:0]%2))) 
+                &  (pec[3:0] + per[3:0])  <  (NUM_GLB_IACT[3:0] * ((current_iact_cycle_reg[3:0]%2) + 1))
                 ) begin
-                  flat_help_var   = (flat_help_var + pec[3:0] + per[3:0] - (NUM_GLB_IACT[3:0] * current_iact_cycle_reg[3:0]));
+                  flat_help_var   = (pec[3:0] + per[3:0] - (NUM_GLB_IACT[3:0] * (current_iact_cycle_reg[3:0]%2)));
                   for (b = 0; b < $clog2(NUM_GLB_IACT + 1); b = b + 1) begin
                     iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+b] <=
                         flat_help_var[b];
@@ -144,12 +144,13 @@ module iact_stream_constructor #(
               end
             end
             // Full Iact Cycle
-            if (fsm_enc_cycle + 1 == (channels * wght_size_reg)) begin
+            if (fsm_enc_cycle[7:0] + 1 == (channels)) begin
               fsm_enc_cycle          <= 0;
               current_iact_cycle_reg <= current_iact_cycle_reg + 1;
               //All Iacts per Computing Cycle are transmitted
-              if (current_iact_cycle_reg == needed_iact_cycles_reg - 1) begin
-                fsm_enc_current_state <= IDLE;
+              if (current_iact_cycle_reg == (needed_iact_cycles_reg* wght_size_reg) - 1) begin
+                fsm_enc_current_state  <= IDLE;
+                current_iact_cycle_reg <= 0;
               end
             end
           end
@@ -310,11 +311,11 @@ module iact_stream_constructor #(
               end
               if (fsm_cycle % (2 / WORDS_PER_CYCLE) == 0) begin
                 addr_cycle <= addr_cycle + 1;
-                if (addr_cycle == ((channels / WORDS_PER_CYCLE) - 1)) begin
-                  addr_cycle  <= 0;
+                
+                if (fsm_cycle != 0) begin
                   ram_wr_addr <= ram_wr_addr + 1;
                 end else begin
-                  ram_wr_addr <= ((ram_wr_addr_reg * channels)/WORDS_PER_TRANS[11:0]) + address_storage;
+                  ram_wr_addr <= address_storage;
                 end
                 //Reset payload to 0
                 for (r = 0; r < NUM_GLB_IACT; r++) begin
