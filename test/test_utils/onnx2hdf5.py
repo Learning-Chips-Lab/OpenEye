@@ -163,8 +163,6 @@ def extract_and_write_info(ID, graph, node_name, dimension, w_ident, b_ident, hd
             strides = extract_attribute(node, "strides")
             filters = dimension_list[-1]
 
-            #print(pads)
-
 
             weights_node = next((input for input in node.input if w_ident in input), None)
             bias_node = next((input for input in node.input if b_ident in input), None)

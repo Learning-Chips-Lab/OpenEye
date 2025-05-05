@@ -359,9 +359,6 @@ def collect_results(layer, layer_number, layer_params, dram, serial):
             jobs[proc].join()
 
         calculated_results = return_dict
-    print (str(calculated_results[0][0][0]))
-    print (str(calculated_results[0][1][0]))
-    print (str(calculated_results[0][2][0]))
     return calculated_results
 
 def calculate_dense_results_mp(x, layer, layer_number, dram, calculated_results,return_dict):

@@ -81,6 +81,8 @@ class LayerParameters(object):
 
         #FPGA parameters
         self.needed_standing_cycles = 0
+        self.direct_cycling = 0
+        self.iact_x_lines = 3
 
         if "Depthwise" in str(layer):
             logger.debug("Depthwise Convolution Layer")
@@ -325,9 +327,12 @@ class LayerParameters(object):
         logger.debug("layer_params.needed_Iact_writes : " + str(self.needed_Iact_writes))
         logger.debug("Used_refreshes : " + str(self.Used_refreshes))
         logger.debug("layer_params.needed_psum_transmissions : " + str(self.needed_psum_transmissions))
-        self.iact_transmissions_glb = \
-        math.ceil(math.ceil(self.Used_refreshes/self.wght_transmissions_pe/self.needed_psum_transmissions/self.iact_transmissions_pe)/math.floor(params.Iact_Mem_Addr_Words/\
-        ((math.ceil((self.used_channels*layer.kernel_size[0])/2) + (math.ceil((self.used_channels + 1)/6)))* self.needed_Iact_writes)))
+        if (params.SERIAL == 1) :
+            self.iact_transmissions_glb = 1
+        else :
+            self.iact_transmissions_glb = \
+            math.ceil(math.ceil(self.Used_refreshes/self.wght_transmissions_pe/self.needed_psum_transmissions/self.iact_transmissions_pe)/math.floor(params.Iact_Mem_Addr_Words/\
+            ((math.ceil((self.used_channels*layer.kernel_size[0])/2) + (math.ceil((self.used_channels + 1)/6)))* self.needed_Iact_writes)))
         self.needed_iact_transmissions = self.iact_transmissions_pe * self.iact_transmissions_glb
         match self.single_cluster_computation:
             case 1:
@@ -372,7 +377,12 @@ class LayerParameters(object):
         self.iact_size_y = layer.input.shape[2]
         #FPGA parameters
         self.needed_standing_cycles = math.ceil(params.Clusters/math.floor((params.Clusters*params.PEs_X)/self.iact_size_x))
-        self.needed_standing_cycles = max(self.needed_standing_cycles,4)
+        if (self.iact_size_x == 64) :
+            self.needed_standing_cycles = 4
+            self.direct_cycling = 1
+            self.iact_x_lines = layer.kernel_size[1] + self.iact_size_y - 1
+        else :
+            self.needed_standing_cycles = max(self.needed_standing_cycles,4)
  
     def write_convdw_layer(self, layer, params):
         """ Write the weights and bias of a Conv2D layer to a file. """
