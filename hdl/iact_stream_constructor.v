@@ -146,8 +146,6 @@ module iact_stream_constructor #(
             end
             if (fsm_enc_cycle[7:0] == 0) begin
               current_iact_cycle_reg <= current_iact_cycle_reg + 1;
-            end
-            if (fsm_enc_cycle[7:0] == 0) begin
               //All Iacts per Computing Cycle are transmitted
               if (current_iact_cycle_reg == (needed_iact_cycles_reg * wght_size_reg)) begin
                 fsm_enc_current_state  <= IDLE;
