@@ -892,7 +892,7 @@ module OpenEye_FPGA #(
                 psum_delay_reg            <= data_dma_i_reg[3+PARAMETER_POS_2_7:PARAMETER_POS_2_7];
                 kernel_per_pe_cluster_reg <= data_dma_i_reg[3+PARAMETER_POS_2_8:PARAMETER_POS_2_8];
                 kernel_size               <= data_dma_i_reg[3+PARAMETER_POS_2_9:PARAMETER_POS_2_9];
-                x_lines_reg               <= data_dma_i_reg[8+PARAMETER_POS_2_10:PARAMETER_POS_2_10];
+                x_lines_reg               <= data_dma_i_reg[7+PARAMETER_POS_2_10:PARAMETER_POS_2_10];
               end
               32'd2: begin
                 needed_standing_cycles <= data_dma_i_reg[63:56];

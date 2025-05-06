@@ -444,6 +444,7 @@ module PE #(
       psum_data_1_delay       <= 0;
       psum_data_2_delay       <= 0;
       psum_enable             <= 0;
+      psum_enable_2           <= 0;
       psum_enable_o           <= 0;
       psum_spad_addr_a_mem    <= 0;
       psum_spad_addr_b_mem    <= 1;
