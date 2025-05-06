@@ -7,6 +7,7 @@ import sys
 import os
 directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
+import numpy as np
 import math
 import logging
 import generic_test_utils as gtu
@@ -29,16 +30,32 @@ class WghtStreamMapper(object):
 
     def get_wght_stream(self):
         storage = [[[[] for c in range(self.params.Wght_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
-        for cl_x in range(self.params.Clusters_X):
-            for cl_y in range(self.params.Clusters_Y):
-                for router in range(self.params.Wght_Routers):
-                    if(self.layer_params.computing_mx[cl_x][cl_y][router][0] == 1):
-                        spad = self.write_wght_pe(cl_x, cl_y, router)
-                        if (self.sparse_data == 1):
-                            storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
-                        else:
-                            storage[cl_x][cl_y][router] = spad
-        wght_stream = self.create_complete_wght_stream(storage)
+        if (self.params.SERIAL):
+            wght_stream = []
+            for layer_repetition_loop in range(self.layer_params.needed_wght_transmissions) :
+                self.layer_repetition = layer_repetition_loop
+                temp_storage = [[[[] for c in range(self.params.Wght_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
+                for cl_x in range(self.params.Clusters_X):
+                    for cl_y in range(self.params.Clusters_Y):
+                        for router in range(self.params.Wght_Routers):
+                            if(self.layer_params.computing_mx[cl_x][cl_y][router][0] == 1):
+                                spad = self.write_wght_pe(cl_x, cl_y, router)
+                                if (self.sparse_data == 1):
+                                    temp_storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
+                                else:
+                                    temp_storage[cl_x][cl_y][router] = spad
+                wght_stream.extend(self.create_complete_wght_stream(temp_storage))
+        else:
+            for cl_x in range(self.params.Clusters_X):
+                for cl_y in range(self.params.Clusters_Y):
+                    for router in range(self.params.Wght_Routers):
+                        if(self.layer_params.computing_mx[cl_x][cl_y][router][0] == 1):
+                            spad = self.write_wght_pe(cl_x, cl_y, router)
+                            if (self.sparse_data == 1):
+                                storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
+                            else:
+                                storage[cl_x][cl_y][router] = spad
+            wght_stream = self.create_complete_wght_stream(storage)
         return wght_stream
     
     def set_sparse_stream(self,spad_data):

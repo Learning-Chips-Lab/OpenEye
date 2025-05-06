@@ -65,8 +65,7 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + (layer_params.used_iact_per_PE << 41)
             dma_storage.append(dma_line)
             dma_line = 0
-            dma_line = dma_line + (layer_params.iact_addr_len)
-            dma_line = dma_line + (layer_params.iact_data_len << 2)
+            dma_line = dma_line + (layer_params.needed_wght_transmissions)
             dma_line = dma_line + (layer_params.strideX << 6)
             dma_line = dma_line + (layer_params.strideY << 10)
             dma_line = dma_line + (layer_params.skipIact << 14)

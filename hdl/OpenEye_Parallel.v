@@ -160,8 +160,6 @@ module OpenEye_Parallel #(
     input      [                             NUM_GLB_PSUM-1:0] pooling_cluster_mode_i,
     input      [                                          3:0] delay_psum_glb_i,
     input      [                    $clog2(IACT_PER_PE+1)-1:0] input_activations_i,
-    input      [                                          1:0] iact_write_addr_t_i,
-    input      [                                          3:0] iact_write_data_t_i,
     input      [                                          2:0] stride_x_i,
     input      [                                          2:0] stride_y_i,
     input      [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i,
@@ -251,7 +249,6 @@ module OpenEye_Parallel #(
   wire [                    CLUSTERS*NUM_GLB_WGHT-1:0] wght_ready_o_w;
   wire                                                 compute_i_w;
   reg                                                  iact_transmitted;
-  reg                                                  wght_transmitted;
   reg                                                  psum_transmitted;
   reg                                                  start_new_cycle;
   wire                                                 status_reg_enable_i_w;
@@ -269,8 +266,6 @@ module OpenEye_Parallel #(
   wire [                             NUM_GLB_PSUM-1:0] pooling_cluster_mode_i_w;
   wire [                                          3:0] delay_psum_glb_i_w;
   wire [                    $clog2(IACT_PER_PE+1)-1:0] input_activations_i_w;
-  wire [                                          1:0] iact_write_addr_t_i_w;
-  wire [                                          3:0] iact_write_data_t_i_w;
   wire [                                          2:0] stride_x_i_w;
   wire [                                          2:0] stride_y_i_w;
   wire [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i_w;
@@ -281,7 +276,6 @@ module OpenEye_Parallel #(
   reg  [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i_reg;
   reg  [                    CLUSTERS*NUM_GLB_WGHT-1:0] wght_enable_i_reg;
   wire [                    CLUSTERS*NUM_GLB_WGHT-1:0] wght_ready_o_reg;
-  reg                                                  wght_ready_reg;
   reg                                                  compute_i_reg;
   reg                                                  status_reg_enable_i_reg;
   reg                                                  data_mode_i_reg;
@@ -297,8 +291,6 @@ module OpenEye_Parallel #(
   reg  [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i_reg;
   reg  [                             NUM_GLB_PSUM-1:0] pooling_cluster_mode_i_reg;
   reg  [                    $clog2(IACT_PER_PE+1)-1:0] input_activations_i_reg;
-  reg  [                                          1:0] iact_write_addr_t_i_reg;
-  reg  [                                          3:0] iact_write_data_t_i_reg;
   reg  [                                          2:0] stride_x_i_reg;
   reg  [                                          2:0] stride_y_i_reg;
   reg  [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i_reg;
@@ -437,8 +429,6 @@ module OpenEye_Parallel #(
       af_cluster_mode_i_reg       <= 0;
       pooling_cluster_mode_i_reg  <= 0;
       input_activations_i_reg     <= 0;
-      iact_write_addr_t_i_reg     <= 0;
-      iact_write_data_t_i_reg     <= 0;
       stride_x_i_reg              <= 0;
       stride_y_i_reg              <= 0;
       kernel_per_pe_cluster_i_reg <= 0;
@@ -467,8 +457,6 @@ module OpenEye_Parallel #(
       af_cluster_mode_i_reg       <= {NUM_GLB_PSUM{af_cluster_mode_i}};
       pooling_cluster_mode_i_reg  <= pooling_cluster_mode_i;
       input_activations_i_reg     <= input_activations_i;
-      iact_write_addr_t_i_reg     <= iact_write_addr_t_i;
-      iact_write_data_t_i_reg     <= iact_write_data_t_i;
       stride_x_i_reg              <= stride_x_i;
       stride_y_i_reg              <= stride_y_i;
       kernel_per_pe_cluster_i_reg <= kernel_per_pe_cluster_i;
@@ -519,12 +507,14 @@ module OpenEye_Parallel #(
 
           start_new_cycle       <= 0;
           compute_cluster_i_reg <= 0;
-          if (psum_transmitted & (iact_enable_i == 0)) begin
+          if (psum_transmitted & (iact_enable_i == 0) & (wght_enable_i == 0)) begin
             start_new_cycle <= 1;
             if (start_new_cycle != 1) begin
               finished_cycles <= finished_cycles + 1;
             end
-            compute_cluster_i_reg <= compute_mask_reg;
+            if (finished_cycles < needed_cycles_i_reg) begin
+              compute_cluster_i_reg <= compute_mask_reg;
+            end
           end
           if (fsm_psum_current_state == SEND_RESULTS) begin
             computing <= 0;
@@ -548,8 +538,6 @@ module OpenEye_Parallel #(
       wght_enable_i_reg      <= 0;
       wght_data_i_reg        <= 0;
       wght_ready_o           <= 0;
-      wght_ready_reg         <= 1;
-      wght_transmitted       <= 0;
     end else begin
       wght_data_i_reg   <= wght_data_i;
       wght_enable_i_reg <= wght_enable_i;
@@ -557,17 +545,12 @@ module OpenEye_Parallel #(
       case (fsm_wght_current_state)
 
         WGHT_READY: begin
-          wght_ready_reg   <= 1;
-          wght_transmitted <= 0;
           if (compute_i) begin
-            wght_ready_reg         <= 0;
             fsm_wght_current_state <= WGHT_BUSY;
           end
         end
 
         WGHT_BUSY: begin
-          wght_ready_reg   <= 0;
-          wght_transmitted <= 1;
           if ((compute_cluster_i_reg != 0) & (finished_cycles == needed_cycles_i_reg)) begin
             fsm_wght_current_state <= WGHT_READY;
           end
@@ -577,7 +560,6 @@ module OpenEye_Parallel #(
         end
 
         default: begin
-          wght_ready_reg <= 0;
         end
       endcase
     end
@@ -721,9 +703,7 @@ module OpenEye_Parallel #(
               end
             end
           end else begin
-            if ((fsm_psum_cycle <= 16) & (psum_ready_i_reg == 0)) begin
-              fsm_psum_cycle <= fsm_psum_cycle + 1;
-            end else begin
+            if (start_new_cycle & (psum_ready_i_reg == 0)) begin
               fsm_psum_cycle <= 0;
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
@@ -1284,7 +1264,7 @@ module OpenEye_Parallel #(
                                   g_gen * TRANS_BITWIDTH_WGHT + b_gen];
           end
           assign gen_x[cc_gen].gen_y[cr_gen].wght_enable_i_cluster_w[g_gen] = wght_enable_i_w[cc_gen*NUM_GLB_WGHT*CLUSTER_ROWS+cr_gen*NUM_GLB_WGHT+g_gen];
-          assign wght_ready_o_reg[cc_gen*NUM_GLB_WGHT*CLUSTER_ROWS+cr_gen*NUM_GLB_WGHT+g_gen] = gen_x[cc_gen].gen_y[cr_gen].wght_ready_o_cluster_w[g_gen] & (wght_ready_reg != 0);
+          assign wght_ready_o_reg[cc_gen*NUM_GLB_WGHT*CLUSTER_ROWS+cr_gen*NUM_GLB_WGHT+g_gen] = gen_x[cc_gen].gen_y[cr_gen].wght_ready_o_cluster_w[g_gen];
         end
 
         ///PSUM ASSIGNMENTS

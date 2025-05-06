@@ -316,7 +316,6 @@ class LayerParameters(object):
                 self.Used_refreshes = math.ceil(all_transmissions_of_pe * math.ceil(layer.output.shape[1] * layer.output.shape[2]/(params.PEs_X*params.Clusters_X)))
             case _:
                 self.Used_refreshes = math.ceil(self.used_Y_cluster* all_transmissions_of_pe * math.ceil(layer.output.shape[1] * layer.output.shape[2]/(params.PEs_X*params.Clusters)))
-        
         if (layer.kernel_size[0] == 1):
             self.used_iact_addr_per_PE = 1
         else:
@@ -345,20 +344,27 @@ class LayerParameters(object):
         if(self.used_wght_addr_per_PE == (params.Wghts_Addr_per_PE + 1)):
             self.used_wght_addr_per_PE = self.used_wght_addr_per_PE - 1
 
-        self.needed_total_transmissions = self.needed_psum_transmissions * \
-                                            self.needed_wght_transmissions * \
-                                            self.needed_iact_transmissions
-        self.needed_refreshes_mx = [[1 for _ in range(3)] for _ in range(self.needed_total_transmissions)]
+        if (params.SERIAL == 1) :
+            self.needed_total_transmissions = 1
+            self.needed_refreshes_mx = [[1 for _ in range(3)] for _ in range(1)]
+            self.needed_refreshes_mx[0][2] = self.Used_refreshes
+            self.needed_refreshes_mx[0][1] = 0
+            self.needed_refreshes_mx[0][0] = self.Used_refreshes
+        else :
+            self.needed_total_transmissions = self.needed_psum_transmissions * \
+                                                self.needed_wght_transmissions * \
+                                                self.needed_iact_transmissions
+            self.needed_refreshes_mx = [[1 for _ in range(3)] for _ in range(self.needed_total_transmissions)]
 
 
-        for layer_repetition in range(self.needed_total_transmissions):
-            self.needed_refreshes_mx[layer_repetition][2] = math.floor(((math.floor(math.floor(layer_repetition/self.iact_transmissions_pe)/self.needed_wght_transmissions)+1)/ \
-                self.needed_total_transmissions) * self.Used_refreshes)
-            self.needed_refreshes_mx[layer_repetition][2] = self.needed_refreshes_mx[layer_repetition][2] - (self.needed_refreshes_mx[layer_repetition][2]%self.used_Y_cluster)
-            self.needed_refreshes_mx[layer_repetition][1] = math.floor((math.floor(math.floor(layer_repetition/self.iact_transmissions_pe)/self.needed_wght_transmissions)/ \
-                self.needed_total_transmissions) * self.Used_refreshes)
-            self.needed_refreshes_mx[layer_repetition][1] = self.needed_refreshes_mx[layer_repetition][1] - (self.needed_refreshes_mx[layer_repetition][1]%self.used_Y_cluster)
-            self.needed_refreshes_mx[layer_repetition][0] = self.needed_refreshes_mx[layer_repetition][2] - self.needed_refreshes_mx[layer_repetition][1]
+            for layer_repetition in range(self.needed_total_transmissions):
+                self.needed_refreshes_mx[layer_repetition][2] = math.floor(((math.floor(math.floor(layer_repetition/self.iact_transmissions_pe)/self.needed_wght_transmissions)+1)/ \
+                    self.needed_total_transmissions) * self.Used_refreshes)
+                self.needed_refreshes_mx[layer_repetition][2] = self.needed_refreshes_mx[layer_repetition][2] - (self.needed_refreshes_mx[layer_repetition][2]%self.used_Y_cluster)
+                self.needed_refreshes_mx[layer_repetition][1] = math.floor((math.floor(math.floor(layer_repetition/self.iact_transmissions_pe)/self.needed_wght_transmissions)/ \
+                    self.needed_total_transmissions) * self.Used_refreshes)
+                self.needed_refreshes_mx[layer_repetition][1] = self.needed_refreshes_mx[layer_repetition][1] - (self.needed_refreshes_mx[layer_repetition][1]%self.used_Y_cluster)
+                self.needed_refreshes_mx[layer_repetition][0] = self.needed_refreshes_mx[layer_repetition][2] - self.needed_refreshes_mx[layer_repetition][1]
 
         logger.debug("Needed transmissions: " + str(self.needed_iact_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
