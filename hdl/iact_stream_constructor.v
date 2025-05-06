@@ -100,12 +100,13 @@ module iact_stream_constructor #(
               ram_rd_addr <= 0;
             end
             if (fsm_enc_cycle >= 1) begin
-              ram_rd_en <= 1;
               if (iact_ready_i != {((NUM_GLB_IACT)) {1'b1}}) begin
                 fsm_enc_cycle <= fsm_enc_cycle;
               end else begin
                 fsm_enc_current_state <= ENCODE;
                 fsm_enc_cycle         <= 0;
+                ram_rd_en             <= 1;
+                current_iact_cycle_reg <= ~0;
               end
             end
           end
@@ -113,9 +114,9 @@ module iact_stream_constructor #(
             fsm_enc_cycle <= fsm_enc_cycle + 1;
             ram_rd_en     <= 1;
             iact_data_o   <= ram_data_o;
-            if (ram_rd_addr < address_storage) begin
-              iact_enable_o <= {((NUM_GLB_IACT)) {1'b1}};
-              if (fsm_enc_cycle % WORDS_PER_CYCLE == 0) begin
+            if (fsm_enc_cycle >= 1) begin 
+              iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
+              if ((fsm_enc_cycle + 1) % WORDS_PER_CYCLE == 0) begin
                 ram_rd_addr <= ram_rd_addr + 1;
               end
             end
@@ -140,14 +141,20 @@ module iact_stream_constructor #(
               end
             end
             // Full Iact Cycle
-            if (fsm_enc_cycle[7:0] + 1 == (channels)) begin
-              fsm_enc_cycle          <= 0;
+            if (fsm_enc_cycle[7:0] == (channels - 1)) begin
+              fsm_enc_cycle <= 0;
+            end
+            if (fsm_enc_cycle[7:0] == 0) begin
               current_iact_cycle_reg <= current_iact_cycle_reg + 1;
+            end
+            if (fsm_enc_cycle[7:0] == 0) begin
               //All Iacts per Computing Cycle are transmitted
-              if (current_iact_cycle_reg == (needed_iact_cycles_reg* wght_size_reg) - 1) begin
+              if (current_iact_cycle_reg == (needed_iact_cycles_reg * wght_size_reg)) begin
                 fsm_enc_current_state  <= IDLE;
                 ram_rd_addr            <= ram_rd_addr - (channels * (wght_size_reg - 1));
                 current_iact_cycle_reg <= 0;
+                ram_rd_en              <= 0;
+                fsm_enc_cycle          <= 0;
               end
             end
           end
@@ -157,7 +164,6 @@ module iact_stream_constructor #(
           end
         endcase
         if (enable_converter) begin
-          ram_rd_en     <= 1;
           ram_rd_addr   <= 0;
           fsm_enc_cycle <= fsm_enc_cycle + 1;
         end
