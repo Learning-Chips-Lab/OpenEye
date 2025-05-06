@@ -89,7 +89,6 @@ module iact_stream_constructor #(
         current_iact_cycle_reg <= 0;
       end else begin
         case (fsm_enc_current_state)
-
           IDLE: begin
             iact_data_o            <= 0;
             iact_enable_o          <= 0;
@@ -99,10 +98,6 @@ module iact_stream_constructor #(
             current_iact_cycle_reg <= 0;
             if (enable_store) begin
               ram_rd_addr <= 0;
-            end
-            if (enable_converter) begin
-              ram_rd_en     <= 1;
-              fsm_enc_cycle <= fsm_enc_cycle + 1;
             end
             if (fsm_enc_cycle >= 1) begin
               ram_rd_en <= 1;
@@ -114,7 +109,6 @@ module iact_stream_constructor #(
               end
             end
           end
-
           ENCODE: begin
             fsm_enc_cycle <= fsm_enc_cycle + 1;
             ram_rd_en     <= 1;
@@ -161,8 +155,12 @@ module iact_stream_constructor #(
             ram_rd_en             <= 0;
             fsm_enc_current_state <= IDLE;
           end
-
         endcase
+        if (enable_converter) begin
+          ram_rd_en     <= 1;
+          ram_rd_addr   <= 0;
+          fsm_enc_cycle <= fsm_enc_cycle + 1;
+        end
       end
     end
 

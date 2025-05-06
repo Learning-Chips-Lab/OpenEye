@@ -69,10 +69,7 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + (layer_params.iact_data_len << 2)
             dma_line = dma_line + (layer_params.strideX << 6)
             dma_line = dma_line + (layer_params.strideY << 10)
-            if ((layer_params.needed_refreshes_mx[layer_repetition][0] % layer_params.needed_wght_transmissions) == 0):
-                dma_line = dma_line + (0 << 14)
-            else:
-                dma_line = dma_line + (1 << 14)
+            dma_line = dma_line + (layer_params.skipIact << 14)
             dma_line = dma_line + (layer_params.skipWght << 15)
             dma_line = dma_line + (layer_params.skipPsum << 16)
             dma_line = dma_line + (layer_params.psum_delay << 17)

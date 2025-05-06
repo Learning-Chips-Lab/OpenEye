@@ -289,7 +289,7 @@ class LayerParameters(object):
 
         self.used_Y_cluster = (math.ceil(self.used_PEs_Y/params.PEs_Y))
         if (params.SERIAL) :
-            self.psum_delay = int(max([(math.ceil(self.filters) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
+            self.psum_delay = int(max([(math.ceil(self.used_psum_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
         else :
             self.psum_delay = int(max([(math.ceil(self.needed_refreshes_mx[layer_repetition][0]/2) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
         if((layer.output.shape[2] % params.PEs_X)== 0):

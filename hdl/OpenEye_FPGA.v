@@ -665,7 +665,8 @@ module OpenEye_FPGA #(
             wght_enable_i_reg <= flat_help_var_send[CLUSTERS*NUM_GLB_WGHT-1:0];
             flat_help_var_send = 0;
           end
-          if (wght_buffer_SP_rd_addr > wght_cnt + 1) begin
+          if (fsm_sending_cycle[7:0] > wght_cnt + 2) begin
+            fsm_sending_cycle      <= fsm_sending_cycle;
             wght_buffer_SP_en_r    <= 0;
             wght_buffer_SP_rd_addr <= 0;
             compute_reg            <= 1;
@@ -697,7 +698,9 @@ module OpenEye_FPGA #(
           end
         end
         if (current_cycle == needed_cycles_reg) begin
-          psum_ready_i_reg <= (2 ** (CLUSTERS * NUM_GLB_PSUM)) - 1;
+          psum_ready_i_reg  <= (2 ** (CLUSTERS * NUM_GLB_PSUM)) - 1;
+          sending_data      <= 0;
+          fsm_sending_cycle <= 0;
         end
       end else begin
         //Set Registers to 0
