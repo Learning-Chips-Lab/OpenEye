@@ -153,7 +153,7 @@ module OpenEye_FPGA #(
     parameter PARAMETER_POS_2_8  = 4 + PARAMETER_POS_2_7,
     parameter PARAMETER_POS_2_9  = 4 + PARAMETER_POS_2_8,
     parameter PARAMETER_POS_2_10 = 4 + PARAMETER_POS_2_9,
-    parameter PARAMETER_POS_2_11 = 1 + PARAMETER_POS_2_10,
+    parameter PARAMETER_POS_2_11 = 8 + PARAMETER_POS_2_10,
     parameter PARAMETER_POS_2_12 = 4 + PARAMETER_POS_2_11,
 
     //Number of Words per PE
@@ -379,6 +379,8 @@ module OpenEye_FPGA #(
   reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o_reg;
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o_reg;
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i_reg;
+
+  reg [7:0] needed_wght_cycles_reg;
   //#######################
   //States of the FSM
   //#######################
@@ -694,7 +696,7 @@ module OpenEye_FPGA #(
               current_cycle    <= current_cycle + 1;
               iact_cycle_count <= iact_cycle_count + 1;
               wght_cycle_count <= wght_cycle_count + 1;
-              if (iact_cycle_count == 3 - 1) begin
+              if (iact_cycle_count == needed_wght_cycles_reg - 1) begin
                 iact_cycle_count       <= 0;
                 wght_buffer_SP_rd_addr <= 0;
                 for (a = 0; a < CLUSTER_COLUMNS; a++) begin
@@ -784,6 +786,7 @@ module OpenEye_FPGA #(
       skipWght_reg              <= 0;
       skipPsum_reg              <= 0;
       buffer_select             <= 0;
+      needed_wght_cycles_reg    <= 0;
       results_ready   = 0;
       flat_help_var_1 = 0;
       enable_dma_o                      <= 0;
@@ -914,6 +917,7 @@ module OpenEye_FPGA #(
                 kernel_per_pe_cluster_reg <= data_dma_i_reg[3+PARAMETER_POS_2_8:PARAMETER_POS_2_8];
                 kernel_size               <= data_dma_i_reg[3+PARAMETER_POS_2_9:PARAMETER_POS_2_9];
                 x_lines_reg               <= data_dma_i_reg[7+PARAMETER_POS_2_10:PARAMETER_POS_2_10];
+                needed_wght_cycles_reg    <= data_dma_i_reg[PARAMETER_POS_2_11+:7];
               end
               32'd2: begin
                 needed_standing_cycles <= data_dma_i_reg[63:56];
