@@ -432,7 +432,7 @@ module OpenEye_FPGA #(
         param_array_reg <= (1 << (iact_size_x / PE_COLUMNS)) - 1;
         fsm_iact_params <= CLUSTERS;
       end else begin
-        if (GET_IACT == fsm_current_state) begin
+        if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
           if (fsm_iact_params > 0) begin
             fsm_iact_params  <= fsm_iact_params - 1;
             iact_converter_x <= iact_converter_x + PE_COLUMNS;
@@ -1029,8 +1029,8 @@ module OpenEye_FPGA #(
           end
 
           if (enable_dma_i_reg) begin
-            fsm_cycle <= fsm_cycle + 1;
-            current_buffer_n <= current_buffer_n + 1;
+            fsm_cycle          <= fsm_cycle + 1;
+            current_buffer_n   <= current_buffer_n + 1;
             current_buffer_n_1 <= current_buffer_n;
             // get iact params
             max_converter_needed_cycles                                 <= iact_size_y + {{4{1'd0}}, kernel_size} - 8'b00000001;
@@ -1199,7 +1199,7 @@ module OpenEye_FPGA #(
           end
           iact_converter_enc_enable <= 0;
           iact_converter_params_enable <= 0;
-          if (fsm_cycle == 3 & (current_converter_cycles == 0)) begin
+          if ((fsm_cycle == (iact_channels - 1)) & (current_converter_cycles == 0)) begin
             iact_converter_enc_enable    <= 1;
             iact_converter_params_enable <= 1;
           end

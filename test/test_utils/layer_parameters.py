@@ -384,7 +384,7 @@ class LayerParameters(object):
         #FPGA parameters
         self.needed_standing_cycles = math.ceil(params.Clusters/math.floor((params.Clusters*params.PEs_X)/self.iact_size_x))
         if (self.iact_size_x == 64) :
-            self.needed_standing_cycles = 4
+            self.needed_standing_cycles = self.used_channels
             self.direct_cycling = 1
             self.iact_x_lines = layer.kernel_size[1] + self.iact_size_y - 1
         else :
