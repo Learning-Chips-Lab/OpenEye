@@ -76,7 +76,6 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + (layer_params.kernel_size[1] << 25)
             dma_line = dma_line + (layer_params.iact_x_lines << 29)
             dma_line = dma_line + (math.ceil(layer_params.filters/params.Iacts_per_PE) << 37)
-            print("Wert:  " + str(layer_params.filters))
             dma_storage.append(dma_line)
             dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
             dma_storage.append(dma_line)
