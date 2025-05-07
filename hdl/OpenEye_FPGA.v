@@ -605,6 +605,8 @@ module OpenEye_FPGA #(
   reg                             wght_sendable;
   reg                             single_iteration;
   reg [                      7:0] current_cycle;
+  reg [                      7:0] iact_cycle_count;
+  reg [                      7:0] wght_cycle_count;
   reg [                     11:0] fsm_sending_cycle;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] flat_help_var_send;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] temp_var;
@@ -615,7 +617,7 @@ module OpenEye_FPGA #(
     if (!rst_n) begin
       //Reset Registers
       sending_data           <= 0;
-      single_iteration           <= 0;
+      single_iteration       <= 0;
       current_cycle          <= 0;
       fsm_sending_cycle      <= 0;
       wght_enable_i_reg      <= 0;
@@ -625,6 +627,8 @@ module OpenEye_FPGA #(
       compute_reg            <= 0;
       psum_ready_i_reg       <= 0;
       wght_sendable          <= 0;
+      iact_cycle_count       <= 0;
+      wght_cycle_count       <= 0;
       flat_help_var_send = 0;
       for (a = 0; a < CLUSTER_COLUMNS; a++) begin
         for (b = 0; b < CLUSTER_ROWS; b++) begin
@@ -686,18 +690,23 @@ module OpenEye_FPGA #(
         if (current_cycle < needed_cycles_reg) begin
           if (iact_ready_o_oep_w == 0) begin
             if (!single_iteration) begin
-              single_iteration  <= 1;
-              current_cycle <= current_cycle + 1;
-              if (current_cycle < needed_cycles_reg - 1) begin
+              single_iteration <= 1;
+              current_cycle    <= current_cycle + 1;
+              iact_cycle_count <= iact_cycle_count + 1;
+              wght_cycle_count <= wght_cycle_count + 1;
+              if (iact_cycle_count == 3 - 1) begin
+                iact_cycle_count       <= 0;
+                wght_buffer_SP_rd_addr <= 0;
                 for (a = 0; a < CLUSTER_COLUMNS; a++) begin
                   for (b = 0; b < CLUSTER_ROWS; b++) begin
                     iact_converter_en_enc_reg[a][b] <= 1;
                   end
                 end
               end
-            end
-            if (wght_ready_o_reg != {CLUSTERS*NUM_GLB_WGHT{1'b1}}) begin
-              wght_sendable <= 1;
+              if (wght_cycle_count == 0) begin
+                wght_cycle_count <= 0;
+                wght_sendable    <= 1;
+              end
             end
             psum_ready_i_reg <= (2 ** (CLUSTERS * NUM_GLB_PSUM)) - 1;
           end else begin

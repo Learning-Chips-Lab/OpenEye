@@ -392,7 +392,7 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                                     y_cor= int(((router + \
                                     cl_x * params.PEs_X + \
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
-                                    ((cl_y%layer_params.used_Y_cluster) + (refresh%layer_params.needed_iact_transmissions)*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
+                                    ((cl_y%layer_params.used_Y_cluster) + (refresh//(layer_params.needed_wght_transmissions))*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
                                     / (layer.output.shape[1] + layer_params.add_up)))
                                     filter = psum_pe
                                     try:
