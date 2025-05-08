@@ -151,7 +151,7 @@ module iact_stream_constructor #(
               //All Iacts per Computing Cycle are transmitted
               if (current_iact_cycle_reg == (needed_iact_cycles_reg * wght_size_reg) - 1) begin
                 fsm_enc_current_state  <= IDLE;
-                ram_rd_addr            <= ram_rd_addr - (channels * (wght_size_reg - 1));
+                ram_rd_addr            <= ram_rd_addr - ((channels + (channels[0])) * (wght_size_reg - 1));
                 current_iact_cycle_reg <= 0;
                 ram_rd_en              <= 0;
                 fsm_enc_cycle          <= 0;
