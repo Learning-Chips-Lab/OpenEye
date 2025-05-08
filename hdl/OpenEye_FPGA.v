@@ -921,7 +921,7 @@ module OpenEye_FPGA #(
                 kernel_per_pe_cluster_reg <= data_dma_i_reg[3+PARAMETER_POS_2_8:PARAMETER_POS_2_8];
                 kernel_size               <= data_dma_i_reg[3+PARAMETER_POS_2_9:PARAMETER_POS_2_9];
                 x_lines_reg               <= data_dma_i_reg[7+PARAMETER_POS_2_10:PARAMETER_POS_2_10];
-                needed_wght_cycles_reg    <= data_dma_i_reg[PARAMETER_POS_2_11+:7];
+                needed_wght_cycles_reg    <= data_dma_i_reg[PARAMETER_POS_2_11+:8];
               end
               32'd2: begin
                 needed_standing_cycles <= data_dma_i_reg[63:56];
@@ -1172,8 +1172,11 @@ module OpenEye_FPGA #(
 
         CONVERT_IACT: begin
           fsm_cycle <= fsm_cycle + 1;
-          standing_cycle_counter <= standing_cycle_counter + 1; //RAUS
-          if ((fsm_cycle == 0) & (current_converter_cycles > 1)) begin
+          standing_cycle_counter <= standing_cycle_counter + 1;
+          //if ((fsm_cycle == 0) & (current_converter_cycles > 1)) begin Works on 4 channel
+          //if ((fsm_cycle == 1) & (current_converter_cycles > 0)) begin Works on 1 channel
+          //Still unsure about this line. 
+          if ((standing_cycle_counter == iact_channels[0]) & (current_converter_cycles > iact_channels[2])) begin
             for (a = 0; a < RAM_CELLS; a++) begin
               buffer_SP_en_r_reg[a] <= 1;
               if (buffer_SP_addr_upper_limit > buffer_SP_addr_lower_limit) begin
@@ -1194,7 +1197,9 @@ module OpenEye_FPGA #(
             current_converter_standing_cycles <= 0;
             current_converter_cycles <= current_converter_cycles + 1;
             if (current_converter_cycles == (max_converter_needed_cycles - 1)) begin
-              fsm_current_state <= WAIT_CYCLE;
+              fsm_current_state      <= WAIT_CYCLE;
+              fsm_cycle              <= 0;
+              standing_cycle_counter <= 0;
             end
           end
           converters_ready = 1;
@@ -1205,13 +1210,12 @@ module OpenEye_FPGA #(
           end
           iact_converter_enc_enable <= 0;
           iact_converter_params_enable <= 0;
-          if ((fsm_cycle == (iact_channels - 1)) & (current_converter_cycles == 0)) begin
+          if ((standing_cycle_counter == (iact_channels - 1)) & (current_converter_cycles == 0)) begin
             iact_converter_enc_enable    <= 1;
             iact_converter_params_enable <= 1;
           end
-          //if (7'(fsm_cycle) == 7'(min_standing_cycles)-7'(1)) begin HERE
-          if (fsm_cycle + 1 == {{24'd0},needed_standing_cycles}) begin
-            fsm_cycle <= 0;
+          if (standing_cycle_counter + 1 == {{24'd0},needed_standing_cycles}) begin
+            standing_cycle_counter <= 0;
           end
         end
 

@@ -35,27 +35,29 @@ class IactStreamMapper(object):
                         iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
             iact_stream = self.create_complete_iact_stream(iact_stream)
         else :
-            #if (self.layer_params.used_channels % 2 == 0) :
             values = np.transpose(np.array(self.dram_fmap),axes=[2,1,0])
             iact_size_x, iact_size_y, channels = values.shape
             iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER
             iact_stream = []
-            pos = 0
             values_per_word = self.params.DMA_Bit_AXI//(self.params.IACT_Bitwidth)
-            while pos < iact_size_x * iact_size_y * channels:
-                vals = values.flatten()[pos:pos+(values_per_word*self.params.NUM_BUFFER)]
-                try:
-                    for i in range(self.params.NUM_BUFFER):
-                        v = 0
-                        for j in range(values_per_word//self.layer_params.used_channels):
-                            for k in range(self.layer_params.used_channels):
-                                v_tmp = int(vals[(i*values_per_word) + (j*self.layer_params.used_channels)+k])
-                                v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
-                                v = v + (v_tmp << (self.params.IACT_Bitwidth*(j*self.layer_params.used_channels+k)))
-                        iact_stream.append(v)
-                except:
-                    pass
-                pos += self.params.NUM_BUFFER*self.params.IACT_Bitwidth
+            x_values_per_word = math.ceil(values_per_word/ self.layer_params.used_channels)
+            vals = values.flatten()
+            print(vals)
+            print(vals[0])
+            print("Werte: " + str(channels))
+            print("Werte: " + str(self.layer_params.used_channels))
+            print("Werte: " + str(values_per_word))
+            for h in range(math.ceil(channels/self.layer_params.used_channels)):
+                for i in range(self.params.NUM_BUFFER):
+                    v = 0
+                    for j in range(math.ceil(values_per_word/self.layer_params.used_channels)):
+                        for k in range(self.layer_params.used_channels):
+                            v_tmp = int(vals[(i*channels*x_values_per_word) + (j*channels)+ k + h * self.layer_params.used_channels])
+                            if ((h == 0) & (i == 0) & (j == 0)):
+                                print("Value: " + str(v_tmp))
+                            v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
+                            v = v + (v_tmp << (self.params.IACT_Bitwidth*(j*self.layer_params.used_channels+k)))
+                    iact_stream.append(v)
         return iact_stream
     
     def write_iact_data_glb(self, cl_x, cl_y, router):
