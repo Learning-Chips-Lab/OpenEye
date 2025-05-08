@@ -130,7 +130,7 @@ module data_pipeline_iact #(
           data_storage_2    <= data_i;
           first_spad_data_o <= overhead_reg + 1;
         end
-        if (cycle_counter == SECOND_SPAD_DATA_CYCLE[$clog2(FIRST_SPAD_DATA_CYCLE):0] - 1) begin
+        if (cycle_counter == ((first_spad_max_i+1)/SECOND_SPAD_DATA_CYCLE[$clog2(FIRST_SPAD_DATA_CYCLE):0]) - 1) begin
           cycle_counter <= 0;
         end
         if (address_temp_2 == SECOND_SPAD_ADDR - 1) begin
