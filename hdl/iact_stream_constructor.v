@@ -114,11 +114,13 @@ module iact_stream_constructor #(
             fsm_enc_cycle <= fsm_enc_cycle + 1;
             ram_rd_en     <= 1;
             iact_data_o   <= ram_data_o;
-            if (fsm_enc_cycle >= 1) begin 
+            //Delay for one cycle
+            if (current_iact_cycle_reg != {4{1'b1}}) begin
               iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
-              if ((fsm_enc_cycle + 1) % WORDS_PER_CYCLE == 0) begin
-                ram_rd_addr <= ram_rd_addr + 1;
-              end
+            end
+            //Check, wether amount of channels is odd
+            if ((fsm_enc_cycle[7:0] + 1 - (channels%2)) % WORDS_PER_CYCLE[7:0] == 0) begin
+              ram_rd_addr <= ram_rd_addr + 1;
             end
             flat_help_var = 0;
             for (pec = 0; pec < PE_X; pec = pec + 1) begin
