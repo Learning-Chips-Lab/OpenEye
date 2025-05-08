@@ -284,7 +284,7 @@ module iact_stream_constructor #(
               ram_wr_addr       <= address_storage;
               fsm_current_state <= WRITE_TO_MEMORY;
               duty_cycle        <= 0;
-              duty_cycle_th     <= channels - 1;
+              duty_cycle_th     <= channels;
               if (0 == (((channels+1) / WORDS_PER_CYCLE) - 1)) begin
                 router_cycle        <= 0;
                 iact_router_counter <= iact_router_counter + 1;
