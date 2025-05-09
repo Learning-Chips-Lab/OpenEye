@@ -43,22 +43,27 @@ class IactStreamMapper(object):
             values_per_word = self.params.DMA_Bit_AXI//(self.params.IACT_Bitwidth)
             x_values_per_word = math.ceil(values_per_word/ self.layer_params.used_channels)
             vals = values.flatten()
+            print("Size: " + str(iact_size_x * iact_size_y * channels))
             for h in range(math.ceil(channels/self.layer_params.used_channels)):
-                for i in range(self.params.NUM_BUFFER):
-                    if (pos < iact_size_x * iact_size_y * channels) :
-                        v = 0
-                        try:
+                for address_buffer in range(iact_size_y * x_values_per_word):
+                    for i in range(self.params.NUM_BUFFER):
+                        if (pos < iact_size_x * iact_size_y * channels) :
+                            v = 0
+                            #try:
                             for j in range(math.ceil(values_per_word/self.layer_params.used_channels)):
                                 for k in range(self.layer_params.used_channels):
-                                    v_tmp = int(vals[(i*channels*x_values_per_word) + (j*channels)+ k + h * self.layer_params.used_channels])
+                                    index = (i*channels*x_values_per_word) + (j*channels)+ k + h * self.layer_params.used_channels + (address_buffer * self.params.NUM_BUFFER*channels*x_values_per_word)
+                                    v_tmp = int(vals[index])
                                     v_tmp = gtu.to_twos_complement(v_tmp, self.params.IACT_Bitwidth)
                                     v = v + (v_tmp << (self.params.IACT_Bitwidth*(j*self.layer_params.used_channels+k)))
-                        except:
-                            pass
-                        iact_stream.append(v)
-                    else:
-                        break
-                    pos = pos + values_per_word
+                            #except:
+                            #    pass
+                            iact_stream.append(v)
+                        else:
+                            break
+                        pos = pos + values_per_word
+
+        print("POS: " + str(pos))
         return iact_stream
     
     def write_iact_data_glb(self, cl_x, cl_y, router):
