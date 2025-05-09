@@ -370,30 +370,27 @@ module iact_stream_constructor #(
                   end
                 end
               end
-              if (fsm_cycle == ((((needed_iact_cycles_reg * ((channels+1)/WORDS_PER_CYCLE) * (x_lines_reg)))))) begin
+              if (fsm_cycle == ((((needed_iact_cycles_reg * ((channels+1)/WORDS_PER_CYCLE) * (x_lines_reg)))) - 1)) begin
                 fsm_cycle         <= 0;
-                ram_wr_en         <= 0;
                 current_cycle     <= current_cycle + 1;
-                address_storage   <= ram_wr_addr + 1;
+                address_storage   <= ram_wr_addr + 2;
                 fsm_current_state <= GET_PARAMETER;
               end
             end else begin
               ram_wr_en <= 0;
-              if (enable_store) begin
-                fsm_cycle           <= 0;
-                address_storage     <= ram_wr_addr + 1;
-                current_cycle       <= current_cycle + 1;
-                y_cycle             <= 1;
-                router_cycle        <= 1;
-                addr_cycle          <= 0;
-                ram_wr_en           <= 0;
-                ram_wr_addr_reg     <= 0;
-                iact_router_counter <= 0;
-                kernel_y_counter    <= 0;
-                ram_wr_addr         <= ram_wr_addr + 1;
-                fsm_current_state   <= WRITE_TO_MEMORY;
-                duty_cycle          <= 0;
-              end
+            end
+            if (enable_store) begin
+              fsm_cycle           <= 0;
+              address_storage     <= ram_wr_addr + 2;
+              current_cycle       <= current_cycle + 1;
+              y_cycle             <= 1;
+              router_cycle        <= 1;
+              addr_cycle          <= 0;
+              iact_router_counter <= 0;
+              kernel_y_counter    <= 0;
+              ram_wr_addr         <= ram_wr_addr + 1;
+              fsm_current_state   <= WRITE_TO_MEMORY;
+              duty_cycle          <= 0;
             end
           end
 

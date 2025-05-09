@@ -76,7 +76,7 @@ module data_pipeline_iact #(
   reg  [            FIRST_SPAD_DATA-1 : 0] data_storage_1;  // Temporary storage for data
   reg  [                 DATA_WIDTH-1 : 0] data_storage_2;  // Temporary storage for data
   reg  [     $clog2(SECOND_SPAD_ADDR) : 0] address_temp_2;  // Temporary address storage
-  reg  [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;  // Cycle counter for data loading
+  reg  [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;   // Cycle counter for data loading
   reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_reg;
   reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_delay_reg;
   reg  [       SECOND_PAYLOAD_WIDTH-1 : 0] payload_reg;
