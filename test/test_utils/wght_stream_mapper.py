@@ -40,6 +40,7 @@ class WghtStreamMapper(object):
                         for router in range(self.params.Wght_Routers):
                             if(self.layer_params.computing_mx[cl_x][cl_y][router][0] == 1):
                                 spad = self.write_wght_pe(cl_x, cl_y, router)
+
                                 if (self.sparse_data == 1):
                                     temp_storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
                                 else:
@@ -114,7 +115,6 @@ class WghtStreamMapper(object):
         filters_per_calculation = math.ceil(layer_params.used_wght_per_PE/layer_params.used_iact_per_PE)
         start_current_repetition = int((math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.needed_wght_transmissions) * filters_per_calculation)
         filters = start_current_repetition
-                    
         for words_in_storage in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS)):
             kernel_row = (cl_y % layer_params.ceil_used_PE_per_clm) * params.PEs_Y + router
             if(kernel_row < (layer_params.kernel_size[1] * int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))):
@@ -241,6 +241,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         amout_of_iacts = amount_of_channels * layer_params.kernel_size[1]
         channel = (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + \
         math.ceil((math.ceil((router%layer_params.kernel_per_pe_cluster) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)))
+        channel_offset = channel
         filters_per_calculation = math.ceil(layer_params.used_wght_per_PE/layer_params.used_iact_per_PE)
 
 
@@ -254,7 +255,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                 amount_of_words = int((layer_params.filters*amout_of_iacts)/params.Clusters_Y/2)
             case _:
                 start_current_repetition = start_current_repetition
-                amount_of_words = int((layer_params.filters*amout_of_iacts)/layer_params.needed_wght_transmissions/2)
+                amount_of_words = int(layer_params.diff_iact_layer*(layer_params.filters*amout_of_iacts)/layer_params.needed_wght_transmissions/2)
 
         filters = start_current_repetition
 
@@ -262,10 +263,11 @@ class ConvWghtStreamMapper(WghtStreamMapper):
             kernel_row = ((cl_y % layer_params.ceil_used_PE_per_clm) * params.PEs_Y + (router%layer_params.kernel_size[0]))
             for spad_val_number in range(self.params.PARALLEL_MACS): 
                 if(channel != 1 + int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)): #TODO: Correct this line +1 could be wrong here                    
-                    try:
-                        spad_storage[words_in_storage][spad_val_number][0] = dram[channel][filters][kernel_row][kernel_x]
-                    except:
-                        spad_storage[words_in_storage][spad_val_number][0] = 0
+                    #try:
+
+                    spad_storage[words_in_storage][spad_val_number][0] = dram[channel][filters][kernel_row][kernel_x]
+                    #except:
+                    #    spad_storage[words_in_storage][spad_val_number][0] = 0
 
                     spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
                     filters = filters + 1
@@ -273,8 +275,8 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                         filters = start_current_repetition
                         channel = channel + 1
                         overhead_counter = 0
-                    if(channel == layer_params.used_channels):
-                        channel = 0
+                    if(channel == layer_params.used_channels + channel_offset):
+                        channel = channel_offset
                         kernel_x = kernel_x + 1
             if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
                 break

@@ -385,36 +385,35 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
         dut._log.info("Output Stream started")
         while (dut.enable_dma_o.value == 1):
 
-            if ((layer_repetition % layer_parameters.iact_transmissions_pe) == (layer_parameters.iact_transmissions_pe - 1)) :
+            if(logging.DEBUG >= login_level):
+                txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(40) + "\n")
+            for i in range(2):
                 if(logging.DEBUG >= login_level):
-                    txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(40) + "\n")
-                for i in range(2):
-                    if(logging.DEBUG >= login_level):
-                        storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
-                    try:
-                        dram.fmap[layer_number + 1][f][x][y] = int(dut.data_dma_o.value[28-20*i:47-20*i])
-                        if (dram.fmap[layer_number + 1][f][x][y] >= 2**19) :
-                            dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**20
-                    except:
-                        pass
-                    f = f + 1
-                if(f >= les.f_end):
-                    les.f_start = les.f_corner_start
-                    f = les.f_start
-                    if(x == les.x_end - 1):
-                        x = 0
-                        if(y >= les.y_end - 1):
-                            y = 0
-                        else:
-                            y = y + 1
+                    storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
+                try:
+                    dram.fmap[layer_number + 1][f][x][y] = int(dut.data_dma_o.value[28-20*i:47-20*i])
+                    if (dram.fmap[layer_number + 1][f][x][y] >= 2**19) :
+                        dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**20
+                except:
+                    pass
+                f = f + 1
+            if(f >= les.f_end):
+                les.f_start = les.f_corner_start
+                f = les.f_start
+                if(x == les.x_end - 1):
+                    x = 0
+                    if(y >= les.y_end - 1):
+                        y = 0
                     else:
-                        x = x + 1
-                    les.y_start = y
-                    les.x_start = x
+                        y = y + 1
                 else:
-                    les.f_start = f
-                    x = les.x_start
-                    y = les.y_start
+                    x = x + 1
+                les.y_start = y
+                les.x_start = x
+            else:
+                les.f_start = f
+                x = les.x_start
+                y = les.y_start
             await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
 
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))

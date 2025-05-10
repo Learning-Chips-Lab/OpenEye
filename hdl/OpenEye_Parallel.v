@@ -167,7 +167,8 @@ module OpenEye_Parallel #(
     input      [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i,
     input      [  ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_i,
     input      [  ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_i,
-    input      [  ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_i
+    input      [  ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_i,
+    input      [                                        8-1:0] needed_psum_storage_cycles_i
 
 
 );
@@ -564,7 +565,7 @@ module OpenEye_Parallel #(
       endcase
     end
   end
-
+reg [7:0]needed_psum_storage_cycles_reg;
   integer g_psum, b_psum, cc_psum, cr_psum;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
@@ -588,10 +589,12 @@ module OpenEye_Parallel #(
       router_mode_psum_reg   <= 0;
       psum_router_set_reg    <= 1;
       results_ready = 0;
+      needed_psum_storage_cycles_reg <= 0;
 
     end else begin
       if (status_reg_enable_i_w) begin
         router_mode_psum_reg <= router_mode_psum_i;
+        needed_psum_storage_cycles_reg <= needed_psum_storage_cycles_i;
       end
       if (compute_i_w) begin
         mem_addr_psum <= 0;
@@ -779,8 +782,6 @@ module OpenEye_Parallel #(
                       end
                     end
                   end
-
-
                 end else begin
                   for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                     for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
@@ -790,12 +791,12 @@ module OpenEye_Parallel #(
                   storage_cycles <= 0;
                 end
               end
-
               psum_transmitted       <= 1;
               fsm_psum_last_state    <= GET_RESULTS;
               fsm_psum_current_state <= CALCULATE_PSUM;
               fsm_psum_cycle         <= 0;
-              if (storage_cycles == 0) begin
+              if (storage_cycles == needed_psum_storage_cycles_reg - 1) begin
+                storage_cycles <= 0;
                 if (SERIAL) begin
                   mem_addr_psum_storage <= mem_addr_psum_storage +
                       {{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg};
@@ -803,6 +804,16 @@ module OpenEye_Parallel #(
                   mem_addr_psum_storage <= mem_addr_psum_storage +
                       ({{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg} + 1) /
                       2;
+                end
+              end else begin
+                storage_cycles <= storage_cycles + 1;
+                for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                  for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
+                    for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
+                      mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
+                          mem_addr_psum_storage;
+                    end
+                  end
                 end
               end
               psum_ready_i_reg <= 0;

@@ -372,9 +372,9 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
     layer_repetition_cycle = math.floor(layer_repetition/layer_params.iact_transmissions_pe)
     if (params.SERIAL):
         for refresh in range(math.ceil(layer_params.needed_refreshes_mx[layer_repetition][1]/layer_params.used_Y_cluster),
-                            math.ceil(layer_params.needed_refreshes_mx[layer_repetition][2]/layer_params.used_Y_cluster)):
+                             math.ceil(layer_params.needed_refreshes_mx[layer_repetition][2]/layer_params.used_Y_cluster)):
             for psum_pe in range(((refresh)%layer_params.needed_wght_transmissions)*math.ceil(layer.filters/layer_params.needed_wght_transmissions),\
-                (((refresh)%layer_params.needed_wght_transmissions)+1)*math.ceil(layer.filters/layer_params.needed_wght_transmissions)):
+                                (((refresh)%layer_params.needed_wght_transmissions)+1)*math.ceil(layer.filters/layer_params.needed_wght_transmissions)):
                 for cl_y in cluster_order:
                     for cl_x in range(params.Clusters_X):
                         for router in range(0, params.Psum_Routers, 2):
@@ -554,9 +554,6 @@ def calculate_conv_results_mp(f, layer, layer_number, layer_params, serial, dram
                                     else:
                                         calculated_results[j][i] = int(calculated_results[j][i] + \
                                             dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)])
-                                     # zero pad with 1
-                                    # calculated_results[i][j] = int(calculated_results[i][j] + \
-                                    #                                 dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)])
         return_dict[f] = calculated_results
 
 def compare_dram_with_ref(layer, ref_output, dram):

@@ -251,7 +251,7 @@ class LayerParameters(object):
         if((self.filters * self.used_iact_per_PE) <= params.Wghts_per_PE):
             self.used_wght_per_PE = self.filters*self.used_iact_per_PE
             self.used_psum_per_PE = self.filters
-            self.wght_transmissions_pe = 1
+            self.wght_transmissions_pe = math.ceil(self.channels/self.used_channels)
         else:
             if (layer.kernel_size[0] == 5):
                 wght_factor = math.ceil((self.filters*self.used_iact_per_PE)/160)
@@ -308,7 +308,7 @@ class LayerParameters(object):
         self.needed_wght_transmissions = self.wght_transmissions_pe * self.wght_transmissions_glb
         
         all_transmissions_of_pe = self.iact_transmissions_pe * self.wght_transmissions_pe * self.psum_transmissions_pe
-
+        print("TEST: " +str(all_transmissions_of_pe))
         match self.single_cluster_computation:
             case 1:
                 self.Used_refreshes = math.ceil(all_transmissions_of_pe * math.ceil(layer.output.shape[1] * layer.output.shape[2]/(params.PEs_X)))
