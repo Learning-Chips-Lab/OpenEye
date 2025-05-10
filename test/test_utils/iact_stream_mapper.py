@@ -36,15 +36,15 @@ class IactStreamMapper(object):
             iact_stream = self.create_complete_iact_stream(iact_stream)
         else :
             values = np.transpose(np.array(self.dram_fmap),axes=[2,1,0])
-            iact_size_x, iact_size_y, channels = values.shape
+            iact_size_y, iact_size_x, channels = values.shape
             iact_stream_cycles = iact_size_x * iact_size_y * channels // self.params.NUM_BUFFER
             iact_stream = []
             pos = 0
             values_per_word = self.params.DMA_Bit_AXI//(self.params.IACT_Bitwidth)
             x_values_per_word = math.ceil(values_per_word/ self.layer_params.used_channels)
             vals = values.flatten()
-            for address_buffer in range(iact_size_y * x_values_per_word):
-                for h in range(math.ceil(channels/self.layer_params.used_channels)):
+            for h in range(math.ceil(channels/self.layer_params.used_channels)):
+                for address_buffer in range(iact_size_y):
                     for i in range(self.params.NUM_BUFFER):
                         if (pos < iact_size_x * iact_size_y * channels) :
                             v = 0

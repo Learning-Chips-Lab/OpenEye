@@ -1490,8 +1490,8 @@ module OpenEye_FPGA #(
             .iact_choose_o               (iact_choose_w),
             .needed_cycles_i             (iact_converter_buffer_addr_max_cycles[3:0]),
             .needed_iact_channel_cycles_i(iact_channel_max_cycles[3:0]),
-            .iact_size_xi                (iact_size_x),
-            .iact_size_yi                (iact_size_y),
+            .iact_size_x_i               (iact_size_x),
+            .iact_size_y_i               (iact_size_y),
             .x_lines_i                   (x_lines_reg)
         );
       end
