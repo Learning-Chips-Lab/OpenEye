@@ -274,7 +274,7 @@ class LayerParameters(object):
                 case 2:
                     self.wght_transmissions_pe = math.ceil(self.filters/(32*params.PEs_X*params.Clusters_Y))
                 case _:
-                    self.wght_transmissions_pe = math.ceil(self.filters * self.used_iact_per_PE / self.used_wght_per_PE)
+                    self.wght_transmissions_pe = math.ceil(self.channels/self.used_channels) * math.ceil(self.filters * self.used_iact_per_PE / self.used_wght_per_PE)
 
 
         if(math.ceil(self.used_iact_per_PE/self.used_wght_per_PE) <= params.Psums_per_PE):
