@@ -162,7 +162,6 @@ module OpenEye_FPGA #(
 
     // Converter
     parameter BITWIDTH_IACT = TRANS_BITWIDTH_IACT / 2,
-    parameter WGHT_SIZE = 3,
 
     //Storage RAMs
     parameter RAM_CELLS = 32,
@@ -1222,7 +1221,7 @@ module OpenEye_FPGA #(
               buffer_SP_addr_reg[a] <= ~0;
             end
           end
-          converter_needed_cycles <= WGHT_SIZE[6-1:0] * iact_channels[6-1:0];
+          converter_needed_cycles <= kernel_size * iact_channels[6-1:0];
         end
 
         CONVERT_IACT: begin
@@ -1490,7 +1489,8 @@ module OpenEye_FPGA #(
             .iact_size_x_i               (iact_size_x),
             .iact_size_y_i               (iact_size_y),
             .x_lines_i                   (x_lines_reg),
-            .needed_wght_cycles_i        (needed_wght_cycles_reg)
+            .needed_wght_cycles_i        (needed_wght_cycles_reg),
+            .wght_size_i                 (kernel_size)
         );
       end
     end

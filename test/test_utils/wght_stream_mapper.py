@@ -166,7 +166,13 @@ class WghtStreamMapper(object):
             for word in range(len(temp_stream[0][0][0])):
                 for cl_y in range(params.Clusters_Y):
                     for router in range(params.NUM_GLB_WGHT):
-                        stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
+                        print("cl_y " + str(cl_y))
+                        print("router " + str(router))
+                        print("word " + str(word))
+                        try:
+                            stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
+                        except:
+                            stream.append(0)
         return stream
     
     def create_pe_addr_wght_stream(self, spad):
