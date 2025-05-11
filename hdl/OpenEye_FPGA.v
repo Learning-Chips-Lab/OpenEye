@@ -654,7 +654,6 @@ module OpenEye_FPGA #(
   reg                             single_iteration;
   reg [                      7:0] current_cycle;
   reg [                      7:0] iact_cycle_count;
-  reg [                      7:0] wght_cycle_count;
   reg [                     11:0] fsm_sending_cycle;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] flat_help_var_send;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] temp_var;
@@ -676,7 +675,6 @@ module OpenEye_FPGA #(
       psum_ready_i_reg       <= 0;
       wght_sendable          <= 0;
       iact_cycle_count       <= 0;
-      wght_cycle_count       <= 0;
       flat_help_var_send = 0;
       for (a = 0; a < CLUSTER_COLUMNS; a++) begin
         for (b = 0; b < CLUSTER_ROWS; b++) begin
@@ -738,23 +736,19 @@ module OpenEye_FPGA #(
           if (iact_ready_o_oep_w == 0) begin
             if (!single_iteration) begin
               single_iteration <= 1;
+              wght_sendable    <= 1;
               current_cycle    <= current_cycle + 1;
-              iact_cycle_count <= iact_cycle_count + 1;
-              wght_cycle_count <= wght_cycle_count + 1;
-              if (iact_cycle_count == needed_wght_cycles_reg - 1) begin
-                iact_cycle_count       <= 0;
-                if (iact_channels_counter == iact_channel_max_cycles -1) begin
-                  wght_buffer_SP_rd_addr <= 0;
-                end
-                for (a = 0; a < CLUSTER_COLUMNS; a++) begin
-                  for (b = 0; b < CLUSTER_ROWS; b++) begin
-                    iact_converter_en_enc_reg[a][b] <= 1;
-                  end
+              for (a = 0; a < CLUSTER_COLUMNS; a++) begin
+                for (b = 0; b < CLUSTER_ROWS; b++) begin
+                  iact_converter_en_enc_reg[a][b] <= 1;
                 end
               end
-              if (wght_cycle_count == 0) begin
-                wght_cycle_count <= 0;
-                wght_sendable    <= 1;
+              if (iact_channels_counter == iact_channel_max_cycles -1) begin
+                iact_cycle_count <= iact_cycle_count + 1;
+                if (iact_cycle_count == needed_wght_cycles_reg - 1) begin
+                  wght_buffer_SP_rd_addr <= 0;
+                  iact_cycle_count       <= 0;
+                end
               end
             end
             psum_ready_i_reg <= (2 ** (CLUSTERS * NUM_GLB_PSUM)) - 1;
@@ -1495,7 +1489,8 @@ module OpenEye_FPGA #(
             .needed_iact_channel_cycles_i(iact_channel_max_cycles[3:0]),
             .iact_size_x_i               (iact_size_x),
             .iact_size_y_i               (iact_size_y),
-            .x_lines_i                   (x_lines_reg)
+            .x_lines_i                   (x_lines_reg),
+            .needed_wght_cycles_i        (needed_wght_cycles_reg)
         );
       end
     end

@@ -39,7 +39,8 @@ module iact_stream_constructor #(
     input      [                            4-1:0] needed_iact_channel_cycles_i,
     input      [                            8-1:0] iact_size_x_i,
     input      [                            8-1:0] iact_size_y_i,
-    input      [                            8-1:0] x_lines_i
+    input      [                            8-1:0] x_lines_i,
+    input      [                            8-1:0] needed_wght_cycles_i
 );
   reg                           ram_wr_en;
   reg  [         ADDRWIDTH-1:0] ram_wr_addr;
@@ -79,19 +80,23 @@ module iact_stream_constructor #(
     reg [3:0] flat_help_var;
     reg [3:0] iact_channel_counter;
     reg [3:0] finished_output_channels;
+    reg [7:0] iact_y_counter;
+    reg [11:0] line_offset;
     integer pec, per, b;
     always @(posedge clk_i, negedge rst_ni) begin
       if (!rst_ni) begin
-        fsm_enc_current_state  <= IDLE;
-        iact_data_o            <= 0;
-        iact_enable_o          <= 0;
-        iact_choose_o          <= 0;
-        fsm_enc_cycle          <= 0;
-        ram_rd_addr            <= 0;
-        ram_rd_en              <= 0;
-        current_iact_cycle_reg <= 0;
-        iact_channel_counter   <= 0;
+        fsm_enc_current_state    <= IDLE;
+        iact_data_o              <= 0;
+        iact_enable_o            <= 0;
+        iact_choose_o            <= 0;
+        fsm_enc_cycle            <= 0;
+        ram_rd_addr              <= 0;
+        ram_rd_en                <= 0;
+        current_iact_cycle_reg   <= 0;
+        iact_channel_counter     <= 0;
         finished_output_channels <= 0;
+        line_offset              <= 0;
+        iact_y_counter                 <= 0;
       end else begin
         case (fsm_enc_current_state)
           IDLE: begin
@@ -160,9 +165,20 @@ module iact_stream_constructor #(
                 iact_channel_counter   <= iact_channel_counter + 1;
                 ram_rd_addr            <= ram_rd_addr + (iact_size_y_i - 1) * channels;
                 if (iact_channel_counter == needed_iact_channel_cycles_i - 1) begin
-                  ram_rd_addr          <= channels * (1 + finished_output_channels);
                   iact_channel_counter <= 0;
-                  finished_output_channels <= finished_output_channels + 1;
+                  iact_y_counter        <= iact_y_counter + 1;
+                  ram_rd_addr          <= line_offset;
+                  if (iact_y_counter == needed_wght_cycles_i - 1) begin
+                    iact_y_counter           <= 0;
+                    ram_rd_addr              <= channels * (1 + finished_output_channels);
+                    line_offset              <= channels * (1 + finished_output_channels);
+                    finished_output_channels <= finished_output_channels + 1;
+                    if (finished_output_channels == iact_size_y_i - 1) begin
+                      finished_output_channels <= 0;
+                      ram_rd_addr              <= 0;
+                      line_offset              <= 0;
+                    end
+                  end
                 end
                 current_iact_cycle_reg <= 0;
                 ram_rd_en              <= 0;
