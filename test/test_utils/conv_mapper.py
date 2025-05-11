@@ -39,15 +39,17 @@ class ConvMapper(LayerMapper):
         counter = 0
         computing_pes = 0
 
+        
         for x in range(params.Clusters_X):
             for y in range(params.Clusters_Y):
                 for pe_y in range(params.PEs_Y):
                     for pe_x in range(params.PEs_X):
-                        if(layer_params.computing_mx[x][y][pe_y][pe_x]== 1):
-                            computing_pes = computing_pes + 2**(counter)
-                        counter = counter + 1
-        formating = "0" + str(params.Clusters_X * params.Clusters_Y * params.PEs_Y) + "b"
-        computing_pes = format(computing_pes, formating)
+                        if layer_params.computing_mx[x][y][pe_y][pe_x] == 1:
+                            computing_pes |= (1 << counter)
+                        counter += 1
+
+        total_bits = params.Clusters_X * params.Clusters_Y * params.PEs_Y * params.PEs_X
+        bitstring = format(computing_pes, f"0{total_bits}b")[::-1] 
 
         if (params.SERIAL):
             dma_line = 0
@@ -84,8 +86,10 @@ class ConvMapper(LayerMapper):
             dma_line = math.ceil(layer_params.diff_iact_layer)
             dma_storage.append(dma_line)
             dma_line = 0
-            for x in reversed(range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI))):
-                dma_storage.append(int(computing_pes[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI],2))
+            print(computing_pes)
+            for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
+                segment = bitstring[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI]
+                dma_storage.append(int(segment[::-1], 2))
             
             dma_storage.extend(self.write_router_iact(params, layer_params))
             dma_storage.extend(self.write_router_wght(params, layer_params))
