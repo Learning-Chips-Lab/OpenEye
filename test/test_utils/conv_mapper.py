@@ -80,13 +80,12 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + (math.ceil(layer_params.filters/params.Iacts_per_PE) << 37)
             dma_storage.append(dma_line)
             dma_line = 0
-            dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
+            dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.used_channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
             dma_storage.append(dma_line)
             dma_line = 0
             dma_line = math.ceil(layer_params.diff_iact_layer)
             dma_storage.append(dma_line)
             dma_line = 0
-            print(computing_pes)
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
                 segment = bitstring[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI]
                 dma_storage.append(int(segment[::-1], 2))

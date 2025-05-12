@@ -308,7 +308,6 @@ class LayerParameters(object):
         self.needed_wght_transmissions = self.wght_transmissions_pe * self.wght_transmissions_glb
         
         all_transmissions_of_pe = self.iact_transmissions_pe * self.wght_transmissions_pe * self.psum_transmissions_pe
-        print("TEST: " +str(all_transmissions_of_pe))
         match self.single_cluster_computation:
             case 1:
                 self.Used_refreshes = math.ceil(all_transmissions_of_pe * math.ceil(layer.output.shape[1] * layer.output.shape[2]/(params.PEs_X)))

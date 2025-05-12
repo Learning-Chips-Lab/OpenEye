@@ -153,7 +153,6 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
-        print(cluster_order)
         for layer_repetition in range(layer_params.needed_total_transmissions):
             p = mp.Process(target = calculate_conv_output_stream_mp, \
                             args = (layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results, return_dict))

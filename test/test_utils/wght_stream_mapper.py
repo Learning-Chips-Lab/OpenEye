@@ -166,11 +166,6 @@ class WghtStreamMapper(object):
             for word in range(len(temp_stream[0][0][0])):
                 for cl_y in range(params.Clusters_Y):
                     for router in range(params.NUM_GLB_WGHT):
-                        """
-                        print("cl_y " + str(cl_y))
-                        print("router " + str(router))
-                        print("word " + str(word))
-                        """
                         try:
                             stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
                         except:
@@ -267,29 +262,12 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                                       (self.layer_params.needed_wght_transmissions//self.layer_params.needed_iact_transmissions)/2)
 
         filters = start_current_repetition
-        if ((cl_x == 0) & (cl_y == 0) & (router == 0)) :
-            print("WGHT: " + str(self.layer_params.needed_wght_transmissions))
-            print("VALUES: ")
-            print(str(amount_of_words))
-            print(str(layer_params.diff_iact_layer))
-            print(str(layer_params.diff_iact_layer))
-            print(str(layer_params.filters))
-            print(str(amout_of_iacts))
-            print("FILTER: " + str(filters))
-            print("channel: " + str(channel))
         for words_in_storage in range(amount_of_words):
             kernel_row = ((cl_y % layer_params.ceil_used_PE_per_clm) * params.PEs_Y + (router%layer_params.kernel_size[0]))
             for spad_val_number in range(self.params.PARALLEL_MACS): 
                 if(channel != 1 + int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)): #TODO: Correct this line +1 could be wrong here                    
                     #try:
-                    """
-                    print("words_in_storage: " + str(words_in_storage))
-                    print("spad_val_number: " + str(spad_val_number))
-                    print("channel: " + str(channel))
-                    print("filters: " + str(filters))
-                    print("kernel_row: " + str(kernel_row))
-                    print("kernel_x: " + str(kernel_x))
-                    """
+
                     spad_storage[words_in_storage][spad_val_number][0] = dram[channel][filters][kernel_row][kernel_x]
                     #except:
                     #    spad_storage[words_in_storage][spad_val_number][0] = 0

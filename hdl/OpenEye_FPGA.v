@@ -248,6 +248,7 @@ module OpenEye_FPGA #(
   reg skipPsum_reg;
   reg [4-1:0] kernel_per_pe_cluster_reg;
   reg [3:0] kernel_size;
+  reg [3:0] padding_reg;
   reg [DMA_BITWIDTH-1 : 0] fifo_data_i;
   reg fifo_read_i;
   reg fifo_write_i;
@@ -278,9 +279,9 @@ module OpenEye_FPGA #(
   reg iact_buffer_SP_en_r;
   reg iact_buffer_SP_en_w;
   reg [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_w;
-  reg [32-1:0] buffer_SP_addr_upper_limit;
-  reg [32-1:0] buffer_SP_addr_lower_limit;
-  reg [32-1:0] limit_increase_reg;
+  reg [8-1:0] buffer_SP_addr_upper_limit;
+  reg [8-1:0] buffer_SP_addr_lower_limit;
+  reg [8-1:0] limit_increase_reg;
   wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_r;
 
   reg wght_buffer_SP_en_r;
@@ -311,6 +312,8 @@ module OpenEye_FPGA #(
   reg [ 7:0] iact_channels_counter;
   reg [ 7:0] iact_channel_max_cycles;
   reg [10:0] iact_needed_cycles;
+
+  reg [ 3:0] iact_router_counter;
 
   // Register for IACT Converter Buffer
   reg buffer_SP_en_r_reg[RAM_CELLS-1:0];
@@ -751,24 +754,26 @@ module OpenEye_FPGA #(
           end
         end
 
-        if (current_cycle < needed_cycles_reg) begin // ÄNDERN 5x5 KERNEL
+        if (current_cycle < needed_cycles_reg) begin
           if (iact_ready_o_oep_w == 0) begin
             single_iteration3 <= 0;
             if (!single_iteration) begin
               single_iteration  <= 1;
               single_iteration3 <= 1;
-              wght_sendable    <= 1;
-              current_cycle    <= current_cycle + 1;
               for (a = 0; a < CLUSTER_COLUMNS; a++) begin
                 for (b = 0; b < CLUSTER_ROWS; b++) begin
                   iact_converter_en_enc_reg[a][b] <= 1;
                 end
               end
-              if (iact_channels_counter == iact_channel_max_cycles -1) begin
-                iact_cycle_count <= iact_cycle_count + 1;
-                if (iact_cycle_count == needed_wght_cycles_reg - 1) begin
-                  wght_buffer_SP_rd_addr <= 0;
-                  iact_cycle_count       <= 0;
+              if (iact_router_counter == needed_y_cls_reg - 1) begin
+                wght_sendable    <= 1;
+                current_cycle    <= current_cycle + 1;
+                if (iact_channels_counter == iact_channel_max_cycles -1) begin
+                  iact_cycle_count <= iact_cycle_count + 1;
+                  if (iact_cycle_count == needed_wght_cycles_reg - 1) begin
+                    wght_buffer_SP_rd_addr <= 0;
+                    iact_cycle_count       <= 0;
+                  end
                 end
               end
             end
@@ -832,6 +837,7 @@ module OpenEye_FPGA #(
       stride_y_reg              <= 0;
       kernel_per_pe_cluster_reg <= 0;
       kernel_size               <= 0;
+      padding_reg               <= 0;
       new_stream                <= 0;
       fsm_cycle                 <= 0;
       fsm_cycle_mod1            <= 0;
@@ -989,8 +995,9 @@ module OpenEye_FPGA #(
                 needed_wght_cycles_reg    <= data_dma_i_reg[PARAMETER_POS_2_11+:8];
               end
               32'd2: begin
+                padding_reg                           <= (kernel_size-1)/2;
                 iact_converter_buffer_addr_max_cycles <= data_dma_i_reg[63:56];
-                iact_channels                         <= data_dma_i_reg[55:48];
+                iact_channels_per_pe                  <= data_dma_i_reg[55:48];
                 iact_size_y                           <= data_dma_i_reg[39:32];
                 iact_size_x                           <= data_dma_i_reg[23:16];
                 iact_needed_cycles                    <= data_dma_i_reg[10:0];
@@ -1000,12 +1007,7 @@ module OpenEye_FPGA #(
                 iact_channel_max_cycles        <= data_dma_i_reg[7:0];
               end
               32'd4: begin
-                if (iact_channels > 4) begin
-                  iact_channels_per_pe    <= 4;
-                end else begin
-                  iact_channels_per_pe    <= 4;
-                  iact_channels_per_pe    <= iact_channels;
-                end
+                iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
                 compute_mask_reg[DMA_BITWIDTH-1:0] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
               end
               32'd5: begin
@@ -1227,18 +1229,18 @@ module OpenEye_FPGA #(
         end
 
         CONVERT_IACT: begin
-          fsm_cycle <= fsm_cycle + 1;
           //if ((iact_converter_buffer_addr_cycles == 0) & (iact_converter_cycles >= 2)) begin Works on 4 channel 2 Router
           //if ((iact_converter_buffer_addr_cycles == 1) & (iact_converter_cycles >= 1)) begin Works on 1 channel 2 Router
           //if ((iact_converter_buffer_addr_cycles == 2) & (iact_converter_cycles >= 0)) begin Works on 2 channel 3 Router
           //Still unsure about this line.
           //if ((iact_converter_buffer_addr_cycles == iact_channels_per_pe[0]) & (iact_converter_cycles > iact_channels_per_pe[2])) begin
           //if ((iact_converter_buffer_addr_cycles == 2) & (iact_converter_cycles >= 0)) begin //ÄNDERN
-          if (fsm_cycle >= 2 - 1) begin
+          fsm_cycle <= fsm_cycle + 1;
+          if (fsm_cycle >= 0) begin
             test_reg <= test_reg + 1;
             if (test_reg == ((iact_converter_buffer_addr_max_cycles) - 1)) begin
               test_reg <= 0;
-              if (iact_converter_cycles >= 2) begin
+              if ((iact_converter_cycles >= padding_reg) & (iact_converter_cycles <= padding_reg + iact_size_y - 1)) begin
                 for (a = 0; a < RAM_CELLS; a++) begin
                   buffer_SP_en_r_reg[a] <= 1;
                   if (buffer_SP_addr_upper_limit > buffer_SP_addr_lower_limit) begin
@@ -1413,7 +1415,6 @@ module OpenEye_FPGA #(
     end
   end
   reg [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_storage;
-  reg [                                        3:0] iact_router_counter;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       router_mode_iact_reg     <= 0;

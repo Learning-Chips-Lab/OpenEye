@@ -35,56 +35,33 @@ class IactStreamMapper(object):
                         iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
             iact_stream = self.create_complete_iact_stream(iact_stream)
         else :
+            bitwidth = self.params.IACT_Bitwidth
+            dma_bitwidth = self.params.DMA_Bit_AXI
+            values_per_word = dma_bitwidth // bitwidth
+
             values = np.transpose(np.array(self.dram_fmap), axes=[2, 1, 0])  # (channels, y, x) -> (x, y, channels)
             iact_size_y, iact_size_x, channels = values.shape
-            values = values.flatten()
 
-            used_channels = self.layer_params.used_channels
-            num_buffer = self.params.NUM_BUFFER
-            bitwidth = self.params.IACT_Bitwidth
-            values_per_word = self.params.DMA_Bit_AXI//bitwidth
-            x_values_per_word = math.ceil(values_per_word/ used_channels)
-            total_values = iact_size_y * iact_size_x * channels
+            used_channels = self.layer_params.used_channels 
+            flat_values = []
 
+            for c_base in range(0, channels, used_channels):
+                for y in range(iact_size_y):
+                    for x in range(iact_size_x):
+                        for c_offset in range(used_channels):
+                            c = c_base + c_offset
+                            if c < channels:
+                                flat_values.append(int(values[y, x, c]))
             iact_stream = []
-            pos = 0
-
-            for h in range(math.ceil(channels/used_channels)):
-                for addr_buf in range(iact_size_y):
-                    for i in range(num_buffer):
-                        if (pos >= total_values) :
-                            break
-                        
-                        packed_values = []
-                        for j in range(math.ceil(values_per_word / used_channels)):
-                            for k in range(used_channels):
-                                index = self.calculate_index(i, j, k, h, addr_buf, channels,
-                                                        used_channels, x_values_per_word, num_buffer)
-                                if index < total_values:
-                                    val = int(values[index])
-                                    packed_values.append(val)
-                                else:
-                                    packed_values.append(0)
-                        
-                        word = self.pack_values_to_word(packed_values, bitwidth)
-                        iact_stream.append(word)
-                        pos += values_per_word
-        return iact_stream
-    
-    def pack_values_to_word(self, values, bitwidth):
-        word = 0
-        for idx, val in enumerate(values):
-            val_twos = gtu.to_twos_complement(val, bitwidth)
-            word |= val_twos << (bitwidth * idx)
-        return word
-    
-    def calculate_index(self, i, j, k, h, addr_buf, channels, used_channels, x_values_per_word, num_buffer):
-        return (i * channels * x_values_per_word 
-                + j * channels  
-                + k 
-                + h * used_channels  
-                + addr_buf * num_buffer * channels * x_values_per_word)
-    
+            for i in range(0, len(flat_values), values_per_word):
+                word = 0
+                for j in range(values_per_word):
+                    if i + j < len(flat_values):
+                        val_twos = gtu.to_twos_complement(flat_values[i + j], bitwidth)
+                        word |= val_twos << (j * bitwidth)
+                iact_stream.append(word)
+            return iact_stream
+            
     
     def write_iact_data_glb(self, cl_x, cl_y, router):
         storage = []

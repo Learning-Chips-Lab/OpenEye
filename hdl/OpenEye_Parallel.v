@@ -803,7 +803,7 @@ reg [7:0]needed_psum_storage_cycles_reg;
                     for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                       for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
                         mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
-                            mem_addr_psum_storage + {{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg}; //ÄNDERUNG TESTEN
+                            mem_addr_psum_storage + {{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg};
                       end
                     end
                   end
