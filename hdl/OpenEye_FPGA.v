@@ -1229,12 +1229,6 @@ module OpenEye_FPGA #(
         end
 
         CONVERT_IACT: begin
-          //if ((iact_converter_buffer_addr_cycles == 0) & (iact_converter_cycles >= 2)) begin Works on 4 channel 2 Router
-          //if ((iact_converter_buffer_addr_cycles == 1) & (iact_converter_cycles >= 1)) begin Works on 1 channel 2 Router
-          //if ((iact_converter_buffer_addr_cycles == 2) & (iact_converter_cycles >= 0)) begin Works on 2 channel 3 Router
-          //Still unsure about this line.
-          //if ((iact_converter_buffer_addr_cycles == iact_channels_per_pe[0]) & (iact_converter_cycles > iact_channels_per_pe[2])) begin
-          //if ((iact_converter_buffer_addr_cycles == 2) & (iact_converter_cycles >= 0)) begin //ÄNDERN
           fsm_cycle <= fsm_cycle + 1;
           test_reg  <= 0;
           if (test_reg > 0) begin
