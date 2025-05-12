@@ -192,23 +192,23 @@ module router_iact #(
   ///Destination Port: Ready
   ////////////////////////////////////////
 
-  assign r00 = (2'd0 == router_mode_i[5:4]) ? (router_mode_i[0] ? ready_dst_port_0 : 1) : 1;
-  assign r10 = (2'd1 == router_mode_i[5:4]) ? (router_mode_i[0] ? ready_dst_port_0 : 1) : 1;
-  assign r20 = (2'd2 == router_mode_i[5:4]) ? (router_mode_i[0] ? ready_dst_port_0 : 1) : 1;
-  assign r30 = (2'd3 == router_mode_i[5:4]) ? (router_mode_i[0] ? ready_dst_port_0 : 1) : 1;
+  assign r00 = (2'd0 == router_mode_i[5:4]) ? (router_mode_i[0] ? ready_dst_port_0 : 1) : 0;
+  assign r10 = (2'd1 == router_mode_i[5:4]) ? (router_mode_i[0] ? ready_dst_port_0 : 1) : 0;
+  assign r20 = (2'd2 == router_mode_i[5:4]) ? (router_mode_i[0] ? ready_dst_port_0 : 1) : 0;
+  assign r30 = (2'd3 == router_mode_i[5:4]) ? (router_mode_i[0] ? ready_dst_port_0 : 1) : 0;
 
-  assign r01 = (2'd0 == router_mode_i[5:4]) ? (router_mode_i[1] ? ready_dst_port_1 : 1) : 1;
-  assign r11 = (2'd1 == router_mode_i[5:4]) ? (router_mode_i[1] ? 0 : 0) : 1;
-  assign r21 = (2'd2 == router_mode_i[5:4]) ? (router_mode_i[1] ? ready_dst_port_1 : 1) : 1;
-  assign r31 = (2'd3 == router_mode_i[5:4]) ? (router_mode_i[1] ? ready_dst_port_1 : 1) : 1;
+  assign r01 = (2'd0 == router_mode_i[5:4]) ? (router_mode_i[1] ? ready_dst_port_1 : 1) : 0;
+  assign r11 = (2'd1 == router_mode_i[5:4]) ? (router_mode_i[1] ? 0 : 0) : 0;
+  assign r21 = (2'd2 == router_mode_i[5:4]) ? (router_mode_i[1] ? ready_dst_port_1 : 1) : 0;
+  assign r31 = (2'd3 == router_mode_i[5:4]) ? (router_mode_i[1] ? ready_dst_port_1 : 1) : 0;
 
-  assign r02 = (2'd0 == router_mode_i[5:4]) ? (router_mode_i[2] ? ready_dst_port_2 : 1) : 1;
-  assign r12 = (2'd1 == router_mode_i[5:4]) ? (router_mode_i[2] ? ready_dst_port_2 : 1) : 1;
-  assign r22 = (2'd2 == router_mode_i[5:4]) ? (router_mode_i[2] ? 0 : 0) : 1;
-  assign r32 = (2'd3 == router_mode_i[5:4]) ? (router_mode_i[2] ? 0 : 1) : 1;
+  assign r02 = (2'd0 == router_mode_i[5:4]) ? (router_mode_i[2] ? ready_dst_port_2 : 1) : 0;
+  assign r12 = (2'd1 == router_mode_i[5:4]) ? (router_mode_i[2] ? ready_dst_port_2 : 1) : 0;
+  assign r22 = (2'd2 == router_mode_i[5:4]) ? (router_mode_i[2] ? 0 : 0) : 0;
+  assign r32 = (2'd3 == router_mode_i[5:4]) ? (router_mode_i[2] ? 0 : 1) : 0;
 
-  assign r03 = (2'd0 == router_mode_i[5:4]) ? (router_mode_i[3] ? ready_dst_port_3 : 1) : 1;
-  assign r13 = (2'd1 == router_mode_i[5:4]) ? (router_mode_i[3] ? ready_dst_port_3 : 1) : 1;
-  assign r23 = (2'd2 == router_mode_i[5:4]) ? (router_mode_i[3] ? 0 : 1) : 1;
-  assign r33 = (2'd3 == router_mode_i[5:4]) ? (router_mode_i[3] ? 0 : 0) : 1;
+  assign r03 = (2'd0 == router_mode_i[5:4]) ? (router_mode_i[3] ? ready_dst_port_3 : 1) : 0;
+  assign r13 = (2'd1 == router_mode_i[5:4]) ? (router_mode_i[3] ? ready_dst_port_3 : 1) : 0;
+  assign r23 = (2'd2 == router_mode_i[5:4]) ? (router_mode_i[3] ? 0 : 1) : 0;
+  assign r33 = (2'd3 == router_mode_i[5:4]) ? (router_mode_i[3] ? 0 : 0) : 0;
 endmodule

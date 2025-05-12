@@ -749,7 +749,7 @@ module OpenEye_FPGA #(
           end
         end
 
-        if (current_cycle < needed_cycles_reg) begin
+        if (current_cycle < needed_cycles_reg) begin // ÄNDERN 5x5 KERNEL
           if (iact_ready_o_oep_w == 0) begin
             if (!single_iteration) begin
               single_iteration <= 1;
@@ -857,7 +857,6 @@ module OpenEye_FPGA #(
       bano_cluster_mode_reg             <= 0;
       af_cluster_mode_reg               <= 0;
       compute_mask_reg                  <= 0;
-      router_mode_iact_reg              <= 0;
       router_mode_wght_reg              <= 0;
       router_mode_psum_reg              <= 0;
       psum_data_i_reg                   <= 0;
@@ -919,7 +918,6 @@ module OpenEye_FPGA #(
       converter_needed_cycles      <= 0;
       iact_converter_enc_enable    <= 0;
       iact_converter_params_enable <= 0;
-
 
     end else begin
       case (fsm_current_state)
@@ -1030,22 +1028,6 @@ module OpenEye_FPGA #(
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
             if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS) begin
-              for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
-                for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
-                  for (g = 0; g < NUM_GLB_IACT; g = g + 1) begin
-                    if(((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)>=(fsm_cycle    *(DMA_BITWIDTH/ROUTER_MODES_IACT)))
-                      &((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)< ((fsm_cycle+1)*(DMA_BITWIDTH/ROUTER_MODES_IACT))))begin
-                      for (i = 0; i < ROUTER_MODES_IACT; i = i + 1) begin
-                        router_mode_iact_reg[cc * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
-                                           cr * NUM_GLB_IACT * ROUTER_MODES_IACT + 
-                                           g * ROUTER_MODES_IACT + i] <=
-                        data_dma_i_reg[(cc*NUM_GLB_IACT+cr*CLUSTER_COLUMNS*NUM_GLB_IACT+g-fsm_cycle*(DMA_BITWIDTH/ROUTER_MODES_IACT))
-                        *ROUTER_MODES_IACT+i];
-                      end
-                    end
-                  end
-                end
-              end
             end else begin
 
               if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS) begin
@@ -1431,6 +1413,39 @@ module OpenEye_FPGA #(
         end
       endcase
     end
+  end
+  always @(posedge clk_i, negedge rst_n) begin
+    if (!rst_n) begin
+      router_mode_iact_reg <= 0;
+    end else begin
+      if (fsm_current_state == GET_ROUTER_CONFIG) begin
+        if (enable_dma_i_reg) begin
+          if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS) begin
+            for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+              for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
+                for (g = 0; g < NUM_GLB_IACT; g = g + 1) begin
+                  if(((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)>=(fsm_cycle    *(DMA_BITWIDTH/ROUTER_MODES_IACT)))
+                    &((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)< ((fsm_cycle+1)*(DMA_BITWIDTH/ROUTER_MODES_IACT))))begin
+                    for (i = 0; i < ROUTER_MODES_IACT; i = i + 1) begin
+                      router_mode_iact_reg[cc * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
+                                          cr * NUM_GLB_IACT * ROUTER_MODES_IACT + 
+                                          g * ROUTER_MODES_IACT + i] <=
+                      data_dma_i_reg[(cc*NUM_GLB_IACT+cr*CLUSTER_COLUMNS*NUM_GLB_IACT+g-fsm_cycle*(DMA_BITWIDTH/ROUTER_MODES_IACT))
+                      *ROUTER_MODES_IACT+i];
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end else begin
+        if (fsm_current_state == WAIT_CYCLE) begin
+        
+        end
+      end
+    end
+
   end
 
   //#######################
