@@ -1236,41 +1236,37 @@ module OpenEye_FPGA #(
           //if ((iact_converter_buffer_addr_cycles == iact_channels_per_pe[0]) & (iact_converter_cycles > iact_channels_per_pe[2])) begin
           //if ((iact_converter_buffer_addr_cycles == 2) & (iact_converter_cycles >= 0)) begin //ÄNDERN
           fsm_cycle <= fsm_cycle + 1;
-          if (fsm_cycle >= 0) begin
-            test_reg <= test_reg + 1;
-            if (test_reg == ((iact_converter_buffer_addr_max_cycles) - 1)) begin
-              test_reg <= 0;
-              if ((iact_converter_cycles >= padding_reg) & (iact_converter_cycles <= padding_reg + iact_size_y - 1)) begin
-                for (a = 0; a < RAM_CELLS; a++) begin
-                  buffer_SP_en_r_reg[a] <= 1;
-                  if (buffer_SP_addr_upper_limit > buffer_SP_addr_lower_limit) begin
-                    if (((a >= buffer_SP_addr_lower_limit) & (a < buffer_SP_addr_upper_limit))) begin
-                      buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
-                    end
-                  end else begin
-                    if (((a >= buffer_SP_addr_lower_limit) | (a < buffer_SP_addr_upper_limit))) begin
-                      buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
-                    end
+          test_reg  <= 0;
+          if (test_reg > 0) begin
+            test_reg <= test_reg - 1;
+          end
+          if (test_reg == 1) begin
+            test_reg <= iact_converter_buffer_addr_max_cycles;
+            if ((iact_converter_cycles >= padding_reg ) & (iact_converter_cycles <= padding_reg + iact_size_y - 1)) begin
+              for (a = 0; a < RAM_CELLS; a++) begin
+                buffer_SP_en_r_reg[a] <= 1;
+                if (buffer_SP_addr_upper_limit > buffer_SP_addr_lower_limit) begin
+                  if (((a >= buffer_SP_addr_lower_limit) & (a < buffer_SP_addr_upper_limit))) begin
+                    buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
+                  end
+                end else begin
+                  if (((a >= buffer_SP_addr_lower_limit) | (a < buffer_SP_addr_upper_limit))) begin
+                    buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
                   end
                 end
-                buffer_SP_addr_upper_limit <= ((buffer_SP_addr_upper_limit + limit_increase_reg)%RAM_CELLS);
-                buffer_SP_addr_lower_limit <= ((buffer_SP_addr_lower_limit + limit_increase_reg)%RAM_CELLS);
               end
-            end
-          end
-          converters_ready = 1;
-          for (a = 0; a < CLUSTER_COLUMNS; a++) begin
-            for (b = 0; b < CLUSTER_ROWS; b++) begin
-              converters_ready = converters_ready & iact_converter_ready_w[a][b];
+              buffer_SP_addr_upper_limit <= ((buffer_SP_addr_upper_limit + limit_increase_reg)%RAM_CELLS);
+              buffer_SP_addr_lower_limit <= ((buffer_SP_addr_lower_limit + limit_increase_reg)%RAM_CELLS);
             end
           end
           iact_converter_enc_enable    <= 0;
           iact_converter_params_enable <= 0;
-          if ((iact_converter_buffer_addr_cycles == (iact_channels_per_pe - 1)) & 
+          if ((iact_converter_buffer_addr_cycles == (iact_converter_buffer_addr_max_cycles - 2)) & 
           (iact_converter_cycles == 0) & 
           (iact_channels_counter != (iact_channel_max_cycles))) begin
             iact_converter_enc_enable    <= 1;
             iact_converter_params_enable <= 1;
+            test_reg                     <= 1;
           end
           iact_converter_buffer_addr_cycles <= iact_converter_buffer_addr_cycles + 1;
           if (iact_converter_buffer_addr_cycles == (iact_converter_buffer_addr_max_cycles - 1)) begin
