@@ -127,9 +127,9 @@ module iact_stream_constructor #(
                 fsm_enc_cycle         <= 0;
                 current_iact_cycle_reg <= ~0;
                 current_iact_cycle_mod_reg <= ~0;
-                if (fsm_row_offset == y_cluster_counter) begin
+                //if (fsm_row_offset == y_cluster_counter) begin
                   ram_rd_en             <= 1;
-                end
+                //end
               end
             end
           end
@@ -137,12 +137,12 @@ module iact_stream_constructor #(
             fsm_enc_cycle <= fsm_enc_cycle + 1;
             ram_rd_en     <= 0;
             iact_enable_o <= 0;
-            if (fsm_row_offset == y_cluster_counter) begin
+            //if (fsm_row_offset == y_cluster_counter) begin
               ram_rd_en             <= 1;
               if (current_iact_cycle_reg != {4{1'b1}}) begin
                 iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
               end
-            end
+            //end
             iact_data_o   <= ram_data_o;
             //Delay for one cycle
             //Check, wether amount of channels is odd
@@ -182,10 +182,10 @@ module iact_stream_constructor #(
               //All Iacts per Computing Cycle are transmitted
               if (current_iact_cycle_reg == (needed_iact_cycles_reg * wght_size_reg) - 1) begin
                 fsm_enc_current_state  <= IDLE;
-                y_cluster_counter <= y_cluster_counter + 1;
-                if (y_cluster_counter == needed_y_cls_i - 1) begin
-                  y_cluster_counter      <= 0;
-                end
+                //y_cluster_counter <= y_cluster_counter + 1;
+                //if (y_cluster_counter == needed_y_cls_i - 1) begin
+                //  y_cluster_counter      <= 0;
+                //end
                 iact_channel_counter   <= iact_channel_counter + 1;
                 ram_rd_addr            <= ram_rd_addr + (iact_size_y_i - 1) * channels;
                 if (iact_channel_counter == needed_iact_channel_cycles_i - 1) begin
@@ -210,9 +210,9 @@ module iact_stream_constructor #(
                 fsm_enc_cycle              <= 0;
               end
             end
-            if (fsm_row_offset != y_cluster_counter) begin
-              ram_rd_addr   <= 0;
-            end
+            //if (fsm_row_offset != y_cluster_counter) begin
+            //  ram_rd_addr   <= 0;
+            //end
           
           end
           default: begin
