@@ -996,7 +996,7 @@ module OpenEye_FPGA #(
                 iact_needed_cycles                    <= data_dma_i_reg[10:0];
               end
               32'd3: begin
-                needed_psum_storage_cycles_reg <= data_dma_i_reg[7:0];
+                needed_psum_storage_cycles_reg <= data_dma_i_reg[7:0] * needed_y_cls_reg;
                 iact_channel_max_cycles        <= data_dma_i_reg[7:0];
               end
               32'd4: begin

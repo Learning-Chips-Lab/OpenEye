@@ -726,7 +726,6 @@ reg [7:0]needed_psum_storage_cycles_reg;
             for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
               for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
                 if (psum_cluster_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum]) begin
-
                   mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
                       mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] + 1;
                 end
@@ -800,6 +799,14 @@ reg [7:0]needed_psum_storage_cycles_reg;
                 if (SERIAL) begin
                   mem_addr_psum_storage <= mem_addr_psum_storage +
                       {{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg};
+                  for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                    for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
+                      for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
+                        mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
+                            mem_addr_psum_storage + {{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg}; //ÄNDERUNG TESTEN
+                      end
+                    end
+                  end
                 end else begin
                   mem_addr_psum_storage <= mem_addr_psum_storage +
                       ({{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg} + 1) /

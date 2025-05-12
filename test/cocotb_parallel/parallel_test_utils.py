@@ -153,7 +153,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
-
+        print(cluster_order)
         for layer_repetition in range(layer_params.needed_total_transmissions):
             p = mp.Process(target = calculate_conv_output_stream_mp, \
                             args = (layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results, return_dict))
@@ -375,7 +375,7 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                              math.ceil(layer_params.needed_refreshes_mx[layer_repetition][2]/layer_params.used_Y_cluster)):
             for psum_pe in range(((refresh)%layer_params.needed_wght_transmissions)*math.ceil(layer.filters/layer_params.needed_wght_transmissions),\
                                 (((refresh)%layer_params.needed_wght_transmissions)+1)*math.ceil(layer.filters/layer_params.needed_wght_transmissions)):
-                for cl_y in cluster_order:
+                for cl_y in range(params.Clusters_Y):
                     for cl_x in range(params.Clusters_X):
                         for router in range(0, params.Psum_Routers, 2):
                         
