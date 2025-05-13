@@ -61,7 +61,7 @@ module iact_stream_constructor #(
   reg  [                 8-1:0] channels;
   reg  [                 8-1:0] current_cycle;
   reg  [                 8-1:0] pos;
-  reg  [                 3-1:0] padding_reg;
+  reg  [                 4-1:0] padding_reg;
   reg  [                 4-1:0] needed_iact_cycles_reg;
   reg  [                 8-1:0] current_iact_cycle_reg;
   reg  [                 4-1:0] current_iact_cycle_mod_reg;
@@ -332,7 +332,7 @@ module iact_stream_constructor #(
             iact_router_counter <= 0;
             kernel_y_counter    <= 0;
             byte_var_pre_calc   <= 0;
-            padding_reg         <= (wght_size_reg[2:0] - 1) / 2;
+            padding_reg         <= (wght_size_reg[3:0] - 1) / 2;
             if (enable_store) begin
               ram_wr_addr       <= address_storage;
               fsm_current_state <= WRITE_TO_MEMORY;

@@ -140,20 +140,20 @@ class ConvMapper(LayerMapper):
                             storage[cl_x][cl_y][router] = 1
                     else:
                         if(layer_params.used_PEs_Y > 1):
-                            if((cl_y % layer_params.ceil_used_PE_per_clm) == 0):
+                            if((cl_y % layer_params.used_Y_cluster) == 0):
                                 if(params.SERIAL):
                                     line = line + (9 << (params.Iact_Router_Bits * router_cycle))
                                 else:
                                     storage[cl_x][cl_y][router] = 9
                             else:
-                                if((cl_y % layer_params.ceil_used_PE_per_clm) + 1 == layer_params.ceil_used_PE_per_clm):
+                                if(((cl_y + 1) % layer_params.used_Y_cluster) == 0):
                                     if(params.SERIAL):
                                         line = line + (17 << (params.Iact_Router_Bits * router_cycle))
                                     else:
                                         storage[cl_x][cl_y][router] = 17
                                 else:
                                     if(params.SERIAL):
-                                        line = line + (41 << (params.Iact_Router_Bits * router_cycle))
+                                        line = line + (25 << (params.Iact_Router_Bits * router_cycle))
                                     else:
                                         storage[cl_x][cl_y][router] = 25
                         else:
