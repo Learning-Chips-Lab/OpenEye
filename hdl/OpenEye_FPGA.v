@@ -288,6 +288,7 @@ module OpenEye_FPGA #(
   reg wght_buffer_SP_en_w;
   reg [BUFFER_WIDTH-1:0] wght_buffer_SP_wr_addr;
   reg [BUFFER_WIDTH-1:0] wght_buffer_SP_rd_addr;
+  reg [BUFFER_WIDTH-1:0] wght_buffer_SP_rd_addr_storage;
   reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_w;
   reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_r;
 
@@ -693,6 +694,7 @@ module OpenEye_FPGA #(
       wght_data_i_reg        <= 0;
       wght_buffer_SP_en_r    <= 0;
       wght_buffer_SP_rd_addr <= 0;
+      wght_buffer_SP_rd_addr_storage <= 0;
       compute_reg            <= 0;
       psum_ready_i_reg       <= 0;
       wght_sendable          <= 0;
@@ -767,15 +769,16 @@ module OpenEye_FPGA #(
               end
               wght_sendable    <= 1;
               if (iact_channel_max_cycles == 1) begin
-                wght_sendable    <= 0;
+                wght_sendable          <= 0;
               end
               if (iact_channels_counter == iact_channel_max_cycles -1) begin
+                //wght_buffer_SP_rd_addr <= wght_buffer_SP_rd_addr_storage; //ÄNDERN 0 ?
                 if (iact_router_counter == needed_y_cls_reg - 1) begin
                   iact_cycle_count <= iact_cycle_count + 1;
                   wght_sendable    <= 1;
                   current_cycle    <= current_cycle + 1;
                   if (iact_cycle_count == needed_wght_cycles_reg - 1) begin
-                    wght_buffer_SP_rd_addr <= 0;
+                    wght_buffer_SP_rd_addr <= wght_buffer_SP_rd_addr_storage; //ÄNDERN 0 ?
                     iact_cycle_count       <= 0;
                   end
                 end
@@ -1591,6 +1594,7 @@ module OpenEye_FPGA #(
             .needed_iact_channel_cycles_i(iact_channel_max_cycles[3:0]),
             .iact_size_x_i               (iact_size_x),
             .iact_size_y_i               (iact_size_y),
+            .iact_channels_i             (iact_channels_per_pe),
             .x_lines_i                   (x_lines_reg),
             .needed_wght_cycles_i        (needed_wght_cycles_reg),
             .needed_iact_router_cycles_i (needed_iact_cycles_reg),
