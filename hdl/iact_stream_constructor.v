@@ -63,7 +63,7 @@ module iact_stream_constructor #(
   reg  [                 8-1:0] pos;
   reg  [                 3-1:0] padding_reg;
   reg  [                 4-1:0] needed_iact_cycles_reg;
-  reg  [                 4-1:0] current_iact_cycle_reg;
+  reg  [                 8-1:0] current_iact_cycle_reg;
   reg  [                 4-1:0] current_iact_cycle_mod_reg;
   reg  [                 4-1:0] wght_size_reg;
   reg                           change_state;
@@ -177,7 +177,7 @@ module iact_stream_constructor #(
               end
               //All Iacts per Computing Cycle are transmitted
               if (current_iact_cycle_reg == (needed_iact_cycles_reg * wght_size_reg) - 1) begin
-                ram_rd_addr            <= ram_rd_addr + (iact_size_y_i - 1) * iact_channels_i;
+                ram_rd_addr            <= (padding_reg + ram_rd_addr + (iact_size_y_i - 1) * iact_channels_i) - 1; //ÄNDERN zu padding
                 iact_channel_counter   <= iact_channel_counter + 1;
                 if (iact_channel_counter == needed_iact_channel_cycles_i - 1) begin
                   ram_rd_addr          <= line_offset;
@@ -402,7 +402,7 @@ module iact_stream_constructor #(
             end
             for (r = 0; r < NUM_GLB_IACT; r++) begin
               for (w = 0; w < WORDS_PER_CYCLE; w++) begin
-                ram_var = ((((channels * iact_size_x_i)/ 8 ) + (iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r])) / 8)) % RAM_CELLS;
+                ram_var = ((((channels * iact_size_x_i * iact_size_y_i)/ 8 ) + (iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r])) / 8)) % RAM_CELLS;
                 byte_var = ((x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
                 //PADDING
                 if ((

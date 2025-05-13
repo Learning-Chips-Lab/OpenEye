@@ -790,7 +790,8 @@ module OpenEye_FPGA #(
                   iact_cycle_count <= iact_cycle_count + 1;
                   wght_sendable    <= 1;
                   if (iact_cycle_count == needed_wght_cycles_reg - 1) begin
-                    loop_debug <= 4;
+                    loop_debug                     <= 4;
+                    wght_buffer_SP_rd_addr_storage <= 0;
                     wght_buffer_SP_rd_addr         <= 0;
                     iact_cycle_count               <= 0;
                   end
