@@ -760,7 +760,7 @@ reg [7:0] iact_channel_counter_reg;
               if ((needed_y_cls_reg >= 2) & !psum_router_set_reg) begin
                 psum_router_set_reg <= 1;
                 iact_channel_counter_reg <= iact_channel_counter_reg + 1;
-                if ((iact_channel_counter_reg == needed_iact_channel_cycles_i - 1)) begin //ÄNDERN
+                if ((iact_channel_counter_reg == needed_iact_channel_cycles_i - 1)) begin
                   iact_channel_counter_reg <= 0;
                   for (cr_psum = 1; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                     for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin

@@ -152,7 +152,7 @@ class LayerParameters(object):
                     for y_cluster in range(params.Clusters_Y):
                         for y_pe in range(params.PEs_Y):
                             for x_pe in range(params.PEs_X):
-                                if((1 + y_pe + (y_cluster % math.ceil(layer.kernel_size[0]/params.PEs_Y)) * params.PEs_Y) > (layer.kernel_size[0]*self.kernel_per_pe_cluster)):
+                                if((1 + y_pe + (y_cluster % self.used_Y_cluster) * params.PEs_Y) > (layer.kernel_size[0]*self.kernel_per_pe_cluster)):
                                     self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
 
             if((layer.output.shape[1] % params.PEs_X) != 0):
@@ -195,7 +195,6 @@ class LayerParameters(object):
         self.strideX = layer.strides[0]
         self.strideY = layer.strides[1]
         self.calculate_iact_transmissions(layer,params)
-        self.calculate_computing_matrix(layer, params)
         self.channels = layer.input.shape[3]
         match self.single_cluster_computation:
             case 1:
@@ -290,6 +289,7 @@ class LayerParameters(object):
         self.used_Y_cluster = (math.ceil(self.used_PEs_Y/params.PEs_Y))
         self.used_Y_cluster = (math.floor(8/self.used_Y_cluster))
         self.used_Y_cluster = (math.ceil(8/self.used_Y_cluster))
+        self.calculate_computing_matrix(layer, params)
         if (params.SERIAL) :
             self.psum_delay = int(max([(math.ceil(self.used_psum_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
         else :
