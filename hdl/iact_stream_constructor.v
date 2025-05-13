@@ -437,7 +437,6 @@ module iact_stream_constructor #(
               y_cycle             <= 1;
               router_cycle        <= 1;
               addr_cycle          <= 0;
-              //iact_router_counter <= 0; EINFÜGEN ?
               kernel_y_counter    <= 0;
               ram_wr_addr         <= ram_wr_addr + 1;
               fsm_current_state   <= WRITE_TO_MEMORY;
@@ -449,8 +448,8 @@ module iact_stream_constructor #(
 
           end
         endcase
-        //ram_var  = 0; EINFÜGEN
-        //byte_var = 0; EINFÜGEN
+        ram_var  = 0;
+        byte_var = 0;
         if (enable_config) begin
           fsm_row_offset         <= params[35:32];
           x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];

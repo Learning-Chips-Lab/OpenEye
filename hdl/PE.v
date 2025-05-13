@@ -372,8 +372,7 @@ module PE #(
         SECOND_PARAMS: begin
           if (enable_stream_i) begin
             current_state_stream <= THIRD_PARAMS;
-            iact_addr_max_reg    <= 4;
-            //iact_addr_max_reg    <= data_stream_i[3:0]; //EINFÜGEN
+            iact_addr_max_reg    <= data_stream_i[3:0];
           end else begin
             current_state_stream <= FIRST_PARAMS;
           end
