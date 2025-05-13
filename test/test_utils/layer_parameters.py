@@ -288,6 +288,8 @@ class LayerParameters(object):
         self.ceil_used_PE_per_clm = math.ceil(used_PEs_per_clm)
 
         self.used_Y_cluster = (math.ceil(self.used_PEs_Y/params.PEs_Y))
+        self.used_Y_cluster = (math.floor(8/self.used_Y_cluster))
+        self.used_Y_cluster = (math.ceil(8/self.used_Y_cluster))
         if (params.SERIAL) :
             self.psum_delay = int(max([(math.ceil(self.used_psum_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
         else :
