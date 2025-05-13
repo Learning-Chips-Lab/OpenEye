@@ -756,23 +756,8 @@ reg [7:0]needed_psum_storage_cycles_reg;
             end else begin
               if ((needed_y_cls_reg >= 2) & !psum_router_set_reg) begin
                 psum_router_set_reg <= 1;
-                for (cr_psum = 1; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                  for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                    for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                      router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2] <=
-                      router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr_psum-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2];
-                    end
-                  end
-                end
-                if (storage_cycles != (needed_y_cls_reg - 1)) begin
-                  for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                    for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                      router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g_psum*ROUTER_MODES_PSUM+2] <= 0;
-                    end
-                  end
-
-                  storage_cycles <= storage_cycles + 1;
-
+                //if ((storage_cycles == 2 - 1)) begin //ÄNDERN
+                if (1 == 1) begin //ÄNDERN
                   for (cr_psum = 1; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                     for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                       for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
@@ -781,20 +766,38 @@ reg [7:0]needed_psum_storage_cycles_reg;
                       end
                     end
                   end
-                end else begin
-                  for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                    for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                      router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g_psum*ROUTER_MODES_PSUM+2] <= 1;
+                  if (storage_cycles != (needed_psum_storage_cycles_reg - 1)) begin //ÄNDERN
+                    for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                      for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
+                        router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g_psum*ROUTER_MODES_PSUM+2] <= 0;
+                      end
                     end
+
+                    storage_cycles <= storage_cycles + 1;
+
+                    for (cr_psum = 1; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
+                      for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                        for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
+                          router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2] <=
+                          router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr_psum-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2];
+                        end
+                      end
+                    end
+                  end else begin
+                    for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                      for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
+                        router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g_psum*ROUTER_MODES_PSUM+2] <= 1;
+                      end
+                    end
+                    storage_cycles <= 0;
                   end
-                  storage_cycles <= 0;
                 end
               end
               psum_transmitted       <= 1;
               fsm_psum_last_state    <= GET_RESULTS;
               fsm_psum_current_state <= CALCULATE_PSUM;
               fsm_psum_cycle         <= 0;
-              if (storage_cycles == needed_psum_storage_cycles_reg - 1) begin
+              if (storage_cycles == needed_psum_storage_cycles_reg - 1) begin //ÄNDERN vll 2
                 storage_cycles <= 0;
                 if (SERIAL) begin
                   mem_addr_psum_storage <= mem_addr_psum_storage +
