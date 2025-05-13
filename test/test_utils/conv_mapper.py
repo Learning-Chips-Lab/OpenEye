@@ -224,13 +224,13 @@ class ConvMapper(LayerMapper):
                         else:
                             storage[cl_x][cl_y][router] = 4
                     else:
-                        if((cl_y % layer_params.ceil_used_PE_per_clm) == 0):
+                        if((cl_y % layer_params.used_Y_cluster) == 0):
                             if(params.SERIAL):
                                 line = line + (5 << (params.Psum_Router_Bits * router_cycle))
                             else:
                                 storage[cl_x][cl_y][router] = 5
                         else:
-                            if(((cl_y + 1) % layer_params.ceil_used_PE_per_clm) == 0):
+                            if(((cl_y + 1) %  layer_params.used_Y_cluster) == 0):
                                 if(params.SERIAL):
                                     line = line + (3 << (params.Psum_Router_Bits * router_cycle))
                                 else:

@@ -619,7 +619,7 @@ reg [7:0] iact_channel_counter_reg;
             psum_choose_reg <= {CLUSTER_ROWS{{NUM_GLB_PSUM{1'b1}}, {NUM_GLB_PSUM{1'b0}}}};
           end else begin
             if (needed_y_cls_reg == 4 & (CLUSTER_ROWS >= 4)) begin
-              //32'(psum_choose_reg) <= {((CLUSTER_ROWS+1)/2){{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{3'b000}}}};
+              psum_choose_reg <= {((CLUSTER_ROWS+1)/2){{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{3'b000}}}};
             end else begin
               psum_choose_reg <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
             end
