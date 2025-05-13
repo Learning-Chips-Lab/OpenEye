@@ -458,8 +458,8 @@ module OpenEye_FPGA #(
   reg [7:0] fsm_iact_params;
   reg [7:0] iact_converter_x;
   reg [7:0] iact_converter_y;
+  reg [7:0] iact_converter_c;
   // additional register for fsm
-  reg [$clog2(CLUSTER_COLUMNS+1)-1:0] fsm_col;
   reg [$clog2(CLUSTER_ROWS+1)-1:0]    fsm_row;
   reg [$clog2(CLUSTER_ROWS+1)-1:0]    fsm_row_offset;
   integer a, b;
@@ -469,7 +469,7 @@ module OpenEye_FPGA #(
       fsm_iact_params  <= 0;
       iact_converter_x <= 0;
       iact_converter_y <= 0;
-      fsm_col          <= 0;
+      iact_converter_c <= 0;
       fsm_row          <= 0;
       fsm_row_offset   <= 0;
       for (a = 0; a < CLUSTER_COLUMNS; a++) begin
@@ -481,63 +481,62 @@ module OpenEye_FPGA #(
     end else begin
       if (GET_ROUTER_CONFIG == fsm_current_state) begin
         param_array_reg <= (1 << (iact_size_x / PE_COLUMNS)) - 1;
-        fsm_iact_params <= CLUSTERS;
+        fsm_iact_params <= CLUSTERS / CLUSTER_COLUMNS;
       end else begin
         if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
           if (fsm_iact_params > 0) begin
             fsm_iact_params  <= fsm_iact_params - 1;
-            iact_converter_x <= iact_converter_x + PE_COLUMNS;
-            if (iact_converter_x >= iact_size_x - PE_COLUMNS) begin
+            iact_converter_x <= iact_converter_x + (PE_COLUMNS * 2);
+            if (iact_converter_x >= iact_size_x - (PE_COLUMNS * 2)) begin
               iact_converter_x <= 0;
-              iact_converter_y <= iact_converter_y + 1;
+              iact_converter_c <= iact_converter_c + iact_channels_per_pe;
+              if (iact_converter_c == iact_channels - iact_channels_per_pe) begin
+                iact_converter_c <= 0;
+                iact_converter_y <= iact_converter_y + 1;
+                if (iact_converter_y >= iact_size_y - 1) begin
+                iact_converter_y <= 0;
+                end
+              end
             end
-            iact_converter_params_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
+            for (a = 0; a < CLUSTER_COLUMNS; a++) begin 
+            iact_converter_params_reg[a
+            ][fsm_row[$clog2(
                 CLUSTER_ROWS
             )-1:0]][35:32] <= fsm_row_offset;
+              iact_converter_params_reg[a
+              ][fsm_row[$clog2(
+                  CLUSTER_ROWS
+              )-1:0]][31:24] <= iact_converter_x + a * PE_COLUMNS[7:0];
 
-            iact_converter_params_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]][31:24] <= iact_converter_x;
+              iact_converter_params_reg[a
+              ][fsm_row[$clog2(
+                  CLUSTER_ROWS
+              )-1:0]][23:16] <= iact_converter_y;
 
-            iact_converter_params_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]][23:16] <= iact_converter_y;
+              iact_converter_params_reg[a
+              ][fsm_row[$clog2(
+                  CLUSTER_ROWS
+              )-1:0]][15:8] <= iact_size_x;
 
-            iact_converter_params_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]][15:8] <= iact_size_x;
+              iact_converter_params_reg[a
+              ][fsm_row[$clog2(
+                  CLUSTER_ROWS
+              )-1:0]][7:0] <= iact_converter_c;
 
-            iact_converter_params_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]][7:0] <= iact_channels_per_pe;
+              iact_converter_en_cfg_reg[a
+              ][fsm_row[$clog2(
+                  CLUSTER_ROWS
+              )-1:0]] <= 1;
+            end
 
-            iact_converter_en_cfg_reg[fsm_col[$clog2(
-                CLUSTER_COLUMNS
-            )-1:0]][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]] <= 1;
 
-            fsm_col <= fsm_col + 1;
-            if (fsm_col == CLUSTER_COLUMNS - 1) begin
-              fsm_col <= 0;
-              fsm_row <= fsm_row + needed_y_cls_reg;
-              if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
-                fsm_row <= fsm_row_offset + 1;
-                fsm_row_offset <= fsm_row_offset + 1;
-                if (fsm_row_offset == needed_y_cls_reg - 1) begin
-                  fsm_row        <= 0;
-                  fsm_row_offset <= 0;
-                end
+            fsm_row <= fsm_row + needed_y_cls_reg;
+            if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
+              fsm_row <= fsm_row_offset + 1;
+              fsm_row_offset <= fsm_row_offset + 1;
+              if (fsm_row_offset == needed_y_cls_reg - 1) begin
+                fsm_row        <= 0;
+                fsm_row_offset <= 0;
               end
             end
           end
@@ -559,54 +558,55 @@ module OpenEye_FPGA #(
             end
             param_array_reg <= (param_array_reg<<(iact_size_x/PE_COLUMNS) | param_array_reg>>(CLUSTERS-(iact_size_x/PE_COLUMNS)));
           end
-          if ((iact_converter_params_enable & (iact_channels_counter == iact_channel_max_cycles - 1)) | (fsm_iact_params > 0)) begin
+          if ((iact_converter_params_enable) | (fsm_iact_params > 0)) begin
             if (fsm_iact_params > 0) begin
               fsm_iact_params <= fsm_iact_params - 1;
             end
             if (iact_converter_params_enable & (fsm_current_state == CONVERT_IACT)) begin
-              fsm_iact_params <= fsm_iact_params + (iact_size_x / PE_COLUMNS);
+              fsm_iact_params <= fsm_iact_params + (iact_size_x / (2 * PE_COLUMNS));
             end
             if (fsm_iact_params > 0) begin
-              iact_converter_x <= iact_converter_x + PE_COLUMNS;
-              if (iact_converter_x >= iact_size_x - PE_COLUMNS) begin
+              iact_converter_x <= iact_converter_x + (PE_COLUMNS * 2);
+              if (iact_converter_x >= iact_size_x - (PE_COLUMNS * 2)) begin
                 iact_converter_x <= 0;
-                iact_converter_y <= iact_converter_y + 1;
-              end
-              iact_converter_params_reg[fsm_col[$clog2(
-                  CLUSTER_COLUMNS
-              )-1:0]][fsm_row[$clog2(
-                  CLUSTER_ROWS
-              )-1:0]][31:24] <= iact_converter_x;
-
-              iact_converter_params_reg[fsm_col[$clog2(
-                  CLUSTER_COLUMNS
-              )-1:0]][fsm_row[$clog2(
-                  CLUSTER_ROWS
-              )-1:0]][23:16] <= iact_converter_y;
-
-              iact_converter_params_reg[fsm_col[$clog2(
-                  CLUSTER_COLUMNS
-              )-1:0]][fsm_row[$clog2(
-                  CLUSTER_ROWS
-              )-1:0]][15:8] <= iact_size_x;
-
-              iact_converter_params_reg[fsm_col[$clog2(
-                  CLUSTER_COLUMNS
-              )-1:0]][fsm_row[$clog2(
-                  CLUSTER_ROWS
-              )-1:0]][7:0] <= iact_channels_per_pe;
-
-              fsm_col <= fsm_col + 1;
-              if (fsm_col == (CLUSTER_COLUMNS - 1)) begin
-                fsm_col <= 0;
-                fsm_row <= fsm_row + needed_y_cls_reg;
-                if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
-                  fsm_row <= fsm_row_offset + 1;
-                  fsm_row_offset <= fsm_row_offset + 1;
-                  if (fsm_row_offset == needed_y_cls_reg - 1) begin
-                    fsm_row        <= 0;
-                    fsm_row_offset <= 0;
+                iact_converter_c <= iact_converter_c + iact_channels_per_pe;
+                if (iact_converter_c == iact_channels - iact_channels_per_pe) begin
+                  iact_converter_c <= 0;
+                  iact_converter_y <= iact_converter_y + 1;
+                  if (iact_converter_y >= iact_size_y - 1) begin
+                  iact_converter_y <= 0;
                   end
+                end
+              end
+              for (a = 0; a < CLUSTER_COLUMNS; a++) begin 
+                iact_converter_params_reg[a
+                ][fsm_row[$clog2(
+                    CLUSTER_ROWS
+                )-1:0]][31:24] <= iact_converter_x + a * PE_COLUMNS[7:0];
+
+                iact_converter_params_reg[a
+                ][fsm_row[$clog2(
+                    CLUSTER_ROWS
+                )-1:0]][23:16] <= iact_converter_y;
+
+                iact_converter_params_reg[a
+                ][fsm_row[$clog2(
+                    CLUSTER_ROWS
+                )-1:0]][15:8] <= iact_size_x;
+
+                iact_converter_params_reg[a
+                ][fsm_row[$clog2(
+                    CLUSTER_ROWS
+                )-1:0]][7:0] <= iact_converter_c;
+              end
+
+              fsm_row <= fsm_row + needed_y_cls_reg;
+              if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
+                fsm_row <= fsm_row_offset + 1;
+                fsm_row_offset <= fsm_row_offset + 1;
+                if (fsm_row_offset == needed_y_cls_reg - 1) begin
+                  fsm_row        <= 0;
+                  fsm_row_offset <= 0;
                 end
               end
             end
@@ -617,7 +617,6 @@ module OpenEye_FPGA #(
         if (reset_cycle_reg) begin
           iact_converter_x <= 0;
           iact_converter_y <= 0;
-          fsm_col          <= 0;
           fsm_row          <= 0;
           for (a = 0; a < CLUSTER_COLUMNS; a++) begin
             for (b = 0; b < CLUSTER_ROWS; b++) begin
@@ -679,26 +678,29 @@ module OpenEye_FPGA #(
   reg [                     11:0] fsm_sending_cycle;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] flat_help_var_send;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] temp_var;
+  reg [7:0] loop_debug;
   localparam EXTENDEDBITS = 48 - NUM_GLB_WGHT;
   //Process for sending data to OpenEye
   wire [CLUSTERS*NUM_GLB_IACT-1:0] iact_ready_o_oep_w;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       //Reset Registers
-      sending_data           <= 0;
-      single_iteration       <= 0;
-      single_iteration3      <= 0;
-      current_cycle          <= 0;
-      fsm_sending_cycle      <= 0;
-      wght_enable_i_reg      <= 0;
-      wght_data_i_reg        <= 0;
-      wght_buffer_SP_en_r    <= 0;
-      wght_buffer_SP_rd_addr <= 0;
+      loop_debug <= 0;
+
+      sending_data                   <= 0;
+      single_iteration               <= 0;
+      single_iteration3              <= 0;
+      current_cycle                  <= 0;
+      fsm_sending_cycle              <= 0;
+      wght_enable_i_reg              <= 0;
+      wght_data_i_reg                <= 0;
+      wght_buffer_SP_en_r            <= 0;
+      wght_buffer_SP_rd_addr         <= 0;
       wght_buffer_SP_rd_addr_storage <= 0;
-      compute_reg            <= 0;
-      psum_ready_i_reg       <= 0;
-      wght_sendable          <= 0;
-      iact_cycle_count       <= 0;
+      compute_reg                    <= 0;
+      psum_ready_i_reg               <= 0;
+      wght_sendable                  <= 0;
+      iact_cycle_count               <= 0;
       flat_help_var_send = 0;
       for (a = 0; a < CLUSTER_COLUMNS; a++) begin
         for (b = 0; b < CLUSTER_ROWS; b++) begin
@@ -756,30 +758,41 @@ module OpenEye_FPGA #(
           end
         end
 
+        loop_debug <= 0;
         if (current_cycle < needed_cycles_reg) begin
           if (iact_ready_o_oep_w == 0) begin
             single_iteration3 <= 0;
             if (!single_iteration) begin
               single_iteration  <= 1;
               single_iteration3 <= 1;
+              current_cycle     <= current_cycle + 1;
+
+              loop_debug <= 1;
               for (a = 0; a < CLUSTER_COLUMNS; a++) begin
                 for (b = 0; b < CLUSTER_ROWS; b++) begin
                   iact_converter_en_enc_reg[a][b] <= 1;
                 end
               end
-              wght_sendable    <= 1;
+              wght_sendable <= 1;
               if (iact_channel_max_cycles == 1) begin
-                wght_sendable          <= 0;
+                wght_sendable <= 0;
               end
               if (iact_channels_counter == iact_channel_max_cycles -1) begin
-                //wght_buffer_SP_rd_addr <= wght_buffer_SP_rd_addr_storage; //ÄNDERN 0 ?
+                loop_debug <= 2;
+                if (iact_channel_max_cycles != 1) begin
+                  wght_buffer_SP_rd_addr <= 0;
+                  wght_buffer_SP_rd_addr <= wght_buffer_SP_rd_addr_storage;
+                end
                 if (iact_router_counter == needed_y_cls_reg - 1) begin
+                  wght_buffer_SP_rd_addr <= wght_buffer_SP_rd_addr;
+                  wght_buffer_SP_rd_addr_storage <= wght_buffer_SP_rd_addr;
+                  loop_debug <= 3;
                   iact_cycle_count <= iact_cycle_count + 1;
                   wght_sendable    <= 1;
-                  current_cycle    <= current_cycle + 1;
                   if (iact_cycle_count == needed_wght_cycles_reg - 1) begin
-                    wght_buffer_SP_rd_addr <= wght_buffer_SP_rd_addr_storage; //ÄNDERN 0 ?
-                    iact_cycle_count       <= 0;
+                    loop_debug <= 4;
+                    wght_buffer_SP_rd_addr         <= 0;
+                    iact_cycle_count               <= 0;
                   end
                 end
               end
@@ -1716,7 +1729,8 @@ module OpenEye_FPGA #(
         .router_mode_iact_i     (router_mode_iact_reg),
         .router_mode_wght_i     (router_mode_wght_reg),
         .router_mode_psum_i     (router_mode_psum_reg),
-        .needed_psum_storage_cycles_i (needed_psum_storage_cycles_reg)
+        .needed_psum_storage_cycles_i (needed_psum_storage_cycles_reg),
+        .needed_iact_channel_cycles_i (iact_channel_max_cycles)
     );
 
     genvar cc_gen, cr_gen, g_gen, pe_gen;
