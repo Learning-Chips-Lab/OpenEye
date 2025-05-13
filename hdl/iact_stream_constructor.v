@@ -402,7 +402,7 @@ module iact_stream_constructor #(
             end
             for (r = 0; r < NUM_GLB_IACT; r++) begin
               for (w = 0; w < WORDS_PER_CYCLE; w++) begin
-                ram_var = (iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r]) / 8) % RAM_CELLS;
+                ram_var = ((((channels * iact_size_x_i)/ 8 ) + (iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r])) / 8)) % RAM_CELLS;
                 byte_var = ((x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
                 //PADDING
                 if ((
@@ -431,7 +431,7 @@ module iact_stream_constructor #(
               y_cycle             <= 1;
               router_cycle        <= 1;
               addr_cycle          <= 0;
-              iact_router_counter <= 0;
+              //iact_router_counter <= 0; EINFÜGEN ?
               kernel_y_counter    <= 0;
               ram_wr_addr         <= ram_wr_addr + 1;
               fsm_current_state   <= WRITE_TO_MEMORY;
@@ -443,8 +443,8 @@ module iact_stream_constructor #(
 
           end
         endcase
-        ram_var  = 0;
-        byte_var = 0;
+        //ram_var  = 0; EINFÜGEN
+        //byte_var = 0; EINFÜGEN
         if (enable_config) begin
           fsm_row_offset         <= params[35:32];
           x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
