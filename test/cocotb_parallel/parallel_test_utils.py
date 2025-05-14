@@ -370,10 +370,11 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
     file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
     layer_repetition_cycle = math.floor(layer_repetition/layer_params.iact_transmissions_pe)
     if (params.SERIAL):
-        for refresh in range(math.ceil(layer_params.needed_refreshes_mx[layer_repetition][1]/layer_params.used_Y_cluster),
-                             math.ceil(layer_params.needed_refreshes_mx[layer_repetition][2]/layer_params.used_Y_cluster)):
-            for psum_pe in range(((refresh)%layer_params.needed_wght_transmissions)*math.ceil(layer.filters/layer_params.needed_wght_transmissions),\
-                                (((refresh)%layer_params.needed_wght_transmissions)+1)*math.ceil(layer.filters/layer_params.needed_wght_transmissions)):
+        output_number = layer_params.iact_size_y*layer_params.iact_size_x*layer_params.filters
+        needed_refreshes = math.ceil(output_number / (params.Clusters_Y * params.Clusters_X) / params.Psum_Routers / layer_params.used_psum_per_PE)
+        filter_cycles = (layer_params.filters//layer_params.used_psum_per_PE)
+        for refresh in range(needed_refreshes):
+            for psum_pe in range(layer_params.used_psum_per_PE):
                 for cl_y in range(params.Clusters_Y):
                     for cl_x in range(params.Clusters_X):
                         for router in range(0, params.Psum_Routers, 2):
@@ -385,15 +386,15 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                                     x_cor= int(((router + \
                                     cl_x * params.PEs_X + \
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
-                                    ((cl_y%layer_params.used_Y_cluster) + refresh*layer_params.used_Y_cluster) * (params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster)) \
+                                    ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles) *layer_params.used_Y_cluster) * (params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster)) \
                                     % (layer.output.shape[1] + layer_params.add_up)))
 
                                     y_cor= int(((router + \
                                     cl_x * params.PEs_X + \
                                     math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
-                                    ((cl_y%layer_params.used_Y_cluster) + (refresh//(layer_params.needed_wght_transmissions))*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
+                                    ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles)*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
                                     / (layer.output.shape[1] + layer_params.add_up)))
-                                    filter = psum_pe
+                                    filter = psum_pe + layer_params.used_psum_per_PE * (refresh % filter_cycles)
                                     try:
                                         if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
                                             if (counter == 0):

@@ -229,7 +229,7 @@ module OpenEye_FPGA #(
   //Register, that occupy hyperparameters
   reg data_mode_reg;
   reg [$clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_reg;
-  reg [7:0] needed_cycles_reg;
+  reg [15:0] needed_cycles_reg;
   reg [$clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_reg;
   reg [$clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg;
   reg [3:0] needed_iact_cycles_reg;
@@ -673,8 +673,8 @@ module OpenEye_FPGA #(
   reg                             wght_sendable;
   reg                             single_iteration;
   reg                             single_iteration3;
-  reg [                      7:0] current_cycle;
-  reg [                      7:0] iact_cycle_count;
+  reg [                     15:0] current_cycle;
+  reg [                     15:0] iact_cycle_count;
   reg [                     11:0] fsm_sending_cycle;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] flat_help_var_send;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] temp_var;
@@ -1209,7 +1209,7 @@ module OpenEye_FPGA #(
                 psum_enable_i_reg   <= {((CLUSTERS * NUM_GLB_PSUM)) {1'b1}};
                 psum_buffer_SP_en_w <= 1;
                 psum_buffer_SP_addr <= psum_buffer_SP_addr + 1;
-                if (fsm_cycle == (filters_reg * iact_size_y) - 1) begin
+                if (fsm_cycle == (needed_wght_cycles_reg * filters_reg * iact_size_y * 4) - 1) begin
                   fsm_cycle              <= 0;
                   fsm_cycle_mod1         <= 0;
 

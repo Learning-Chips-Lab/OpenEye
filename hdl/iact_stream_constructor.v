@@ -82,7 +82,8 @@ module iact_stream_constructor #(
   localparam ENCODE = 1'b1;
 
   generate
-    reg [CALC_DATA_WIDTH-1:0] fsm_enc_cycle;
+    reg [8-1:0] fsm_enc_cycle;
+    reg [8-1:0] ram_inc_counter;
     reg fsm_enc_current_state;
     reg [3:0] iact_channel_counter;
     reg [3:0] finished_output_channels;
@@ -97,6 +98,7 @@ module iact_stream_constructor #(
         iact_enable_o              <= 0;
         iact_choose_o              <= 0;
         fsm_enc_cycle              <= 0;
+        ram_inc_counter            <= 0;
         ram_rd_addr                <= 0;
         ram_rd_en                  <= 0;
         current_iact_cycle_reg     <= 0;
@@ -113,6 +115,7 @@ module iact_stream_constructor #(
             iact_enable_o              <= 0;
             iact_choose_o              <= ~0;
             fsm_enc_cycle              <= 0;
+            ram_inc_counter            <= 0;
             ram_rd_en                  <= 0;
             current_iact_cycle_mod_reg <= 0;
             current_iact_cycle_reg     <= 0;
@@ -146,8 +149,11 @@ module iact_stream_constructor #(
             end
             //Delay for one cycle
             //Check, wether amount of channels is odd
-            if ((fsm_enc_cycle[7:0] + 1 - (iact_channels_i%2)) % WORDS_PER_CYCLE[7:0] == 0) begin
+            if ((ram_inc_counter[7:0] + 1 - (iact_channels_i%2)) % WORDS_PER_CYCLE[7:0] == 0) begin
               ram_rd_addr <= ram_rd_addr + 1;
+              if (fsm_enc_cycle >= (needed_iact_cycles_reg * wght_size_reg * iact_channels_i) - 1) begin
+                  ram_rd_addr <= ram_rd_addr;
+              end
             end
             for (pec = 0; pec < PE_X; pec = pec + 1) begin
               for (per = 0; per < PE_Y; per = per + 1) begin
@@ -163,13 +169,14 @@ module iact_stream_constructor #(
               end
             end
             // Full Iact Cycle
-            if (fsm_enc_cycle[7:0] == (iact_channels_i - 1)) begin
-              fsm_enc_cycle <= 0;
+            ram_inc_counter <= ram_inc_counter + 1;
+            if (ram_inc_counter[7:0] == (iact_channels_i - 1)) begin
+              ram_inc_counter <= 0;
             end
             if (fsm_row_offset != y_cluster_counter) begin
               ram_rd_addr   <= ram_rd_addr;
             end
-            if (fsm_enc_cycle[7:0] == 0) begin
+            if (ram_inc_counter[7:0] == 0) begin
               current_iact_cycle_reg     <= current_iact_cycle_reg + 1;
               current_iact_cycle_mod_reg <= current_iact_cycle_mod_reg + 1;
               if (current_iact_cycle_mod_reg == needed_iact_router_cycles_i - 1) begin
@@ -177,7 +184,7 @@ module iact_stream_constructor #(
               end
               //All Iacts per Computing Cycle are transmitted
               if (current_iact_cycle_reg == (needed_iact_cycles_reg * wght_size_reg) - 1) begin
-                ram_rd_addr            <= (padding_reg + ram_rd_addr + (iact_size_y_i - 1) * iact_channels_i) - 1;
+                ram_rd_addr            <= (ram_rd_addr + (iact_size_y_i) * iact_channels_i);
                 iact_channel_counter   <= iact_channel_counter + 1;
                 if (iact_channel_counter == needed_iact_channel_cycles_i - 1) begin
                   ram_rd_addr          <= line_offset;
@@ -204,6 +211,7 @@ module iact_stream_constructor #(
                 current_iact_cycle_mod_reg <= 0;
                 ram_rd_en                  <= 0;
                 fsm_enc_cycle              <= 0;
+                ram_inc_counter            <= 0;
               end
             end
           end

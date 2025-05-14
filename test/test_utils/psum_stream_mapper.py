@@ -26,18 +26,22 @@ class PsumStreamMapper(object):
             self.storage = [[] for _ in range(len(strdic.stream_parallel_dict))]
 
     def get_psum_stream(self):
-        psum_stream = [[[[] for c in range(self.params.Psum_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
-        for cl_x in range(self.params.Clusters_X):
-            for cl_y in range(self.params.Clusters_Y):
-                for router in range(self.params.Psum_Routers):
-                    psum_stream[cl_x][cl_y][router] = self.write_psum_data_glb(cl_x, cl_y, router)
-        psum_stream = self.create_complete_psum_stream(psum_stream)
+        if (self.params.SERIAL) :
+            psum_stream_length = 4 * self.layer_params.filters * self.layer_params.iact_size_y * 16 * math.ceil(4 * 2 / 8)
+            psum_stream = [0] * psum_stream_length
+        else : 
+            psum_stream = [[[[] for c in range(self.params.Psum_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
+            for cl_x in range(self.params.Clusters_X):
+                for cl_y in range(self.params.Clusters_Y):
+                    for router in range(self.params.Psum_Routers):
+                        psum_stream[cl_x][cl_y][router] = self.write_psum_data_glb(cl_x, cl_y, router)
+            psum_stream = self.create_complete_psum_stream(psum_stream)
         return psum_stream
 
     def write_psum_data_glb(self, cl_x, cl_y, router):
         storage = []
         if (self.params.SERIAL):
-            for cycle in range(self.layer_params.iact_size_y):
+            for cycle in range(self.layer_params.iact_size_y * 2):
                 storage.append(self.write_psum_storage(cl_x, cl_y, router, cycle))
         else:
             for cycle in range(math.floor(self.layer_params.needed_refreshes_mx[self.layer_repetition][1]/2),math.ceil(self.layer_params.needed_refreshes_mx[self.layer_repetition][2]/2)):
