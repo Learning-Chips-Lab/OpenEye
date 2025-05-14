@@ -1209,7 +1209,7 @@ module OpenEye_FPGA #(
                 psum_enable_i_reg   <= {((CLUSTERS * NUM_GLB_PSUM)) {1'b1}};
                 psum_buffer_SP_en_w <= 1;
                 psum_buffer_SP_addr <= psum_buffer_SP_addr + 1;
-                if (fsm_cycle == (filters_reg * needed_cycles_reg) - 1) begin
+                if (fsm_cycle == (filters_reg * iact_size_y) - 1) begin
                   fsm_cycle              <= 0;
                   fsm_cycle_mod1         <= 0;
 
