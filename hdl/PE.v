@@ -251,6 +251,7 @@ module PE #(
   wire [                         4 : 0] first_spad_words_wght;
   wire [                         6 : 0] second_spad_words_wght;
   reg                                   values_valid;
+  reg   [                        3 : 0] channel_reg;
   wire                                  psum_data_SPad_en_a_w_i;
   wire                                  psum_data_SPad_en_b_w_i;
   reg                                   data_mode_reg;
@@ -358,6 +359,7 @@ module PE #(
       input_activations_reg <= 0;
       wght_addr_max_reg     <= 0;
       iact_addr_max_reg     <= 0;
+      channel_reg           <= 0;
     end else begin
       case (current_state_stream)
         FIRST_PARAMS: begin
@@ -372,7 +374,8 @@ module PE #(
         SECOND_PARAMS: begin
           if (enable_stream_i) begin
             current_state_stream <= THIRD_PARAMS;
-            iact_addr_max_reg    <= data_stream_i[3:0];
+            channel_reg          <= data_stream_i[3:0];
+            iact_addr_max_reg    <= 4;
           end else begin
             current_state_stream <= FIRST_PARAMS;
           end
@@ -1302,7 +1305,7 @@ module PE #(
       .enable_i(mux_iact_b_o_w),
 
       .first_spad_words_o (first_spad_words_iact),
-      .first_spad_max_i   (iact_addr_max_reg),
+      .first_spad_max_i   (channel_reg),
       .second_spad_words_o(second_spad_words_iact),
 
       .first_spad_addr_o(first_spad_iact_addr_w),

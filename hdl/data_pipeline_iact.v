@@ -80,6 +80,7 @@ module data_pipeline_iact #(
   reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_reg;
   reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_delay_reg;
   reg  [       SECOND_PAYLOAD_WIDTH-1 : 0] payload_reg;
+  reg  [                              1:0] cycle_max_reg;
   wire [                 DATA_WIDTH-1 : 0] current_data;
 
   assign current_data = data_storage_2 >> SECOND_SPAD_DATA;
@@ -105,12 +106,17 @@ module data_pipeline_iact #(
       payload_reg         <= 0;
       overhead_reg        <= 0;
       overhead_delay_reg  <= 0;
+      cycle_max_reg       <= 0;
     end else begin
       first_spad_en_o   <= 0;
       first_spad_data_o <= 0;
+      cycle_max_reg     <= first_spad_max_i/2;
+      if (first_spad_max_i >= 2) begin
+        cycle_max_reg   <= 1;
+      end
       if (enable_i == 1) begin
-        cycle_counter       <= cycle_counter + 1;
-        if (cycle_counter == (first_spad_max_i/SECOND_SPAD_DATA_CYCLE[$clog2(FIRST_SPAD_DATA_CYCLE):0])) begin
+        cycle_counter <= cycle_counter + 1;
+        if (cycle_counter == cycle_max_reg) begin
           cycle_counter <= 0;
         end
         first_spad_en_o     <= 1;

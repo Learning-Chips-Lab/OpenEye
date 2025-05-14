@@ -49,8 +49,7 @@ class ConvMapper(LayerMapper):
                         counter += 1
 
         total_bits = params.Clusters_X * params.Clusters_Y * params.PEs_Y * params.PEs_X
-        bitstring = format(computing_pes, f"0{total_bits}b")[::-1] 
-        print(bitstring)
+        bitstring = format(computing_pes, f"0{total_bits}b")[::-1]
         if (params.SERIAL):
             dma_line = 0
             dma_storage = []
