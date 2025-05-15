@@ -379,33 +379,32 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                     for cl_x in range(params.Clusters_X):
                         for router in range(0, params.Psum_Routers, 2):
                         
-                            if(layer_params.computing_mx[cl_x][cl_y][0][router] == 1):
-                                partial_result_a = gtu.to_twos_complement_string(0,20)
-                                partial_result_b = gtu.to_twos_complement_string(0,20)
-                                for counter in range(params.PARALLEL_MACS):
-                                    x_cor= int(((router + \
-                                    cl_x * params.PEs_X + \
-                                    math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
-                                    ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles) *layer_params.used_Y_cluster) * (params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster)) \
-                                    % (layer.output.shape[1] + layer_params.add_up)))
+                            partial_result_a = gtu.to_twos_complement_string(0,20)
+                            partial_result_b = gtu.to_twos_complement_string(0,20)
+                            for counter in range(params.PARALLEL_MACS):
+                                x_cor= int(((router + \
+                                cl_x * params.PEs_X + \
+                                math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
+                                ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles) * layer_params.used_Y_cluster) * (params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster)) \
+                                % (layer.output.shape[1] + layer_params.add_up)))
 
-                                    y_cor= int(((router + \
-                                    cl_x * params.PEs_X + \
-                                    math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
-                                    ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles)*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
-                                    / (layer.output.shape[1] + layer_params.add_up)))
-                                    filter = psum_pe + layer_params.used_psum_per_PE * (refresh % filter_cycles)
-                                    try:
-                                        if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
-                                            if (counter == 0):
-                                                partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
-                                            else:
-                                                partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor+1][y_cor],20)
-                                    except:
-                                        partial_result_b = partial_result_b
-                                        partial_result_a = partial_result_a
+                                y_cor= int(((router + \
+                                cl_x * params.PEs_X + \
+                                math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
+                                ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles)*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
+                                / (layer.output.shape[1] + layer_params.add_up)))
+                                filter = psum_pe + layer_params.used_psum_per_PE * (refresh % filter_cycles)
+                                try:
+                                    if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
+                                        if (counter == 0):
+                                            partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
+                                        else:
+                                            partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor+1][y_cor],20)
+                                except:
+                                    partial_result_b = partial_result_b
+                                    partial_result_a = partial_result_a
 
-                                file_dma_ref.write(partial_result_a + partial_result_b + "\n")
+                            file_dma_ref.write(partial_result_a + partial_result_b + "\n")
     else:
         refresh_lower = math.ceil(layer_params.needed_refreshes_mx[layer_repetition][1]/layer_params.used_Y_cluster)
         refresh_upper = math.ceil(layer_params.needed_refreshes_mx[layer_repetition][2]/layer_params.used_Y_cluster)

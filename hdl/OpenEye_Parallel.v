@@ -389,7 +389,7 @@ module OpenEye_Parallel #(
       endcase
     end
   end
-
+  reg [7:0] cycle_break_counter;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
       start_new_cycle             <= 0;
@@ -441,6 +441,7 @@ module OpenEye_Parallel #(
       wght_addr_len_i_reg         <= 0;
       wght_addr_len_reg           <= 0;
       router_mode_iact_reg        <= 0;
+      cycle_break_counter         <= 0;
 
     end else begin
 
@@ -466,6 +467,7 @@ module OpenEye_Parallel #(
       compute_mask_i_reg          <= compute_mask_i;
 
       if (status_reg_enable_i_w) begin
+        cycle_break_counter         <= 0;
         data_mode_reg               <= data_mode_i_w;
         fraction_bit_reg            <= fraction_bit_i_w;
         needed_cycles_reg           <= needed_cycles_i_w;
@@ -493,6 +495,7 @@ module OpenEye_Parallel #(
         MAIN_IDLE: begin
           data_write_enable    <= 1;
           computing            <= 0;
+          cycle_break_counter  <= 0;
           router_mode_wght_reg <= router_mode_wght_i;
           if (compute_i_w) begin
             fsm_last_state    <= MAIN_IDLE;
@@ -506,16 +509,20 @@ module OpenEye_Parallel #(
         end
 
         COMPUTING: begin
-
           start_new_cycle       <= 0;
           compute_cluster_i_reg <= 0;
+          cycle_break_counter   <= 0;
           if (psum_transmitted & (iact_enable_i == 0) & (wght_enable_i == 0)) begin
-            start_new_cycle <= 1;
-            if (start_new_cycle != 1) begin
-              finished_cycles <= finished_cycles + 1;
-            end
-            if (finished_cycles < needed_cycles_i_reg) begin
-              compute_cluster_i_reg <= compute_mask_reg;
+            cycle_break_counter <= cycle_break_counter + 1;
+            if (cycle_break_counter >= needed_y_cls_i_reg * 2) begin 
+              cycle_break_counter <= 0;
+              start_new_cycle     <= 1;
+              if (start_new_cycle != 1) begin
+                finished_cycles <= finished_cycles + 1;
+              end
+              if (finished_cycles < needed_cycles_i_reg) begin //ÄNDERN  - 1 ?
+                compute_cluster_i_reg <= compute_mask_reg;
+              end
             end
           end
           if (fsm_psum_current_state == SEND_RESULTS) begin

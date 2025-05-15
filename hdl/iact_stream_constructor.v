@@ -142,7 +142,7 @@ module iact_stream_constructor #(
             iact_enable_o <= 0;
             if (fsm_row_offset == y_cluster_counter) begin
               ram_rd_en             <= 1;
-              if (current_iact_cycle_reg != {4{1'b1}}) begin
+              if (current_iact_cycle_reg != {8{1'b1}}) begin
                 iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
               end
               iact_data_o   <= ram_data_o;

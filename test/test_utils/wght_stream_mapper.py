@@ -116,7 +116,7 @@ class WghtStreamMapper(object):
         start_current_repetition = int((math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.needed_wght_transmissions) * filters_per_calculation)
         filters = start_current_repetition
         for words_in_storage in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS)):
-            kernel_row = (cl_y % layer_params.ceil_used_PE_per_clm) * params.PEs_Y + router
+            kernel_row = (cl_y % (layer_params.used_Y_cluster * params.PEs_Y)) * params.PEs_Y + router
             if(kernel_row < (layer_params.kernel_size[1] * int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))):
                 for spad_val_number in range(self.params.PARALLEL_MACS): 
                     if(channel != int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)):
@@ -263,14 +263,14 @@ class ConvWghtStreamMapper(WghtStreamMapper):
 
         filters = start_current_repetition
         for words_in_storage in range(amount_of_words):
-            kernel_row = ((cl_y % layer_params.ceil_used_PE_per_clm) * params.PEs_Y + (router%layer_params.kernel_size[0]))
+            kernel_row = ((cl_y % (layer_params.used_Y_cluster)) * params.PEs_Y + (router%layer_params.kernel_size[0]))
             for spad_val_number in range(self.params.PARALLEL_MACS): 
                 if(channel != 1 + int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)): #TODO: Correct this line +1 could be wrong here                    
-                    #try:
+                    try:
 
-                    spad_storage[words_in_storage][spad_val_number][0] = dram[channel][filters][kernel_row][kernel_x]
-                    #except:
-                    #    spad_storage[words_in_storage][spad_val_number][0] = 0
+                        spad_storage[words_in_storage][spad_val_number][0] = dram[channel][filters][kernel_row][kernel_x]
+                    except:
+                        spad_storage[words_in_storage][spad_val_number][0] = 0
 
                     spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
                     filters = filters + 1
