@@ -1164,7 +1164,7 @@ module OpenEye_FPGA #(
                 wght_buffer_SP_en_w    <= 1;
                 wght_buffer_SP_wr_addr <= wght_buffer_SP_wr_addr + 1;
 
-                  wght_cnt  <= (wght_cycles_reg * ({27'd0,wght_addr_len_reg} + input_activations_reg * ({26'd0,filters_reg} / PARALLEL_MACS))) - 1;
+                  wght_cnt  <= ({6'd0,wght_cycles_reg} * ({8'd0,wght_addr_len_reg} + {6'd0,input_activations_reg} * ({6'd0,filters_reg} / PARALLEL_MACS[11:0]))) - 1;
                 if(fsm_cycle == (wght_cycles_reg * ({27'd0,wght_addr_len_reg} + input_activations_reg * ({26'd0,filters_reg} / PARALLEL_MACS))) - 1)begin
                   wght_cnt  <= ({8'd0,wght_addr_len_reg} + input_activations_reg * ({6'd0,filters_reg} / PARALLEL_MACS[11:0]));
                   fsm_cycle <= 0;
