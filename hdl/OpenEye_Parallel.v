@@ -148,7 +148,7 @@ module OpenEye_Parallel #(
     input                                                      status_reg_enable_i,
     input                                                      data_mode_i,
     input      [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i,
-    input      [                                          7:0] needed_cycles_i,
+    input      [                                         15:0] needed_cycles_i,
     input      [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i,
     input      [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                                          3:0] needed_iact_cycles_i,
@@ -199,7 +199,7 @@ module OpenEye_Parallel #(
   ///Register, that occupy hyperparameters
   reg                                                  data_mode_reg;
   reg  [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_reg;
-  reg  [                                          7:0] needed_cycles_reg;
+  reg  [                                         15:0] needed_cycles_reg;
   reg  [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_reg;
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg;
   reg  [                                          3:0] needed_iact_cycles_reg;
@@ -216,10 +216,10 @@ module OpenEye_Parallel #(
   reg  [                             CLUSTERS*PES-1:0] compute_cluster_i_reg;
   reg  [                             CLUSTERS*PES-1:0] compute_mask_reg;
   ///Register for the psum FSM
-  reg  [                                       32-1:0] fsm_psum_cycle;
+  reg  [                                         15:0] fsm_psum_cycle;
   reg                                                  data_write_enable;
   reg                                                  results_ready;
-  reg  [                                          7:0] finished_cycles;
+  reg  [                                         15:0] finished_cycles;
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] storage_cycles;
 
   ///Register, that configure the chip
@@ -256,7 +256,7 @@ module OpenEye_Parallel #(
   wire                                                 status_reg_enable_i_w;
   wire                                                 data_mode_i_w;
   wire [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i_w;
-  wire [                                          7:0] needed_cycles_i_w;
+  wire [                                         15:0] needed_cycles_i_w;
   wire [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i_w;
   wire [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i_w;
   wire [                                          3:0] needed_iact_cycles_i_w;
@@ -282,7 +282,7 @@ module OpenEye_Parallel #(
   reg                                                  status_reg_enable_i_reg;
   reg                                                  data_mode_i_reg;
   reg  [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i_reg;
-  reg  [                                          7:0] needed_cycles_i_reg;
+  reg  [                                         15:0] needed_cycles_i_reg;
   reg  [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i_reg;
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i_reg;
   reg  [                                          3:0] needed_iact_cycles_i_reg;
@@ -520,7 +520,7 @@ module OpenEye_Parallel #(
               if (start_new_cycle != 1) begin
                 finished_cycles <= finished_cycles + 1;
               end
-              if (finished_cycles < needed_cycles_i_reg) begin //ÄNDERN  - 1 ?
+              if (finished_cycles < needed_cycles_i_reg) begin
                 compute_cluster_i_reg <= compute_mask_reg;
               end
             end
@@ -694,9 +694,9 @@ reg [7:0] iact_channel_counter_reg;
             if ((!SERIAL & (((fsm_psum_cycle[$clog2(
                     PSUM_PER_PE+1
                 )-1:0] >= (filters_reg + 1) / 2) & !data_mode_reg) |
-                    ((fsm_psum_cycle[7:0] >= (needed_cycles_i_reg + 1) / 2) & data_mode_reg))) |
-                    (SERIAL & (((fsm_psum_cycle >= filters_reg) & !data_mode_reg) |
-                               ((fsm_psum_cycle[7:0] >= (needed_cycles_i_reg + 1) / 2) &
+                    ((fsm_psum_cycle >= (needed_cycles_i_reg + 1) / 2) & data_mode_reg))) |
+                    (SERIAL & (((fsm_psum_cycle >= {{10{1'd0}},filters_reg}) & !data_mode_reg) |
+                               ((fsm_psum_cycle >= (needed_cycles_i_reg + 1) / 2) &
                                 data_mode_reg)))) begin
               results_ready = 0;
               fsm_psum_cycle         <= 0;
@@ -751,11 +751,11 @@ reg [7:0] iact_channel_counter_reg;
           if ((!SERIAL & (((fsm_psum_cycle[$clog2(
                   PSUM_PER_PE+1
               )-1:0] >= (filters_reg + 1) / 2) & !data_mode_reg) |
-                  ((fsm_psum_cycle[7:0] >= (needed_cycles_i_reg + 1) / 2) & data_mode_reg))) |
+                  ((fsm_psum_cycle >= (needed_cycles_i_reg + 1) / 2) & data_mode_reg))) |
                   (SERIAL & (((fsm_psum_cycle[$clog2(
                   PSUM_PER_PE+1
               )-1:0] >= filters_reg) & !data_mode_reg) |
-                  ((fsm_psum_cycle[7:0] >= (needed_cycles_i_reg + 1) / 2) & data_mode_reg)))) begin
+                  ((fsm_psum_cycle >= (needed_cycles_i_reg + 1) / 2) & data_mode_reg)))) begin
             if ((finished_cycles == needed_cycles_reg) | (fsm_current_state == MAIN_IDLE) | data_mode_reg) begin
               fsm_psum_last_state    <= GET_RESULTS;
               fsm_psum_current_state <= WAIT_FOR_RESULTS;
@@ -777,7 +777,7 @@ reg [7:0] iact_channel_counter_reg;
                       end
                     end
                   end
-                  if (storage_cycles != (needed_psum_storage_cycles_reg - 1)) begin
+                  if (storage_cycles != (needed_psum_storage_cycles_reg[3:0] - 1)) begin
                     for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                       for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
                         router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g_psum*ROUTER_MODES_PSUM+2] <= 0;
@@ -808,7 +808,7 @@ reg [7:0] iact_channel_counter_reg;
               fsm_psum_last_state    <= GET_RESULTS;
               fsm_psum_current_state <= CALCULATE_PSUM;
               fsm_psum_cycle         <= 0;
-              if (storage_cycles == needed_psum_storage_cycles_reg - 1) begin
+              if (storage_cycles == needed_psum_storage_cycles_reg[3:0] - 1) begin
                 storage_cycles <= 0;
                 if (SERIAL) begin
                   mem_addr_psum_storage <= mem_addr_psum_storage +

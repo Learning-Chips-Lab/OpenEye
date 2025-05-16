@@ -86,7 +86,7 @@ module iact_stream_constructor #(
     reg [8-1:0] ram_inc_counter;
     reg fsm_enc_current_state;
     reg [3:0] iact_channel_counter;
-    reg [3:0] finished_output_channels;
+    reg [7:0] finished_output_channels;
     reg [7:0] iact_y_counter;
     reg [11:0] line_offset;
     reg [3:0] y_cluster_counter;
@@ -184,7 +184,7 @@ module iact_stream_constructor #(
               end
               //All Iacts per Computing Cycle are transmitted
               if (current_iact_cycle_reg == (needed_iact_cycles_reg * wght_size_reg) - 1) begin
-                ram_rd_addr            <= (1 + ram_rd_addr + (iact_size_y_i - 1) * ((iact_channels_i + 1)/2) * needed_iact_cycles_reg);
+                ram_rd_addr            <= (1 + ram_rd_addr + ({{(8 - 4) {1'd0}},iact_size_y_i} - 1) * (({{(8 - 4) {1'd0}},iact_channels_i} + 1)/2) * {{(8 - 4) {1'd0}},needed_iact_cycles_reg});
                 iact_channel_counter   <= iact_channel_counter + 1;
                 if (iact_channel_counter == needed_iact_channel_cycles_i - 1) begin
                   ram_rd_addr          <= line_offset;
@@ -195,8 +195,8 @@ module iact_stream_constructor #(
                     iact_y_counter       <= iact_y_counter + 1;
                     if (iact_y_counter == needed_wght_cycles_i - 1) begin
                       iact_y_counter           <= 0;
-                      ram_rd_addr              <= needed_iact_cycles_reg * ((iact_channels_i + 1)/2) * (1 + finished_output_channels);
-                      line_offset              <= needed_iact_cycles_reg * ((iact_channels_i + 1)/2) * (1 + finished_output_channels);
+                      ram_rd_addr              <= needed_iact_cycles_reg * (({{4{1'd0}},iact_channels_i} + 1)/2) * (1 + {{4{1'd0}},finished_output_channels});
+                      line_offset              <= needed_iact_cycles_reg * (({{4{1'd0}},iact_channels_i} + 1)/2) * (1 + {{4{1'd0}},finished_output_channels});
                       finished_output_channels <= finished_output_channels + 1;
                       if (finished_output_channels == iact_size_y_i - 1) begin
                         finished_output_channels <= 0;

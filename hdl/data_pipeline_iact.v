@@ -80,7 +80,7 @@ module data_pipeline_iact #(
   reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_reg;
   reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_delay_reg;
   reg  [       SECOND_PAYLOAD_WIDTH-1 : 0] payload_reg;
-  reg  [                              1:0] cycle_max_reg;
+  reg  [                              3:0] cycle_max_reg;
   wire [                 DATA_WIDTH-1 : 0] current_data;
 
   assign current_data = data_storage_2 >> SECOND_SPAD_DATA;
