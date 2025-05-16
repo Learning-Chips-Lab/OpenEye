@@ -298,7 +298,6 @@ module OpenEye_Parallel #(
   reg  [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i_reg;
   reg  [                             CLUSTERS*PES-1:0] compute_mask_i_reg;
   reg  [  ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_i_reg;
-  reg  [  ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_storage;
   reg  [  ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_i_reg;
   reg  [  ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_i_reg;
   reg  [                               4*CLUSTERS-1:0] iact_router_offset;
@@ -487,7 +486,6 @@ module OpenEye_Parallel #(
         kernel_per_pe_cluster_i_reg <= kernel_per_pe_cluster_i_w;
         compute_mask_reg            <= compute_mask_i_w;
         router_mode_iact_reg        <= router_mode_iact_i;
-        router_mode_iact_storage    <= router_mode_iact_i;
         router_mode_wght_reg        <= router_mode_wght_i;
       end
       case (fsm_current_state)
