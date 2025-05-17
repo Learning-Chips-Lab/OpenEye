@@ -759,9 +759,9 @@ module OpenEye_FPGA #(
         end
 
         loop_debug <= 0;
+        single_iteration3 <= 0;
         if (current_cycle < needed_cycles_reg) begin
           if (iact_ready_o_oep_w == 0) begin
-            single_iteration3 <= 0;
             if (!single_iteration) begin
               single_iteration  <= 1;
               single_iteration3 <= 1;
@@ -1055,47 +1055,14 @@ module OpenEye_FPGA #(
           new_stream  <= 1;
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
-            if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS) begin
-            end else begin
-
-              if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS) begin
-                for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
-                  for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
-                    for (g = 0; g < NUM_GLB_WGHT; g = g + 1) begin
-                      if(((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_WGHT)))
-                        &((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))))begin
-                        router_mode_wght_reg[cc * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
-                                            cr * NUM_GLB_WGHT * ROUTER_MODES_WGHT + 
-                                            g * ROUTER_MODES_WGHT+: ROUTER_MODES_WGHT] <=
-                        data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))+:ROUTER_MODES_WGHT];
-                      end
-                    end
-                  end
-                end
+            if(fsm_cycle == FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS + FSM_CEIL_PSUM_RTR_CCLS - 1) begin
+              fsm_cycle             <= 0;
+              fsm_last_state        <= GET_ROUTER_CONFIG;
+              status_reg_enable_reg <= 0;
+              if (!skipIact_reg) begin
+                fsm_current_state <= GET_IACT;
               end else begin
-                for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
-                  for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
-                    for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
-                      if(((cc*CLUSTER_ROWS*NUM_GLB_PSUM+cr*NUM_GLB_PSUM+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_PSUM)))
-                        &((cc*CLUSTER_ROWS*NUM_GLB_PSUM+cr*NUM_GLB_PSUM+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_PSUM))))begin
-                        router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
-                                            cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + 
-                                            g * ROUTER_MODES_PSUM +:ROUTER_MODES_PSUM] <=
-                        data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_PSUM*ROUTER_MODES_PSUM+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*FSM_PSUM_RTR_CCLS_C)+:ROUTER_MODES_PSUM];
-                      end
-                    end
-                  end
-                end
-                if(fsm_cycle == FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS + FSM_CEIL_PSUM_RTR_CCLS - 1) begin
-                  fsm_cycle             <= 0;
-                  fsm_last_state        <= GET_ROUTER_CONFIG;
-                  status_reg_enable_reg <= 0;
-                  if (!skipIact_reg) begin
-                    fsm_current_state <= GET_IACT;
-                  end else begin
-                    fsm_current_state <= GET_WGHT;
-                  end
-                end
+                fsm_current_state <= GET_WGHT;
               end
             end
           end
@@ -1331,7 +1298,7 @@ module OpenEye_FPGA #(
                 for (b = 0; b < ROUTER_MODES_PSUM; b = b + 1) begin
                   flat_help_var_1[b] = router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g * ROUTER_MODES_PSUM + b];
                 end
-                results_ready = results_ready & (psum_ready_o_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] | (flat_help_var_1 == 2) |(flat_help_var_1 == 3));
+                results_ready = results_ready & (psum_ready_o_reg[cc*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM+g] | (flat_help_var_1 == 2) |(flat_help_var_1 == 3)); //ÄNDERN, obere Zeilen vll weg
               end
             end
           end
@@ -1427,13 +1394,22 @@ module OpenEye_FPGA #(
     end
   end
   reg [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_storage;
+  reg [                                        7:0] storage_cycles;
+  reg                                               first_cycle;
+  reg [7:0] iact_channels_counter_psum_router;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       router_mode_iact_reg     <= 0;
       router_mode_iact_storage <= 0;
       iact_router_counter      <= 0;
+      storage_cycles           <= 0;
+      first_cycle              <= 1;
+      iact_channels_counter_psum_router   <= 0;
     end else begin
       if (fsm_current_state == GET_ROUTER_CONFIG) begin
+        storage_cycles         <= 0;
+        first_cycle            <= 1;
+        iact_channels_counter_psum_router <= 0;
         if (enable_dma_i_reg) begin
           if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS) begin
             for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
@@ -1450,6 +1426,36 @@ module OpenEye_FPGA #(
                 end
               end
             end
+          end else begin
+            if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS) begin
+              for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
+                  for (g = 0; g < NUM_GLB_WGHT; g = g + 1) begin
+                    if(((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_WGHT)))
+                      &((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))))begin
+                      router_mode_wght_reg[cc * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
+                                          cr * NUM_GLB_WGHT * ROUTER_MODES_WGHT + 
+                                          g * ROUTER_MODES_WGHT+: ROUTER_MODES_WGHT] <=
+                      data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))+:ROUTER_MODES_WGHT];
+                    end
+                  end
+                end
+              end
+            end else begin
+              for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
+                  for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
+                    if(((cc*CLUSTER_ROWS*NUM_GLB_PSUM+cr*NUM_GLB_PSUM+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_PSUM)))
+                      &((cc*CLUSTER_ROWS*NUM_GLB_PSUM+cr*NUM_GLB_PSUM+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_PSUM))))begin
+                      router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
+                                          cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + 
+                                          g * ROUTER_MODES_PSUM +:ROUTER_MODES_PSUM] <=
+                      data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_PSUM*ROUTER_MODES_PSUM+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*FSM_PSUM_RTR_CCLS_C)+:ROUTER_MODES_PSUM];
+                    end
+                  end
+                end
+              end
+            end
           end
         end
         router_mode_iact_storage <= router_mode_iact_reg;
@@ -1462,7 +1468,6 @@ module OpenEye_FPGA #(
                 iact_router_counter  <= 0;
                 router_mode_iact_reg <= router_mode_iact_storage;
               end else begin
-
                 for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                   for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
                     router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+3] <= 0;
@@ -1519,6 +1524,54 @@ module OpenEye_FPGA #(
                       end
                     end
                   end
+                end
+              end
+            end
+            //PSUM Router
+            first_cycle    <= 0;
+            if (first_cycle == 0) begin
+              if ((needed_y_cls_reg >= 2)) begin
+                iact_channels_counter_psum_router <= iact_channels_counter_psum_router + 1;
+                if ((iact_channels_counter_psum_router == iact_channel_max_cycles - 1)) begin
+                  iact_channels_counter_psum_router <= 0;
+                  for (cr = 1; cr < CLUSTER_ROWS; cr = cr + 1) begin
+                    for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                      for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
+                        router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2] <=
+                        router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2];
+                      end
+                    end
+                  end
+                  if (storage_cycles != (needed_psum_storage_cycles_reg - 1)) begin
+                    storage_cycles <= storage_cycles + 1;
+                    for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                      for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
+                        router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 0;
+                      end
+                    end
+
+
+                    for (cr = 1; cr < CLUSTER_ROWS; cr = cr + 1) begin
+                      for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                        for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
+                          router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2] <=
+                          router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2];
+                        end
+                      end
+                    end
+                  end else begin
+                    for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                      for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
+                        router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 1;
+                      end
+                    end
+                    storage_cycles <= 0;
+                  end
+                end
+                if (storage_cycles == needed_psum_storage_cycles_reg - 1) begin
+                  storage_cycles <= 0;
+                end else begin
+                  storage_cycles <= storage_cycles + 1;
                 end
               end
             end
