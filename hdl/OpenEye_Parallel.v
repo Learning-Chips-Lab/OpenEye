@@ -609,6 +609,8 @@ reg [7:0] iact_channel_counter_reg;
       if (compute_i_w) begin
         mem_addr_psum <= 0;
       end
+      psum_enable_delay <= psum_enable_i_reg;
+      psum_enable_o_reg <= psum_enable_delay;
       psum_enable_o     <= psum_enable_o_reg;
       psum_enable_i_reg <= psum_enable_i;
       psum_data_o       <= psum_data_o_reg;
@@ -668,11 +670,7 @@ reg [7:0] iact_channel_counter_reg;
                 end
               end
             end
-            if ((!SERIAL & (((fsm_psum_cycle[$clog2(PSUM_PER_PE+1)-1:0] >= (filters_reg + 1) / 2) & !data_mode_reg) |
-                    ((fsm_psum_cycle >= (needed_cycles_i_reg + 1) / 2) & data_mode_reg))) |
-                    (SERIAL & (((fsm_psum_cycle >= {{10{1'd0}},filters_reg}) & !data_mode_reg) |
-                               ((fsm_psum_cycle >= (needed_cycles_i_reg + 1) / 2) &
-                                data_mode_reg)))) begin
+            if (fsm_psum_cycle >= {{10{1'd0}},filters_reg}) begin
               fsm_psum_last_state    <= CALCULATE_PSUM;
               fsm_psum_current_state <= GET_RESULTS;
               results_ready = 0;
@@ -682,8 +680,7 @@ reg [7:0] iact_channel_counter_reg;
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
                     if (router_mode_psum_i[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 1) begin
-                      mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
-                        mem_addr_psum_storage;
+                      mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <= mem_addr_psum_storage;
                     end
                   end
                 end
@@ -714,10 +711,7 @@ reg [7:0] iact_channel_counter_reg;
             psum_router_set_reg <= 0;
             fsm_psum_cycle <= fsm_psum_cycle + 1;
           end
-          if ((!SERIAL & (((fsm_psum_cycle[$clog2(PSUM_PER_PE+1)-1:0] >= (filters_reg + 1) / 2) & !data_mode_reg) |
-                  ((fsm_psum_cycle >= (needed_cycles_i_reg + 1) / 2) & data_mode_reg))) |
-              (SERIAL & (((fsm_psum_cycle[$clog2(PSUM_PER_PE+1 )-1:0] >= filters_reg) & !data_mode_reg) |
-                  ((fsm_psum_cycle >= (needed_cycles_i_reg + 1) / 2) & data_mode_reg)))) begin
+          if (fsm_psum_cycle[$clog2(PSUM_PER_PE+1 )-1:0] >= filters_reg) begin
             psum_transmitted       <= 1;
             if ((finished_cycles == needed_cycles_reg) | (fsm_current_state == MAIN_IDLE) | data_mode_reg) begin
               fsm_psum_last_state    <= GET_RESULTS;
@@ -741,17 +735,13 @@ reg [7:0] iact_channel_counter_reg;
               fsm_psum_cycle         <= 0;
               if (storage_cycles == needed_psum_storage_cycles_reg[3:0] - 1) begin
                 storage_cycles <= 0;
-                if (SERIAL) begin
-                  mem_addr_psum_storage <= mem_addr_psum_storage + {{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg};
-                  for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                    for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                      for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                        mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <= mem_addr_psum_storage + {{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg};
-                      end
+                mem_addr_psum_storage <= mem_addr_psum_storage + {{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg};
+                for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                  for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
+                    for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
+                      mem_addr_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + cr_psum * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS + g_psum * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <= mem_addr_psum_storage + {{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg};
                     end
                   end
-                end else begin
-                  mem_addr_psum_storage <= mem_addr_psum_storage + ({{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg} + 1) /2;
                 end
               end else begin
                 storage_cycles <= storage_cycles + 1;
@@ -773,8 +763,6 @@ reg [7:0] iact_channel_counter_reg;
           fsm_psum_current_state <= SEND_RESULTS;
         end
         SEND_RESULTS: begin
-          psum_enable_delay <= psum_enable_i_reg;
-          psum_enable_o_reg <= psum_enable_delay;
           for (g_psum = 0; g_psum < NUM_GLB_PSUM * CLUSTERS; g_psum = g_psum + 1) begin
             psum_ready_i_reg[g_psum]  <= 0;
             psum_ready_o_reg[g_psum]  <= 1;
