@@ -135,7 +135,7 @@ module OpenEye_Parallel #(
     ///Ports for GLBs and PEs
     input      [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i,
     input      [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i,
-    output     [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_ready_o,
+    output reg [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_ready_o,
     input      [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i,
     input      [                    CLUSTERS*NUM_GLB_WGHT-1:0] wght_enable_i,
     output reg [                    CLUSTERS*NUM_GLB_WGHT-1:0] wght_ready_o,
@@ -165,6 +165,7 @@ module OpenEye_Parallel #(
     input      [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i,
     input      [                             CLUSTERS*PES-1:0] compute_mask_i,
     input      [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i,
+    input      [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_choose_i,
     input      [  ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_i,
     input      [  ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_i,
     input      [  ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_i,
@@ -441,8 +442,9 @@ module OpenEye_Parallel #(
       wght_addr_len_reg           <= 0;
       router_mode_iact_reg        <= 0;
       cycle_break_counter         <= 0;
+      psum_choose_reg                <= 0;
       needed_psum_storage_cycles_reg <= 0;
-
+      iact_ready_o                   <= 0;
     end else begin
 
       ///Regs for ports
@@ -465,6 +467,7 @@ module OpenEye_Parallel #(
       kernel_per_pe_cluster_i_reg <= kernel_per_pe_cluster_i;
       wght_addr_len_i_reg         <= wght_addr_len_i;
       compute_mask_i_reg          <= compute_mask_i;
+      iact_ready_o                <= iact_ready_o_w;
 
       if (status_reg_enable_i_w) begin
         cycle_break_counter         <= 0;
@@ -594,7 +597,6 @@ reg [7:0] iact_channel_counter_reg;
       psum_ready_o_reg       <= 0;
       psum_data_i_reg        <= 0;
       psum_data_o            <= 0;
-      psum_choose_reg        <= 0;
       storage_cycles         <= 0;
       psum_router_set_reg    <= 1;
       iact_channel_counter_reg <= 0;
@@ -612,21 +614,6 @@ reg [7:0] iact_channel_counter_reg;
       psum_ready_o      <= psum_ready_o_reg;
       if (start_new_cycle == 1) begin
         psum_transmitted <= 0;
-      end
-      if (computing) begin
-        if (needed_y_cls_reg == 1) begin
-          psum_choose_reg <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
-        end else begin
-          if (needed_y_cls_reg == 2) begin
-            psum_choose_reg <= {CLUSTER_ROWS{{NUM_GLB_PSUM{1'b1}}, {NUM_GLB_PSUM{1'b0}}}};
-          end else begin
-            if (needed_y_cls_reg == 4 & (CLUSTER_ROWS >= 4)) begin
-              psum_choose_reg <= {((CLUSTER_ROWS+1)/2){{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{3'b000}}}};
-            end else begin
-              psum_choose_reg <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
-            end
-          end
-        end
       end
       case (fsm_psum_current_state)
         PSUM_IDLE: begin
@@ -785,8 +772,7 @@ reg [7:0] iact_channel_counter_reg;
                   end
                 end else begin
                   mem_addr_psum_storage <= mem_addr_psum_storage +
-                      ({{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg} + 1) /
-                      2;
+                      ({{(PSUM_MEM_ADDR_BITS - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg} + 1) /2;
                 end
               end else begin
                 storage_cycles <= storage_cycles + 1;
@@ -1198,7 +1184,7 @@ reg [7:0] iact_channel_counter_reg;
                         cr_gen * NUM_GLB_IACT * IACT_MEM_ADDR_BITS +
                         g_gen * IACT_MEM_ADDR_BITS +: IACT_MEM_ADDR_BITS];
           assign gen_x[cc_gen].gen_y[cr_gen].iact_enable_i_cluster_w[g_gen] = iact_enable_i_w[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen];
-          assign iact_ready_o[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen] = gen_x[cc_gen].gen_y[cr_gen].iact_ready_o_cluster_w[g_gen];
+          assign iact_ready_o_w[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen] = gen_x[cc_gen].gen_y[cr_gen].iact_ready_o_cluster_w[g_gen];
         end
         for (pec_gen = 0; pec_gen < PE_COLUMNS; pec_gen = pec_gen + 1) begin
           for (per_gen = 0; per_gen < PE_ROWS; per_gen = per_gen + 1) begin
@@ -1251,7 +1237,7 @@ reg [7:0] iact_channel_counter_reg;
                               cr_gen * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                               g_gen * ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM];
           end
-          assign gen_x[cc_gen].gen_y[cr_gen].psum_choose_cluster_i_w[g_gen] = psum_choose_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM + cr_gen * NUM_GLB_PSUM + g_gen];
+          assign gen_x[cc_gen].gen_y[cr_gen].psum_choose_cluster_i_w[g_gen] = psum_choose_i[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM + cr_gen * NUM_GLB_PSUM + g_gen];
           if (cr_gen != CLUSTER_ROWS - 1) begin : gen_router_iact_bottom_connect
             assign gen_x[cc_gen].gen_y[cr_gen + 1].data_src_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] =
           gen_x[cc_gen].gen_y[cr_gen].data_dst_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM];

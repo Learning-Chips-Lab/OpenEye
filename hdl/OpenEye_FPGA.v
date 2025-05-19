@@ -1396,16 +1396,33 @@ module OpenEye_FPGA #(
   reg [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_storage;
   reg [                                        7:0] storage_cycles;
   reg                                               first_cycle;
+  reg [                  CLUSTERS*NUM_GLB_PSUM-1:0] psum_choose_i_reg;
   reg [7:0] iact_channels_counter_psum_router;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
-      router_mode_iact_reg     <= 0;
-      router_mode_iact_storage <= 0;
-      iact_router_counter      <= 0;
-      storage_cycles           <= 0;
-      first_cycle              <= 1;
-      iact_channels_counter_psum_router   <= 0;
+      router_mode_iact_reg              <= 0;
+      router_mode_iact_storage          <= 0;
+      iact_router_counter               <= 0;
+      storage_cycles                    <= 0;
+      first_cycle                       <= 1;
+      psum_choose_i_reg                 <= 0;
+      iact_channels_counter_psum_router <= 0;
     end else begin
+      if (compute_reg) begin
+        if (needed_y_cls_reg == 1) begin
+          psum_choose_i_reg <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
+        end else begin
+          if (needed_y_cls_reg == 2) begin
+            psum_choose_i_reg <= {CLUSTER_ROWS{{NUM_GLB_PSUM{1'b1}}, {NUM_GLB_PSUM{1'b0}}}};
+          end else begin
+            if (needed_y_cls_reg == 4 & (CLUSTER_ROWS >= 4)) begin
+              psum_choose_i_reg <= {((CLUSTER_ROWS+1)/2){{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{3'b000}}}};
+            end else begin
+              psum_choose_i_reg <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
+            end
+          end
+        end
+      end
       if (fsm_current_state == GET_ROUTER_CONFIG) begin
         storage_cycles         <= 0;
         first_cycle            <= 1;
@@ -1755,6 +1772,7 @@ module OpenEye_FPGA #(
         .wght_enable_i(wght_enable_i_reg),
         .wght_ready_o (wght_ready_o_reg),
 
+        .psum_choose_i(psum_choose_i_reg),
         .psum_data_i  (psum_data_i_reg),
         .psum_enable_i(psum_enable_i_reg),
         .psum_ready_o (psum_ready_o_reg),
