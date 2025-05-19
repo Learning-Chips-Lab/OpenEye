@@ -441,6 +441,7 @@ module OpenEye_Parallel #(
       wght_addr_len_reg           <= 0;
       router_mode_iact_reg        <= 0;
       cycle_break_counter         <= 0;
+      needed_psum_storage_cycles_reg <= 0;
 
     end else begin
 
@@ -468,6 +469,7 @@ module OpenEye_Parallel #(
       if (status_reg_enable_i_w) begin
         cycle_break_counter         <= 0;
         data_mode_reg               <= data_mode_i_w;
+        needed_psum_storage_cycles_reg <= needed_psum_storage_cycles_i;
         fraction_bit_reg            <= fraction_bit_i_w;
         needed_cycles_reg           <= needed_cycles_i_w;
         needed_x_cls_reg            <= needed_x_cls_i_w;
@@ -594,17 +596,11 @@ reg [7:0] iact_channel_counter_reg;
       psum_data_o            <= 0;
       psum_choose_reg        <= 0;
       storage_cycles         <= 0;
-      router_mode_psum_reg   <= 0;
       psum_router_set_reg    <= 1;
       iact_channel_counter_reg <= 0;
       results_ready = 0;
-      needed_psum_storage_cycles_reg <= 0;
 
     end else begin
-      if (status_reg_enable_i_w) begin
-        router_mode_psum_reg <= router_mode_psum_i;
-        needed_psum_storage_cycles_reg <= needed_psum_storage_cycles_i;
-      end
       if (compute_i_w) begin
         mem_addr_psum <= 0;
       end
@@ -647,7 +643,6 @@ reg [7:0] iact_channel_counter_reg;
           if (status_reg_enable_i_w) begin
             mem_addr_psum <= 0;
           end
-          router_mode_psum_reg <= router_mode_psum_i;
           for (g_psum = 0; g_psum < CLUSTERS * NUM_GLB_PSUM; g_psum = g_psum + 1) begin
             if (psum_enable_i_reg[g_psum]) begin
               mem_addr_psum[g_psum*PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS] <=
@@ -655,7 +650,6 @@ reg [7:0] iact_channel_counter_reg;
             end
           end
         end
-
         CALCULATE_PSUM: begin
           if (psum_ready_i_reg != 0) begin
             psum_ready_i_reg <= psum_ready_i_reg;
@@ -727,7 +721,6 @@ reg [7:0] iact_channel_counter_reg;
             end
           end
         end
-
         GET_RESULTS: begin
           results_ready = 1;
           psum_ready_i_reg <= psum_ready_i_reg;
@@ -768,37 +761,7 @@ reg [7:0] iact_channel_counter_reg;
                 iact_channel_counter_reg <= iact_channel_counter_reg + 1;
                 if ((iact_channel_counter_reg == needed_iact_channel_cycles_i - 1)) begin
                   iact_channel_counter_reg <= 0;
-                  for (cr_psum = 1; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                    for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                      for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                        router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2] <=
-                        router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr_psum-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2];
-                      end
-                    end
-                  end
-                  if (storage_cycles != (needed_psum_storage_cycles_reg[3:0] - 1)) begin
-                    storage_cycles <= storage_cycles + 1;
-                    for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                      for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                        router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g_psum*ROUTER_MODES_PSUM+2] <= 0;
-                      end
-                    end
-
-
-                    for (cr_psum = 1; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                      for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                        for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                          router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2] <=
-                          router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr_psum-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g_psum*ROUTER_MODES_PSUM+2];
-                        end
-                      end
-                    end
-                  end else begin
-                    for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                      for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                        router_mode_psum_reg[cc_psum*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g_psum*ROUTER_MODES_PSUM+2] <= 1;
-                      end
-                    end
+                  if (storage_cycles == (needed_psum_storage_cycles_reg[3:0] - 1)) begin
                     storage_cycles <= 0;
                   end
                 end
@@ -841,7 +804,6 @@ reg [7:0] iact_channel_counter_reg;
           end
         end
         WAIT_FOR_RESULTS: begin
-
           fsm_psum_cycle <= fsm_psum_cycle + 1;
           if (fsm_psum_cycle == 0) begin
             fsm_psum_cycle         <= 0;
@@ -871,7 +833,6 @@ reg [7:0] iact_channel_counter_reg;
             mem_addr_psum_storage  <= 0;
           end
         end
-
         default: begin
         end
       endcase
