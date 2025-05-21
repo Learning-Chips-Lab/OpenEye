@@ -142,8 +142,8 @@ module OpenEye_Parallel #(
     input      [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_i,
     input      [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_i,
     output reg [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_o,
-    output reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o,
-    output reg [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o,
+    output     [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o,
+    output     [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o,
     input      [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i,
     input                                                      status_reg_enable_i,
     input                                                      data_mode_i,
@@ -170,7 +170,8 @@ module OpenEye_Parallel #(
     input      [  ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_i,
     input      [  ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_i,
     input      [                                        8-1:0] needed_psum_storage_cycles_i,
-    input      [                                        8-1:0] needed_iact_channel_cycles_i
+    input      [                                        8-1:0] needed_iact_channel_cycles_i,
+    input                                                      psum_transmitted_i
 
 
 );
@@ -238,7 +239,7 @@ module OpenEye_Parallel #(
   wire [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o_reg;
   reg  [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_delay;
   reg  [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_i_reg;
-  reg  [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o_reg;
+  wire [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o_wire;
   reg  [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i_reg;
   wire [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_cluster_enable_o_reg;
   reg  [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_o_reg;
@@ -335,11 +336,6 @@ module OpenEye_Parallel #(
 
   reg fsm_wght_current_state;
 
-  localparam PSUM_IDLE = 0;
-  localparam CALCULATE_PSUM = 1;
-  localparam GET_RESULTS = 2;
-  localparam WAIT_FOR_RESULTS = 3;
-  localparam SEND_RESULTS = 4;
 
   reg [2:0] fsm_psum_last_state;
   reg [2:0] fsm_psum_current_state;
@@ -390,63 +386,67 @@ module OpenEye_Parallel #(
     end
   end
   reg [7:0] cycle_break_counter;
+  reg [7:0]needed_psum_storage_cycles_reg;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
-      start_new_cycle             <= 0;
-      data_mode_reg               <= 0;
-      fraction_bit_reg            <= 0;
-      needed_cycles_reg           <= 0;
-      needed_x_cls_reg            <= 0;
-      needed_y_cls_reg            <= 0;
-      needed_iact_cycles_reg      <= 0;
-      filters_reg                 <= 0;
-      iact_addr_len_reg           <= 0;
-      stride_x_reg                <= 0;
-      stride_y_reg                <= 0;
-      bano_cluster_mode_reg       <= 0;
-      af_cluster_mode_reg         <= 0;
-      pooling_cluster_mode_reg    <= 0;
-      delay_psum_glb_reg          <= 0;
-      input_activations_reg       <= 0;
-      compute_mask_reg            <= 0;
-      fsm_last_state              <= MAIN_IDLE;
-      fsm_current_state           <= MAIN_IDLE;
+      start_new_cycle                <= 0;
+      data_mode_reg                  <= 0;
+      fraction_bit_reg               <= 0;
+      needed_cycles_reg              <= 0;
+      needed_x_cls_reg               <= 0;
+      needed_y_cls_reg               <= 0;
+      needed_iact_cycles_reg         <= 0;
+      filters_reg                    <= 0;
+      iact_addr_len_reg              <= 0;
+      stride_x_reg                   <= 0;
+      stride_y_reg                   <= 0;
+      bano_cluster_mode_reg          <= 0;
+      af_cluster_mode_reg            <= 0;
+      pooling_cluster_mode_reg       <= 0;
+      delay_psum_glb_reg             <= 0;
+      input_activations_reg          <= 0;
+      compute_mask_reg               <= 0;
+      fsm_last_state                 <= MAIN_IDLE;
+      fsm_current_state              <= MAIN_IDLE;
 
-      data_write_enable           <= 1;
-      finished_cycles             <= 0;
-      compute_mask_i_reg          <= 0;
-      compute_cluster_i_reg       <= 0;
-      computing                   <= 0;
-      compute_i_reg               <= 0;
-      status_reg_enable_i_reg     <= 0;
-      data_mode_i_reg             <= 0;
-      fraction_bit_i_reg          <= 0;
-      needed_cycles_i_reg         <= 0;
-      needed_x_cls_i_reg          <= 0;
-      needed_y_cls_i_reg          <= 0;
-      needed_iact_cycles_i_reg    <= 0;
-      filters_i_reg               <= 0;
-      iact_addr_len_i_reg         <= 0;
-      bano_cluster_mode_i_reg     <= 0;
-      af_cluster_mode_i_reg       <= 0;
-      pooling_cluster_mode_i_reg  <= 0;
-      input_activations_i_reg     <= 0;
-      stride_x_i_reg              <= 0;
-      stride_y_i_reg              <= 0;
-      kernel_per_pe_cluster_i_reg <= 0;
-      router_mode_wght_reg        <= 0;
-      router_mode_wght_i_reg      <= 0;
-      router_mode_psum_i_reg      <= 0;
-      iact_pes_per_router         <= 5;
-      wght_addr_len_i_reg         <= 0;
-      wght_addr_len_reg           <= 0;
-      router_mode_iact_reg        <= 0;
-      cycle_break_counter         <= 0;
+      data_write_enable              <= 1;
+      finished_cycles                <= 0;
+      compute_mask_i_reg             <= 0;
+      compute_cluster_i_reg          <= 0;
+      computing                      <= 0;
+      compute_i_reg                  <= 0;
+      status_reg_enable_i_reg        <= 0;
+      data_mode_i_reg                <= 0;
+      fraction_bit_i_reg             <= 0;
+      needed_cycles_i_reg            <= 0;
+      needed_x_cls_i_reg             <= 0;
+      needed_y_cls_i_reg             <= 0;
+      needed_iact_cycles_i_reg       <= 0;
+      filters_i_reg                  <= 0;
+      iact_addr_len_i_reg            <= 0;
+      bano_cluster_mode_i_reg        <= 0;
+      af_cluster_mode_i_reg          <= 0;
+      pooling_cluster_mode_i_reg     <= 0;
+      input_activations_i_reg        <= 0;
+      stride_x_i_reg                 <= 0;
+      stride_y_i_reg                 <= 0;
+      kernel_per_pe_cluster_i_reg    <= 0;
+      router_mode_wght_reg           <= 0;
+      router_mode_wght_i_reg         <= 0;
+      router_mode_psum_i_reg         <= 0;
+      iact_pes_per_router            <= 5;
+      wght_addr_len_i_reg            <= 0;
+      wght_addr_len_reg              <= 0;
+      router_mode_iact_reg           <= 0;
+      cycle_break_counter            <= 0;
       psum_choose_reg                <= 0;
       needed_psum_storage_cycles_reg <= 0;
       iact_ready_o                   <= 0;
 
-      psum_data_i_reg             <= 0;
+      psum_data_i_reg                <= 0;
+      psum_ready_i_reg               <= 0;
+      psum_ready_o_reg               <= 0;
+      psum_enable_i_reg              <= 0;
     end else begin
 
       ///Regs for ports
@@ -472,6 +472,9 @@ module OpenEye_Parallel #(
       iact_ready_o                <= iact_ready_o_w;
 
       psum_data_i_reg             <= psum_data_i;
+      psum_ready_i_reg            <= psum_ready_i;
+      psum_ready_o                <= psum_ready_o_cluster_reg;
+      psum_enable_i_reg           <= psum_enable_i;
 
       if (status_reg_enable_i_w) begin
         cycle_break_counter         <= 0;
@@ -517,31 +520,35 @@ module OpenEye_Parallel #(
         end
 
         COMPUTING: begin
-          start_new_cycle       <= 0;
           compute_cluster_i_reg <= 0;
           cycle_break_counter   <= 0;
-          if (psum_transmitted & (iact_enable_i == 0) & (wght_enable_i == 0)) begin
+          if (psum_transmitted_i & (iact_enable_i == 0) & (wght_enable_i == 0)) begin
             cycle_break_counter <= cycle_break_counter + 1;
             if (cycle_break_counter >= needed_y_cls_i_reg * 2) begin 
               cycle_break_counter <= 0;
               start_new_cycle     <= 1;
               if (start_new_cycle != 1) begin
                 finished_cycles <= finished_cycles + 1;
-              end
-              if (finished_cycles < needed_cycles_i_reg) begin
-                compute_cluster_i_reg <= compute_mask_reg;
+                if (finished_cycles < needed_cycles_i_reg) begin
+                  compute_cluster_i_reg <= compute_mask_reg;
+                end
               end
             end
+          end else begin
+            start_new_cycle       <= 0;
           end
+          /*
           if (fsm_psum_current_state == SEND_RESULTS) begin
             computing <= 0;
           end
+          */
+          /*
           if (fsm_psum_last_state == SEND_RESULTS) begin
             fsm_last_state        <= COMPUTING;
             fsm_current_state     <= MAIN_IDLE;
             compute_cluster_i_reg <= 0;
           end
-
+          */
         end
 
         default: begin
@@ -582,7 +589,7 @@ module OpenEye_Parallel #(
       endcase
     end
   end
-reg [7:0]needed_psum_storage_cycles_reg;
+  /*
 reg [7:0] iact_channel_counter_reg;
   integer g_psum, b_psum, cc_psum, cr_psum;
   always @(posedge clk_i, negedge rst_n) begin
@@ -786,7 +793,7 @@ reg [7:0] iact_channel_counter_reg;
       endcase
     end
   end
-
+*/
 
   ///#######################
   ///Wires
@@ -1227,7 +1234,7 @@ reg [7:0] iact_channel_counter_reg;
           psum_data_i_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
                           cr_gen * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
                           g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM];
-          assign psum_data_o_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
+          assign psum_data_o[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
                                  cr_gen * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
                                  g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM]
           = gen_x[cc_gen].gen_y[cr_gen].psum_data_o_cluster_w[g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM];
@@ -1239,7 +1246,7 @@ reg [7:0] iact_channel_counter_reg;
 
           assign psum_ready_o_cluster_reg[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_ready_o_cluster_w[g_gen];
 
-          assign psum_cluster_enable_o_reg[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_enable_o_cluster_w[g_gen];
+          assign psum_enable_o[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_enable_o_cluster_w[g_gen];
           assign gen_x[cc_gen].gen_y[cr_gen].psum_ready_i_cluster_w[g_gen] = psum_ready_i_reg[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen];
         end
       end

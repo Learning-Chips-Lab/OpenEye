@@ -117,7 +117,7 @@ module GLB_cluster #(
     input      [                   NUM_GLB_WGHT-1:0] router_cluster_wght_ready_i,
     ///PSUM-READ    
     output     [DATA_PSUM_BITWIDTH*NUM_GLB_PSUM-1:0] router_cluster_psum_data_o,
-    output reg [                   NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o,
+    output     [                   NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o,
     input      [                   NUM_GLB_PSUM-1:0] router_cluster_psum_ready_i,
     ///PSUM-WRITE
     input      [DATA_PSUM_BITWIDTH*NUM_GLB_PSUM-1:0] router_cluster_psum_data_i,
@@ -163,7 +163,9 @@ module GLB_cluster #(
     end
     ///PSUM GLB Storages
     for (
-        glb_counter = 0; glb_counter < NUM_GLB_PSUM; glb_counter = glb_counter + 1
+        glb_counter = 0;
+        glb_counter < NUM_GLB_PSUM - (NUM_GLB_PSUM * SERIAL);
+        glb_counter = glb_counter + 1
     ) begin : gen_psum
 
       wire [TRANS_BITWIDTH_PSUM-1:0] psum_glb_data_in_w;
@@ -194,9 +196,15 @@ module GLB_cluster #(
   assign ext_mem_wght_ready_o = router_cluster_wght_ready_i;
 
   if (SERIAL == 1) begin : gen_serial_router
-    assign router_cluster_iact_data_o = ext_mem_iact_data_i;
+    assign router_cluster_psum_data_o   = ext_mem_psum_data_i;
+    assign router_cluster_psum_enable_o = ext_mem_psum_enable_i;
+    assign ext_mem_psum_ready_o         = router_cluster_psum_ready_i;
+    assign ext_mem_psum_data_o          = router_cluster_psum_data_i;
+    assign ext_mem_psum_enable_o        = router_cluster_psum_enable_i;
+    assign router_cluster_psum_ready_o  = ext_mem_psum_ready_i;
+    assign router_cluster_iact_data_o   = ext_mem_iact_data_i;
     assign router_cluster_iact_enable_o = ext_mem_iact_enable_i;
-    assign ext_mem_iact_ready_o = router_cluster_iact_ready_i;
+    assign ext_mem_iact_ready_o         = router_cluster_iact_ready_i;
   end else begin : gen_parallel_router
     for (
         glb_counter = 0;
@@ -216,28 +224,28 @@ module GLB_cluster #(
     end
 
     assign ext_mem_iact_ready_o = router_cluster_iact_ready_i;
-  end
 
-  for (glb_counter = 0; glb_counter < NUM_GLB_PSUM; glb_counter = glb_counter + 1) begin
-    assign gen_psum[glb_counter].psum_glb_re_in_w = (ext_mem_psum_enable_i[glb_counter] & !data_write_enable_i);
-    assign gen_psum[glb_counter].psum_glb_we_in_w = (ext_mem_psum_enable_i[glb_counter] & data_write_enable_i) | (router_cluster_psum_enable_i[glb_counter] & (!data_write_enable_i));
-    assign router_cluster_psum_enable_o_delay_1[glb_counter] = ext_mem_psum_enable_i[glb_counter] & (!data_write_enable_i);
-
-    for (bit_counter = 0; bit_counter < PSUM_MEM_ADDR_BITS; bit_counter = bit_counter + 1) begin
-      assign gen_psum[glb_counter].psum_glb_addr_in_w[bit_counter] = ext_mem_psum_addr_i[PSUM_MEM_ADDR_BITS*glb_counter+bit_counter];
+    for (
+        glb_counter = 0;
+        glb_counter < NUM_GLB_PSUM - (NUM_GLB_PSUM * SERIAL);
+        glb_counter = glb_counter + 1
+    ) begin
+      assign gen_psum[glb_counter].psum_glb_re_in_w = (ext_mem_psum_enable_i[glb_counter] & !data_write_enable_i);
+      assign gen_psum[glb_counter].psum_glb_we_in_w = (ext_mem_psum_enable_i[glb_counter] & data_write_enable_i) | (router_cluster_psum_enable_i[glb_counter] & (!data_write_enable_i));
+      assign router_cluster_psum_enable_o_delay_1[glb_counter] = ext_mem_psum_enable_i[glb_counter] & (!data_write_enable_i);
+      for (bit_counter = 0; bit_counter < PSUM_MEM_ADDR_BITS; bit_counter = bit_counter + 1) begin
+        assign gen_psum[glb_counter].psum_glb_addr_in_w[bit_counter] = ext_mem_psum_addr_i[PSUM_MEM_ADDR_BITS*glb_counter+bit_counter];
+      end
+      for (bit_counter = 0; bit_counter < DATA_PSUM_BITWIDTH; bit_counter = bit_counter + 1) begin
+        assign ext_mem_psum_data_o[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] = gen_psum[glb_counter].psum_glb_data_out_w[bit_counter];
+        assign router_cluster_psum_data_o[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] = gen_psum[glb_counter].psum_glb_data_out_w[bit_counter];
+        assign gen_psum[glb_counter].psum_glb_data_in_w[bit_counter] = ext_mem_psum_data_i[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] | router_cluster_psum_data_i[DATA_PSUM_BITWIDTH*glb_counter+bit_counter];
+      end
     end
-    for (bit_counter = 0; bit_counter < DATA_PSUM_BITWIDTH; bit_counter = bit_counter + 1) begin
-      assign ext_mem_psum_data_o[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] = gen_psum[glb_counter].psum_glb_data_out_w[bit_counter];
-      assign router_cluster_psum_data_o[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] = gen_psum[glb_counter].psum_glb_data_out_w[bit_counter];
-      assign gen_psum[glb_counter].psum_glb_data_in_w[bit_counter] = ext_mem_psum_data_i[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] | router_cluster_psum_data_i[DATA_PSUM_BITWIDTH*glb_counter+bit_counter];
-    end
+    assign ext_mem_psum_enable_o = router_cluster_psum_enable_i;
+    assign router_cluster_psum_ready_o = ext_mem_psum_ready_i;
+    assign ext_mem_psum_ready_o = router_cluster_psum_ready_i;
   end
-
-  assign ext_mem_psum_enable_o = router_cluster_psum_enable_i;
-
-
-  assign router_cluster_psum_ready_o = ext_mem_psum_ready_i;
-  assign ext_mem_psum_ready_o = router_cluster_psum_ready_i;
 
   integer g;
 
@@ -247,17 +255,16 @@ module GLB_cluster #(
         router_cluster_iact_enable_o_delay_2 <= 0;
       end
       router_cluster_psum_enable_o_delay_2 <= 0;
-      router_cluster_psum_enable_o         <= 0;
+      //router_cluster_psum_enable_o         <= 0;
     end else begin
       ///Push Enable signals
       if (SERIAL == 1'd0) begin
         for (g = 0; g < NUM_GLB_IACT; g = g + 1) begin
           router_cluster_iact_enable_o_delay_2[g] <= router_cluster_iact_enable_o_delay_1[g];
         end
-      end
-      for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
-        router_cluster_psum_enable_o_delay_2[g] <= router_cluster_psum_enable_o_delay_1[g];
-        router_cluster_psum_enable_o[g] <= router_cluster_psum_enable_o_delay_2[g];
+        for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
+          router_cluster_psum_enable_o_delay_2[g] <= router_cluster_psum_enable_o_delay_1[g];
+        end
       end
     end
   end
