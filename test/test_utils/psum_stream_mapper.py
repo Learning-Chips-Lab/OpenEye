@@ -27,8 +27,12 @@ class PsumStreamMapper(object):
 
     def get_psum_stream(self):
         if (self.params.SERIAL) :
-            psum_stream_length = 4 * self.layer_params.filters * self.layer_params.iact_size_y * 16 * math.ceil(4 * 2 / 8)
-            psum_stream = [0] * psum_stream_length
+            block_length = 2 * self.params.Clusters * math.ceil(4 * 2 / 8)
+            psum_stream = []
+
+            for j in range(self.layer_params.iact_size_y):
+                for i in range(self.layer_params.filters):
+                    psum_stream.extend([gtu.to_twos_complement(self.dram_bias[i],20) + (gtu.to_twos_complement(self.dram_bias[i],20) * 2**20)] * block_length)
         else : 
             psum_stream = [[[[] for c in range(self.params.Psum_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
             for cl_x in range(self.params.Clusters_X):

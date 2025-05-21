@@ -106,6 +106,7 @@ class DRAMContents(object):
             elif "Conv" in str(model.layers[l]):
                 for x in range(model.layers[l].filters):
                     self.bias[l][x] = int(math.floor(float(model.layers[l].weights[1][x])))
+                    #self.bias[l][x] = x * (-1)
             elif "Dense" in str(model.layers[l]):
                 for c in range(model.layers[l].input.shape[1]):
                     for x in range(model.layers[l].output.shape[1]):

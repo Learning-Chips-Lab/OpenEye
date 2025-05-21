@@ -341,7 +341,7 @@ def collect_results(layer, layer_number, layer_params, dram, serial):
         for j in range(layer.output.shape[1]):
             for i in range(layer.output.shape[2]):
                 for f in range(layer.output.shape[3]):
-                    calculated_results[f][j][i] = int(calculated_results[f][j][i] + int(layer.bias[f]))
+                    calculated_results[f][j][i] = int(calculated_results[f][j][i] + int(dram.bias[layer_number][f]))
 
         manager = mp.Manager()
         return_dict = manager.dict()

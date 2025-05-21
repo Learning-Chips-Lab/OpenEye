@@ -1547,36 +1547,36 @@ reg last_data_reg;
           last_data_reg       <= 0;
           if (GET_BIAS == fsm_current_state) begin
             if (enable_dma_i_reg) begin
-              psum_buffer_SP_data_w[fsm_cycle_mod1[0]*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS]<= data_dma_i_reg;
-              fsm_cycle_mod1 <= fsm_cycle_mod1 + 1;
-              if (fsm_cycle_mod1 == (CLUSTER_COLUMNS - 1)) begin
-                fsm_cycle_mod1 <= 0;
-              end
-              //fsm_cycle_mod1: fsm_cycle%CLUSTER_COLUMNS
+              psum_buffer_SP_data_w[fsm_x_cl*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS]<= data_dma_i_reg[39:0];
+
               fsm_psum_r <= fsm_psum_r + PARALLEL_MACS;
               if (fsm_psum_r == NUM_GLB_PSUM - PARALLEL_MACS) begin
                 fsm_psum_r <= 0;
                 fsm_y_cl <= fsm_y_cl + 1;
                 if ((fsm_y_cl) == CLUSTER_ROWS - 1) begin
                   fsm_y_cl            <= 0;
-                  fsm_psum_cycle      <= fsm_psum_cycle + 1;
-                  psum_enable_i_reg   <= {((CLUSTERS * NUM_GLB_PSUM)) {1'b1}};
-                  psum_buffer_SP_en_w <= {((CLUSTERS * NUM_GLB_PSUM)) {1'b1}};
+                  fsm_x_cl <= fsm_x_cl + 1;
+                  if (fsm_x_cl == (CLUSTER_COLUMNS - 1)) begin
+                    fsm_x_cl <= 0;
+                    fsm_psum_cycle      <= fsm_psum_cycle + 1;
+                    psum_enable_i_reg   <= {((CLUSTERS * NUM_GLB_PSUM)) {1'b1}};
+                    psum_buffer_SP_en_w <= {((CLUSTERS * NUM_GLB_PSUM)) {1'b1}};
 
-                  for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                    for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                      for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                        psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
-                        <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
+                    for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                      for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
+                        for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
+                          psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
+                          <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
+                        end
                       end
                     end
-                  end
-                  if (fsm_psum_cycle == (needed_wght_cycles_reg * filters_reg * iact_size_y * 4) - 1) begin
-                    fsm_psum_cycle         <= 0;
-                    fsm_cycle_mod1         <= 0;
-                    limit_increase_reg     <= ((iact_size_x*iact_channels_per_pe)/(WORDS_PER_CYCLE[7:0]*4));
-                    ready_dma_o            <= 0;
-                    psum_cnt               <= psum_buffer_SP_addr + 1;
+                    if (fsm_psum_cycle == (needed_wght_cycles_reg * filters_reg * iact_size_y) - 1) begin
+                      fsm_psum_cycle         <= 0;
+                      fsm_cycle_mod1         <= 0;
+                      limit_increase_reg     <= ((iact_size_x*iact_channels_per_pe)/(WORDS_PER_CYCLE[7:0]*4));
+                      ready_dma_o            <= 0;
+                      psum_cnt               <= psum_buffer_SP_addr + 1;
+                    end
                   end
                 end
               end
