@@ -1495,6 +1495,35 @@ module OpenEye_FPGA #(
     end
   end
 
+reg [ 6:0] quant_exp  [31:0];
+reg [24:0] quant_mant [31:0];
+reg [ 4:0] position;
+integer quant_int;
+always @(posedge clk_i, negedge rst_n) begin
+  if (!rst_n) begin  ///Reset
+    for (quant_int = 0; quant_int < 32; quant_int = quant_int + 1) begin
+      fsm_psum_cycle[quant_int]           <= 0;
+      iact_channel_counter_reg[quant_int] <= 0;
+    end
+    position <= 0;
+  end else begin
+    if (fsm_current_state == GET_PARAMETERS) begin
+      position <= 0;
+    end
+    if ((fsm_current_state == START_CONVERTER) |(fsm_current_state == CONVERT_IACT))begin
+      if (enable_dma_i_reg) begin
+        position <= position + 1;
+        if (position == 16 - 1) begin
+          position <= 0;
+        end
+        quant_exp[position]    <= data_dma_i_reg[31:25];
+        quant_mant[position]   <= data_dma_i_reg[24:0];
+        quant_exp[position+1]  <= data_dma_i_reg[63:57];
+        quant_mant[position+1] <= data_dma_i_reg[56:32];
+      end
+    end
+  end
+end
 localparam PSUM_IDLE = 0;
 localparam WAIT_TO_SEND_READY_SIGNAL = 1;
 localparam CALCULATE_PSUM = 2;
