@@ -288,10 +288,10 @@ module OpenEye_FPGA #(
   reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_w;
   reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_r;
 
-  reg [CLUSTERS*NUM_GLB_PSUM-1:0]psum_buffer_SP_en_r;
-  reg [CLUSTERS*NUM_GLB_PSUM-1:0]psum_buffer_SP_en_w;
-  reg [BUFFER_WIDTH*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_addr;
-  reg [BUFFER_WIDTH*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_addr_storage;
+  reg [CLUSTERS*NUM_GLB_PSUM/2-1:0]psum_buffer_SP_en_r;
+  reg [CLUSTERS*NUM_GLB_PSUM/2-1:0]psum_buffer_SP_en_w;
+  reg [BUFFER_WIDTH*CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_SP_addr;
+  reg [BUFFER_WIDTH-1:0] psum_buffer_SP_addr_storage;
   reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_data_w;
   wire [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_data_r;
 
@@ -1513,24 +1513,24 @@ reg last_data_reg;
   integer g_psum, b_psum, cc_psum, cr_psum;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
-      psum_transmitted         <= 0;
-      fsm_psum_cycle           <= 0;
-      fsm_psum_last_state      <= PSUM_IDLE;
-      fsm_psum_current_state   <= PSUM_IDLE;
+      psum_transmitted            <= 0;
+      fsm_psum_cycle              <= 0;
+      fsm_psum_last_state         <= PSUM_IDLE;
+      fsm_psum_current_state      <= PSUM_IDLE;
       psum_buffer_SP_addr         <= ~0;
       psum_buffer_SP_addr_storage <= 0;
-      psum_enable_i_reg        <= 0;
-      psum_ready_i_reg         <= 0;
-      storage_cycles           <= 0;
-      psum_router_set_reg      <= 1;
-      iact_channel_counter_reg <= 0;
-      results_ready             = 0;
-      psum_cnt                 <= 0;
-      start_new_cycle          <= 0;
-      fsm_cycle_mod1           <= 0;
-      enable_dma_o             <= 0;
-      data_dma_o               <= 0;
-      last_data_reg            <= 0;
+      psum_enable_i_reg           <= 0;
+      psum_ready_i_reg            <= 0;
+      storage_cycles              <= 0;
+      psum_router_set_reg         <= 1;
+      iact_channel_counter_reg    <= 0;
+      results_ready                = 0;
+      psum_cnt                    <= 0;
+      start_new_cycle             <= 0;
+      fsm_cycle_mod1              <= 0;
+      enable_dma_o                <= 0;
+      data_dma_o                  <= 0;
+      last_data_reg               <= 0;
     end else begin
       //psum_enable_o     <= psum_enable_o_reg;
       //psum_enable_i_reg <= psum_enable_i;
@@ -1559,14 +1559,13 @@ reg last_data_reg;
                   if (fsm_x_cl == (CLUSTER_COLUMNS - 1)) begin
                     fsm_x_cl <= 0;
                     fsm_psum_cycle      <= fsm_psum_cycle + 1;
-                    psum_enable_i_reg   <= {((CLUSTERS * NUM_GLB_PSUM)) {1'b1}};
-                    psum_buffer_SP_en_w <= {((CLUSTERS * NUM_GLB_PSUM)) {1'b1}};
+                    psum_buffer_SP_en_w <= {((CLUSTERS * NUM_GLB_PSUM/2)){1'b1}};
 
                     for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                       for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                        for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                          psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
-                          <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
+                        for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                          psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
+                          <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
                         end
                       end
                     end
@@ -1575,7 +1574,7 @@ reg last_data_reg;
                       fsm_cycle_mod1         <= 0;
                       limit_increase_reg     <= ((iact_size_x*iact_channels_per_pe)/(WORDS_PER_CYCLE[7:0]*4));
                       ready_dma_o            <= 0;
-                      psum_cnt               <= psum_buffer_SP_addr + 1;
+                      psum_cnt               <= psum_buffer_SP_addr[11:0] + 1;
                     end
                   end
                 end
@@ -1600,7 +1599,7 @@ reg last_data_reg;
             fsm_psum_cycle <= fsm_psum_cycle + 1;
           end
           psum_transmitted <= 1;
-          psum_buffer_SP_en_r    <= {(NUM_GLB_PSUM*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
+          psum_buffer_SP_en_r    <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
           if (fsm_psum_cycle >= 16) begin
             fsm_psum_cycle         <= 0;
             psum_ready_i_reg       <= {(NUM_GLB_PSUM*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
@@ -1613,14 +1612,14 @@ reg last_data_reg;
           if (psum_ready_i_reg != 0) begin
             psum_ready_i_reg <= psum_ready_i_reg;
           end
-          psum_buffer_SP_en_r <= {(NUM_GLB_PSUM*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
+          psum_buffer_SP_en_r <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
           if (results_ready == 0 & (psum_ready_i_reg != 0)) begin
             results_ready = 1;
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                  results_ready = results_ready & (psum_ready_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] |
-                   (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 0));
+                for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                  results_ready = results_ready & (psum_ready_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum*2] |
+                   (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0));
                 end
               end
             end
@@ -1630,11 +1629,12 @@ reg last_data_reg;
             psum_data_i_reg <= psum_buffer_SP_data_r;
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                  if ((fsm_psum_cycle != 0) & (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 1)) begin
-                    psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
-                    <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
-                    psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] <= 1;
+                for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                  if ((fsm_psum_cycle != 0) & (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1)) begin
+                    psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
+                    <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
+                    psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] <= 1;
+                    psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2 + 1] <= 1;
                   end
                 end
               end
@@ -1648,9 +1648,9 @@ reg last_data_reg;
               psum_enable_i_reg      <= {(NUM_GLB_PSUM*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                  for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                    if (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 1) begin
-                      psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] <= psum_buffer_SP_addr_storage;
+                  for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                    if (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) begin
+                      psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] <= psum_buffer_SP_addr_storage;
                     end
                   end
                 end
@@ -1665,17 +1665,17 @@ reg last_data_reg;
           psum_buffer_SP_data_w <= psum_data_o_w;
           for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
             for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-              for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                if (psum_buffer_SP_en_w[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum]) begin
-                  psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
-                  <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
+              for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                if (psum_buffer_SP_en_w[cc_psum*NUM_GLB_PSUM/2*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM/2+g_psum]) begin
+                  psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
+                  <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
                 end
-                results_ready = results_ready & (psum_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] | 
-                (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 0));
-                if (psum_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum] != 0) begin
-                  psum_buffer_SP_en_w[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum]   <= 1;
+                results_ready = results_ready & (psum_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] | 
+                (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0));
+                if (psum_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] != 0) begin
+                  psum_buffer_SP_en_w[cc_psum*NUM_GLB_PSUM/2*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM/2+g_psum] <= 1;
                 end else begin
-                  psum_buffer_SP_en_w[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum]   <= 0;
+                  psum_buffer_SP_en_w[cc_psum*NUM_GLB_PSUM/2*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM/2+g_psum] <= 0;
                 end
               end
             end
@@ -1693,7 +1693,7 @@ reg last_data_reg;
               psum_ready_i_reg       <= 0;
               fsm_psum_cycle         <= 0;
               psum_buffer_SP_en_w    <= 0;
-              psum_buffer_SP_en_r    <= {(NUM_GLB_PSUM*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
+              psum_buffer_SP_en_r    <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
               psum_enable_i_reg      <= 0;
             end else begin
               finished_cycles <= finished_cycles + 1;
@@ -1717,8 +1717,8 @@ reg last_data_reg;
 
                 for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                   for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                    for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                      psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] <= psum_buffer_SP_addr_storage + {{6{1'd0}}, filters_reg};
+                    for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                      psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] <= psum_buffer_SP_addr_storage + {{6{1'd0}}, filters_reg};
                     end
                   end
                 end
@@ -1726,8 +1726,8 @@ reg last_data_reg;
                 storage_cycles <= storage_cycles + 1;
                 for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                   for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                    for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
-                      psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] <= psum_buffer_SP_addr_storage;
+                    for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                      psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] <= psum_buffer_SP_addr_storage;
                     end
                   end
                 end
@@ -1745,7 +1745,7 @@ reg last_data_reg;
           fsm_x_cl   <= 0;
         end
         SEND_RESULTS: begin
-          psum_buffer_SP_en_r <= {(NUM_GLB_PSUM*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
+          psum_buffer_SP_en_r <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
           if (ready_dma_i == 1) begin
             enable_dma_o <= 1;
             data_dma_o <= psum_buffer_SP_data_r[fsm_x_cl*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM * PARALLEL_MACS];
@@ -1753,10 +1753,10 @@ reg last_data_reg;
 
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
+                for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
                   if ((fsm_psum_r != NUM_GLB_PSUM - PARALLEL_MACS) & (fsm_x_cl == CLUSTER_COLUMNS - 1) & (fsm_y_cl == CLUSTER_ROWS - 1)) begin
-                    psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
-                    <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
+                    psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
+                    <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
                   end
                 end
               end
@@ -1793,7 +1793,7 @@ reg last_data_reg;
         end
       endcase
       if (status_reg_enable_reg) begin
-        psum_buffer_SP_addr    <= {(BUFFER_WIDTH*CLUSTERS*NUM_GLB_PSUM){1'd1}};
+        psum_buffer_SP_addr    <= {(BUFFER_WIDTH*CLUSTERS*NUM_GLB_PSUM/2){1'd1}};
         psum_enable_i_reg      <= 0;
         psum_ready_i_reg       <= 0;
         //psum_ready_o_reg       <= 0;
@@ -1908,26 +1908,24 @@ reg last_data_reg;
         .data_o (wght_buffer_SP_data_r)
     );
 
-    //wire [NUM_GLB_PSUM*CLUSTER_ROWS*CLUSTER_COLUMNS*TRANS_BITWIDTH_PSUM-1:0] psum_buffer_SP_data_w;
-    //wire [NUM_GLB_PSUM*CLUSTER_ROWS*CLUSTER_COLUMNS*TRANS_BITWIDTH_PSUM-1:0] psum_buffer_SP_data_r;
 
 
     for (i_gen = 0; i_gen < CLUSTER_COLUMNS; i_gen++) begin : PSUM_RAM_X
       for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen++) begin : PSUM_RAM_Y
-        for (g_gen = 0; g_gen < NUM_GLB_PSUM; g_gen++) begin : PSUM_RAM_GLB
+        for (g_gen = 0; g_gen < NUM_GLB_PSUM/2; g_gen++) begin : PSUM_RAM_GLB
 
           RAM_SP #(
               //.DataWidth(TRANS_BITWIDTH_PSUM * CLUSTERS * NUM_GLB_PSUM),
               //.AddrWidth(BUFFER_WIDTH)
-              .DataWidth(TRANS_BITWIDTH_PSUM),
+              .DataWidth(TRANS_BITWIDTH_PSUM*2),
               .AddrWidth(BUFFER_WIDTH)
           ) psum_buffer_SP (
               .clk_i  (clk_i),
-              .rd_en_i(psum_buffer_SP_en_r[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*NUM_GLB_PSUM+g_gen] & !psum_buffer_SP_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*NUM_GLB_PSUM+g_gen]),
-              .wr_en_i(psum_buffer_SP_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*NUM_GLB_PSUM+g_gen]),
-              .addr_i (psum_buffer_SP_addr[i_gen*BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*BUFFER_WIDTH*NUM_GLB_PSUM+g_gen*BUFFER_WIDTH+:BUFFER_WIDTH]),
-              .data_i (psum_buffer_SP_data_w[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]),
-              .data_o (psum_buffer_SP_data_r[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM])
+              .rd_en_i(psum_buffer_SP_en_r[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen] & !psum_buffer_SP_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen]),
+              .wr_en_i(psum_buffer_SP_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen]),
+              .addr_i (psum_buffer_SP_addr[i_gen*BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*BUFFER_WIDTH*NUM_GLB_PSUM/2+g_gen*BUFFER_WIDTH+:BUFFER_WIDTH]),
+              .data_i (psum_buffer_SP_data_w[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM*2]),
+              .data_o (psum_buffer_SP_data_r[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM*2])
           );
         end
       end
