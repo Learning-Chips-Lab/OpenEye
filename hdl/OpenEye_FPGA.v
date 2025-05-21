@@ -887,7 +887,6 @@ module OpenEye_FPGA #(
       wght_buffer_SP_wr_addr            <= 0;
       wght_buffer_SP_en_w               <= 0;
       wght_buffer_SP_data_w             <= 0;
-      psum_buffer_SP_en_r               <= 0;
       psum_buffer_SP_data_w             <= 0;
       wght_cnt                          <= 0;
       psum_cnt                          <= 0;
@@ -1539,6 +1538,8 @@ reg        psum_transmitted;
 reg psum_router_set_reg;
 reg start_new_cycle;
 reg last_data_reg;
+reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_x_cl_psum;
+reg [   $clog2(CLUSTER_ROWS)-1:0] fsm_y_cl_psum;
   integer g_psum, b_psum, cc_psum, cr_psum;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
@@ -1560,6 +1561,9 @@ reg last_data_reg;
       enable_dma_o                <= 0;
       data_dma_o                  <= 0;
       last_data_reg               <= 0;
+      fsm_x_cl_psum               <= 0;
+      fsm_y_cl_psum               <= 0;
+      psum_buffer_SP_en_r         <= 0;
     end else begin
       //psum_enable_o     <= psum_enable_o_reg;
       //psum_enable_i_reg <= psum_enable_i;
@@ -1576,17 +1580,17 @@ reg last_data_reg;
           last_data_reg       <= 0;
           if (GET_BIAS == fsm_current_state) begin
             if (enable_dma_i_reg) begin
-              psum_buffer_SP_data_w[fsm_x_cl*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS]<= data_dma_i_reg[39:0];
+              psum_buffer_SP_data_w[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS]<= data_dma_i_reg[39:0];
 
               fsm_psum_r <= fsm_psum_r + PARALLEL_MACS;
               if (fsm_psum_r == NUM_GLB_PSUM - PARALLEL_MACS) begin
                 fsm_psum_r <= 0;
-                fsm_y_cl <= fsm_y_cl + 1;
-                if ((fsm_y_cl) == CLUSTER_ROWS - 1) begin
-                  fsm_y_cl            <= 0;
-                  fsm_x_cl <= fsm_x_cl + 1;
-                  if (fsm_x_cl == (CLUSTER_COLUMNS - 1)) begin
-                    fsm_x_cl <= 0;
+                fsm_y_cl_psum <= fsm_y_cl_psum + 1;
+                if ((fsm_y_cl_psum) == CLUSTER_ROWS - 1) begin
+                  fsm_y_cl_psum            <= 0;
+                  fsm_x_cl_psum <= fsm_x_cl_psum + 1;
+                  if (fsm_x_cl_psum == (CLUSTER_COLUMNS - 1)) begin
+                    fsm_x_cl_psum <= 0;
                     fsm_psum_cycle      <= fsm_psum_cycle + 1;
                     psum_buffer_SP_en_w <= {((CLUSTERS * NUM_GLB_PSUM/2)){1'b1}};
 
@@ -1770,20 +1774,20 @@ reg last_data_reg;
           fsm_psum_last_state    <= WAIT_FOR_RESULTS;
           fsm_psum_current_state <= SEND_RESULTS;
           fsm_psum_r <= 0;
-          fsm_y_cl   <= 0;
-          fsm_x_cl   <= 0;
+          fsm_y_cl_psum   <= 0;
+          fsm_x_cl_psum   <= 0;
         end
         SEND_RESULTS: begin
           psum_buffer_SP_en_r <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
           if (ready_dma_i == 1) begin
             enable_dma_o <= 1;
-            data_dma_o <= psum_buffer_SP_data_r[fsm_x_cl*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM * PARALLEL_MACS];
+            data_dma_o <= psum_buffer_SP_data_r[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM * PARALLEL_MACS];
             fsm_psum_r <= fsm_psum_r + PARALLEL_MACS;
 
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                  if ((fsm_psum_r != NUM_GLB_PSUM - PARALLEL_MACS) & (fsm_x_cl == CLUSTER_COLUMNS - 1) & (fsm_y_cl == CLUSTER_ROWS - 1)) begin
+                  if ((fsm_psum_r != NUM_GLB_PSUM - PARALLEL_MACS) & (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) & (fsm_y_cl_psum == CLUSTER_ROWS - 1)) begin
                     psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
                     <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
                   end
@@ -1792,12 +1796,12 @@ reg last_data_reg;
             end
             if (fsm_psum_r == NUM_GLB_PSUM - PARALLEL_MACS) begin
               fsm_psum_r <= 0;
-              fsm_x_cl <= fsm_x_cl + 1;
-              if (fsm_x_cl == CLUSTER_COLUMNS - 1) begin
-                fsm_x_cl <= 0;
-                fsm_y_cl <= fsm_y_cl + 1;
-                if (fsm_y_cl == CLUSTER_ROWS - 1) begin
-                  fsm_y_cl <= 0;
+              fsm_x_cl_psum <= fsm_x_cl_psum + 1;
+              if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
+                fsm_x_cl_psum <= 0;
+                fsm_y_cl_psum <= fsm_y_cl_psum + 1;
+                if (fsm_y_cl_psum == CLUSTER_ROWS - 1) begin
+                  fsm_y_cl_psum <= 0;
                   fsm_psum_cycle <= fsm_psum_cycle + 1;
                   if (fsm_psum_cycle == needed_wght_cycles_reg * filters_reg * iact_size_y - 1) begin
                     fsm_psum_cycle      <= 0;
