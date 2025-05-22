@@ -1545,16 +1545,16 @@ integer quant_int;
 always @(posedge clk_i, negedge rst_n) begin
   if (!rst_n) begin  ///Reset
     for (quant_int = 0; quant_int < 32; quant_int = quant_int + 1) begin
-      fsm_psum_cycle[quant_int]           <= 0;
-      iact_channel_counter_reg[quant_int] <= 0;
+      quant_exp[quant_int]  <= 0;
+      quant_mant[quant_int] <= 0;
     end
     position <= 0;
   end else begin
     if (fsm_current_state == GET_PARAMETERS) begin
       position <= 0;
       for (quant_int = 0; quant_int < 32; quant_int = quant_int + 1) begin
-        fsm_psum_cycle[quant_int]           <= 0;
-        iact_channel_counter_reg[quant_int] <= 0;
+        quant_exp[quant_int]  <= 0;
+        quant_mant[quant_int] <= 0;
       end
     end
     if ((fsm_current_state == START_CONVERTER) |(fsm_current_state == CONVERT_IACT))begin
