@@ -382,6 +382,19 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
         cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 1))
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     else:
+        cluster_order = []
+        for b in range(0,oep.Clusters_Y,layer_parameters.used_Y_cluster):
+            for a in range(layer_parameters.used_Y_cluster):
+                cluster_order.append(int(oep.Clusters_Y/layer_parameters.used_Y_cluster)*a+int(b/layer_parameters.used_Y_cluster))
+
+        matrix = [[i * 8 + j for j in range(8)] for i in range(8)]
+
+        # Schritt 3: Neue Matrix nach Permutation der Zeilen
+        reordered_matrix = [matrix[i] for i in cluster_order]
+
+        flat_list = [item for row in reordered_matrix for item in row]
+
+
         dut._log.info("Output Stream started")
         while (dut.enable_dma_o.value == 1):
 
@@ -389,31 +402,23 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
                 txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(40) + "\n")
             for i in range(2):
                 if(logging.DEBUG >= login_level):
-                    storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
+                    storage_file.write("f: " + str(f) + " x: " + str(flat_list[x]) + " y: " + str(y) + "\n")
                 try:
-                    dram.fmap[layer_number + 1][f][x][y] = int(dut.data_dma_o.value[28-20*i:47-20*i])
-                    if (dram.fmap[layer_number + 1][f][x][y] >= 2**19) :
-                        dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**20
+                    dram.fmap[layer_number + 1][f][flat_list[x]][y] = int(dut.data_dma_o.value[44-20*i:63-20*i])
+                    if (dram.fmap[layer_number + 1][f][flat_list[x]][y] >= 2**19) :
+                        dram.fmap[layer_number + 1][f][flat_list[x]][y] = dram.fmap[layer_number + 1][f][flat_list[x]][y] - 2**20
                 except:
                     pass
+                x = x + 1
+            if(x >= layer_parameters.iact_size_x):
+                x = 0
                 f = f + 1
-            if(f >= les.f_end):
-                les.f_start = les.f_corner_start
-                f = les.f_start
-                if(x == les.x_end - 1):
-                    x = 0
-                    if(y >= les.y_end - 1):
+                if(f == layer_parameters.filters):
+                    f = 0
+                    y = y + 1
+                    if(y >= layer_parameters.iact_size_y):
                         y = 0
-                    else:
-                        y = y + 1
-                else:
-                    x = x + 1
-                les.y_start = y
-                les.x_start = x
-            else:
-                les.f_start = f
-                x = les.x_start
-                y = les.y_start
+
             await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
 
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))

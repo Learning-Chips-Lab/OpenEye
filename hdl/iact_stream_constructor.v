@@ -12,7 +12,7 @@ module iact_stream_constructor #(
     parameter  RAM_CELLS           = 32,
     parameter  RAM_CELLS_WORDWIDTH = 64,
     parameter  WORD_BITWIDTH       = 72,
-    parameter  ADDRWIDTH           = 12,
+    parameter  ADDRWIDTH           = 13,
     localparam PES                 = PE_X * PE_Y,
     localparam IACT_WORDS_IN_RAM   = RAM_CELLS_WORDWIDTH / DATA_IACT_BITWIDTH,
     localparam IACT_DATA_DATA      = DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD,
@@ -223,6 +223,23 @@ module iact_stream_constructor #(
         if (enable_converter) begin
           fsm_enc_cycle <= fsm_enc_cycle + 1;
         end
+        if (reset_cycle_i) begin
+          fsm_enc_current_state      <= IDLE;
+          iact_data_o                <= 0;
+          iact_enable_o              <= 0;
+          iact_choose_o              <= 0;
+          fsm_enc_cycle              <= 0;
+          ram_inc_counter            <= 0;
+          ram_rd_addr                <= 0;
+          ram_rd_en                  <= 0;
+          current_iact_cycle_reg     <= 0;
+          current_iact_cycle_mod_reg <= 0;
+          iact_channel_counter       <= 0;
+          finished_output_channels   <= 0;
+          line_offset                <= 0;
+          iact_y_counter             <= 0;
+          y_cluster_counter          <= 0;
+        end
       end
     end
 
@@ -253,6 +270,12 @@ module iact_stream_constructor #(
             params[PARAMS_SIZE-1:3*PARAMS_SIZE/4]) - {{(8 - 4){1'd0}},padding_reg};
           end
           y_reg <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4] - {{(8 - 4) {1'd0}}, padding_reg};
+        end
+        if (reset_cycle_i) begin
+          y_reg <= 0;
+          for (router_loop = 0; router_loop < NUM_GLB_IACT; router_loop++) begin
+            x_reg[router_loop] <= 0;
+          end
         end
       end
     end
@@ -305,25 +328,29 @@ module iact_stream_constructor #(
       end else begin
         case (fsm_current_state)
           INITIALIZE: begin
-            x_lines_reg            <= 0;
             fsm_cycle              <= 0;
             y_cycle                <= 0;
             router_cycle           <= 0;
             addr_cycle             <= 0;
             fsm_current_state      <= GET_PARAMETER;
-            channels               <= 0;
             x                      <= 0;
             y                      <= 0;
             fsm_row_offset         <= 0;
+            channels               <= 0;
             pos                    <= 0;
+            change_state           <= 0;
             ready_o                <= 0;
             ram_wr_en              <= 0;
             ram_wr_addr            <= 0;
+            ram_wr_addr_reg        <= 0;
             address_storage        <= 0;
+            current_cycle          <= 0;
+            iact_router_counter    <= 0;
+            kernel_y_counter       <= 0;
             padding_reg            <= 0;
             needed_iact_cycles_reg <= 0;
             wght_size_reg          <= 0;
-            byte_var_pre_calc      <= 0;
+            x_lines_reg            <= 0;
             x_pos_in_w_cycle       <= 0;
           end
 
@@ -468,7 +495,7 @@ module iact_stream_constructor #(
           wght_size_reg          <= wght_size_i;
         end
         if (reset_cycle_i) begin
-          fsm_current_state <= INITIALIZE;
+          fsm_current_state      <= INITIALIZE;
         end
       end
     end
