@@ -921,7 +921,6 @@ module OpenEye_FPGA #(
       wght_buffer_SP_data_w             <= 0;
       psum_buffer_SP_data_w             <= 0;
       wght_cnt                          <= 0;
-      psum_cnt                          <= 0;
       iact_converter_buffer_addr_max_cycles <= 0;
       x_lines_reg                       <= 0;
       direct_cycling_reg                <= 0;
@@ -1653,8 +1652,6 @@ reg [   $clog2(CLUSTER_ROWS)-1:0] fsm_y_cl_psum;
                     if (fsm_psum_cycle == (needed_wght_cycles_reg * filters_reg * iact_size_y) - 1) begin
                       fsm_psum_cycle         <= 0;
                       fsm_cycle_mod1         <= 0;
-                      limit_increase_reg     <= ((iact_size_x*iact_channels_per_pe)/(WORDS_PER_CYCLE[7:0]*4));
-                      ready_dma_o            <= 0;
                       psum_cnt               <= psum_buffer_SP_addr[11:0] + 1;
                     end
                   end
@@ -1865,6 +1862,8 @@ reg [   $clog2(CLUSTER_ROWS)-1:0] fsm_y_cl_psum;
               enable_dma_o        <= 0;
               last_data_reg       <= 0;
               finished_cycles     <= 0;
+              fsm_psum_last_state         <= PSUM_SEND_RESULTS;
+              fsm_psum_current_state      <= PSUM_IDLE;
             end
           end
         end
