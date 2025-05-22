@@ -207,6 +207,6 @@ async def single_layer_test(dut):
                 
                 assert ptu.compare_dram_with_ref(layer, calculated_results, dram.fmap[1 + layer_number])
 
-                slo.batchnorm_output(layer, 256, layer_number, dram)
+                slo.batchnorm_output(layer, layer_parameters, 256, layer_number, dram)
 
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"

@@ -171,6 +171,8 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
                 f_dump.write(f'{v}\n')
             for v in stream[strdic.stream_parallel_dict["psum"]]:
                 f_dump.write(f'{v}\n')
+            for v in stream[strdic.stream_parallel_dict["quantize"]]:
+                f_dump.write(f'{v}\n')
 
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 1))
         for data_word in range(len(stream[strdic.stream_parallel_dict["status"]])):
@@ -184,6 +186,9 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
             await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         for data_word in range(len(stream[strdic.stream_parallel_dict["psum"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["psum"]][data_word]))
+            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        for data_word in range(len(stream[strdic.stream_parallel_dict["quantize"]])):
+            cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["quantize"]][data_word]))
             await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))

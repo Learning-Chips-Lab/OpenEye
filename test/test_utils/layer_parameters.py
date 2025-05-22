@@ -83,6 +83,7 @@ class LayerParameters(object):
         self.needed_standing_cycles = 0
         self.direct_cycling = 0
         self.iact_x_lines = 3
+        self.quantize = [[0 for _ in range(2)]for _ in range(256)]
 
         if "Depthwise" in str(layer):
             logger.debug("Depthwise Convolution Layer")
@@ -181,6 +182,9 @@ class LayerParameters(object):
         self.compute_total_computations(layer)
             
         self.filters = layer.filters
+        for f in range(self.filters):
+            self.quantize[f][0] = 1
+            self.quantize[f][1] = 8
         self.input_shape = layer.input.shape
         self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size

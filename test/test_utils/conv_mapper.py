@@ -92,6 +92,7 @@ class ConvMapper(LayerMapper):
             dma_storage.extend(self.write_router_iact(params, layer_params))
             dma_storage.extend(self.write_router_wght(params, layer_params))
             dma_storage.extend(self.write_router_psum(params, layer_params))
+            
             storage = dma_storage
         else:
             storage[strdic.status_dict["data_mode"]] = params.data_mode
@@ -122,6 +123,18 @@ class ConvMapper(LayerMapper):
             storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
         return storage
 
+    def write_quantize(self, params, layer_params, layer_repetition):
+        dma_line = 0
+        dma_storage = []
+        for f in range(math.ceil(layer_params.filters/2)):
+            dma_line = 0
+            dma_line = dma_line + (layer_params.quantize[2*f][0] << 0)
+            dma_line = dma_line + (layer_params.quantize[2*f][1] << 25)
+            dma_line = dma_line + (layer_params.quantize[2*f+1][0] << 32)
+            dma_line = dma_line + (layer_params.quantize[2*f+1][1] << 57)
+            
+            dma_storage.append(dma_line)
+        return dma_storage
     def write_router_iact(self, params, layer_params):
         line = 0
         if(params.SERIAL):
