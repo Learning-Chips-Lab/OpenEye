@@ -66,12 +66,12 @@ export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 #export LAYER=FC
 export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
-export NUM_FILTERS=32
-export KERNEL_SIZE=5
+export NUM_FILTERS=8
+export KERNEL_SIZE=3
 export INPUT_SIZE_X=64
-export INPUT_SIZE_Y=2
+export INPUT_SIZE_Y=1
 export STRIDE=1
-export INPUT_CHANNELS=2
+export INPUT_CHANNELS=4
 export OUTPUT_SIZE=4
 #Amout of parallel MACs
 export PARALLEL_MACS=2
