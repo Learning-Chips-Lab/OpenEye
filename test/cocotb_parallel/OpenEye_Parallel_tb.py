@@ -163,13 +163,15 @@ async def single_layer_test(dut):
     time_printer.timestamp("All signals resetted. ", logger)
 
     # Process the layers of the model one after another
+    max_layers = len(model.layers)
+    print(str(max_layers))
     for layer_number, layer in enumerate(model.layers):
         if("Pooling" in str(layer)):
             slo.pool(dram, layer, layer_number)
         elif("Flat" in str(layer)):
             slo.flat(dram, layer, layer_number)
         else:
-            layer_parameters = lp.LayerParameters(layer, openeye_parameter)
+            layer_parameters = lp.LayerParameters(layer, openeye_parameter, layer_number, max_layers)
             time_printer.timestamp("Layer parameters created. ", logger)
             calculated_results = ptu.collect_results(layer, layer_number, layer_parameters, dram, openeye_parameter.SERIAL)
             output_order = ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)

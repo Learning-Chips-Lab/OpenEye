@@ -18,7 +18,7 @@ class LayerParameters(object):
         params: The parameters of the OpenEye.
         filename: The filename of the output file.
     """
-    def __init__(self, layer, params):
+    def __init__(self, layer, params, layer_number, max_layers):
         self.used_PEs_X = 1
         self.used_PEs_Y = 0
         self.used_X_cluster = 1
@@ -71,6 +71,7 @@ class LayerParameters(object):
         self.used_psum_per_PE = 1
         self.needed_total_transmissions = 1
 
+        self.send_values_out = 1
         self.skipIact = 0
         self.skipWght = 0
         self.skipPsum = 0
@@ -91,7 +92,7 @@ class LayerParameters(object):
 
         elif "Conv2D" in str(layer):
             logger.debug("2D Convolution Layer")
-            self.write_conv2d_layer(layer, params)
+            self.write_conv2d_layer(layer, params, layer_number, max_layers)
                 
         elif "Dense" in str(layer):
             logger.debug("Dense Layer")
@@ -174,14 +175,15 @@ class LayerParameters(object):
         else:
             logger.error("Can't fit model, kernel size must be adjusted.")
             raise ValueError("Can't fit model, kernel size must be adjusted.")
-    def write_conv2d_layer(self, layer, params):
-        """ """
-        
-        realfactor = self.get_realfactor(layer)
+    def write_conv2d_layer(self, layer, params, layer_number, max_layers):
 
         self.compute_total_computations(layer)
             
         self.filters = layer.filters
+        if (layer_number == max_layers - 1) :
+            self.send_values_out = 1
+        else:
+            self.send_values_out = 0
         for f in range(self.filters):
             self.quantize[f][0] = 1
             self.quantize[f][1] = 8

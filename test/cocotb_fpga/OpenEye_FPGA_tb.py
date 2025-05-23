@@ -163,6 +163,7 @@ async def single_layer_test(dut):
     await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
 
     # Process the layers of the model one after another
+    max_layers = len(model.layers)
     for layer_number, layer in enumerate(model.layers):
 
         # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
@@ -172,7 +173,7 @@ async def single_layer_test(dut):
         elif("Flat" in str(layer)):
             slo.flat(dram, layer, layer_number)
         else:
-            layer_parameters = lp.LayerParameters(layer, openeye_parameter)
+            layer_parameters = lp.LayerParameters(layer, openeye_parameter, layer_number, max_layers)
             time_printer.timestamp("Layer parameters created. ", logger)
             calculated_results = ptu.collect_results(layer, layer_number, layer_parameters, dram, openeye_parameter.SERIAL)
             output_order = ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)
@@ -203,8 +204,6 @@ async def single_layer_test(dut):
                     assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                             'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
                     
-            
-                
                 assert ptu.compare_dram_with_ref(layer, calculated_results, dram.fmap[1 + layer_number])
 
                 slo.batchnorm_output(layer, layer_parameters, 256, layer_number, dram)
