@@ -368,14 +368,14 @@ module PE #(
             data_mode_reg         <= data_stream_i[0];
             stride_reg            <= data_stream_i[3:1];
             wght_addr_max_reg     <= data_stream_i[7:4];
-            input_activations_reg <= 3;
+            input_activations_reg <= 4;
           end
         end
         SECOND_PARAMS: begin
           if (enable_stream_i) begin
             current_state_stream <= THIRD_PARAMS;
             channel_reg          <= data_stream_i[3:0];
-            iact_addr_max_reg    <= 4;
+            iact_addr_max_reg    <= 5;
           end else begin
             current_state_stream <= FIRST_PARAMS;
           end

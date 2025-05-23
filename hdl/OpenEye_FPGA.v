@@ -813,6 +813,18 @@ module OpenEye_FPGA #(
           end else begin
             single_iteration <= 0;
           end
+        end else begin
+          if (current_cycle == needed_cycles_reg - 1) begin
+            if (iact_ready_o_oep_w == 0) begin
+              if (!single_iteration) begin
+                single_iteration  <= 1;
+                single_iteration3 <= 1;
+                current_cycle     <= current_cycle + 1;
+              end
+            end else begin
+              single_iteration <= 0;
+            end
+          end
         end
         if (current_cycle == needed_cycles_reg) begin
           sending_data      <= 0;
