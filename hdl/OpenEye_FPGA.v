@@ -1328,7 +1328,7 @@ module OpenEye_FPGA #(
             single_iteration2 <= 0;
           end
           fsm_cycle <= fsm_cycle + 1;
-          if (last_data_reg) begin
+          if (last_data_o) begin
             fsm_last_state        <= WAIT_FOR_RESULTS;
             fsm_current_state     <= GET_PARAMETERS;
             send_data_reg         <= 0;
@@ -1655,6 +1655,7 @@ reg [7:0] current_filter;
       case (fsm_psum_current_state)
         PSUM_IDLE: begin
           enable_dma_o        <= 0;
+          last_data_o         <= 0;
           psum_buffer_SP_en_w <= 0;
           psum_enable_i_reg   <= 0;
           last_data_reg       <= 0;
@@ -1895,14 +1896,14 @@ reg [7:0] current_filter;
                     fsm_psum_cycle      <= 0;
                     psum_buffer_SP_addr <= 0;
                     psum_buffer_SP_en_r <= 0;
-                    last_data_reg       <= 1;
+                    last_data_o         <= 1;
                   end
                 end
               end
             end
-            if (last_data_reg) begin
+            if (last_data_o) begin
               psum_buffer_SP_en_r    <= ~0;
-              last_data_o            <= 1;
+              last_data_o            <= 0;
               enable_dma_o           <= 0;
               last_data_reg          <= 0;
               finished_cycles        <= 0;
@@ -2027,7 +2028,7 @@ reg [7:0] current_filter;
             .DATA_IACT_OVERHEAD(DATA_IACT_OVERHEAD),
             .RAM_CELLS         (RAM_CELLS),
             .WORD_BITWIDTH     (TRANS_BITWIDTH_IACT * NUM_GLB_IACT),
-            .ADDRWIDTH         (BUFFER_WIDTH)
+            .ADDRWIDTH         (BUFFER_WIDTH + 1)
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
             .rst_ni                      (rst_ni),
