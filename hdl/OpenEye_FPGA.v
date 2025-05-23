@@ -1353,6 +1353,8 @@ module OpenEye_FPGA #(
     if (!rst_n) begin
       router_mode_iact_reg              <= 0;
       router_mode_iact_storage          <= 0;
+      router_mode_wght_reg              <= 0;
+      router_mode_psum_reg              <= 0;
       iact_router_counter               <= 0;
       storage_cycles_router             <= 0;
       first_cycle                       <= 1;
@@ -1639,7 +1641,9 @@ reg [7:0] current_filter;
       for (cr_psum = 0; cr_psum < 8; cr_psum = cr_psum + 1) begin
         quantized_value_reg[cr_psum] <= 0;
       end
-      last_data_o                 <= 0;
+      fsm_psum_r                  <= 0;
+      finished_cycles             <= 0;
+      psum_buffer_SP_data_w       <= 0;
     end else begin
       //psum_enable_o     <= psum_enable_o_reg;
       //psum_enable_i_reg <= psum_enable_i;
