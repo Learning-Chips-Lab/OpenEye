@@ -894,8 +894,6 @@ module OpenEye_FPGA #(
       fsm_y_cl                  <= 0;
       fsm_iact_r                <= 0;
       fsm_wght_r                <= 0;
-      fsm_psum_r                <= 0;
-      finished_cycles           <= 0;
       skipIact_reg              <= 0;
       skipWght_reg              <= 0;
       skipPsum_reg              <= 0;
@@ -907,19 +905,15 @@ module OpenEye_FPGA #(
       bano_cluster_mode_reg             <= 0;
       af_cluster_mode_reg               <= 0;
       compute_mask_reg                  <= 0;
-      router_mode_wght_reg              <= 0;
-      router_mode_psum_reg              <= 0;
       psum_data_i_reg                   <= 0;
       psum_delay_reg                    <= 0;
       ready_dma_o                       <= 0;
-      last_data_o                       <= 0;
       iact_buffer_SP_en_r               <= 0;
       iact_buffer_SP_en_w               <= 0;
       iact_buffer_SP_data_w             <= 0;
       wght_buffer_SP_wr_addr            <= 0;
       wght_buffer_SP_en_w               <= 0;
       wght_buffer_SP_data_w             <= 0;
-      psum_buffer_SP_data_w             <= 0;
       wght_cnt                          <= 0;
       iact_converter_buffer_addr_max_cycles <= 0;
       x_lines_reg                       <= 0;
@@ -1611,6 +1605,7 @@ reg [   $clog2(CLUSTER_ROWS)-1:0] fsm_y_cl_psum;
       fsm_x_cl_psum               <= 0;
       fsm_y_cl_psum               <= 0;
       psum_buffer_SP_en_r         <= 0;
+      last_data_o                 <= 0;
     end else begin
       //psum_enable_o     <= psum_enable_o_reg;
       //psum_enable_i_reg <= psum_enable_i;
@@ -1919,7 +1914,7 @@ reg [   $clog2(CLUSTER_ROWS)-1:0] fsm_y_cl_psum;
   end
 
   generate
-    genvar i_gen, j_gen;
+    genvar i_gen, j_gen, g_gen;
     // Converter Buffer
     for (j_gen = 0; j_gen < RAM_CELLS; j_gen++) begin : BUFFER_A
         RAM_SP #(
@@ -2110,7 +2105,7 @@ reg [   $clog2(CLUSTER_ROWS)-1:0] fsm_y_cl_psum;
         .psum_transmitted_i (psum_transmitted)
     );
 
-    genvar cc_gen, cr_gen, g_gen, pe_gen;
+    genvar cc_gen, cr_gen, pe_gen;
     for (cc_gen = 0; cc_gen < CLUSTER_COLUMNS; cc_gen = cc_gen + 1) begin
       for (cr_gen = 0; cr_gen < CLUSTER_ROWS; cr_gen = cr_gen + 1) begin
         for (g_gen = 0; g_gen < NUM_GLB_IACT; g_gen = g_gen + 1) begin
