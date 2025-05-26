@@ -685,7 +685,7 @@ module OpenEye_FPGA #(
   reg                             single_iteration3;
   reg [                     15:0] current_cycle;
   reg [                     15:0] iact_cycle_count;
-  reg [                     11:0] fsm_sending_cycle;
+  reg [                     12:0] fsm_sending_cycle;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] flat_help_var_send;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] temp_var;
   reg [7:0] loop_debug;
@@ -743,7 +743,7 @@ module OpenEye_FPGA #(
           wght_buffer_SP_en_r <= 1;
         end
         if (wght_buffer_SP_en_r) begin
-          if (fsm_sending_cycle[12:0] <= wght_cnt) begin
+          if (fsm_sending_cycle <= wght_cnt) begin
             wght_buffer_SP_rd_addr <= wght_buffer_SP_rd_addr + 1;
           end
           if (fsm_sending_cycle > 2) begin
@@ -760,7 +760,7 @@ module OpenEye_FPGA #(
             wght_enable_i_reg <= flat_help_var_send[CLUSTERS*NUM_GLB_WGHT-1:0];
             flat_help_var_send = 0;
           end
-          if (fsm_sending_cycle[11:0] > wght_cnt + 2) begin
+          if (fsm_sending_cycle > wght_cnt + 2) begin
             fsm_sending_cycle      <= fsm_sending_cycle;
             wght_buffer_SP_en_r    <= 0;
             wght_enable_i_reg      <= 0;
