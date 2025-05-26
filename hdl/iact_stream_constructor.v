@@ -38,7 +38,7 @@ module iact_stream_constructor #(
     output reg [ (PES*$clog2(NUM_GLB_IACT+1))-1:0] iact_choose_o,
     input      [       $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                            4-1:0] needed_cycles_i,
-    input      [                            4-1:0] needed_iact_channel_cycles_i,
+    input      [                            8-1:0] needed_iact_channel_cycles_i,
     input      [                            8-1:0] iact_size_x_i,
     input      [                            8-1:0] iact_size_y_i,
     input      [                            8-1:0] iact_channels_i,
@@ -63,8 +63,8 @@ module iact_stream_constructor #(
   reg  [                 8-1:0] pos;
   reg  [                 4-1:0] padding_reg;
   reg  [                 4-1:0] needed_iact_cycles_reg;
-  reg  [                 8-1:0] current_iact_cycle_reg;
-  reg  [                 4-1:0] current_iact_cycle_mod_reg;
+  reg  [                16-1:0] current_iact_cycle_reg;
+  reg  [                 8-1:0] current_iact_cycle_mod_reg;
   reg  [                 4-1:0] wght_size_reg;
   reg                           change_state;
   reg  [DATA_IACT_BITWIDTH-1:0] mem_data_payload_reg   [NUM_GLB_IACT-1:0][  WORDS_PER_TRANS-1:0];
@@ -85,11 +85,11 @@ module iact_stream_constructor #(
     reg [8-1:0] fsm_enc_cycle;
     reg [8-1:0] ram_inc_counter;
     reg fsm_enc_current_state;
-    reg [3:0] iact_channel_counter;
-    reg [7:0] finished_output_channels;
+    reg [8:0] iact_channel_counter;
+    reg [15:0] finished_output_channels;
     reg [7:0] iact_y_counter;
-    reg [11:0] line_offset;
-    reg [3:0] y_cluster_counter;
+    reg [12:0] line_offset;
+    reg [8:0] y_cluster_counter;
     integer pec, per, b;
     always @(posedge clk_i, negedge rst_ni) begin
       if (!rst_ni) begin
@@ -280,7 +280,7 @@ module iact_stream_constructor #(
       end
     end
 
-    reg [8-1:0] fsm_cycle;
+    reg [16-1:0] fsm_cycle;
     reg [8-1:0] y_cycle;
     reg [8-1:0] x_pos_in_w_cycle;
     reg [8-1:0] router_cycle;

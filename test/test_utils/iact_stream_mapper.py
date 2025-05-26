@@ -35,31 +35,31 @@ class IactStreamMapper(object):
                         iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
             iact_stream = self.create_complete_iact_stream(iact_stream)
         else :
-            bitwidth = self.params.IACT_Bitwidth
-            dma_bitwidth = self.params.DMA_Bit_AXI
-            values_per_word = dma_bitwidth // bitwidth
-
-            values = np.transpose(np.array(self.dram_fmap), axes=[2, 1, 0])  # (channels, y, x) -> (x, y, channels)
-            iact_size_y, iact_size_x, channels = values.shape
-
-            used_channels = self.layer_params.used_channels 
-            flat_values = []
-
-            for c_base in range(0, channels, used_channels):
-                for y in range(iact_size_y):
-                    for x in range(iact_size_x):
-                        for c_offset in range(used_channels):
-                            c = c_base + c_offset
-                            if c < channels:
-                                flat_values.append(int(values[y, x, c]))
             iact_stream = []
-            for i in range(0, len(flat_values), values_per_word):
-                word = 0
-                for j in range(values_per_word):
-                    if i + j < len(flat_values):
-                        val_twos = gtu.to_twos_complement(flat_values[i + j], bitwidth)
-                        word |= val_twos << (j * bitwidth)
-                iact_stream.append(word)
+            if (self.layer_params.skipIact == 0) :
+                bitwidth = self.params.IACT_Bitwidth
+                dma_bitwidth = self.params.DMA_Bit_AXI
+                values_per_word = dma_bitwidth // bitwidth
+                values = np.transpose(np.array(self.dram_fmap), axes=[2, 1, 0])
+                iact_size_y, iact_size_x, channels = values.shape
+
+                used_channels = self.layer_params.used_channels 
+                flat_values = []
+
+                for c_base in range(0, channels, used_channels):
+                    for y in range(iact_size_y):
+                        for x in range(iact_size_x):
+                            for c_offset in range(used_channels):
+                                c = c_base + c_offset
+                                if c < channels:
+                                    flat_values.append(int(values[y, x, c]))
+                for i in range(0, len(flat_values), values_per_word):
+                    word = 0
+                    for j in range(values_per_word):
+                        if i + j < len(flat_values):
+                            val_twos = gtu.to_twos_complement(flat_values[i + j], bitwidth)
+                            word |= val_twos << (j * bitwidth)
+                    iact_stream.append(word)
             return iact_stream
             
     

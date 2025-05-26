@@ -595,4 +595,11 @@ def compare_dram_with_ref_mp(f, ref_output, dram, return_dict):
                 logger.error(f'Output Stream: {str(dram[x][y])}')
                 return_dict[f] = False
                 return
-                 
+          
+def fill_dram_with_ref(layer, ref_output, dram):
+    logger.info("Results are transmitted.")
+    for f in range(len(ref_output)):    
+        for x in range(len(ref_output[f])):
+            for y in range(len(ref_output[f][x])):
+                dram[f][x][y] = ref_output[f][x][y]
+    return dram       

@@ -56,7 +56,7 @@ class ConvMapper(LayerMapper):
             dma_line = params.data_mode + ((layer_params.realfactor) << 1) 
             dma_line = dma_line + (params.autofunction << 6)
             dma_line = dma_line + (params.poolingmode << 7)
-            dma_line = dma_line + ((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 8))
+            #dma_line = dma_line + ((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 8))
             dma_line = dma_line + (layer_params.used_X_cluster << 16)
             dma_line = dma_line + (layer_params.used_Y_cluster << 18)
             dma_line = dma_line + (layer_params.needed_Iact_writes << 22)
@@ -78,6 +78,7 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + (layer_params.kernel_size[1] << 25)
             dma_line = dma_line + (layer_params.iact_x_lines << 29)
             dma_line = dma_line + (math.ceil(layer_params.filters/params.Iacts_per_PE) << 37)
+            dma_line = dma_line + (math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 45)
             dma_storage.append(dma_line)
             dma_line = 0
             dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.used_channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles

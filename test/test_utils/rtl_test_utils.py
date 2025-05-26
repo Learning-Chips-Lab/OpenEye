@@ -298,14 +298,16 @@ async def write_bias(ptp, dut, stream, oep, lp):
     cocotb.start_soon(set_input(ptp,(dut.psum_data_i), 0))
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
 
-async def await_ready_signal(ptp, dut, layer_number, model, layer_repetition, layer_parameters, oep, les, dram, login_level, stream):
-    if (oep.SERIAL == 0):
-        while (dut.psum_ready_o.value != (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1):
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
-    else:
-        cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
-        while (dut.enable_dma_o.value != 1):
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+async def await_enable_signal(ptp, dut):
+    cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
+    while (dut.enable_dma_o.value != 1):
+        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    pass
+
+async def await_ready_signal(ptp, dut):
+
+    while (dut.ready_dma_o.value != 1):
+        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     pass
 
 async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, oep, les, dram, login_level, stream, output_order):

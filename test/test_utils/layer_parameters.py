@@ -186,7 +186,9 @@ class LayerParameters(object):
             self.send_values_out = 0
         for f in range(self.filters):
             self.quantize[f][0] = 1
-            self.quantize[f][1] = 8
+            self.quantize[f][1] = 9
+        if (layer_number != 0) : 
+            self.skipIact = 1
         self.input_shape = layer.input.shape
         self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size

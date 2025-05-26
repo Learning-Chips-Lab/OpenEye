@@ -192,20 +192,23 @@ async def single_layer_test(dut):
                 await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters, layer_repetition))
                 logger.info("Stream is sent.")
 
-                await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level, stream[layer_repetition]))
-
-                if("Depthwise" in str(layer)):
-                    await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
-                elif("Conv" in str(layer)):
-                    await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level, stream, output_order))
-                elif("Dense" in str(layer)):
-                    await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
-                if(logging.DEBUG >= log_level):
-                    assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
-                                            'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
-                    
-                assert ptu.compare_dram_with_ref(layer, calculated_results, dram.fmap[1 + layer_number])
-
-                slo.batchnorm_output(layer, layer_parameters, 256, layer_number, dram)
+                if (layer_number == max_layers - 1) :
+                    await cocotb.start_soon(rtl_test_utils.await_enable_signal(ptp, dut))
+                    if("Depthwise" in str(layer)):
+                        await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
+                    elif("Conv" in str(layer)):
+                        await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level, stream, output_order))
+                    elif("Dense" in str(layer)):
+                        await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
+                    if(logging.DEBUG >= log_level):
+                        assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
+                                                'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
+                        
+                    assert ptu.compare_dram_with_ref(layer, calculated_results, dram.fmap[1 + layer_number])
+                else :
+                    await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
+                    time_printer.timestamp("Ready signal detected. Start new stream" , logger)
+                    dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(layer, calculated_results, dram.fmap[1 + layer_number])
+                slo.batchnorm_output(layer, layer_parameters, 1, layer_number, dram)
 
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"
