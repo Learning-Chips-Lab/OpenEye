@@ -18,7 +18,7 @@ class LayerParameters(object):
         params: The parameters of the OpenEye.
         filename: The filename of the output file.
     """
-    def __init__(self, layer, params, layer_number, max_layers):
+    def __init__(self, layer_parameters, layer, params, layer_number, max_layers):
         self.used_PEs_X = 1
         self.used_PEs_Y = 0
         self.used_X_cluster = 1
@@ -32,6 +32,7 @@ class LayerParameters(object):
         self.used_wght_per_PE = []
         self.used_psum_per_PE = []
         self.diff_iact_layer = []
+        self.diff_iact_layer_next_layer = 0
         self.ceil_used_PE_per_clm = 0
 
         self.needed_Iact_writes = 0
@@ -59,7 +60,6 @@ class LayerParameters(object):
         self.single_cluster_computation = 0
         self.iact_size_x = 0
         self.iact_size_y = 0
-
         self.iact_transmissions_pe = 1
         self.wght_transmissions_pe = 1
         self.psum_transmissions_pe = 1
@@ -92,7 +92,7 @@ class LayerParameters(object):
 
         elif "Conv2D" in str(layer):
             logger.debug("2D Convolution Layer")
-            self.write_conv2d_layer(layer, params, layer_number, max_layers)
+            self.write_conv2d_layer(layer_parameters, layer, params, layer_number, max_layers)
                 
         elif "Dense" in str(layer):
             logger.debug("Dense Layer")
@@ -175,8 +175,7 @@ class LayerParameters(object):
         else:
             logger.error("Can't fit model, kernel size must be adjusted.")
             raise ValueError("Can't fit model, kernel size must be adjusted.")
-    def write_conv2d_layer(self, layer, params, layer_number, max_layers):
-
+    def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         self.compute_total_computations(layer)
             
         self.filters = layer.filters
@@ -243,6 +242,8 @@ class LayerParameters(object):
             assert False
         self.iact_stream_cycles = math.ceil(layer.input.shape[1] * layer.input.shape[2] * layer.input.shape[3] / params.NUM_BUFFER / (params.DMA_Bit_AXI//params.IACT_Bitwidth))
         self.diff_iact_layer = math.ceil(layer.input.shape[3]/self.used_channels)
+        if (layer_number != max_layers - 1) :
+            self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
         self.used_iact_per_PE = layer.kernel_size[0] * self.used_channels
 
         match self.single_cluster_computation:

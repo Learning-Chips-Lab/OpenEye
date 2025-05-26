@@ -13,6 +13,7 @@ def create_layer(layer_mode, filters, kernelsize, inputsize_x,  inputsize_y, str
     match layer_mode:
         case "Convolution":
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize, kernelsize), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
+            model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "Depthwise_Convolution":
             model.add(tf.keras.layers.DepthwiseConv2D((kernelsize, kernelsize), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "FC":

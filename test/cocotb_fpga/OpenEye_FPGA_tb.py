@@ -164,42 +164,44 @@ async def single_layer_test(dut):
 
     # Process the layers of the model one after another
     max_layers = len(model.layers)
+    layer_parameters = [0 for _ in range(len(model.layers))]
+    for layer_number, layer in reversed(list(enumerate(model.layers))):
+        layer_parameters[max_layers - layer_number - 1] = lp.LayerParameters(layer_parameters, layer, openeye_parameter, layer_number, max_layers)
+    layer_parameters = list(reversed(layer_parameters))
     for layer_number, layer in enumerate(model.layers):
 
         # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
-        # layer_parameters = ptu.LayerParameters(model.layers[layer_number], openeye_parameter)
         if("Pooling" in str(layer)):
             slo.pool(dram, layer, layer_number)
         elif("Flat" in str(layer)):
             slo.flat(dram, layer, layer_number)
         else:
-            layer_parameters = lp.LayerParameters(layer, openeye_parameter, layer_number, max_layers)
             time_printer.timestamp("Layer parameters created. ", logger)
-            calculated_results = ptu.collect_results(layer, layer_number, layer_parameters, dram, openeye_parameter.SERIAL)
-            output_order = ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)
+            calculated_results = ptu.collect_results(layer, layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
+            output_order = ptu.make_ref(openeye_parameter, layer_parameters[layer_number], layer, layer_number, dram, calculated_results)
             if(logging.DEBUG >= log_level):
                 time_printer.timestamp("Reference data created. ", logger)
 
             dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
             time_printer.timestamp("Start creating stream. " , logger)
-            stream = ptu.write_stream(openeye_parameter, layer_parameters, layer, dram_layer_content, sparse_iacts, sparse_wghts)
+            stream = ptu.write_stream(openeye_parameter, layer_parameters[layer_number], layer, dram_layer_content, sparse_iacts, sparse_wghts)
             
             time_printer.timestamp("Streams set. " , logger)
 
-            for layer_repetition in range(layer_parameters.needed_total_transmissions):
+            for layer_repetition in range(layer_parameters[layer_number].needed_total_transmissions):
                 
                 logger.info("Send stream.")
-                await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters, layer_repetition))
+                await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters[layer_number], layer_repetition))
                 logger.info("Stream is sent.")
 
                 if (layer_number == max_layers - 1) :
                     await cocotb.start_soon(rtl_test_utils.await_enable_signal(ptp, dut))
                     if("Depthwise" in str(layer)):
-                        await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
+                        await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                     elif("Conv" in str(layer)):
-                        await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level, stream, output_order))
+                        await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level, stream, output_order))
                     elif("Dense" in str(layer)):
-                        await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
+                        await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                     if(logging.DEBUG >= log_level):
                         assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                                 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
@@ -209,6 +211,6 @@ async def single_layer_test(dut):
                     await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
                     time_printer.timestamp("Ready signal detected. Start new stream" , logger)
                     dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(layer, calculated_results, dram.fmap[1 + layer_number])
-                slo.batchnorm_output(layer, layer_parameters, 1, layer_number, dram)
+                slo.batchnorm_output(layer, layer_parameters[layer_number], 1, layer_number, dram)
 
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"

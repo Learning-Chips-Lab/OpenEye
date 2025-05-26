@@ -85,6 +85,7 @@ class ConvMapper(LayerMapper):
             dma_storage.append(dma_line)
             dma_line = 0
             dma_line = math.ceil(layer_params.diff_iact_layer)
+            dma_line = dma_line + math.ceil(layer_params.diff_iact_layer_next_layer << 8)
             dma_storage.append(dma_line)
             dma_line = 0
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
