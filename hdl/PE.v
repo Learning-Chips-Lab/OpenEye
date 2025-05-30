@@ -1268,7 +1268,7 @@ module PE #(
   ) wght_data_handler (
       .clk_i    (clk_i),
       .rst_ni   (rst_ni),
-      .compute_i(compute_i),
+      .compute_i(compute_i | enable_stream_i),
       .data_mode(1'd0),
 
       .data_i  (wght_data_i),
@@ -1298,7 +1298,7 @@ module PE #(
   ) iact_data_handler (
       .clk_i    (clk_i),
       .rst_ni   (rst_ni),
-      .compute_i(compute_i),
+      .compute_i(compute_i | enable_stream_i),
       //.data_mode         (data_mode_reg), ReAdd later
 
       .data_i  (mux_iact_a_o_w),

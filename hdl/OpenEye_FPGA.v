@@ -1330,26 +1330,22 @@ module OpenEye_FPGA #(
               if (iact_channels_per_pe_next_layer == 2) begin
                 select_ram_counter <= select_ram_counter + 1;
                 if (select_ram_counter == select_ram_offset + 8 - 1) begin
-                  select_ram_counter <= select_ram_offset;
+                  select_ram_counter    <= select_ram_offset;
                   iact_channels_counter <= iact_channels_counter + 1;
+
                   if (iact_channels_counter == iact_channels_per_pe_next_layer - 1) begin
                     iact_channels_counter <= 0;
-                    select_ram_offset <= select_ram_offset + 8;
+                    select_ram_offset     <= select_ram_offset + 8;
+                    for (a = 0; a < RAM_CELLS; a++) begin
+                      if ((a < (select_ram_offset + 8) * 2) & (a >= (select_ram_offset) * 2)) begin
+                        buffer_SP_en_w_reg[a] <= 1;
+                      end
+                    end
                     if (select_ram_offset == 8) begin
                       select_ram_offset <= 0;
                       select_ram_counter <= 0;
-                      for (a = 0; a < RAM_CELLS; a++) begin
-                        if ((a < (select_ram_offset + 8) * 2) & (a >= (select_ram_offset) * 2)) begin
-                          buffer_SP_en_w_reg[a] <= 1;
-                        end
-                      end
                     end else begin
                       select_ram_counter <= select_ram_offset + 8;
-                      for (a = 0; a < RAM_CELLS; a++) begin
-                        if (a < 16) begin
-                          buffer_SP_en_w_reg[a] <= 1;
-                        end
-                      end
                     end
                   end
                 end
@@ -1367,6 +1363,33 @@ module OpenEye_FPGA #(
                 end
               end
               if (iact_channels_per_pe_next_layer == 1) begin
+                select_ram_counter <= select_ram_counter + 1;
+                if (select_ram_counter == select_ram_offset + 8 - 1) begin
+                  select_ram_counter    <= select_ram_offset;
+                  iact_channels_counter <= iact_channels_counter + 1;
+                  if (iact_channels_counter == iact_channels_per_pe_next_layer - 1) begin
+                    iact_channels_counter <= 0;
+                    select_ram_offset     <= select_ram_offset + 8;
+                    for (a = 0; a < RAM_CELLS; a++) begin
+                      if ((a < (select_ram_offset + 8)) & (a >= select_ram_offset)) begin
+                        buffer_SP_en_w_reg[a] <= 1;
+                      end
+                    end
+                    if (select_ram_offset == 24) begin
+                      select_ram_offset <= 0;
+                      select_ram_counter <= 0;
+                    end else begin
+                      select_ram_counter <= select_ram_offset + 8;
+                    end
+                  end
+                end
+                for (a = 0; a < RAM_CELLS; a++) begin
+                  for (word = 0; word < 8; word++) begin
+                    if (a == select_ram_counter) begin
+                      buffer_SP_data_w_reg[a][8*word+:8] <= quantized_value_reg[word];
+                    end
+                  end
+                end
               end
             end
           end
@@ -1667,6 +1690,7 @@ reg [7:0]test_reg1;
 reg [7:0]test_reg2;
 reg [7:0]test_reg3;
 reg [7:0]psum_filter_offset;
+reg [3:0]fsm_psum_row_offset;
 
 reg [ 7:0] iact_channel_counter_reg;
 reg [15:0] fsm_psum_cycle;
@@ -1712,6 +1736,7 @@ reg [7:0] current_filter;
       test_reg2                   <= 0;
       test_reg3                   <= 0;
       psum_filter_offset          <= 0;
+      fsm_psum_row_offset         <= 0;
       for (cr_psum = 0; cr_psum < 8; cr_psum = cr_psum + 1) begin
         quantized_value_reg[cr_psum] <= 0;
       end
@@ -1936,7 +1961,8 @@ reg [7:0] current_filter;
               test_reg1              <= 0;
               test_reg2              <= 0;
               test_reg3              <= 0;
-              psum_filter_offset     <= iact_channels_per_pe;
+              psum_filter_offset     <= iact_channels_per_pe_next_layer;
+              fsm_psum_row_offset    <= 0;
             end
           end
           fsm_psum_r             <= 0;
@@ -1994,24 +2020,24 @@ reg [7:0] current_filter;
             quantized_value_reg[2*cr_psum]     <= (quant_mant[current_filter] * psum_buffer_SP_data_r[(cr_psum/2)*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum%2)*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM]) >>> quant_exp[current_filter];
             quantized_value_reg[2*cr_psum + 1] <= (quant_mant[current_filter] * psum_buffer_SP_data_r[(cr_psum/2)*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum%2)*TRANS_BITWIDTH_PSUM*2+TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]) >>> quant_exp[current_filter];
           end
-          if (fsm_y_cl_psum == 6) begin
+          if (fsm_psum_cycle % 8 == 6) begin //3x3 is 6
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
                   test_reg1 <= test_reg1 + 1;
-                  if (test_reg1 != iact_channels_per_pe - 1) begin // Einfügen durch nächstes Layer
+                  if (test_reg1 != iact_channels_per_pe_next_layer - 1) begin // Einfügen durch nächstes Layer
                     psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
                     <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
                   end else begin
                     test_reg1 <= 0;
                     test_reg2 <= test_reg2 + 1;
                     psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
-                    <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + (iact_channels_per_pe * (iact_channel_max_cycles - 1)) + 1;
+                    <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + (filters_reg - iact_channels_per_pe_next_layer) + 1;
                     if (test_reg2 == iact_size_y - 1) begin
                       test_reg2 <= 0;
                       psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
                       <= psum_filter_offset;
-                      psum_filter_offset <= psum_filter_offset + iact_channels_per_pe;
+                      psum_filter_offset <= psum_filter_offset + iact_channels_per_pe_next_layer;
                     end
                   end
                 end
@@ -2019,13 +2045,15 @@ reg [7:0] current_filter;
             end
           end
           if (fsm_psum_cycle >= 0) begin
-            fsm_y_cl_psum <= fsm_y_cl_psum + 1;
-            if (fsm_y_cl_psum == CLUSTER_ROWS - 1) begin
-              fsm_y_cl_psum            <= 0;
-              fsm_x_cl_psum <= fsm_x_cl_psum + 1;
-              if (fsm_x_cl_psum == (CLUSTER_COLUMNS - 1)) begin
-                fsm_x_cl_psum <= 0;
-                fsm_psum_cycle <= fsm_psum_cycle + 1;
+
+
+            fsm_y_cl_psum <= fsm_y_cl_psum + needed_y_cls_reg;
+            if (fsm_y_cl_psum + needed_y_cls_reg >= CLUSTER_ROWS) begin
+              fsm_y_cl_psum       <= fsm_psum_row_offset + 1;
+              fsm_psum_row_offset <= fsm_psum_row_offset + 1;
+              if (fsm_psum_row_offset == needed_y_cls_reg - 1) begin
+                fsm_y_cl_psum       <= 0;
+                fsm_psum_row_offset <= 0;
               end
             end
           end
