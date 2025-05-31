@@ -96,7 +96,7 @@ class LayerParameters(object):
                 
         elif "Dense" in str(layer):
             logger.debug("Dense Layer")
-            self.write_dense_layer(layer, params)
+            self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
             
         else:
             logger.debug("Layer type for " + str(layer) + " not supported.")
@@ -188,6 +188,7 @@ class LayerParameters(object):
             self.quantize[f][1] = 9
         if (layer_number != 0) : 
             self.skipIact = 1
+        print(self.skipIact)
         self.input_shape = layer.input.shape
         self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size
@@ -555,26 +556,30 @@ class LayerParameters(object):
             logger.error("Can't fit model, kernel size must be adjusted.")
         return
     
-    def write_dense_layer(self, layer, params):
+    def write_dense_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         """ Write the weights and bias of a Conv2D layer to a file. """
-        
-        # Get the weights and bias of the layer
-        realfactor = 1
-                        
-        # Calculate the number of PEs needed for the layer
-        self.complete_computations = layer.input.shape[1] * layer.output.shape[1]
             
-        self.filters = layer.output.shape[1]
+        self.filters = layer.output.shape[2]
+        if (layer_number == max_layers - 1) :
+            self.send_values_out = 1
+        else:
+            self.send_values_out = 0
+        for f in range(self.filters):
+            self.quantize[f][0] = 1
+            self.quantize[f][1] = 9
+        if (layer_number != 0) : 
+            self.skipIact = 1
+            
         #Calculate Iact Cycles
         self.needed_Iact_writes = math.ceil(params.PEs_Y/params.NUM_GLB_IACT)
 
         # Calculate the number of refreshes needed for the layer
         
-        self.used_iact_per_PE = 12
+        self.used_iact_per_PE = math.ceil(layer.input.shape[2]/4)
         self.used_wght_per_PE = 192
-        self.used_psum_per_PE = 16
+        self.used_psum_per_PE = math.ceil(layer.output.shape[2]/2)
 
-        self.used_Y_cluster = 8
+        self.used_Y_cluster = params.Clusters_Y
         self.used_X_cluster = 1
         self.kernel_per_pe_cluster = 1
 

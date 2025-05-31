@@ -17,8 +17,7 @@ def create_layer(layer_mode, filters, kernelsize, inputsize_x,  inputsize_y, str
         case "Depthwise_Convolution":
             model.add(tf.keras.layers.DepthwiseConv2D((kernelsize, kernelsize), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "FC":
-            model.add(tf.keras.Input(shape =(inputsize_x,)))
-            model.add(tf.keras.layers.Dense(outputsize, use_bias = True))
+            model.add(tf.keras.layers.Dense( input_shape=(1, inputsize_x), units=outputsize, use_bias = True))
         case "Pooling":
             model.add(tf.keras.Input(shape =(inputsize_x, inputsize_y, channels)))
             model.add(tf.keras.layers.AveragePooling2D(pool_size = inputsize, padding="valid"))

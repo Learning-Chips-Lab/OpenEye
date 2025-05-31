@@ -400,11 +400,12 @@ module OpenEye_FPGA #(
   localparam GET_IACT = 4'd3;
   localparam GET_WGHT = 4'd4;
   localparam GET_BIAS = 4'd5;
-  localparam START_CONVERTER = 4'd6;
-  localparam CONVERT_IACT = 4'd7;
-  localparam WAIT_CYCLE = 4'd8;
-  localparam WAIT_FOR_RESULTS = 4'd9;
-  localparam RECEIVE_PSUMS_TO_IACT = 4'd10;
+  localparam GET_QUANTIZE = 4'd6;
+  localparam START_CONVERTER = 4'd7;
+  localparam CONVERT_IACT = 4'd8;
+  localparam WAIT_CYCLE = 4'd9;
+  localparam WAIT_FOR_RESULTS = 4'd10;
+  localparam RECEIVE_PSUMS_TO_IACT = 4'd11;
 
   reg [3:0] fsm_current_state;
   reg [3:0] fsm_last_state;
@@ -888,6 +889,9 @@ module OpenEye_FPGA #(
   reg single_iteration2;
   reg [15:0]select_ram_counter;
   reg [7:0] select_ram_offset;
+
+  reg [ 6:0] quant_exp  [31:0];
+  reg [24:0] quant_mant [31:0];
   integer cr, cc, g;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
@@ -968,6 +972,10 @@ module OpenEye_FPGA #(
       iact_converter_cycles          <= 0;
       iact_converter_buffer_addr_cycles <= 0;
       send_data_reg                     <= 0;
+      for (a = 0; a < 32; a = a + 1) begin
+        quant_exp[a]  <= 0;
+        quant_mant[a] <= 0;
+      end
 
       for (a = 0; a < RAM_CELLS; a++) begin
         buffer_SP_en_r_reg[a]   <= 0;
@@ -1004,6 +1012,10 @@ module OpenEye_FPGA #(
           buffer_SP_addr_lower_limit <= 0;
           buffer_SP_addr_upper_limit <= 0;
           limit_increase_reg         <= 0;
+          for (a = 0; a < 32; a = a + 1) begin
+            quant_exp[a]  <= 0;
+            quant_mant[a] <= 0;
+          end
           if (enable_dma_i_reg) begin
             fsm_cycle       <= fsm_cycle + 1;
             reset_cycle_reg <= 0;
@@ -1135,7 +1147,6 @@ module OpenEye_FPGA #(
             buffer_SP_en_w_reg[a] <= 0;
           end
           wght_buffer_SP_en_w <= 0;
-
           if (enable_dma_i_reg) begin
             iact_converter_max_cycles                                   <= (iact_size_y + {{4{1'd0}}, kernel_size}) - 8'b00000001;
             min_standing_cycles                                         <= (needed_iact_cycles_reg * iact_channels_per_pe) / WORDS_PER_CYCLE[8-1:0];
@@ -1145,7 +1156,6 @@ module OpenEye_FPGA #(
               wght_buffer_SP_data_w[CLUSTER_ROWS*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b] 
               <= data_dma_i_reg[TRANS_BITWIDTH_WGHT+b];
             end
-
             if (fsm_wght_r != NUM_GLB_WGHT - 1) begin
               fsm_wght_r <= fsm_wght_r + 1;
             end else begin
@@ -1157,21 +1167,19 @@ module OpenEye_FPGA #(
                 fsm_cycle              <= fsm_cycle + 1;
                 wght_buffer_SP_en_w    <= 1;
                 wght_buffer_SP_wr_addr <= wght_buffer_SP_wr_addr + 1;
-
-                  wght_cnt  <= ({7'd0,wght_cycles_reg} * ({9'd0,wght_addr_len_reg} + {7'd0,input_activations_reg} * ({7'd0,filters_reg} / PARALLEL_MACS[12:0]))) - 1;
+                wght_cnt               <= ({7'd0,wght_cycles_reg} * ({9'd0,wght_addr_len_reg} + {7'd0,input_activations_reg} * ({7'd0,filters_reg} / PARALLEL_MACS[12:0]))) - 1;
                 if(fsm_cycle == (wght_cycles_reg * ({27'd0,wght_addr_len_reg} + input_activations_reg * ({26'd0,filters_reg} / PARALLEL_MACS))) - 1)begin
                   wght_cnt  <= ({9'd0,wght_addr_len_reg} + input_activations_reg * ({7'd0,filters_reg} / PARALLEL_MACS[12:0]));
                   fsm_cycle <= 0;
-                  fsm_last_state    <= GET_WGHT;
+                  fsm_last_state <= GET_WGHT;
                   if (!skipPsum_reg) begin
                     fsm_current_state <= GET_BIAS;
                   end else begin
-                    fsm_current_state <= START_CONVERTER;
+                    fsm_current_state <= GET_QUANTIZE;
                   end
                 end
               end
             end
-          end else begin
           end
         end
 
@@ -1180,11 +1188,28 @@ module OpenEye_FPGA #(
           wght_buffer_SP_en_w <= 0;
           if (psum_cnt != 0) begin
             fsm_last_state         <= GET_BIAS;
-            fsm_current_state      <= START_CONVERTER;
+            fsm_current_state      <= GET_QUANTIZE;
             wght_buffer_SP_wr_addr <= 0;
-            ready_dma_o            <= 0;
             limit_increase_reg     <= ((iact_size_x*iact_channels_per_pe)/(WORDS_PER_CYCLE[7:0]*4));
             fsm_cycle              <= 0;
+          end
+        end
+
+        GET_QUANTIZE: begin
+          ready_dma_o         <= 1;
+          wght_buffer_SP_en_w <= 0;
+          if (enable_dma_i_reg) begin
+            fsm_cycle <= fsm_cycle + 1;
+            quant_exp[2*fsm_cycle]    <= data_dma_i_reg[31:25];
+            quant_mant[2*fsm_cycle]   <= data_dma_i_reg[24:0];
+            quant_exp[2*fsm_cycle+1]  <= data_dma_i_reg[63:57];
+            quant_mant[2*fsm_cycle+1] <= data_dma_i_reg[56:32];
+          end
+          if (fsm_cycle == 16 - 1) begin
+            fsm_cycle <= 0;
+            fsm_last_state    <= GET_QUANTIZE;
+            fsm_current_state <= START_CONVERTER;
+            ready_dma_o       <= 0;
           end
         end
         
@@ -1645,39 +1670,6 @@ module OpenEye_FPGA #(
     end
   end
 
-reg [ 6:0] quant_exp  [31:0];
-reg [24:0] quant_mant [31:0];
-reg [ 4:0] position;
-integer quant_int;
-always @(posedge clk_i, negedge rst_n) begin
-  if (!rst_n) begin  ///Reset
-    for (quant_int = 0; quant_int < 32; quant_int = quant_int + 1) begin
-      quant_exp[quant_int]  <= 0;
-      quant_mant[quant_int] <= 0;
-    end
-    position <= 0;
-  end else begin
-    if (fsm_current_state == GET_PARAMETERS) begin
-      position <= 0;
-      for (quant_int = 0; quant_int < 32; quant_int = quant_int + 1) begin
-        quant_exp[quant_int]  <= 0;
-        quant_mant[quant_int] <= 0;
-      end
-    end
-    if ((fsm_current_state == START_CONVERTER) |(fsm_current_state == CONVERT_IACT))begin
-      if (enable_dma_i_reg) begin
-        position <= position + 1;
-        if (position == 16 - 1) begin
-          position <= 0;
-        end
-        quant_exp[position]    <= data_dma_i_reg[31:25];
-        quant_mant[position]   <= data_dma_i_reg[24:0];
-        quant_exp[position+1]  <= data_dma_i_reg[63:57];
-        quant_mant[position+1] <= data_dma_i_reg[56:32];
-      end
-    end
-  end
-end
 localparam PSUM_IDLE = 0;
 localparam WAIT_TO_SEND_READY_SIGNAL = 1;
 localparam CALCULATE_PSUM = 2;

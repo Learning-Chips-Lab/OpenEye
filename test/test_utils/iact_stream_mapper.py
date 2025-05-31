@@ -376,6 +376,29 @@ class DenseIactStreamMapper(IactStreamMapper):
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
 
+    def get_iact_stream(self):
+        if (not self.params.SERIAL) :
+            iact_stream = [[[[] for c in range(self.params.NUM_GLB_IACT)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
+            for cl_x in range(self.params.Clusters_X):
+                for cl_y in range(self.params.Clusters_Y):
+                    for router in range(self.params.NUM_GLB_IACT):
+                        iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
+            iact_stream = self.create_complete_iact_stream(iact_stream)
+        else :
+            iact_stream = []
+            if (self.layer_params.skipIact == 0) :
+                bitwidth = self.params.IACT_Bitwidth
+                dma_bitwidth = self.params.DMA_Bit_AXI
+                values_per_word = dma_bitwidth // bitwidth
+                print(self.dram_fmap)
+                for i in range(0, len(self.dram_fmap), values_per_word):
+                    word = 0
+                    for j in range(values_per_word):
+                        if i + j < len(self.dram_fmap):
+                            val_twos = gtu.to_twos_complement(self.dram_fmap[i + j], bitwidth)
+                            word |= val_twos << (j * bitwidth)
+                    iact_stream.append(word)
+            return iact_stream
     def write_iact_data_glb(self, cl_x, cl_y, router):
         storage = []
         for cycle in range(self.layer_params.needed_refreshes_mx[self.layer_repetition][1],self.layer_params.needed_refreshes_mx[self.layer_repetition][2]):

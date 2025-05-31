@@ -164,8 +164,26 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
         for layer_repetition in range(layer_params.needed_total_transmissions):
             output_order.append(return_dict[layer_repetition])
     elif "Dense" in str(layer):
+        filter = 0
+        layer_repetition = 0
+        file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
         if(params.SERIAL):
-            assert False, "not realized yet"
+            for refresh in range(layer_params.used_psum_per_PE * params.Clusters_X):
+                partial_result_a = gtu.to_twos_complement_string(0,20)
+                partial_result_b = gtu.to_twos_complement_string(0,20)
+                for counter in range(params.PARALLEL_MACS):
+                    filter = filter + 1
+                    try:
+                        if (counter == 0):
+                            partial_result_b = gtu.to_twos_complement_string(calculated_results[filter],20)
+                        else:
+                            partial_result_a = gtu.to_twos_complement_string(calculated_results[filter],20)
+                    except:
+                        partial_result_b = partial_result_b
+                        partial_result_a = partial_result_a
+
+                file_dma_ref.write(partial_result_a + partial_result_b + "\n")
+            file_dma_ref.close()
         else:
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
             for layer_repetition in range(layer_params.needed_total_transmissions):
@@ -199,9 +217,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
                             file_dma_ref[layer_repetition].write("\n")
                             dma_line = 0
                 file_dma_ref[layer_repetition].close()
-    
     logger.info("Reference Output calculated.")
-
     return output_order
 
 def write_weight_file(layer, layer_number, dram):
@@ -263,7 +279,7 @@ def write_psum_file(layer, layer_number, dram, calculated_results):
     jobs = []
     if "Dense" in str(layer):
         psum_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_0.csv')
-        for x in range(layer.output.shape[1]):
+        for x in range(layer.output.shape[2]):
             psum_ref.write(str(calculated_results[x]))
             psum_ref.write("\n")
         psum_ref.close()
@@ -305,11 +321,11 @@ def write_psum_file_conv_mp(f, layer, calculated_results, return_dict):
 def collect_results(layer, layer_number, layer_params, dram, serial):
     #Calculate Bias
     if "Dense" in str(layer):
-        calculated_results = [0 for i in range(layer.output.shape[1])]
+        calculated_results = [0 for i in range(layer.output.shape[2])]
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
-        for x in range(layer.output.shape[1]):
+        for x in range(layer.output.shape[2]):
             p = mp.Process(target = calculate_dense_results_mp, args = (x, layer, layer_number, dram, calculated_results[x], return_dict))
             p.start()
             jobs.append(p)
@@ -361,7 +377,7 @@ def collect_results(layer, layer_number, layer_params, dram, serial):
     return calculated_results
 
 def calculate_dense_results_mp(x, layer, layer_number, dram, calculated_results,return_dict):
-    for c in range(layer.input.shape[1]):
+    for c in range(layer.input.shape[2]):
         calculated_results = int(calculated_results + dram.weights[layer_number][x][c] * dram.fmap[layer_number][c])
     return_dict[x] = calculated_results
 

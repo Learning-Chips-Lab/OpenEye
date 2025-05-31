@@ -306,6 +306,9 @@ async def await_enable_signal(ptp, dut):
 
 async def await_ready_signal(ptp, dut):
 
+    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     while (dut.ready_dma_o.value != 1):
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     pass

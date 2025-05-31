@@ -129,7 +129,7 @@ class ConvMapper(LayerMapper):
     def write_quantize(self, params, layer_params, layer_repetition):
         dma_line = 0
         dma_storage = []
-        for f in range(math.ceil(layer_params.filters/2)):
+        for f in range(math.ceil(16)):
             dma_line = 0
             dma_line = dma_line + (layer_params.quantize[2*f][0] << 0)
             dma_line = dma_line + (layer_params.quantize[2*f][1] << 25)
