@@ -1329,6 +1329,9 @@ module OpenEye_FPGA #(
           end
         end
         RECEIVE_PSUMS_TO_IACT: begin
+          if (fsm_psum_current_state == WAIT_FOR_SENDING_RESULTS) begin
+            choose_iact_buffer       <= 0;
+          end
           if (single_iteration & (single_iteration2 == 0)) begin
             single_iteration2 <= 1;
             iact_channels_counter <= iact_channels_counter + 1;
@@ -1449,6 +1452,9 @@ module OpenEye_FPGA #(
           end
         end
         WAIT_FOR_RESULTS: begin
+          if (fsm_psum_current_state == WAIT_FOR_SENDING_RESULTS) begin
+            choose_iact_buffer       <= 0;
+          end
           if (single_iteration & (single_iteration2 == 0)) begin
             single_iteration2 <= 1;
             iact_channels_counter <= iact_channels_counter + 1;
@@ -2111,7 +2117,7 @@ reg [7:0] current_filter;
 
   wire                                           buffer_SP_en_r     [RAM_CELLS-1:0];
   wire                                           buffer_SP_en_w     [RAM_CELLS-1:0];
-  wire [             RAM_CELLS_ADDR_WIDTH-1:0]   buffer_SP_addr     [RAM_CELLS-1:0];
+  wire [             RAM_CELLS_ADDR_WIDTH-2:0]   buffer_SP_addr     [RAM_CELLS-1:0];
   wire [          RAM_CELLS_WORD_BITWIDTH-1:0]   buffer_SP_data_w   [RAM_CELLS-1:0];
   wire [2*RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r_w;
   wire [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0]   buffer_SP_data_r;
@@ -2136,7 +2142,7 @@ reg [7:0] current_filter;
             .clk_i(clk_i),
             .rd_en_i(buffer_SP_en_r[j_gen] & !buffer_SP_en_w[j_gen]),
             .wr_en_i(buffer_SP_en_w[j_gen]),
-            .addr_i(buffer_SP_addr[j_gen]),
+            .addr_i({choose_iact_buffer,buffer_SP_addr[j_gen]}),
             .data_i(buffer_SP_data_w[j_gen]),
             .data_o(buffer_SP_data_r_w[j_gen*RAM_CELLS_WORD_BITWIDTH+:RAM_CELLS_WORD_BITWIDTH])
         );
