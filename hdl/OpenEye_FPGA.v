@@ -1180,9 +1180,8 @@ module OpenEye_FPGA #(
               fsm_wght_r <= fsm_wght_r + 1;
             end else begin
               fsm_wght_r <= 0;
-              if ((fsm_y_cl + 1) != CLUSTER_ROWS) begin
               fsm_y_cl <= fsm_y_cl + 1;
-              end else begin
+              if ((fsm_y_cl == CLUSTER_ROWS - 1) | (fully_connected_layer & (fsm_y_cl == (CLUSTER_ROWS/2) - 1))) begin
                 fsm_y_cl               <= 0;
                 fsm_cycle              <= fsm_cycle + 1;
                 wght_buffer_SP_en_w    <= 1;
