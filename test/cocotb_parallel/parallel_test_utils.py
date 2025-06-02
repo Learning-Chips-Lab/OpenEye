@@ -224,8 +224,8 @@ def write_weight_file(layer, layer_number, dram):
 
     if "Dense" in str(layer):
         wght_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_0.csv')
-        for c in range(layer.input.shape[1]):
-            for x in range(layer.output.shape[1]):
+        for c in range(layer.input.shape[2]):
+            for x in range(layer.output.shape[2]):
                 wght_ref.write(str(int(dram.weights[layer_number][x][c])).rjust(5) + ";")
             wght_ref.write("\n")
         wght_ref.close()
@@ -253,7 +253,7 @@ def write_weight_file(layer, layer_number, dram):
 def write_iact_file(layer, layer_number, dram):
     if "Dense" in str(layer):
         iact_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/iact/iact_ref' + '_0.csv')
-        for c in range(layer.input.shape[1]):
+        for c in range(layer.input.shape[2]):
             iact_ref.write(str(int(dram.fmap[layer_number][c])))
             iact_ref.write("\n")
         iact_ref.close()
@@ -562,7 +562,6 @@ def calculate_conv_results_mp(f, layer, layer_number, layer_params, serial, dram
                                     calculated_results[j][i] = int(calculated_results[j][i] + \
                                                                     dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)] * \
                                                                     dram.fmap[layer_number][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
-
                                 else:
                                     if (serial) :
                                         pass

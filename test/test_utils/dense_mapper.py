@@ -81,8 +81,9 @@ class DenseMapper(LayerMapper):
             dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.used_channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
             dma_storage.append(dma_line)
             dma_line = 0
-            #dma_line = math.ceil(layer_params.diff_iact_layer)
             dma_line = dma_line + math.ceil(layer_params.diff_iact_layer_next_layer << 8)
+            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage << 16)
+            dma_line = dma_line + math.ceil(layer_params.fully_connected << 17)
             dma_storage.append(dma_line)
             dma_line = 0
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
@@ -124,7 +125,7 @@ class DenseMapper(LayerMapper):
     def write_quantize(self, params, layer_params, layer_repetition):
         dma_line = 0
         dma_storage = []
-        for f in range(math.ceil(layer_params.filters/2)):
+        for f in range(math.ceil(16)):
             dma_line = 0
             dma_line = dma_line + (layer_params.quantize[2*f][0] << 0)
             dma_line = dma_line + (layer_params.quantize[2*f][1] << 25)
@@ -148,35 +149,6 @@ class DenseMapper(LayerMapper):
                             line = line + (1 << (params.Iact_Router_Bits * router_cycle))
                         else:
                             storage[cl_x][cl_y][router] = 1
-                    else:
-                        if(layer_params.used_PEs_Y > 1):
-                            if((cl_y % layer_params.used_Y_cluster) == 0):
-                                if(params.SERIAL):
-                                    line = line + (9 << (params.Iact_Router_Bits * router_cycle))
-                                else:
-                                    storage[cl_x][cl_y][router] = 9
-                            else:
-                                if(((cl_y + 1) % layer_params.used_Y_cluster) == 0):
-                                    if(params.SERIAL):
-                                        line = line + (17 << (params.Iact_Router_Bits * router_cycle))
-                                    else:
-                                        storage[cl_x][cl_y][router] = 17
-                                else:
-                                    if(params.SERIAL):
-                                        line = line + (25 << (params.Iact_Router_Bits * router_cycle))
-                                    else:
-                                        storage[cl_x][cl_y][router] = 25
-                        else:
-                            if(cl_y == 0):
-                                if(params.SERIAL):
-                                    line = line + (3 << (params.Iact_Router_Bits * router_cycle))
-                                else:
-                                    storage[cl_x][cl_y][router] = 3
-                            else:
-                                if(params.SERIAL):
-                                    line = line + (33 << (params.Iact_Router_Bits * router_cycle))
-                                else:
-                                    storage[cl_x][cl_y][router] = 33
                     router_cycle = router_cycle + 1
                     if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Iact_Router_Bits))):
                         router_cycle = 0
@@ -198,16 +170,11 @@ class DenseMapper(LayerMapper):
         for cl_x in range(params.Clusters_X):
             for cl_y in range(params.Clusters_Y):   
                 for router in range(params.Wght_Routers):
-                    if((cl_x == 0) | (layer_params.single_cluster_computation == 1)):
-                        if(params.SERIAL):
-                            line = line + (0 << (params.Wght_Router_Bits * router_cycle))
-                        else:
-                            storage[cl_x][cl_y][router] = 0
+                    if(params.SERIAL):
+                        line = line + (0 << (params.Wght_Router_Bits * router_cycle))
                     else:
-                        if(params.SERIAL):
-                            line = line + (1 << (params.Wght_Router_Bits * router_cycle))
-                        else:
-                            storage[cl_x][cl_y][router] = 1
+                        storage[cl_x][cl_y][router] = 0
+                    
                     router_cycle = router_cycle + 1
                     if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Wght_Router_Bits))):
                         router_cycle = 0
