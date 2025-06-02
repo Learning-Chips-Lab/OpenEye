@@ -106,6 +106,14 @@ class DensePsumStreamMapper(PsumStreamMapper):
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
         super().__init__(params, layer_params, layer_repetition, dram_layer_content)
 
+    def get_psum_stream(self):
+        block_length = 2
+        psum_stream = []
+        for i in range(8):
+            psum_stream.extend([gtu.to_twos_complement(self.dram_bias[i],20) + (gtu.to_twos_complement(self.dram_bias[i],20) * 2**20)] * block_length)
+
+        return psum_stream
+    
     def write_psum_storage(self, cl_x, cl_y, router, cycle):
         storage = []
         for part_data_num in range(math.ceil(self.layer_params.used_psum_per_PE/2)):

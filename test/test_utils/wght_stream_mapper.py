@@ -303,8 +303,51 @@ class DenseWghtStreamMapper(WghtStreamMapper):
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
 
-    def write_wght_data_storage(self, cl_x, cl_y, router):
+    def get_wght_stream(self):
+        storage = [[[[] for c in range(self.params.Wght_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
 
+        wght_stream = []
+        for layer_repetition_loop in range(self.layer_params.needed_wght_transmissions) :
+            self.layer_repetition = layer_repetition_loop
+            temp_storage = [[[[] for c in range(self.params.Wght_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
+            for cl_x in range(self.params.Clusters_X):
+                for cl_y in range(4):
+                    for router in range(self.params.Wght_Routers):
+                        if(self.layer_params.computing_mx[cl_x][cl_y][router][0] == 1):
+                            spad = self.write_wght_pe(cl_x, cl_y, router)
+
+                            if (self.sparse_data == 1):
+                                temp_storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
+                            else:
+                                temp_storage[cl_x][cl_y][router] = spad
+            wght_stream.extend(self.create_complete_wght_stream(temp_storage))
+
+        return wght_stream
+            
+    def create_complete_wght_stream(self, spad_storage):
+        params = self.params
+
+        stream = [[[[] for c in range(params.Wght_Routers)] for b in range(4)] for a in range(params.Clusters_X)]
+        for cl_x in range(params.Clusters_X):
+            for cl_y in range(4):
+                for router in range(params.Wght_Routers):
+
+                    current_spad = spad_storage[cl_x][cl_y][router]
+                    stream[cl_x][cl_y][router] = self.create_pe_addr_wght_stream(current_spad)
+                    stream[cl_x][cl_y][router].extend(self.create_pe_data_wght_stream(current_spad))
+        if(params.SERIAL):
+            temp_stream = stream
+            stream = []
+            for word in range(len(temp_stream[0][0][0])):
+                for cl_y in range(4):
+                    for router in range(params.NUM_GLB_WGHT):
+                        try:
+                            stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
+                        except:
+                            stream.append(0)
+        return stream
+
+    def write_wght_data_storage(self, cl_x, cl_y, router):
         layer_repetition = self.layer_repetition
         layer_params = self.layer_params
         params = self.params
@@ -333,7 +376,6 @@ class DenseWghtStreamMapper(WghtStreamMapper):
             if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
         return spad_storage
-        
     def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
 
         layer_params = self.layer_params

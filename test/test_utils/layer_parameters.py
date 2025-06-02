@@ -44,6 +44,7 @@ class LayerParameters(object):
 
         self.iact_addr_len = 1
         self.iact_data_len = 3
+        self.choose_iact_storage = 0
         
         self.strideX = 1
         self.strideY = 1
@@ -178,7 +179,9 @@ class LayerParameters(object):
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         self.compute_total_computations(layer)
             
+        self.choose_iact_storage = 1
         self.filters = layer.filters
+        self.fully_connected = 0
         if (layer_number == max_layers - 1) :
             self.send_values_out = 1
         else:
@@ -188,7 +191,7 @@ class LayerParameters(object):
             self.quantize[f][1] = 9
         if (layer_number != 0) : 
             self.skipIact = 1
-        print(self.skipIact)
+            self.choose_iact_storage = 0
         self.input_shape = layer.input.shape
         self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size
@@ -559,7 +562,11 @@ class LayerParameters(object):
     def write_dense_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         """ Write the weights and bias of a Conv2D layer to a file. """
             
+        self.used_channels = layer.input.shape[2]
+        self.iact_size_x = 1
+        self.iact_size_y = layer.input.shape[1]
         self.filters = layer.output.shape[2]
+        self.fully_connected = 1
         if (layer_number == max_layers - 1) :
             self.send_values_out = 1
         else:
@@ -576,8 +583,8 @@ class LayerParameters(object):
         # Calculate the number of refreshes needed for the layer
         
         self.used_iact_per_PE = math.ceil(layer.input.shape[2]/4)
-        self.used_wght_per_PE = 192
-        self.used_psum_per_PE = math.ceil(layer.output.shape[2]/2)
+        self.used_wght_per_PE = math.ceil(layer.input.shape[2]*layer.output.shape[2]/(4*params.Clusters_X))
+        self.used_psum_per_PE = math.ceil(layer.output.shape[2]/params.Clusters_X)
 
         self.used_Y_cluster = params.Clusters_Y
         self.used_X_cluster = 1

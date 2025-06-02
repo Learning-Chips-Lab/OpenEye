@@ -164,7 +164,6 @@ async def single_layer_test(dut):
 
     # Process the layers of the model one after another
     max_layers = len(model.layers)
-    print(str(max_layers))
     for layer_number, layer in enumerate(model.layers):
         if("Pooling" in str(layer)):
             slo.pool(dram, layer, layer_number)

@@ -390,7 +390,6 @@ class DenseIactStreamMapper(IactStreamMapper):
                 bitwidth = self.params.IACT_Bitwidth
                 dma_bitwidth = self.params.DMA_Bit_AXI
                 values_per_word = dma_bitwidth // bitwidth
-                print(self.dram_fmap)
                 for i in range(0, len(self.dram_fmap), values_per_word):
                     word = 0
                     for j in range(values_per_word):
