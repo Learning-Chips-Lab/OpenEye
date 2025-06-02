@@ -235,7 +235,6 @@ module OpenEye_FPGA #(
   reg [$clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg;
   reg [3:0] needed_iact_cycles_reg;
   reg [$clog2(PSUM_PER_PE+1)-1:0] filters_reg;
-  reg [$clog2(PSUM_PER_PE+1)-1:0] filters_per_pe_reg;
   reg [$clog2(IACT_ADDR_PER_PE+1)-1:0] iact_addr_len_reg;
   reg [$clog2(WGHT_ADDR_PER_PE)-1:0] wght_addr_len_reg;
   reg [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_reg;
@@ -301,7 +300,7 @@ module OpenEye_FPGA #(
   reg [BUFFER_WIDTH-1:0] psum_cnt;
 
   // Register for IACT Stream
-  reg [RAM_CELLS_ADDR_WIDTH-1:0] current_buffer_addr;
+  reg [RAM_CELLS_ADDR_WIDTH-2:0] current_buffer_addr;
   reg [ 7:0] current_buffer_n;
   reg [ 7:0] current_buffer_n_1;
   reg [ 7:0] current_channel;
@@ -319,7 +318,9 @@ module OpenEye_FPGA #(
   // Register for IACT Converter Buffer
   reg buffer_SP_en_r_reg[RAM_CELLS-1:0];
   reg buffer_SP_en_w_reg[RAM_CELLS-1:0];
-  reg [RAM_CELLS_ADDR_WIDTH-1:0] buffer_SP_addr_reg[RAM_CELLS-1:0];
+  reg choose_iact_buffer;
+  reg fully_connected_layer;
+  reg [RAM_CELLS_ADDR_WIDTH-2:0] buffer_SP_addr_reg[RAM_CELLS-1:0];
   reg [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w_reg[RAM_CELLS-1:0];
 
   // Registers for IACT Converter
@@ -488,26 +489,33 @@ module OpenEye_FPGA #(
           if (fsm_iact_params > 0) begin
             fsm_iact_params  <= fsm_iact_params - 1;
             iact_converter_x <= iact_converter_x + (PE_COLUMNS * 2);
-            if (iact_converter_x >= iact_size_x - (PE_COLUMNS * 2)) begin
+            if (iact_converter_x + (PE_COLUMNS * 2) >= iact_size_x) begin
               iact_converter_x <= 0;
               iact_converter_c <= iact_converter_c + iact_channels_per_pe;
-              if (iact_converter_c == iact_channels - iact_channels_per_pe) begin
+              if (iact_converter_c + iact_channels_per_pe == iact_channels) begin
                 iact_converter_c <= 0;
                 iact_converter_y <= iact_converter_y + 1;
-                if (iact_converter_y >= iact_size_y - 1) begin
+                if (iact_converter_y + 1 >= iact_size_y) begin
                 iact_converter_y <= 0;
                 end
               end
             end
             for (a = 0; a < CLUSTER_COLUMNS; a++) begin 
-            iact_converter_params_reg[a
-            ][fsm_row[$clog2(
-                CLUSTER_ROWS
-            )-1:0]][35:32] <= fsm_row_offset;
               iact_converter_params_reg[a
               ][fsm_row[$clog2(
                   CLUSTER_ROWS
-              )-1:0]][31:24] <= iact_converter_x + a[7:0] * PE_COLUMNS[7:0];
+              )-1:0]][35:32] <= fsm_row_offset;
+              if (fully_connected_layer) begin
+                iact_converter_params_reg[a
+                ][fsm_row[$clog2(
+                    CLUSTER_ROWS
+                )-1:0]][31:24] <= iact_converter_x;
+              end else begin
+                iact_converter_params_reg[a
+                ][fsm_row[$clog2(
+                    CLUSTER_ROWS
+                )-1:0]][31:24] <= iact_converter_x + a[7:0] * PE_COLUMNS[7:0];
+              end
 
               iact_converter_params_reg[a
               ][fsm_row[$clog2(
@@ -903,7 +911,6 @@ module OpenEye_FPGA #(
       needed_y_cls_reg          <= 0;
       needed_iact_cycles_reg    <= 0;
       filters_reg               <= 0;
-      filters_per_pe_reg        <= 0;
       iact_addr_len_reg         <= 0;
       wght_addr_len_reg         <= 0;
       stride_x_reg              <= 0;
@@ -1161,7 +1168,7 @@ module OpenEye_FPGA #(
             end else begin
               fsm_wght_r <= 0;
               if ((fsm_y_cl + 1) != CLUSTER_ROWS) begin
-                fsm_y_cl <= fsm_y_cl + 1;
+              fsm_y_cl <= fsm_y_cl + 1;
               end else begin
                 fsm_y_cl               <= 0;
                 fsm_cycle              <= fsm_cycle + 1;
