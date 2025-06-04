@@ -368,6 +368,14 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                 channel = math.floor((layer_repetition%layer_params.iact_transmissions_pe)*params.Wght_Routers*layer_params.used_iact_per_PE) + \
                 math.floor(position/layer_params.used_psum_per_PE) + \
                 router * layer_params.used_iact_per_PE
+
+                filters =  (position%layer_params.used_psum_per_PE) + \
+                cl_x * layer_params.used_psum_per_PE + \
+                (math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.psum_transmissions_pe) * params.Clusters_X * params.Clusters_Y * layer_params.used_psum_per_PE
+
+                channel = math.floor((layer_repetition%layer_params.iact_transmissions_pe)*params.Wght_Routers*layer_params.used_iact_per_PE) + \
+                math.floor(position/layer_params.used_psum_per_PE) + \
+                cl_y * layer_params.used_iact_per_PE
                 try:
                     spad_storage[words_in_storage][spad_val_number][0] = dram[filters][channel]
                     spad_storage[words_in_storage][spad_val_number][1] = overhead_counter

@@ -599,7 +599,7 @@ class LayerParameters(object):
             for y_cluster in range(params.Clusters_Y):
                 for y_pe in range(params.PEs_Y):
                     for x_pe in range(params.PEs_X):
-                        if(x_pe != 0):
+                        if((x_pe != 0) | (y_pe != 0) | (y_cluster >= 4)):
                             self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
         
         self.psum_transmissions_pe = math.ceil(layer.output.shape[1]/(self.used_psum_per_PE * params.Clusters_X * params.Clusters_Y))

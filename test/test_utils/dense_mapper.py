@@ -74,8 +74,8 @@ class DenseMapper(LayerMapper):
             dma_line = dma_line + (layer_params.psum_delay << 17)
             dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21)
             #dma_line = dma_line + (layer_params.kernel_size[1] << 25)
-            dma_line = dma_line + (layer_params.iact_x_lines << 29)
-            dma_line = dma_line + (math.ceil(layer_params.filters/params.Iacts_per_PE) << 37)
+            dma_line = dma_line + (1 << 29)
+            dma_line = dma_line + (1 << 37)
             #dma_line = dma_line + (math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 45)
             dma_storage.append(dma_line)
             dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.used_channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
