@@ -481,10 +481,8 @@ module iact_stream_constructor #(
 
           end
         endcase
-        //ram_var  = 0; EINFÜGEN
-        //byte_var = 0;
-        ram_var = ((((channels * iact_size_x_i * iact_size_y_i)/ 8) + (iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[0])) / 8)) % RAM_CELLS;
-        byte_var = ((x_reg[0]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
+        ram_var  = 0;
+        byte_var = 0;
         if (enable_config) begin
           fsm_row_offset         <= params[35:32];
           x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
