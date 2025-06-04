@@ -89,7 +89,7 @@ module iact_stream_constructor #(
     reg [15:0] finished_output_channels;
     reg [7:0] iact_y_counter;
     reg [12:0] line_offset;
-    reg [8:0] y_cluster_counter;
+    reg [3:0] y_cluster_counter;
     integer pec, per, b;
     always @(posedge clk_i, negedge rst_ni) begin
       if (!rst_ni) begin
@@ -142,7 +142,7 @@ module iact_stream_constructor #(
             iact_enable_o <= 0;
             if (fsm_row_offset == y_cluster_counter) begin
               ram_rd_en             <= 1;
-              if (current_iact_cycle_reg != {8{1'b1}}) begin
+              if (current_iact_cycle_reg != {16{1'b1}}) begin
                 iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
               end
               iact_data_o   <= ram_data_o;
@@ -160,8 +160,7 @@ module iact_stream_constructor #(
                 if (((pec[3:0] + per[3:0] + (fsm_row_offset * PE_Y)) >=  (NUM_GLB_IACT[3:0] * current_iact_cycle_mod_reg[3:0]))
                 &    (pec[3:0] + per[3:0] + (fsm_row_offset * PE_Y))  <  (NUM_GLB_IACT[3:0] *(current_iact_cycle_mod_reg[3:0] + 1))
                 ) begin
-                  iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+: $clog2(NUM_GLB_IACT+1)] <=
-                      (pec[3:0] + per[3:0]  + (fsm_row_offset * PE_Y) - (NUM_GLB_IACT[3:0] * (current_iact_cycle_mod_reg[3:0])));
+                  iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+: $clog2(NUM_GLB_IACT+1)] <= (pec[3:0] + per[3:0]  + (fsm_row_offset * PE_Y) - (NUM_GLB_IACT[3:0] * (current_iact_cycle_mod_reg[3:0])));
                 end else begin
                   iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+: $clog2(NUM_GLB_IACT+1)] <=
                       NUM_GLB_IACT;
@@ -179,7 +178,7 @@ module iact_stream_constructor #(
             if (ram_inc_counter == 0) begin
               current_iact_cycle_reg     <= current_iact_cycle_reg + 1;
               current_iact_cycle_mod_reg <= current_iact_cycle_mod_reg + 1;
-              if (current_iact_cycle_mod_reg == needed_iact_router_cycles_i - 1) begin
+              if (current_iact_cycle_mod_reg + 1 == {{4{1'd0}},needed_iact_router_cycles_i}) begin
                 current_iact_cycle_mod_reg <= 0;
               end
               //All Iacts per Computing Cycle are transmitted
@@ -196,10 +195,10 @@ module iact_stream_constructor #(
                     iact_y_counter       <= iact_y_counter + 1;
                     if (iact_y_counter == needed_wght_cycles_i - 1) begin
                       iact_y_counter           <= 0;
-                      ram_rd_addr              <= needed_iact_cycles_reg * (({{4{1'd0}},iact_channels_i} + 1)/2) * (1 + {{4{1'd0}},finished_output_channels});
-                      line_offset              <= needed_iact_cycles_reg * (({{4{1'd0}},iact_channels_i} + 1)/2) * (1 + {{4{1'd0}},finished_output_channels});
+                      ram_rd_addr              <= {{9{1'd0}},needed_iact_cycles_reg} * (({{5{1'd0}},iact_channels_i} + 1)/2) * (1 + finished_output_channels[12:0]);
+                      line_offset              <= {{9{1'd0}},needed_iact_cycles_reg} * (({{5{1'd0}},iact_channels_i} + 1)/2) * (1 + finished_output_channels[12:0]);
                       finished_output_channels <= finished_output_channels + 1;
-                      if (finished_output_channels == iact_size_y_i - 1) begin
+                      if (finished_output_channels == {{8{1'd0}},iact_size_y_i} - 1) begin
                         finished_output_channels <= 0;
                         ram_rd_addr              <= 0;
                         line_offset              <= 0;
@@ -457,7 +456,7 @@ module iact_stream_constructor #(
                 end
               end
             end
-            if (fsm_cycle == ((((needed_iact_cycles_reg * ((iact_channels_i+1)/WORDS_PER_CYCLE) * (x_lines_reg)))) - 1)) begin
+            if (fsm_cycle == ((((needed_iact_cycles_reg * (({{8{1'd0}},iact_channels_i}+1)/WORDS_PER_CYCLE) * (x_lines_reg)))) - 1)) begin
               fsm_cycle         <= 0;
               current_cycle     <= current_cycle + 1;
               address_storage   <= ram_wr_addr + 2;
