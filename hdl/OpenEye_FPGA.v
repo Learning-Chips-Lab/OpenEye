@@ -178,6 +178,21 @@ module OpenEye_FPGA #(
     input clk_i,
     input rst_ni,
 
+    //DEBUG OUTPUT IACT
+    output reg                               debug_iact_we,
+    output reg                               debug_iact_re,
+    output reg [RAM_CELLS_ADDR_WIDTH-1:0]    debug_iact_addr,
+    output reg [RAM_CELLS_WORD_BITWIDTH-1:0] debug_iact_data_i,
+    output reg [RAM_CELLS_WORD_BITWIDTH-1:0] debug_iact_data_o,
+
+    //DEBUG OUTPUT PSUM
+
+    output reg                             debug_psum_we,
+    output reg                             debug_psum_re,
+    output reg [BUFFER_WIDTH-1:0]          debug_psum_addr,
+    output reg [TRANS_BITWIDTH_PSUM*2-1:0] debug_psum_data_i,
+    output reg [TRANS_BITWIDTH_PSUM*2-1:0] debug_psum_data_o,
+
     output reg                      ready_dma_o,
     input      [DMA_BITWIDTH-1 : 0] data_dma_i,
     input                           enable_dma_i,
@@ -2149,6 +2164,12 @@ reg [7:0] current_filter;
         );
     end
 
+    assign debug_iact_we     = buffer_SP_en_r[0] & !buffer_SP_en_w[0];
+    assign debug_iact_re     = buffer_SP_en_w[0];
+    assign debug_iact_addr   = {choose_iact_buffer,buffer_SP_addr[0]};
+    assign debug_iact_data_i = buffer_SP_data_w[0];
+    assign debug_iact_data_o = buffer_SP_data_r_w[0+:RAM_CELLS_WORD_BITWIDTH];
+
     // IACT Converter
     for (i_gen = 0; i_gen < CLUSTER_COLUMNS; i_gen++) begin : IACT_CONVERTER_X
       for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen++) begin : IACT_CONVERTER_Y
@@ -2228,6 +2249,12 @@ reg [7:0] current_filter;
         end
       end
     end
+
+    assign debug_psum_re     = psum_buffer_SP_en_r[0] & !psum_buffer_SP_en_w[0];
+    assign debug_psum_we     = psum_buffer_SP_en_w[0];
+    assign debug_psum_addr   = psum_buffer_SP_addr[0+:BUFFER_WIDTH];
+    assign debug_psum_data_i = psum_buffer_SP_data_w[0+:TRANS_BITWIDTH_PSUM*2];
+    assign debug_psum_data_o = psum_buffer_SP_data_r[0+:TRANS_BITWIDTH_PSUM*2];
 
     wire [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i_oep_w;
     wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_oep_w;
