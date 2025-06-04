@@ -148,7 +148,7 @@ module OpenEye_Parallel #(
     input                                                      status_reg_enable_i,
     input                                                      data_mode_i,
     input      [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i,
-    input      [                                         15:0] needed_cycles_i,
+    input      [                                         19:0] needed_cycles_i,
     input      [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i,
     input      [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                                          3:0] needed_iact_cycles_i,
@@ -201,7 +201,7 @@ module OpenEye_Parallel #(
   ///Register, that occupy hyperparameters
   reg                                                  data_mode_reg;
   reg  [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_reg;
-  reg  [                                         15:0] needed_cycles_reg;
+  reg  [                                         19:0] needed_cycles_reg;
   reg  [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_reg;
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg;
   reg  [                                          3:0] needed_iact_cycles_reg;
@@ -221,7 +221,7 @@ module OpenEye_Parallel #(
   reg  [                                         15:0] fsm_psum_cycle;
   reg                                                  data_write_enable;
   reg                                                  results_ready;
-  reg  [                                         15:0] finished_cycles;
+  reg  [                                         19:0] finished_cycles;
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] storage_cycles;
 
   ///Register, that configure the chip
@@ -258,7 +258,7 @@ module OpenEye_Parallel #(
   wire                                                 status_reg_enable_i_w;
   wire                                                 data_mode_i_w;
   wire [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i_w;
-  wire [                                         15:0] needed_cycles_i_w;
+  wire [                                         19:0] needed_cycles_i_w;
   wire [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i_w;
   wire [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i_w;
   wire [                                          3:0] needed_iact_cycles_i_w;
@@ -284,7 +284,7 @@ module OpenEye_Parallel #(
   reg                                                  status_reg_enable_i_reg;
   reg                                                  data_mode_i_reg;
   reg  [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i_reg;
-  reg  [                                         15:0] needed_cycles_i_reg;
+  reg  [                                         19:0] needed_cycles_i_reg;
   reg  [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i_reg;
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i_reg;
   reg  [                                          3:0] needed_iact_cycles_i_reg;
