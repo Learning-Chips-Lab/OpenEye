@@ -152,7 +152,7 @@ module iact_stream_constructor #(
             if ((ram_inc_counter[7:0] + 1 - (iact_channels_i%2)) % WORDS_PER_CYCLE[7:0] == 0) begin
               ram_rd_addr <= ram_rd_addr + 1;
               if (fsm_enc_cycle >= (needed_iact_cycles_reg * wght_size_reg * iact_channels_i) - 1) begin
-                  ram_rd_addr <= ram_rd_addr;
+                ram_rd_addr <= ram_rd_addr;
               end
             end
             for (pec = 0; pec < PE_X; pec = pec + 1) begin
@@ -174,7 +174,7 @@ module iact_stream_constructor #(
               ram_inc_counter <= 0;
             end
             if (fsm_row_offset != y_cluster_counter) begin
-              ram_rd_addr   <= ram_rd_addr;
+              ram_rd_addr <= ram_rd_addr;
             end
             if (ram_inc_counter == 0) begin
               current_iact_cycle_reg     <= current_iact_cycle_reg + 1;
@@ -190,7 +190,7 @@ module iact_stream_constructor #(
                 if (iact_channel_counter == needed_iact_channel_cycles_i - 1) begin
                   ram_rd_addr          <= line_offset;
                   iact_channel_counter <= 0;
-                  y_cluster_counter     <= y_cluster_counter + 1;
+                  y_cluster_counter    <= y_cluster_counter + 1;
                   if (y_cluster_counter == needed_y_cls_i - 1) begin
                     y_cluster_counter    <= 0;
                     iact_y_counter       <= iact_y_counter + 1;
@@ -441,7 +441,7 @@ module iact_stream_constructor #(
             end
             for (r = 0; r < NUM_GLB_IACT; r++) begin
               for (w = 0; w < WORDS_PER_CYCLE; w++) begin
-                ram_var = ((((channels * iact_size_x_i * iact_size_y_i)/ 8 ) + (iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r])) / 8)) % RAM_CELLS;
+                ram_var = ((((channels * iact_size_x_i * iact_size_y_i)/ 8) + (iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r])) / 8)) % RAM_CELLS;
                 byte_var = ((x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
                 //PADDING
                 if ((
@@ -481,8 +481,10 @@ module iact_stream_constructor #(
 
           end
         endcase
-        ram_var  = 0;
-        byte_var = 0;
+        //ram_var  = 0; EINFÜGEN
+        //byte_var = 0;
+        ram_var = ((((channels * iact_size_x_i * iact_size_y_i)/ 8) + (iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[0])) / 8)) % RAM_CELLS;
+        byte_var = ((x_reg[0]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
         if (enable_config) begin
           fsm_row_offset         <= params[35:32];
           x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
