@@ -109,8 +109,10 @@ class DensePsumStreamMapper(PsumStreamMapper):
     def get_psum_stream(self):
         block_length = 2
         psum_stream = []
-        for i in range(8):
-            psum_stream.extend([gtu.to_twos_complement(self.dram_bias[i],20) + (gtu.to_twos_complement(self.dram_bias[i],20) * 2**20)] * block_length)
+        values = 10
+        for i in range(values):
+            for j in range(2):
+                psum_stream.extend([gtu.to_twos_complement(self.dram_bias[i + j * values],20)])
 
         return psum_stream
     

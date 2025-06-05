@@ -1141,6 +1141,7 @@ module OpenEye_FPGA #(
                   iact_channels_per_pe                  <= 8;
                   needed_y_cls_reg                      <= 1;
                   padding_reg                           <= 0;
+                  needed_cycles_reg                     <= 1;
                 end
               end
               default: begin
@@ -1248,7 +1249,7 @@ module OpenEye_FPGA #(
           ready_dma_o         <= 1;
           wght_buffer_SP_en_w <= 0;
           if (((psum_cnt != 0) & !fully_connected_layer) |
-            (fully_connected_layer & (fsm_psum_cycle == 8 - 1))) begin
+            (fully_connected_layer & (fsm_psum_cycle == 10 - 1) & (fsm_x_cl_psum == (CLUSTER_COLUMNS - 1)))) begin
             fsm_last_state         <= GET_BIAS;
             fsm_current_state      <= GET_QUANTIZE;
             wght_buffer_SP_wr_addr <= 0;
@@ -1547,16 +1548,20 @@ module OpenEye_FPGA #(
       iact_channels_counter_psum_router <= 0;
     end else begin
       if (compute_reg) begin
-        if (needed_y_cls_reg == 1) begin
-          psum_choose_i_reg <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
+        if (fully_connected_layer) begin
+          psum_choose_i_reg <= {CLUSTER_COLUMNS{{NUM_GLB_PSUM{1'b1}}, {((CLUSTER_ROWS - 1) * NUM_GLB_PSUM){1'b0}}}};
         end else begin
-          if (needed_y_cls_reg == 2) begin
-            psum_choose_i_reg <= {CLUSTER_ROWS{{NUM_GLB_PSUM{1'b1}}, {NUM_GLB_PSUM{1'b0}}}};
+          if (needed_y_cls_reg == 1) begin
+            psum_choose_i_reg <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
           end else begin
-            if (needed_y_cls_reg == 4 & (CLUSTER_ROWS >= 4)) begin
-              psum_choose_i_reg <= {((CLUSTER_ROWS+1)/2){{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{3'b000}}}};
+            if (needed_y_cls_reg == 2) begin
+              psum_choose_i_reg <= {CLUSTER_ROWS{{NUM_GLB_PSUM{1'b1}}, {NUM_GLB_PSUM{1'b0}}}};
             end else begin
-              psum_choose_i_reg <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
+              if (needed_y_cls_reg == 4 & (CLUSTER_ROWS >= 4)) begin
+                psum_choose_i_reg <= {((CLUSTER_ROWS+1)/2){{NUM_GLB_PSUM{1'b1}},{NUM_GLB_PSUM{3'b000}}}};
+              end else begin
+                psum_choose_i_reg <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
+              end
             end
           end
         end
@@ -1808,13 +1813,6 @@ reg [7:0] current_filter;
       finished_cycles             <= 0;
       psum_buffer_SP_data_w       <= 0;
     end else begin
-      //psum_enable_o     <= psum_enable_o_reg;
-      //psum_enable_i_reg <= psum_enable_i;
-      //psum_ready_i_reg  <= psum_ready_i;
-      //psum_ready_o      <= psum_ready_o_reg;
-      //if (start_new_cycle == 1) begin
-      //  psum_transmitted <= 0;
-      //end
       case (fsm_psum_current_state)
         PSUM_IDLE: begin
           enable_dma_o        <= 0;
@@ -1847,8 +1845,8 @@ reg [7:0] current_filter;
                         end
                       end
                     end
-                    if ((fsm_psum_cycle == (needed_wght_cycles_reg * filters_reg * iact_size_y) - 1)
-                      | (fully_connected_layer & (fsm_psum_cycle == 8 - 1))) begin
+                    if (((fsm_psum_cycle == (needed_wght_cycles_reg * filters_reg * iact_size_y) - 1) & (!fully_connected_layer))
+                      | (fully_connected_layer & (fsm_psum_cycle == 10 - 1))) begin
                       fsm_psum_cycle <= 0;
                       fsm_cycle_mod1 <= 0;
                       psum_cnt       <= psum_buffer_SP_addr[11:0] + 1;
@@ -2052,13 +2050,13 @@ reg [7:0] current_filter;
               end
             end
             fsm_psum_r <= fsm_psum_r + 1;
-            if (fsm_psum_r == NUM_GLB_PSUM - 3) begin //NUM_GLB_PSUM / PARALLEL_MACS - 1
+            if ((fsm_psum_r == NUM_GLB_PSUM - 3) | fully_connected_layer) begin //NUM_GLB_PSUM / PARALLEL_MACS - 1
               fsm_psum_r <= 0;
               fsm_x_cl_psum <= fsm_x_cl_psum + 1;
               if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
                 fsm_x_cl_psum <= 0;
                 fsm_y_cl_psum <= fsm_y_cl_psum + 1;
-                if (fsm_y_cl_psum == CLUSTER_ROWS - 1) begin
+                if ((fsm_y_cl_psum == CLUSTER_ROWS - 1) | fully_connected_layer) begin
                   fsm_y_cl_psum <= 0;
                   fsm_psum_cycle <= fsm_psum_cycle + 1;
                   if (fsm_psum_cycle == needed_wght_cycles_reg * filters_reg * iact_size_y - 1) begin

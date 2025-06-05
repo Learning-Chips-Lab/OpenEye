@@ -164,25 +164,20 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
         for layer_repetition in range(layer_params.needed_total_transmissions):
             output_order.append(return_dict[layer_repetition])
     elif "Dense" in str(layer_params.layer_name):
-        filter = 0
         layer_repetition = 0
         file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
+        print(calculated_results)
         if(params.SERIAL):
-            for refresh in range(layer_params.used_psum_per_PE * params.Clusters_X):
-                partial_result_a = gtu.to_twos_complement_string(0,20)
-                partial_result_b = gtu.to_twos_complement_string(0,20)
-                for counter in range(params.PARALLEL_MACS):
-                    filter = filter + 1
+            for refresh in range(math.ceil(len(calculated_results)/2)):
+                for x in range(2) :
+                    partial_result_a = gtu.to_twos_complement_string(0,20)
+                    partial_result_b = gtu.to_twos_complement_string(0,20)
                     try:
-                        if (counter == 0):
-                            partial_result_b = gtu.to_twos_complement_string(calculated_results[filter],20)
-                        else:
-                            partial_result_a = gtu.to_twos_complement_string(calculated_results[filter],20)
+                        partial_result_b = gtu.to_twos_complement_string(calculated_results[refresh + x * 10],20)
                     except:
                         partial_result_b = partial_result_b
-                        partial_result_a = partial_result_a
+                    file_dma_ref.write(partial_result_a + partial_result_b + "\n")
 
-                file_dma_ref.write(partial_result_a + partial_result_b + "\n")
             file_dma_ref.close()
         else:
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
@@ -257,7 +252,6 @@ def write_iact_file(layer_params, layer_number, dram):
             iact_ref.write(str(int(dram.fmap[layer_number][c])))
             iact_ref.write("\n")
         iact_ref.close()
-
     else:
         iact_ref = [0 for c in range(layer_params.input_shape[3])]
         for c in range(layer_params.input_shape[3]):
@@ -379,6 +373,7 @@ def collect_results(layer_number, layer_params, dram, serial):
 def calculate_dense_results_mp(x, layer_params, layer_number, dram, calculated_results,return_dict):
     for c in range(layer_params.input_shape[2]):
         calculated_results = int(calculated_results + dram.weights[layer_number][x][c] * dram.fmap[layer_number][c])
+    calculated_results = int(calculated_results + dram.bias[layer_number][x])
     return_dict[x] = calculated_results
 
 def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict):

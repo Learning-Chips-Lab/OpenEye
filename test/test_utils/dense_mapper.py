@@ -144,7 +144,8 @@ class DenseMapper(LayerMapper):
             for cl_x in range(params.Clusters_X):
                 for router in range(params.NUM_GLB_IACT):
                     if(params.SERIAL):
-                        line = line + (1 << (params.Iact_Router_Bits * router_cycle))
+                        if (cl_y < 4) :
+                            line = line + (1 << (params.Iact_Router_Bits * router_cycle))
                     else:
                         storage[cl_x][cl_y][router] = 1
                     router_cycle = router_cycle + 1

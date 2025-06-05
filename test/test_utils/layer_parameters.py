@@ -609,7 +609,7 @@ class LayerParameters(object):
         self.needed_iact_transmissions = self.iact_transmissions_pe * self.iact_transmissions_glb
         self.Used_refreshes = self.iact_transmissions_pe * self.wght_transmissions_pe * self.psum_transmissions_pe
         
-        self.used_iact_addr_per_PE = 1
+        self.used_iact_per_PE = math.ceil(self.input_shape[2]/4)
         self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_Bit_AXI/2)/params.IACT_WOH_Bitwidth))
         logger.debug("Refreshes: " + str(self.Used_refreshes))
         logger.debug("Used complete new descriptions: " + str(self.Used_refreshes))

@@ -197,11 +197,11 @@ async def single_layer_test(dut):
                 if (layer_number == max_layers - 1) :
                     await cocotb.start_soon(rtl_test_utils.await_enable_signal(ptp, dut))
                     if("Depthwise" in str(layer_parameters[layer_number].layer_name)):
-                        await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
+                        await cocotb.start_soon(rtl_test_utils.compare_stream_Dw(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                     elif("Conv" in str(layer_parameters[layer_number].layer_name)):
-                        await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level, stream, output_order))
+                        await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level, output_order))
                     elif("Dense" in str(layer_parameters[layer_number].layer_name)):
-                        await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
+                        await cocotb.start_soon(rtl_test_utils.compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                     if(logging.DEBUG >= log_level):
                         assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                                 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')

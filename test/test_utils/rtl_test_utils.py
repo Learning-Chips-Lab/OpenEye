@@ -313,7 +313,7 @@ async def await_ready_signal(ptp, dut):
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     pass
 
-async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, oep, les, dram, login_level, stream, output_order):
+async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order):
     """ Await the output stream and compare it to the reference output.
 
     This function awaits the output stream and compares it to the reference output.
@@ -321,7 +321,6 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
     Args:
         dut: The DUT.
         layer_number: The index of the layer.
-        model: The model.
         layer_repetition: The index of the part of a layer, if it is too large to be processed at once.
         layer_parameters: The layer parameters.
         oep: The OpenEye parameters.
@@ -398,8 +397,6 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
                 cluster_order.append(int(oep.Clusters_Y/layer_parameters.used_Y_cluster)*a+int(b/layer_parameters.used_Y_cluster))
 
         matrix = [[i * 8 + j for j in range(8)] for i in range(8)]
-
-        # Schritt 3: Neue Matrix nach Permutation der Zeilen
         reordered_matrix = [matrix[i] for i in cluster_order]
 
         flat_list = [item for row in reordered_matrix for item in row]
@@ -445,10 +442,9 @@ async def compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, l
         storage_file.close()
         logger.debug("POST")
         logger.debug("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + " f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
-
     pass
 
-async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters, oep, les, dram, login_level, stream, output_order):
+async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order):
     """ Await the output stream and compare it to the reference output.
 
     This function awaits the output stream and compares it to the reference output.
@@ -530,7 +526,7 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
 
     pass
 
-async def compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, layer_parameters, oep, les, dram, login_level, stream):
+async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level):
     """ Await the output stream and compare it to the reference output.
 
     This function awaits the output stream and compares it to the reference output.
@@ -552,59 +548,47 @@ async def compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, 
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         storage_file = open(filename, 'w')
 
-    values_per_trans = 2
 
     offset_layer_repetition = (math.floor(layer_repetition/layer_parameters.iact_transmissions_pe) % layer_parameters.psum_transmissions_pe) * oep.Clusters_Y * oep.Clusters_X * layer_parameters.used_psum_per_PE
     les.x = offset_layer_repetition
-    router = 3
-    offset = 0
 
-    if ((layer_repetition % layer_parameters.iact_transmissions_pe) == (layer_parameters.iact_transmissions_pe - 1)) :
-        cocotb.start_soon(send_enable_dense(ptp, dut, layer_parameters, layer_repetition, oep))
-        while (dut.psum_enable_o.value == 0):
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
-        dut._log.info("Output Stream started")
-        assert dut.psum_enable_o.value != 0, "psum is not 1!"
-        while (dut.psum_enable_o.value != 0):
-            for y_cluster in reversed(range(oep.Clusters_Y)):
-                for x_cluster in reversed(range(oep.Clusters_X)):
-                    lower_limit = (x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * 40 + y_cluster * oep.NUM_GLB_PSUM * 40 + router * 40)
-                    upper_limit = lower_limit + 39
-                    outputvalue = dut.psum_data_o.value[lower_limit:upper_limit]
-                    if(logging.DEBUG >= login_level):
-                        txt_file.write(bin(outputvalue)[2:].zfill(40) + "\n")
-                    x = offset + offset_layer_repetition + \
-                    (oep.Clusters_Y-1-y_cluster) * oep.Clusters_X * layer_parameters.used_psum_per_PE+ \
-                    (oep.Clusters_X-1-x_cluster) * layer_parameters.used_psum_per_PE
-                    for i in range(values_per_trans):
+    if ((layer_repetition % layer_parameters.iact_transmissions_pe) == (layer_parameters.iact_transmissions_pe - 1)) :cluster_order = []
+    for b in range(0,oep.Clusters_Y,layer_parameters.used_Y_cluster):
+        for a in range(layer_parameters.used_Y_cluster):
+            cluster_order.append(int(oep.Clusters_Y/layer_parameters.used_Y_cluster)*a+int(b/layer_parameters.used_Y_cluster))
 
-                        if(logging.DEBUG >= login_level):
-                            storage_file.write("x: " + str(x) + "\n")
-                        try:
-                            dram.fmap[layer_number + 1][x] = int(dut.psum_data_o.value[lower_limit+20*(1-i):upper_limit-20*i])
-                            if (dram.fmap[layer_number + 1][x] >= 2**19) :
-                                dram.fmap[layer_number + 1][x] = dram.fmap[layer_number + 1][x] - 2**20
-                        except:
-                            #storage_file.close()
-                            #assert dut.rst_ni.value == 0, "Output is not in range of memory"
-                            logger.debug("Empty File")
+    matrix = [[i * 8 + j for j in range(8)] for i in range(8)]
 
-                        x = x + 1
-                    
+    f = 0
+    dut._log.info("Output Stream started")
+    print(dram.fmap[layer_number + 1])
+    while (dut.enable_dma_o.value == 1):
 
-            offset = offset + values_per_trans
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
-    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
-    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
+        if(logging.DEBUG >= login_level):
+            txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(40) + "\n")
+        if(logging.DEBUG >= login_level):
+            storage_file.write("f: " + str(f) + "\n")
+        try:
+            dram.fmap[layer_number + 1][f] = int(dut.data_dma_o.value[44:63])
+            if (dram.fmap[layer_number + 1][f] >= 2**19) :
+                dram.fmap[layer_number + 1][f] = dram.fmap[layer_number + 1][f] - 2**20
+        except:
+            pass
+        if (f <= 9) :
+            f = f + 10
+        else :
+            f = f - 9
 
-    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
-    cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 1))
-    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
-    if(logging.DEBUG >= login_level):
-        storage_file.close()
-        txt_file.close()
-        dut._log.info("Output Stream finished")
+        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+
+    cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
     
+    if(logging.DEBUG >= login_level):
+        txt_file.close()
+        storage_file.write("f: " + str(f) + "\n")
+        storage_file.close()
+        logger.debug("POST")
+        logger.debug("f: " + str(f) + "\n")
     pass
 
 async def send_enable_conv(ptp, dut, layer_params, layer_repetition, oep):
