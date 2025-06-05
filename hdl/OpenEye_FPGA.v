@@ -1114,6 +1114,9 @@ module OpenEye_FPGA #(
                 choose_iact_buffer              <= data_dma_i_reg[16];
                 iact_channels_per_pe_next_layer <= data_dma_i_reg[11:8];
                 needed_psum_storage_cycles_reg  <= data_dma_i_reg[7:0] * needed_y_cls_reg;
+                if (data_dma_i_reg[17]) begin
+                  needed_psum_storage_cycles_reg  <= data_dma_i_reg[7:0];
+                end
                 iact_channel_max_cycles         <= data_dma_i_reg[7:0];
               end
               32'd4: begin
@@ -1136,6 +1139,7 @@ module OpenEye_FPGA #(
                   kernel_size                           <= 1;
                   iact_converter_buffer_addr_max_cycles <= 2;
                   iact_channels_per_pe                  <= 8;
+                  needed_y_cls_reg                      <= 1;
                   padding_reg                           <= 0;
                 end
               end

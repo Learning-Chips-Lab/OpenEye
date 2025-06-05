@@ -143,11 +143,10 @@ class DenseMapper(LayerMapper):
         for cl_y in range(params.Clusters_Y):
             for cl_x in range(params.Clusters_X):
                 for router in range(params.NUM_GLB_IACT):
-                    if(layer_params.used_Y_cluster == 1):
-                        if(params.SERIAL):
-                            line = line + (1 << (params.Iact_Router_Bits * router_cycle))
-                        else:
-                            storage[cl_x][cl_y][router] = 1
+                    if(params.SERIAL):
+                        line = line + (1 << (params.Iact_Router_Bits * router_cycle))
+                    else:
+                        storage[cl_x][cl_y][router] = 1
                     router_cycle = router_cycle + 1
                     if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Iact_Router_Bits))):
                         router_cycle = 0

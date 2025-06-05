@@ -360,7 +360,6 @@ class LayerParameters(object):
                                                 self.needed_iact_transmissions
             self.needed_refreshes_mx = [[1 for _ in range(3)] for _ in range(self.needed_total_transmissions)]
 
-
             for layer_repetition in range(self.needed_total_transmissions):
                 self.needed_refreshes_mx[layer_repetition][2] = math.floor(((math.floor(math.floor(layer_repetition/self.iact_transmissions_pe)/self.needed_wght_transmissions)+1)/ \
                     self.needed_total_transmissions) * self.Used_refreshes)
@@ -571,9 +570,6 @@ class LayerParameters(object):
         self.input_shape = layer.input.shape
         self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
-        self.kernel_size = layer.kernel_size
-        self.strideX = layer.strides[0]
-        self.strideY = layer.strides[1]
             
         #Calculate Iact Cycles
         self.needed_Iact_writes = math.ceil(params.PEs_Y/params.NUM_GLB_IACT)
