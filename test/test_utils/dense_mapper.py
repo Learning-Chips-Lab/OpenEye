@@ -66,8 +66,7 @@ class DenseMapper(LayerMapper):
             dma_storage.append(dma_line)
             dma_line = 0
             dma_line = dma_line + (layer_params.needed_wght_transmissions)
-            dma_line = dma_line + (layer_params.strideX << 6)
-            dma_line = dma_line + (layer_params.strideY << 10)
+            dma_line = dma_line + (layer_params.strideY << 10) #Also includes Stride X
             dma_line = dma_line + (layer_params.skipIact << 14)
             dma_line = dma_line + (layer_params.skipWght << 15)
             dma_line = dma_line + (layer_params.skipPsum << 16)

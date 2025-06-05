@@ -255,7 +255,7 @@ module OpenEye_FPGA #(
   reg [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_reg;
   reg [$clog2(AF_MODES)-1:0] af_cluster_mode_reg;
   reg [$clog2(IACT_PER_PE+1)-1:0] input_activations_reg;
-  reg [5:0] wght_cycles_reg;
+  reg [7:0] wght_cycles_reg;
   reg [2:0] stride_x_reg;
   reg [2:0] stride_y_reg;
   reg skipIact_reg;
@@ -280,7 +280,7 @@ module OpenEye_FPGA #(
   reg [$clog2(NUM_GLB_WGHT)-1:0] fsm_wght_r;
   reg [$clog2(NUM_GLB_PSUM)-1:0] fsm_psum_r;
   reg results_ready;
-  reg [15:0] finished_cycles;
+  reg [19:0] finished_cycles;
   reg new_stream;
   reg reset_cycle_reg;
   reg send_data_out;
@@ -1079,8 +1079,8 @@ module OpenEye_FPGA #(
                 send_data_out <= data_dma_i_reg[PARAMETER_POS_1_12];
               end
               32'd1: begin
-                wght_cycles_reg           <= data_dma_i_reg[5+PARAMETER_POS_2_0:PARAMETER_POS_2_0];
-                stride_x_reg              <= data_dma_i_reg[2+PARAMETER_POS_2_2:PARAMETER_POS_2_2];
+                wght_cycles_reg           <= data_dma_i_reg[7+PARAMETER_POS_2_0:PARAMETER_POS_2_0];
+                stride_x_reg              <= data_dma_i_reg[2+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
                 stride_y_reg              <= data_dma_i_reg[2+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
                 skipIact_reg              <= data_dma_i_reg[PARAMETER_POS_2_4:PARAMETER_POS_2_4];
                 skipWght_reg              <= data_dma_i_reg[PARAMETER_POS_2_5:PARAMETER_POS_2_5];
