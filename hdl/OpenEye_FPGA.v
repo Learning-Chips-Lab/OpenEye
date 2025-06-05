@@ -2017,6 +2017,7 @@ reg [7:0] current_filter;
           fsm_psum_last_state    <= WAIT_FOR_SENDING_RESULTS;
           if (send_data_out) begin
             fsm_psum_current_state <= PSUM_SEND_RESULTS;
+            psum_buffer_SP_en_r    <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
           end else begin
             fsm_psum_cycle         <= fsm_psum_cycle + 1;
             fsm_y_cl_psum          <= 0;
@@ -2037,20 +2038,20 @@ reg [7:0] current_filter;
         PSUM_SEND_RESULTS: begin
           psum_buffer_SP_en_r <= 0;
           if (ready_dma_i == 1) begin
-            psum_buffer_SP_en_r <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
             enable_dma_o <= 1;
             data_dma_o <= psum_buffer_SP_data_r[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM * PARALLEL_MACS];
-            fsm_psum_r <= fsm_psum_r + PARALLEL_MACS;
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
                   if ((fsm_psum_r != NUM_GLB_PSUM - PARALLEL_MACS) & (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) & (fsm_y_cl_psum == CLUSTER_ROWS - 1)) begin
                     psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
                     <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
+                    psum_buffer_SP_en_r[cc_psum*CLUSTER_ROWS*NUM_GLB_PSUM/2+cr_psum*NUM_GLB_PSUM/2+g_psum] <= 1;
                   end
                 end
               end
             end
+            fsm_psum_r <= fsm_psum_r + PARALLEL_MACS;
             if (fsm_psum_r == NUM_GLB_PSUM - PARALLEL_MACS) begin
               fsm_psum_r <= 0;
               fsm_x_cl_psum <= fsm_x_cl_psum + 1;
