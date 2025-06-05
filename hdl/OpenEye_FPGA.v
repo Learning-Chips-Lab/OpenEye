@@ -496,7 +496,6 @@ module OpenEye_FPGA #(
       iact_converter_c                <= 0;
       fsm_row                         <= 0;
       fsm_row_offset                  <= 0;
-      iact_channels_per_pe_next_layer <= 0;
       for (a = 0; a < CLUSTER_COLUMNS; a++) begin
         for (b = 0; b < CLUSTER_ROWS; b++) begin
           iact_converter_params_reg[a][b] <= 0;
@@ -1001,6 +1000,7 @@ module OpenEye_FPGA #(
       iact_channels                     <= 0;
       iact_channel_max_cycles           <= 0;
       iact_channels_per_pe              <= 0;
+      iact_channels_per_pe_next_layer   <= 0;
       iact_channels_counter             <= 0;
       iact_needed_cycles                <= 1;  // params
       reset_cycle_reg                   <= 0;
