@@ -34,13 +34,13 @@ def flat(dram, layer, layer_number):
             for ix in range(layer.input.shape[2]):
                     dram.fmap[layer_number + 1][ic * layer.input.shape[2] * layer.input.shape[1]+ iy * layer.input.shape[2] + ix] = dram.fmap[layer_number][ic][ix][iy]
 
-def batchnorm_output(layer, layer_parameters, divide_value, layer_number, dram):
-    if "Conv" in str(layer):
+def batchnorm_output(layer_parameters, divide_value, layer_number, dram):
+    if "Conv" in str(layer_parameters.layer_name):
         for f in range(len(dram.fmap[1 + layer_number])):
             for x in range(len(dram.fmap[1 + layer_number][f])):
                 for y in range(len(dram.fmap[1 + layer_number][f][x])):
                     dram.fmap[1 + layer_number][f][x][y] = math.floor((layer_parameters.quantize[f][0]*dram.fmap[1 + layer_number][f][x][y])/(2**layer_parameters.quantize[f][1]))
-    elif "Dense" in str(layer):
+    elif "Dense" in str(layer_parameters.layer_name):
         for f in range(len(dram.fmap[1 + layer_number])):
             dram.fmap[1 + layer_number][f] = math.floor(dram.fmap[1 + layer_number][f]/divide_value)
 

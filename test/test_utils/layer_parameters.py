@@ -19,6 +19,8 @@ class LayerParameters(object):
         filename: The filename of the output file.
     """
     def __init__(self, layer_parameters, layer, params, layer_number, max_layers):
+        self.layer_name = ""
+
         self.used_PEs_X = 1
         self.used_PEs_Y = 0
         self.used_X_cluster = 1
@@ -53,6 +55,7 @@ class LayerParameters(object):
 
         self.filters = 1
         self.input_shape = []
+        self.kernel_shape = []
         self.output_shape = []
         self.kernel_size = []
         self.kernel_per_pe_cluster = 1
@@ -178,7 +181,7 @@ class LayerParameters(object):
             raise ValueError("Can't fit model, kernel size must be adjusted.")
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         self.compute_total_computations(layer)
-            
+        self.layer_name = "Convolution2D"
         self.choose_iact_storage = 1
         self.filters = layer.filters
         self.fully_connected = 0
@@ -193,6 +196,7 @@ class LayerParameters(object):
             self.skipIact = 1
             self.choose_iact_storage = 0
         self.input_shape = layer.input.shape
+        self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size
         if (params.SERIAL == 0) :
@@ -408,7 +412,7 @@ class LayerParameters(object):
         """ Write the weights and bias of a Conv2D layer to a file. """
         
         # Get the weights and bias of the layer
-        realfactor = self.get_realfactor(layer)
+        self.layer_name = "DepthwiseConvolution"
                         
         self.compute_total_computations(layer)
             
@@ -417,6 +421,7 @@ class LayerParameters(object):
         self.data_mode = 1
         self.filters = layer.kernel_size[0]
         self.input_shape = layer.input.shape
+        self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size
 
@@ -562,9 +567,11 @@ class LayerParameters(object):
     def write_dense_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         """ Write the weights and bias of a Conv2D layer to a file. """
             
+        self.layer_name = "Dense"
         self.used_channels = layer.input.shape[2]
         self.iact_size_x = 1
         self.iact_size_y = layer.input.shape[1]
+        self.kernel_shape = layer.kernel.shape
         self.filters = layer.output.shape[2]
         self.fully_connected = 1
         if (layer_number == max_layers - 1) :

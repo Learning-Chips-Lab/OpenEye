@@ -51,25 +51,25 @@ def get_verilog_sources(hdl_dir, serial):
         verilog_sources.append(os.path.join(hdl_dir, "OpenEye_Wrapper.v"))
     return verilog_sources
 
-def write_stream_layer_mp(params, layer_params, layer, dram_layer_content, return_dict, layer_repetition, sparse_iacts, sparse_wghts):
-    if "Depthwise" in str(layer):
+def write_stream_layer_mp(params, layer_params, dram_layer_content, return_dict, layer_repetition, sparse_iacts, sparse_wghts):
+    if "Depthwise" in str(layer_params.layer_name):
         LayerStreamGenerator = DWMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
-    elif "Conv" in str(layer):
+    elif "Conv" in str(layer_params.layer_name):
         LayerStreamGenerator = ConvMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
-    elif "Dense" in str(layer):
+    elif "Dense" in str(layer_params.layer_name):
         LayerStreamGenerator = DenseMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
     return_dict[layer_repetition] = LayerStreamGenerator.get_stream()
 
-def write_stream(params, layer_params, layer, dram_layer_content, sparse_iacts, sparse_wghts):
+def write_stream(params, layer_params, dram_layer_content, sparse_iacts, sparse_wghts):
     manager = mp.Manager()
     return_dict = manager.dict()
     jobs = []
 
     for layer_repetition in range(layer_params.needed_total_transmissions):
-        p = mp.Process(target = write_stream_layer_mp, args = (params, layer_params, layer, dram_layer_content, return_dict, layer_repetition, sparse_iacts, sparse_wghts))
+        p = mp.Process(target = write_stream_layer_mp, args = (params, layer_params, dram_layer_content, return_dict, layer_repetition, sparse_iacts, sparse_wghts))
         p.start()
         jobs.append(p)
 
@@ -80,27 +80,27 @@ def write_stream(params, layer_params, layer, dram_layer_content, sparse_iacts, 
 
 #Reference
 
-def make_ref(params, layer_params, layer, layer_number, dram, calculated_results):
+def make_ref(params, layer_params, layer_number, dram, calculated_results):
     
 
     #Write wght File
-    write_weight_file(layer, layer_number, dram)
+    write_weight_file(layer_params, layer_number, dram)
     logger.info("All weight-files written")
 
     #Write iact File
-    write_iact_file(layer, layer_number, dram)
+    write_iact_file(layer_params, layer_number, dram)
     logger.info("All iact-files written")
 
     logger.info("All results calculated")
 
     #Write psum File
-    write_psum_file(layer, layer_number, dram, calculated_results)
+    write_psum_file(layer_params, layer_number, dram, calculated_results)
     logger.info("All psum-files written")
     
     dma_line = 0
     
     output_order = []
-    if "Depthwise" in str(layer):
+    if "Depthwise" in str(layer_params.layer_name):
         if(params.SERIAL):
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
             for layer_repetition in range(layer_params.needed_total_transmissions):
@@ -110,12 +110,12 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
                     for cl_y in range(params.Clusters_Y):
                         for cl_x in range(params.Clusters_X):
                             for router in range(params.Psum_Routers):
-                                for psum_pe in range(int((layer.filters*(layer_repetition%layer_params.needed_wght_transmissions)/layer_params.needed_wght_transmissions)/2),\
-                                    int((layer.filters*(1+(layer_repetition%layer_params.needed_wght_transmissions))/layer_params.needed_wght_transmissions)/2)):
+                                for psum_pe in range(int((layer_params.filters*(layer_repetition%layer_params.needed_wght_transmissions)/layer_params.needed_wght_transmissions)/2),\
+                                    int((layer_params.filters*(1+(layer_repetition%layer_params.needed_wght_transmissions))/layer_params.needed_wght_transmissions)/2)):
                                     for counter in range(params.DMA_Bit_AXI//params.PSUM_Bitwidth):
-                                        x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % layer.output.shape[2]))
-                                        y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / layer.output.shape[2]))
-                                        if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
+                                        x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % layer_params.output_shape[2]))
+                                        y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / layer_params.output_shape[2]))
+                                        if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[2])):
                                             if(calculated_results[2 * psum_pe + counter][x_cor][y_cor] >= 0):
                                                 dma_line = dma_line + (calculated_results[2 * psum_pe + counter][x_cor][y_cor] << (params.PSUM_Bitwidth * counter))
                                             else:
@@ -136,7 +136,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
 
             for layer_repetition in range(layer_params.needed_total_transmissions):
                 p = mp.Process(target = calculate_dw_output_stream_mp, \
-                               args = (layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results, return_dict))
+                               args = (layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict))
                 p.start()
                 jobs.append(p)
             
@@ -144,7 +144,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
                 jobs[proc].join()
             for layer_repetition in range(layer_params.needed_total_transmissions):
                 output_order.append(return_dict[layer_repetition])
-    elif "Conv" in str(layer):
+    elif "Conv" in str(layer_params.layer_name):
         cluster_order = []
         for a in range(layer_params.used_Y_cluster):
             for b in range(0,params.Clusters_Y,layer_params.used_Y_cluster):
@@ -155,7 +155,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
         jobs = []
         for layer_repetition in range(layer_params.needed_total_transmissions):
             p = mp.Process(target = calculate_conv_output_stream_mp, \
-                            args = (layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results, return_dict))
+                            args = (layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict))
             p.start()
             jobs.append(p)
         
@@ -163,7 +163,7 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
             jobs[proc].join()
         for layer_repetition in range(layer_params.needed_total_transmissions):
             output_order.append(return_dict[layer_repetition])
-    elif "Dense" in str(layer):
+    elif "Dense" in str(layer_params.layer_name):
         filter = 0
         layer_repetition = 0
         file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
@@ -220,52 +220,52 @@ def make_ref(params, layer_params, layer, layer_number, dram, calculated_results
     logger.info("Reference Output calculated.")
     return output_order
 
-def write_weight_file(layer, layer_number, dram):
+def write_weight_file(layer_params, layer_number, dram):
 
-    if "Dense" in str(layer):
+    if "Dense" in str(layer_params.layer_name):
         wght_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_0.csv')
-        for c in range(layer.input.shape[2]):
-            for x in range(layer.output.shape[2]):
+        for c in range(layer_params.input_shape[2]):
+            for x in range(layer_params.output_shape[2]):
                 wght_ref.write(str(int(dram.weights[layer_number][x][c])).rjust(5) + ";")
             wght_ref.write("\n")
         wght_ref.close()
-    elif "Depthwise" in str(layer):
-        wght_ref = [0  for c in range(layer.input.shape[3])]
-        for c in range(layer.input.shape[3]):
+    elif "Depthwise" in str(layer_params.layer_name):
+        wght_ref = [0  for c in range(layer_params.input_shape[3])]
+        for c in range(layer_params.input_shape[3]):
             wght_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_' + str(c) + '.csv')
-            for x in range(layer.kernel_size[0]):
-                for y in range(layer.kernel_size[1]):
+            for x in range(layer_params.kernel_size[0]):
+                for y in range(layer_params.kernel_size[1]):
                     wght_ref[c].write(str(dram.weights[layer_number][c][y][x]).rjust(5) + ";")
                 wght_ref[c].write("\n")
             wght_ref[c].close()
     else:
-        wght_ref = [[0 for f in range(layer.filters)] for c in range(layer.input.shape[3])]
-        for c in range(layer.input.shape[3]):
-            for f in range(layer.filters):
+        wght_ref = [[0 for f in range(layer_params.filters)] for c in range(layer_params.input_shape[3])]
+        for c in range(layer_params.input_shape[3]):
+            for f in range(layer_params.filters):
                 wght_ref[c][f] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_' + str(c) + '_' + str(f) + '.csv')
-                for x in range(layer.kernel_size[0]):
-                    for y in range(layer.kernel_size[1]):
+                for x in range(layer_params.kernel_size[0]):
+                    for y in range(layer_params.kernel_size[1]):
                         wght_ref[c][f].write(str(dram.weights[layer_number][c][f][y][x]).rjust(5) + ";")
                     wght_ref[c][f].write("\n")
                 wght_ref[c][f].close()
     return wght_ref
 
-def write_iact_file(layer, layer_number, dram):
-    if "Dense" in str(layer):
+def write_iact_file(layer_params, layer_number, dram):
+    if "Dense" in str(layer_params.layer_name):
         iact_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/iact/iact_ref' + '_0.csv')
-        for c in range(layer.input.shape[2]):
+        for c in range(layer_params.input_shape[2]):
             iact_ref.write(str(int(dram.fmap[layer_number][c])))
             iact_ref.write("\n")
         iact_ref.close()
 
     else:
-        iact_ref = [0 for c in range(layer.input.shape[3])]
-        for c in range(layer.input.shape[3]):
+        iact_ref = [0 for c in range(layer_params.input_shape[3])]
+        for c in range(layer_params.input_shape[3]):
             iact_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/iact/iact_ref' + '_' +  str(c) + '.csv')
-            for y in range(0 - math.floor(layer.kernel_size[1]/2),layer.input.shape[2] + math.ceil(layer.kernel_size[1]/2) - 1):
-                for x in range(0 - math.floor(layer.kernel_size[0]/2),layer.input.shape[1] + math.ceil(layer.kernel_size[0]/2) - 1):
-                    if(((x >= 0) & (x  < layer.input.shape[1])) & \
-                        ((y >= 0) & (y < layer.input.shape[2]))):
+            for y in range(0 - math.floor(layer_params.kernel_size[1]/2),layer_params.input_shape[2] + math.ceil(layer_params.kernel_size[1]/2) - 1):
+                for x in range(0 - math.floor(layer_params.kernel_size[0]/2),layer_params.input_shape[1] + math.ceil(layer_params.kernel_size[0]/2) - 1):
+                    if(((x >= 0) & (x  < layer_params.input_shape[1])) & \
+                        ((y >= 0) & (y < layer_params.input_shape[2]))):
                         iact_ref[c].write(str(int(dram.fmap[layer_number][c][x][y])).rjust(5) + ";")
                     else:
                         iact_ref[c].write(str(1).rjust(5) + ";")
@@ -273,90 +273,90 @@ def write_iact_file(layer, layer_number, dram):
             iact_ref[c].close()
         return iact_ref
 
-def write_psum_file(layer, layer_number, dram, calculated_results):
+def write_psum_file(layer_params, layer_number, dram, calculated_results):
     manager = mp.Manager()
     return_dict = manager.dict()
     jobs = []
-    if "Dense" in str(layer):
+    if "Dense" in str(layer_params.layer_name):
         psum_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_0.csv')
-        for x in range(layer.output.shape[2]):
+        for x in range(layer_params.output_shape[2]):
             psum_ref.write(str(calculated_results[x]))
             psum_ref.write("\n")
         psum_ref.close()
 
-    elif "Depthwise" in str(layer):
-        psum_ref = [0 for f in range(layer.output.shape[3])]
-        for c in range(layer.output.shape[3]):
+    elif "Depthwise" in str(layer_params.layer_name):
+        psum_ref = [0 for f in range(layer_params.output_shape[3])]
+        for c in range(layer_params.output_shape[3]):
             psum_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_' +  str(c) + '.csv')
-            for x in range(layer.output.shape[1]):
-                for y in range(layer.output.shape[2]):
+            for x in range(layer_params.output_shape[1]):
+                for y in range(layer_params.output_shape[2]):
                     psum_ref[c].write(str(calculated_results[c][y][x]).rjust(8) + ";")
                 psum_ref[c].write("\n")
             psum_ref[c].close()
 
-    elif "Conv" in str(layer):
-        for f in range(layer.output.shape[3]):
-            p = mp.Process(target = write_psum_file_conv_mp, args = (f, layer, calculated_results, return_dict))
+    elif "Conv" in str(layer_params.layer_name):
+        for f in range(layer_params.output_shape[3]):
+            p = mp.Process(target = write_psum_file_conv_mp, args = (f, layer_params, calculated_results, return_dict))
             p.start()
             jobs.append(p)
         for proc in range(len(jobs)):
             jobs[proc].join()
-        psum_ref = [0 for f in range(layer.output.shape[3])]
-        for f in range(layer.output.shape[3]):
+        psum_ref = [0 for f in range(layer_params.output_shape[3])]
+        for f in range(layer_params.output_shape[3]):
             psum_ref[f] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_' +  str(f) + '.csv')
             psum_ref[f].write(return_dict[f])
             psum_ref[f].close()
     return psum_ref
 
-def write_psum_file_conv_mp(f, layer, calculated_results, return_dict):
+def write_psum_file_conv_mp(f, layer_params, calculated_results, return_dict):
     psum_ref = ""
-    for y in range(layer.output.shape[2]):
-        for x in range(layer.output.shape[1]):
+    for y in range(layer_params.output_shape[2]):
+        for x in range(layer_params.output_shape[1]):
             psum_ref = psum_ref + (str(calculated_results[f][x][y]).rjust(8) + ";")
         psum_ref = psum_ref + ("\n")
     return_dict[f] = psum_ref
 
 #Collect and get results
 
-def collect_results(layer, layer_number, layer_params, dram, serial):
+def collect_results(layer_number, layer_params, dram, serial):
     #Calculate Bias
-    if "Dense" in str(layer):
-        calculated_results = [0 for i in range(layer.output.shape[2])]
+    if "Dense" in str(layer_params.layer_name):
+        calculated_results = [0 for i in range(layer_params.output_shape[2])]
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
-        for x in range(layer.output.shape[2]):
-            p = mp.Process(target = calculate_dense_results_mp, args = (x, layer, layer_number, dram, calculated_results[x], return_dict))
+        for x in range(layer_params.output_shape[2]):
+            p = mp.Process(target = calculate_dense_results_mp, args = (x, layer_params, layer_number, dram, calculated_results[x], return_dict))
             p.start()
             jobs.append(p)
         for proc in range(len(jobs)):
             jobs[proc].join()
         calculated_results = return_dict
 
-    elif "Depthwise" in str(layer):
-        calculated_results = [[[0 for i in range(layer.output.shape[2])] for j in range(layer.output.shape[1])]for k in range(layer.output.shape[3])]
-        for j in range(layer.output.shape[1]):
-            for i in range(layer.output.shape[2]):
-                for f in range(layer.output.shape[3]):
-                    calculated_results[f][i][j] = int(calculated_results[f][i][j] + int(layer.bias[f]))
-        for j in range(layer.output.shape[1]):
-            for i in range(layer.output.shape[2]):
-                for y in range(0 - math.floor(layer.kernel_size[1]/2),math.ceil(layer.kernel_size[1]/2)):
-                    for c in range(layer.input.shape[3]):
-                        for x in range(0 - math.floor(layer.kernel_size[0]/2),math.ceil(layer.kernel_size[0]/2)):
-                            if((((x + i * layer_params.strideX) >= 0) & ((x + i * layer_params.strideX) < (layer.output.shape[2] * layer_params.strideX))) & \
-                            (((y + j * layer_params.strideY) >= 0) & ((y + j * layer_params.strideY) < (layer.output.shape[1] * layer_params.strideY)))):
+    elif "Depthwise" in str(layer_params.layer_name):
+        calculated_results = [[[0 for i in range(layer_params.output_shape[2])] for j in range(layer_params.output_shape[1])]for k in range(layer_params.output_shape[3])]
+        for j in range(layer_params.output_shape[1]):
+            for i in range(layer_params.output_shape[2]):
+                for f in range(layer_params.output_shape[3]):
+                    calculated_results[f][i][j] = int(calculated_results[f][i][j]) # + int(layer.bias[f])) Later add back in
+        for j in range(layer_params.output_shape[1]):
+            for i in range(layer_params.output_shape[2]):
+                for y in range(0 - math.floor(layer_params.kernel_size[1]/2),math.ceil(layer_params.kernel_size[1]/2)):
+                    for c in range(layer_params.input_shape[3]):
+                        for x in range(0 - math.floor(layer_params.kernel_size[0]/2),math.ceil(layer_params.kernel_size[0]/2)):
+                            if((((x + i * layer_params.strideX) >= 0) & ((x + i * layer_params.strideX) < (layer_params.output_shape[2] * layer_params.strideX))) & \
+                            (((y + j * layer_params.strideY) >= 0) & ((y + j * layer_params.strideY) < (layer_params.output_shape[1] * layer_params.strideY)))):
                                 calculated_results[c][i][j] = int(calculated_results[c][i][j] + \
-                                                                dram.weights[layer_number][c][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)] * \
+                                                                dram.weights[layer_number][c][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)] * \
                                                                 dram.fmap[layer_number][c][x + (i * layer_params.strideX)][y + (j * layer_params.strideY)])
                             else:
                                 calculated_results[c][i][j] = int(calculated_results[c][i][j] + \
-                                                                dram.weights[layer_number][c][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)])
-    elif "Conv" in str(layer):
-        calculated_results = [[[0 for i in range(layer.output.shape[2])] for j in range(layer.output.shape[1])]for k in range(layer.output.shape[3])]
-        for j in range(layer.output.shape[1]):
-            for i in range(layer.output.shape[2]):
-                for f in range(layer.output.shape[3]):
+                                                                dram.weights[layer_number][c][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)])
+    elif "Conv" in str(layer_params.layer_name):
+        calculated_results = [[[0 for i in range(layer_params.output_shape[2])] for j in range(layer_params.output_shape[1])]for k in range(layer_params.output_shape[3])]
+        for j in range(layer_params.output_shape[1]):
+            for i in range(layer_params.output_shape[2]):
+                for f in range(layer_params.output_shape[3]):
                     calculated_results[f][j][i] = int(calculated_results[f][j][i] + int(dram.bias[layer_number][f]))
 
         manager = mp.Manager()
@@ -365,8 +365,8 @@ def collect_results(layer, layer_number, layer_params, dram, serial):
         max_parallel_jobs = 1
         semaphore = mp.Semaphore(max_parallel_jobs)
 
-        for f in range(layer.output.shape[3]):
-            p = mp.Process(target = calculate_conv_results_mp, args = (f, layer, layer_number, layer_params, serial, dram, calculated_results[f], return_dict, semaphore))
+        for f in range(layer_params.output_shape[3]):
+            p = mp.Process(target = calculate_conv_results_mp, args = (f, layer_number, layer_params, serial, dram, calculated_results[f], return_dict, semaphore))
             p.start()
             jobs.append(p)
         
@@ -376,12 +376,12 @@ def collect_results(layer, layer_number, layer_params, dram, serial):
         calculated_results = return_dict
     return calculated_results
 
-def calculate_dense_results_mp(x, layer, layer_number, dram, calculated_results,return_dict):
-    for c in range(layer.input.shape[2]):
+def calculate_dense_results_mp(x, layer_params, layer_number, dram, calculated_results,return_dict):
+    for c in range(layer_params.input_shape[2]):
         calculated_results = int(calculated_results + dram.weights[layer_number][x][c] * dram.fmap[layer_number][c])
     return_dict[x] = calculated_results
 
-def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results, return_dict):
+def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict):
     coordinates = []
     file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
     layer_repetition_cycle = math.floor(layer_repetition/layer_params.iact_transmissions_pe)
@@ -402,16 +402,16 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                                 cl_x * params.PEs_X + \
                                 math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                 ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles) * layer_params.used_Y_cluster) * (params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster)) \
-                                % (layer.output.shape[1] + layer_params.add_up)))
+                                % (layer_params.output_shape[1] + layer_params.add_up)))
 
                                 y_cor= int(((router + \
                                 cl_x * params.PEs_X + \
                                 math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                 ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles)*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
-                                / (layer.output.shape[1] + layer_params.add_up)))
+                                / (layer_params.output_shape[1] + layer_params.add_up)))
                                 filter = psum_pe + layer_params.used_psum_per_PE * (refresh % filter_cycles)
                                 try:
-                                    if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
+                                    if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[2])):
                                         if (counter == 0):
                                             partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
                                         else:
@@ -429,14 +429,14 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
             
             match layer_params.single_cluster_computation:
                 case 1:
-                    psum_pe_lower = (layer_repetition_cycle%layer_params.needed_wght_transmissions)*math.ceil(layer.filters/layer_params.needed_wght_transmissions/params.Clusters/2)
-                    psum_pe_upper = ((layer_repetition_cycle%layer_params.needed_wght_transmissions)+1)*math.ceil(layer.filters/layer_params.needed_wght_transmissions/params.Clusters/2)
+                    psum_pe_lower = (layer_repetition_cycle%layer_params.needed_wght_transmissions)*math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/params.Clusters/2)
+                    psum_pe_upper = ((layer_repetition_cycle%layer_params.needed_wght_transmissions)+1)*math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/params.Clusters/2)
                 case 2:
-                    psum_pe_lower = (layer_repetition_cycle%layer_params.needed_wght_transmissions)*math.ceil(layer.filters/layer_params.needed_wght_transmissions/params.Clusters_Y/2)
-                    psum_pe_upper = ((layer_repetition_cycle%layer_params.needed_wght_transmissions)+1)*math.ceil(layer.filters/layer_params.needed_wght_transmissions/params.Clusters_Y/2)
+                    psum_pe_lower = (layer_repetition_cycle%layer_params.needed_wght_transmissions)*math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/params.Clusters_Y/2)
+                    psum_pe_upper = ((layer_repetition_cycle%layer_params.needed_wght_transmissions)+1)*math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/params.Clusters_Y/2)
                 case _:
-                    psum_pe_lower = (layer_repetition_cycle%layer_params.needed_wght_transmissions)*math.ceil(layer.filters/layer_params.needed_wght_transmissions/2)
-                    psum_pe_upper = ((layer_repetition_cycle%layer_params.needed_wght_transmissions)+1)*math.ceil(layer.filters/layer_params.needed_wght_transmissions/2)
+                    psum_pe_lower = (layer_repetition_cycle%layer_params.needed_wght_transmissions)*math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/2)
+                    psum_pe_upper = ((layer_repetition_cycle%layer_params.needed_wght_transmissions)+1)*math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/2)
 
             for psum_pe in range(psum_pe_lower,psum_pe_upper):
                 for cl_y in cluster_order:
@@ -450,39 +450,39 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                                         case 1:
                                             x_cor= int(((router + \
                                             (refresh * params.PEs_X)) \
-                                            % (layer.output.shape[1] + layer_params.add_up)))
+                                            % (layer_params.output_shape[1] + layer_params.add_up)))
 
                                             y_cor= int(((router + \
                                             (refresh * params.PEs_X)) \
-                                            / (layer.output.shape[1] + layer_params.add_up)))
+                                            / (layer_params.output_shape[1] + layer_params.add_up)))
                                             filter = 2 * psum_pe + counter + (2 * psum_pe_upper * (cl_y * params.Clusters_X + cl_x))
                                         case 2:
                                             x_cor= int((((cl_x * params.PEs_X) + router + \
                                             (refresh * (params.PEs_X * params.Clusters_X))) \
-                                            % (layer.output.shape[1] + layer_params.add_up)))
+                                            % (layer_params.output_shape[1] + layer_params.add_up)))
 
                                             y_cor= int(((router + \
                                             (refresh * (params.PEs_X * params.Clusters_X))) \
-                                            / (layer.output.shape[1] + layer_params.add_up)))
+                                            / (layer_params.output_shape[1] + layer_params.add_up)))
                                             filter = 2 * psum_pe + counter + (2 * psum_pe_upper * cl_y)
                                         case _:
                                             x_cor= int(((router + \
                                             cl_x * params.PEs_X + \
                                             math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                             ((cl_y%layer_params.used_Y_cluster) + refresh*layer_params.used_Y_cluster) * (params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster)) \
-                                            % (layer.output.shape[1] + layer_params.add_up)))
+                                            % (layer_params.output_shape[1] + layer_params.add_up)))
 
                                             y_cor= int(((router + \
                                             cl_x * params.PEs_X + \
                                             math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
                                             ((cl_y%layer_params.used_Y_cluster) + refresh*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
-                                            / (layer.output.shape[1] + layer_params.add_up)))
+                                            / (layer_params.output_shape[1] + layer_params.add_up)))
 
                                             filter = 2 * psum_pe + counter
 
                                     coordinates.append([filter,x_cor,y_cor])
                                     try:
-                                        if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[2])):
+                                        if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[2])):
                                             if (counter == 0):
                                                 partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
                                             else:
@@ -497,7 +497,7 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
     logger.info("Stream " + str(layer_repetition) + " / " + str(layer_params.needed_total_transmissions) + " calculated.")
     return_dict[layer_repetition] = coordinates
 
-def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_params, layer, cluster_order, calculated_results, return_dict):
+def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict):
     coordinates = []
     filter_number = 0
     file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
@@ -513,26 +513,26 @@ def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_
                         for counter in range(math.floor(params.PSUM_Trans_Bitwidth/params.PSUM_Bitwidth)):
                             match layer_params.single_cluster_computation:
                                 case 1:
-                                    x_cor= int(((router + (2*refresh+counter) * params.PEs_X ) % (layer.output.shape[1] + layer_params.add_up)))
-                                    y_cor= int(((router + (2*refresh+counter) * params.PEs_X ) / (layer.output.shape[1] + layer_params.add_up))) + \
+                                    x_cor= int(((router + (2*refresh+counter) * params.PEs_X ) % (layer_params.output_shape[1] + layer_params.add_up)))
+                                    y_cor= int(((router + (2*refresh+counter) * params.PEs_X ) / (layer_params.output_shape[1] + layer_params.add_up))) + \
                                         max_refresh * 2 * math.floor(layer_repetition/layer_params.iact_transmissions_pe)
 
                                     filter_number = cl_x + (layer_repetition * params.Clusters) + (cl_y * params.Clusters_X) 
                                 case 2:
-                                    x_cor= int(((router + cl_x * params.PEs_X + ((2*refresh+counter) * params.PEs_X * params.Clusters_X)) % (layer.output.shape[1] + layer_params.add_up)))
-                                    y_cor= int(((router + cl_x * params.PEs_X + ((2*refresh+counter) * params.PEs_X * params.Clusters_X)) / (layer.output.shape[1] + layer_params.add_up))) + \
+                                    x_cor= int(((router + cl_x * params.PEs_X + ((2*refresh+counter) * params.PEs_X * params.Clusters_X)) % (layer_params.output_shape[1] + layer_params.add_up)))
+                                    y_cor= int(((router + cl_x * params.PEs_X + ((2*refresh+counter) * params.PEs_X * params.Clusters_X)) / (layer_params.output_shape[1] + layer_params.add_up))) + \
                                         max_refresh * 2 * math.floor(layer_repetition/layer_params.iact_transmissions_pe)
 
                                     filter_number = (layer_repetition * params.Clusters_Y) + cl_y  
                                 case _:
-                                    x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + (2*refresh+counter) * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % (layer.output.shape[1] + layer_params.add_up)))
-                                    y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + (2*refresh+counter) * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / (layer.output.shape[1] + layer_params.add_up))) + \
+                                    x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + (2*refresh+counter) * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % (layer_params.output_shape[1] + layer_params.add_up)))
+                                    y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + (2*refresh+counter) * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / (layer_params.output_shape[1] + layer_params.add_up))) + \
                                         max_refresh * 2 * math.floor(layer_repetition/layer_params.iact_transmissions_pe)
                                     filter_number = math.floor(layer_repetition%layer_params.iact_transmissions_pe)
 
                             coordinates.append([filter_number,x_cor,y_cor])
                             try:
-                                if((x_cor < layer.output.shape[1]) & (y_cor < layer.output.shape[1])):
+                                if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[1])):
                                     if (counter == 0):
                                         partial_result_b = gtu.to_twos_complement_string(calculated_results[filter_number][x_cor][y_cor],params.PSUM_Bitwidth)
                                     else:
@@ -549,31 +549,31 @@ def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_
     logger.info("Stream " + str(layer_repetition) + " / " + str(layer_params.needed_total_transmissions) + " calculated.")
     return_dict[layer_repetition] = coordinates
 
-def calculate_conv_results_mp(f, layer, layer_number, layer_params, serial, dram, calculated_results, return_dict, semaphore):
+def calculate_conv_results_mp(f, layer_number, layer_params, serial, dram, calculated_results, return_dict, semaphore):
     with semaphore:
-        if(f < layer.kernel.shape[3]):
-            for j in range(layer.output.shape[1]):
-                for i in range(layer.output.shape[2]):
-                    for x in range(0 - math.floor(layer.kernel_size[0]/2),math.ceil(layer.kernel_size[0]/2)):
-                        for c in range(layer.input.shape[3]):
-                            for y in range(0 - math.floor(layer.kernel_size[1]/2),math.ceil(layer.kernel_size[1]/2)):
-                                if((((x + j * layer_params.strideX) >= 0) & ((x + j * layer_params.strideX) < (layer.output.shape[1] * layer_params.strideX))) & \
-                                (((y + i * layer_params.strideY) >= 0) & ((y + i * layer_params.strideY) < (layer.output.shape[2] * layer_params.strideY)))):
+        if(f < layer_params.kernel_shape[3]):
+            for j in range(layer_params.output_shape[1]):
+                for i in range(layer_params.output_shape[2]):
+                    for x in range(0 - math.floor(layer_params.kernel_size[0]/2),math.ceil(layer_params.kernel_size[0]/2)):
+                        for c in range(layer_params.input_shape[3]):
+                            for y in range(0 - math.floor(layer_params.kernel_size[1]/2),math.ceil(layer_params.kernel_size[1]/2)):
+                                if((((x + j * layer_params.strideX) >= 0) & ((x + j * layer_params.strideX) < (layer_params.output_shape[1] * layer_params.strideX))) & \
+                                (((y + i * layer_params.strideY) >= 0) & ((y + i * layer_params.strideY) < (layer_params.output_shape[2] * layer_params.strideY)))):
                                     calculated_results[j][i] = int(calculated_results[j][i] + \
-                                                                    dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)] * \
+                                                                    dram.weights[layer_number][c][f][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)] * \
                                                                     dram.fmap[layer_number][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
                                 else:
                                     if (serial) :
                                         pass
                                     else:
                                         calculated_results[j][i] = int(calculated_results[j][i] + \
-                                            dram.weights[layer_number][c][f][x + math.floor(layer.kernel_size[0]/2)][y + math.floor((layer.kernel_size[1]-1)/2)])
+                                            dram.weights[layer_number][c][f][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)])
         return_dict[f] = calculated_results
 
-def compare_dram_with_ref(layer, ref_output, dram):
+def compare_dram_with_ref(layer_params, ref_output, dram):
     logger.info("Results are checked.")
 
-    if "Conv" in str(layer):
+    if "Conv" in str(layer_params.layer_name):
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
@@ -590,7 +590,7 @@ def compare_dram_with_ref(layer, ref_output, dram):
             if (return_dict[f] == False) :
                 return False
 
-    elif "Dense" in str(layer):
+    elif "Dense" in str(layer_params.layer_name):
         for f in range(len(ref_output)):
             if dram[f] != ref_output[f]:
                 logger.error(f'Difference found at f = {f}')
@@ -611,7 +611,7 @@ def compare_dram_with_ref_mp(f, ref_output, dram, return_dict):
                 return_dict[f] = False
                 return
           
-def fill_dram_with_ref(layer, ref_output, dram):
+def fill_dram_with_ref(ref_output, dram):
     logger.info("Results are transmitted.")
     for f in range(len(ref_output)):    
         for x in range(len(ref_output[f])):

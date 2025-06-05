@@ -171,20 +171,20 @@ async def single_layer_test(dut):
     for layer_number, layer in enumerate(model.layers):
 
         # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
-        if("Pooling" in str(layer)):
-            slo.pool(dram, layer, layer_number)
-        elif("Flat" in str(layer)):
-            slo.flat(dram, layer, layer_number)
+        if("Pooling" in str(layer_parameters[layer_number].layer_name)):
+            slo.pool(dram, layer_parameters[layer_number], layer_number)
+        elif("Flat" in str(layer_parameters[layer_number].layer_name)):
+            slo.flat(dram, layer_parameters[layer_number], layer_number)
         else:
             time_printer.timestamp("Layer parameters created. ", logger)
-            calculated_results = ptu.collect_results(layer, layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
-            output_order = ptu.make_ref(openeye_parameter, layer_parameters[layer_number], layer, layer_number, dram, calculated_results)
+            calculated_results = ptu.collect_results(layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
+            output_order = ptu.make_ref(openeye_parameter, layer_parameters[layer_number], layer_number, dram, calculated_results)
             if(logging.DEBUG >= log_level):
                 time_printer.timestamp("Reference data created. ", logger)
 
             dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
             time_printer.timestamp("Start creating stream. " , logger)
-            stream = ptu.write_stream(openeye_parameter, layer_parameters[layer_number], layer, dram_layer_content, sparse_iacts, sparse_wghts)
+            stream = ptu.write_stream(openeye_parameter, layer_parameters[layer_number], dram_layer_content, sparse_iacts, sparse_wghts)
             
             time_printer.timestamp("Streams set. " , logger)
 
@@ -196,21 +196,21 @@ async def single_layer_test(dut):
 
                 if (layer_number == max_layers - 1) :
                     await cocotb.start_soon(rtl_test_utils.await_enable_signal(ptp, dut))
-                    if("Depthwise" in str(layer)):
+                    if("Depthwise" in str(layer_parameters[layer_number].layer_name)):
                         await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
-                    elif("Conv" in str(layer)):
+                    elif("Conv" in str(layer_parameters[layer_number].layer_name)):
                         await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level, stream, output_order))
-                    elif("Dense" in str(layer)):
+                    elif("Dense" in str(layer_parameters[layer_number].layer_name)):
                         await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                     if(logging.DEBUG >= log_level):
                         assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                                 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
                         
-                    assert ptu.compare_dram_with_ref(layer, calculated_results, dram.fmap[1 + layer_number])
+                    assert ptu.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
                 else :
                     await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
                     time_printer.timestamp("Ready signal detected. Start new stream" , logger)
-                    dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(layer, calculated_results, dram.fmap[1 + layer_number])
-                slo.batchnorm_output(layer, layer_parameters[layer_number], 1, layer_number, dram)
+                    dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number])
+                slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
 
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"
