@@ -178,6 +178,10 @@ module OpenEye_FPGA #(
     input clk_i,
     input rst_ni,
 
+    //DEBUG OUTPUT STATES
+    output reg [4-1:0] debug_fsm_current_state,
+    output reg [4-1:0] debug_fsm_psum_state,
+
     //DEBUG OUTPUT IACT
     output reg                               debug_iact_we,
     output reg                               debug_iact_re,
@@ -1765,6 +1769,8 @@ reg [ 7:0] iact_channel_counter_reg;
 reg [15:0] fsm_psum_cycle;
 reg [ 3:0] fsm_psum_last_state;
 reg [ 3:0] fsm_psum_current_state;
+assign debug_fsm_psum_state = fsm_psum_current_state;
+assign debug_fsm_current_state = fsm_current_state;
 reg        psum_transmitted;
 reg psum_router_set_reg;
 reg start_new_cycle;
@@ -2011,8 +2017,8 @@ reg [7:0] current_filter;
           end
         end
         WAIT_FOR_SENDING_RESULTS: begin
-          fsm_psum_cycle         <= 0;
-          fsm_psum_last_state    <= WAIT_FOR_SENDING_RESULTS;
+          fsm_psum_cycle      <= 0;
+          fsm_psum_last_state <= WAIT_FOR_SENDING_RESULTS;
           if (send_data_out) begin
             fsm_psum_current_state <= PSUM_SEND_RESULTS;
             psum_buffer_SP_en_r    <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
@@ -2069,7 +2075,7 @@ reg [7:0] current_filter;
               end
             end
             if (last_data_o) begin
-              psum_buffer_SP_en_r    <= ~0;
+              psum_buffer_SP_en_r    <= 0;
               last_data_o            <= 0;
               enable_dma_o           <= 0;
               last_data_reg          <= 0;
