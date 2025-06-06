@@ -14,79 +14,79 @@ class DRAMContents(object):
 
     """
 
-    def __init__(self, model) -> None:
+    def __init__(self, model, layer_parameters) -> None:
         dram_fmap = []
         dram_weights = []
         dram_bias = []
-        for i in range(len(model.layers)):
-            if "Depthwise" in str(model.layers[i]):
-                dram_weights.append([[[0 for l in range(model.layers[i].kernel_size[1])]
-                                    for k in range(model.layers[i].kernel_size[0])]
-                                    for j in range(model.layers[i].input.shape[3])])
-            elif "Conv" in str(model.layers[i]):
-                dram_weights.append([[[[0 for m in range(model.layers[i].kernel_size[1])]
-                                    for l in range(model.layers[i].kernel_size[0])]
-                                    for k in range(model.layers[i].filters)]
-                                    for j in range(model.layers[i].input.shape[3])])
-            elif "Dense" in str(model.layers[i]):
-                dram_weights.append([[0 for m in range(model.layers[i].input.shape[2])]
-                                    for l in range(model.layers[i].output.shape[2])])
-            elif "Flat" in str(model.layers[i]):
+        for i in range(len(layer_parameters)):
+            if "Depthwise" in str(layer_parameters[i].layer_name):
+                dram_weights.append([[[0 for l in range(layer_parameters[i].kernel_size[1])]
+                                    for k in range(layer_parameters[i].kernel_size[0])]
+                                    for j in range(layer_parameters[i].input_shape[3])])
+            elif "Conv" in str(layer_parameters[i].layer_name):
+                dram_weights.append([[[[0 for m in range(layer_parameters[i].kernel_size[1])]
+                                    for l in range(layer_parameters[i].kernel_size[0])]
+                                    for k in range(layer_parameters[i].filters)]
+                                    for j in range(layer_parameters[i].input_shape[3])])
+            elif "Dense" in str(layer_parameters[i].layer_name):
+                dram_weights.append([[0 for m in range(layer_parameters[i].input_shape[2])]
+                                    for l in range(layer_parameters[i].output_shape[2])])
+            elif "Flat" in str(layer_parameters[i].layer_name):
                 dram_weights.append([0])
 
-            if "Depthwise" in str(model.layers[i]):
-                dram_bias.append([0 for k in range(model.layers[i].kernel_size[0])])
-            elif "Conv" in str(model.layers[i]):
-                dram_bias.append([0 for m in range(model.layers[i].filters)])
-            elif "Dense" in str(model.layers[i]):
-                dram_bias.append([0 for m in range(model.layers[i].output.shape[2])])
+            if "Depthwise" in str(layer_parameters[i].layer_name):
+                dram_bias.append([0 for k in range(layer_parameters[i].kernel_size[0])])
+            elif "Conv" in str(layer_parameters[i].layer_name):
+                dram_bias.append([0 for m in range(layer_parameters[i].filters)])
+            elif "Dense" in str(layer_parameters[i].layer_name):
+                dram_bias.append([0 for m in range(layer_parameters[i].output_shape[2])])
 
-            if "Conv" in str(model.layers[i]):
-                dram_fmap.append([[[0 for l in range(model.layers[i].input.shape[2])]
-                                for k in range(model.layers[i].input.shape[1])]
-                                for j in range(model.layers[i].input.shape[3])])
-            elif "Dense" in str(model.layers[i]):
-                dram_fmap.append([0 for j in range(model.layers[i].input.shape[2])])
-            elif "Flat" in str(model.layers[i]):
-                dram_fmap.append([[[0 for l in range(model.layers[i].input.shape[2])]
-                                for k in range(model.layers[i].input.shape[1])]
-                                for j in range(model.layers[i].input.shape[3])])
+            if "Conv" in str(layer_parameters[i].layer_name):
+                dram_fmap.append([[[0 for l in range(layer_parameters[i].input_shape[2])]
+                                for k in range(layer_parameters[i].input_shape[1])]
+                                for j in range(layer_parameters[i].input_shape[3])])
+            elif "Dense" in str(layer_parameters[i].layer_name):
+                dram_fmap.append([0 for j in range(layer_parameters[i].input_shape[2])])
+            elif "Flat" in str(layer_parameters[i].layer_name):
+                dram_fmap.append([[[0 for l in range(layer_parameters[i].input_shape[2])]
+                                for k in range(layer_parameters[i].input_shape[1])]
+                                for j in range(layer_parameters[i].input_shape[3])])
 
-        for i in [len(model.layers)-1]:
-            if "Conv" in str(model.layers[i]):
-                dram_fmap.append([[[0 for l in range(model.layers[i].output.shape[2])]
-                                    for k in range(model.layers[i].output.shape[1])]
-                                    for j in range(model.layers[i].output.shape[3])])
-            elif "Dense" in str(model.layers[i]):
-                dram_fmap.append([0 for l in range(model.layers[i].input.shape[2])])
+        for i in [len(layer_parameters)-1]:
+            if "Conv" in str(layer_parameters[i].layer_name):
+                dram_fmap.append([[[0 for l in range(layer_parameters[i].output_shape[2])]
+                                    for k in range(layer_parameters[i].output_shape[1])]
+                                    for j in range(layer_parameters[i].output_shape[3])])
+            elif "Dense" in str(layer_parameters[i].layer_name):
+                dram_fmap.append([0 for l in range(layer_parameters[i].input_shape[2])])
         self.fmap = dram_fmap
         self.weights = dram_weights
         self.bias = dram_bias
 
-    def write_initial_data_to_dram(self, model, sparse_iacts, sparse_wghts):
+    def write_initial_data_to_dram(self, model, layer_parameters, sparse_iacts, sparse_wghts):
         """ TODO: Docu"""
-        for l in range(len(model.layers)):
-            if "Depthwise" in str(model.layers[l]):
-                for c in range(model.layers[l].input.shape[3]):
-                    for x in range(model.layers[l].kernel_size[0]):
-                        for y in range(model.layers[l].kernel_size[1]):
+        for l in range(len(layer_parameters)):
+            if "Depthwise" in str(layer_parameters[l].layer_name):
+                for c in range(layer_parameters[l].input_shape[3]):
+                    for x in range(layer_parameters[l].kernel_size[0]):
+                        for y in range(layer_parameters[l].kernel_size[1]):
                             self.weights[l][c][x][y] = int(math.floor(float(127*model.layers[l].weights[0][x][y][c])))
                             if (self.weights[l][c][x][y] == 0):
                                 self.weights[l][c][x][y] = int(np.random.choice([-1, 1]))
-            elif "Conv" in str(model.layers[l]):
-                for c in range(model.layers[l].input.shape[3]):
-                    for f in range(model.layers[l].filters):
-                        for x in range(model.layers[l].kernel_size[0]):
-                            for y in range(model.layers[l].kernel_size[1]):
+            elif "Conv" in str(layer_parameters[l].layer_name):
+                for c in range(layer_parameters[l].input_shape[3]):
+                    for f in range(layer_parameters[l].filters):
+                        for x in range(layer_parameters[l].kernel_size[0]):
+                            for y in range(layer_parameters[l].kernel_size[1]):
                                 self.weights[l][c][f][x][y] = int(math.floor(float(127*model.layers[l].weights[0][x][y][c][f])))
                                 if (sparse_wghts & (((c+f+x+y) % 2) == 0)):
                                     self.weights[l][c][f][x][y] = 0
                                 else:
                                     if (self.weights[l][c][f][x][y] == 0):
                                         self.weights[l][c][f][x][y] = int(np.random.choice([-1, 1]))
-            elif "Dense" in str(model.layers[l]):
-                for c in range(model.layers[l].input.shape[2]):
-                    for x in range(model.layers[l].output.shape[2]):
+            elif "Dense" in str(layer_parameters[l].layer_name):
+                for c in range(layer_parameters[l].input_shape[2]):
+                    for x in range(layer_parameters[l].output_shape[2]):
                         self.weights[l][x][c] = np.random.randint(-128, 127)
                         if (sparse_wghts & (((c+l+x) % 2) == 0)):
                             self.weights[l][x][c] = 0
@@ -94,34 +94,34 @@ class DRAMContents(object):
                             if (self.weights[l][x][c] == 0):
                                 self.weights[l][x][c] = int(np.random.choice([-1, 1]))
 
-        for l in range(len(model.layers)):
-            if "Depthwise" in str(model.layers[l]):
-                if (model.layers[l].kernel_size[0] != 1):
-                    for x in range(model.layers[l].kernel_size[0]):
+        for l in range(len(layer_parameters)):
+            if "Depthwise" in str(layer_parameters[l].layer_name):
+                if (layer_parameters[l].kernel_size[0] != 1):
+                    for x in range(layer_parameters[l].kernel_size[0]):
                         self.bias[l][x] = int(math.floor(float(model.layers[l].weights[1][x])))
                 else:
                     self.bias[l][0] = int(math.floor(float(model.layers[l].weights[1])))
-            elif "Conv" in str(model.layers[l]):
-                for x in range(model.layers[l].filters):
+            elif "Conv" in str(layer_parameters[l].layer_name):
+                for x in range(layer_parameters[l].filters):
                     self.bias[l][x] = int(math.floor(float(model.layers[l].weights[1][x])))
                     #self.bias[l][x] = x * (-1)
-            elif "Dense" in str(model.layers[l]):
-                for c in range(model.layers[l].output.shape[2]):
+            elif "Dense" in str(layer_parameters[l].layer_name):
+                for c in range(layer_parameters[l].output_shape[2]):
                     #self.bias[l][c] = int(math.floor(float(model.layers[l].weights[1][c])))
                     self.bias[l][c] = int(c + 1)
 
-        if "Conv" in str(model.layers[0]):
-            for c in range(model.layers[0].input.shape[3]):
-                for x in range(model.layers[0].input.shape[1]):
-                    for y in range(model.layers[0].input.shape[2]):
+        if "Conv" in str(layer_parameters[0].layer_name):
+            for c in range(layer_parameters[0].input_shape[3]):
+                for x in range(layer_parameters[0].input_shape[1]):
+                    for y in range(layer_parameters[0].input_shape[2]):
                         self.fmap[0][c][x][y] = np.random.randint(-128, 127)
                         if (sparse_iacts & (((c+x+y) % 2) == 0)):
                             self.fmap[0][c][x][y] = 0
                         else:
                             if (self.fmap[0][c][x][y] == 0):
                                 self.fmap[0][c][x][y] = int(np.random.choice([-1, 1]))
-        elif "Dense" in str(model.layers[0]):
-            for c in range(model.layers[l].input.shape[2]):
+        elif "Dense" in str(layer_parameters[0].layer_name):
+            for c in range(layer_parameters[0].input_shape[2]):
                 self.fmap[0][c] = np.random.randint(-128, 127)
                 """
                 if (sparse_iacts & (((c) % 2) == 0)):
