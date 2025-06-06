@@ -166,7 +166,6 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
     elif "Dense" in str(layer_params.layer_name):
         layer_repetition = 0
         file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
-        print(calculated_results)
         if(params.SERIAL):
             for refresh in range(math.ceil(len(calculated_results)/2)):
                 for x in range(2) :

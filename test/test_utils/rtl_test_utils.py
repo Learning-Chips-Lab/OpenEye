@@ -561,7 +561,6 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
 
     f = 0
     dut._log.info("Output Stream started")
-    print(dram.fmap[layer_number + 1])
     while (dut.enable_dma_o.value == 1):
 
         if(logging.DEBUG >= login_level):
