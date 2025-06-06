@@ -285,7 +285,6 @@ module OpenEye_FPGA #(
   reg [7:0]needed_psum_storage_cycles_reg;
   //Register for the FSM
   reg [32-1:0] fsm_cycle;
-  reg [6:0] fsm_cycle_mod1;
   reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_x_cl;
   reg [$clog2(CLUSTER_ROWS)-1:0] fsm_y_cl;
   reg [$clog2(NUM_GLB_IACT)-1:0] fsm_iact_r;
@@ -1041,7 +1040,7 @@ module OpenEye_FPGA #(
         IDLE: begin
           if (enable_dma_i_reg) begin
             fsm_last_state    <= IDLE;
-            fsm_current_state <= fsm_last_state;
+            fsm_current_state <= GET_PARAMETERS;
             fifo_data_i       <= 0;
             fifo_read_i       <= 0;
             fifo_write_i      <= 0;
@@ -1798,7 +1797,6 @@ reg [7:0] current_filter;
       results_ready                = 0;
       psum_cnt                    <= 0;
       start_new_cycle             <= 0;
-      fsm_cycle_mod1              <= 0;
       enable_dma_o                <= 0;
       data_dma_o                  <= 0;
       last_data_reg               <= 0;
@@ -1854,7 +1852,6 @@ reg [7:0] current_filter;
                     if (((fsm_psum_cycle == (needed_wght_cycles_reg * filters_reg * iact_size_y) - 1) & (!fully_connected_layer))
                       | (fully_connected_layer & (fsm_psum_cycle == 10 - 1))) begin
                       fsm_psum_cycle <= 0;
-                      fsm_cycle_mod1 <= 0;
                       psum_cnt       <= psum_buffer_SP_addr[11:0] + 1;
                     end
                   end
@@ -2082,6 +2079,9 @@ reg [7:0] current_filter;
               finished_cycles        <= 0;
               fsm_psum_last_state    <= PSUM_SEND_RESULTS;
               fsm_psum_current_state <= PSUM_IDLE;
+              fsm_psum_r             <= 0;
+              fsm_y_cl_psum          <= 0;
+              fsm_x_cl_psum          <= 0;
             end
           end
         end
@@ -2129,6 +2129,9 @@ reg [7:0] current_filter;
             fsm_psum_cycle              <= 0;
             fsm_psum_last_state         <= PSUM_SEND_RESULTS;
             fsm_psum_current_state      <= PSUM_IDLE;
+            fsm_psum_r                  <= 0;
+            fsm_y_cl_psum               <= 0;
+            fsm_x_cl_psum               <= 0;
           end
         end
         default: begin
@@ -2149,7 +2152,6 @@ reg [7:0] current_filter;
         results_ready                = 0;
         psum_cnt                    <= 0;
         start_new_cycle             <= 0;
-        fsm_cycle_mod1              <= 0;
         enable_dma_o                <= 0;
         data_dma_o                  <= 0;
         last_data_reg               <= 0;
@@ -2157,6 +2159,9 @@ reg [7:0] current_filter;
         fsm_y_cl_psum               <= 0;
         psum_buffer_SP_en_r         <= 0;
         finished_cycles             <= 0;
+        fsm_psum_r                  <= 0;
+        fsm_y_cl_psum               <= 0;
+        fsm_x_cl_psum               <= 0;
       end
     end
   end
