@@ -1125,7 +1125,7 @@ module OpenEye_FPGA #(
               32'd4: begin
                 iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
                 if (fully_connected_layer) begin
-                  iact_channels <= iact_channels_per_pe;
+                  iact_channels <= iact_channels_per_pe * 4;
                 end
                 compute_mask_reg[DMA_BITWIDTH-1:0] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
               end
@@ -1141,7 +1141,6 @@ module OpenEye_FPGA #(
                   iact_channel_max_cycles               <= 1;
                   kernel_size                           <= 1;
                   iact_converter_buffer_addr_max_cycles <= 2;
-                  iact_channels_per_pe                  <= 8;
                   needed_y_cls_reg                      <= 1;
                   padding_reg                           <= 0;
                   needed_cycles_reg                     <= 1;
@@ -1258,7 +1257,7 @@ module OpenEye_FPGA #(
             wght_buffer_SP_wr_addr <= 0;
             limit_increase_reg     <= ((iact_size_x*iact_channels_per_pe)/(WORDS_PER_CYCLE[7:0]*4));
             if (fully_connected_layer) begin
-              limit_increase_reg <= 4;
+              limit_increase_reg <= iact_channels_per_pe/2;
             end
             fsm_cycle              <= 0;
           end
@@ -2250,7 +2249,8 @@ reg [7:0] current_filter;
             .x_lines_i                   (x_lines_reg),
             .needed_wght_cycles_i        (needed_wght_cycles_reg),
             .needed_iact_router_cycles_i (needed_iact_cycles_reg),
-            .wght_size_i                 (kernel_size)
+            .wght_size_i                 (kernel_size),
+            .fully_connected_i           (fully_connected_layer)
         );
       end
     end

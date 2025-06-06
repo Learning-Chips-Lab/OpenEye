@@ -45,7 +45,8 @@ module iact_stream_constructor #(
     input      [                            8-1:0] x_lines_i,
     input      [                            8-1:0] needed_wght_cycles_i,
     input      [                            4-1:0] needed_iact_router_cycles_i,
-    input      [                            4-1:0] wght_size_i
+    input      [                            4-1:0] wght_size_i,
+    input                                          fully_connected_i
 );
   reg                           ram_wr_en;
   reg  [         ADDRWIDTH-1:0] ram_wr_addr;
@@ -441,7 +442,11 @@ module iact_stream_constructor #(
             for (r = 0; r < NUM_GLB_IACT; r++) begin
               for (w = 0; w < WORDS_PER_CYCLE; w++) begin
                 ram_var = ((((channels * iact_size_x_i * iact_size_y_i)/ 8) + (iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r])) / 8)) % RAM_CELLS;
-                byte_var = ((x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
+                if (fully_connected_i) begin
+                  byte_var = (channels + (x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
+                end else begin
+                  byte_var = ((x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
+                end
                 //PADDING
                 if ((
                 (0 > x_reg[r]) |

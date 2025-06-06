@@ -58,7 +58,7 @@ class DRAMContents(object):
                                     for k in range(layer_parameters[i].output_shape[1])]
                                     for j in range(layer_parameters[i].output_shape[3])])
             elif "Dense" in str(layer_parameters[i].layer_name):
-                dram_fmap.append([0 for l in range(layer_parameters[i].input_shape[2])])
+                dram_fmap.append([0 for l in range(layer_parameters[i].output_shape[2])])
         self.fmap = dram_fmap
         self.weights = dram_weights
         self.bias = dram_bias

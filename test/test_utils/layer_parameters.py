@@ -553,7 +553,6 @@ class LayerParameters(object):
         """ Write the weights and bias of a Conv2D layer to a file. """
             
         self.layer_name = "Dense"
-        self.used_channels = layer.input.shape[2]
         self.iact_size_x = 1
         self.iact_size_y = layer.input.shape[1]
         self.filters = layer.output.shape[2]
@@ -571,6 +570,7 @@ class LayerParameters(object):
         self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
             
+        self.used_channels = math.ceil(self.input_shape[2]/4)
         #Calculate Iact Cycles
         self.needed_Iact_writes = math.ceil(params.PEs_Y/params.NUM_GLB_IACT)
 
