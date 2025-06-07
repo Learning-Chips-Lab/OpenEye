@@ -251,8 +251,8 @@ class LayerParameters(object):
         logger.debug("iact_transmissions_pe " + str(self.iact_transmissions_pe))
             
         if((self.filters * self.used_iact_per_PE) <= params.Wghts_per_PE):
-            self.used_wght_per_PE = self.filters*self.used_iact_per_PE
             self.used_psum_per_PE = self.filters
+            self.used_wght_per_PE = self.used_psum_per_PE*self.used_iact_per_PE
             self.wght_transmissions_pe = math.ceil(self.channels/self.used_channels)
         else:
             if (self.kernel_size[0] == 5):
@@ -278,7 +278,6 @@ class LayerParameters(object):
                 case _:
                     self.wght_transmissions_pe = math.ceil(self.channels/self.used_channels) * math.ceil(self.filters * self.used_iact_per_PE / self.used_wght_per_PE)
 
-
         if(math.ceil(self.used_iact_per_PE/self.used_wght_per_PE) <= params.Psums_per_PE):
             self.psum_transmissions_pe = 1
         else:    
@@ -290,8 +289,8 @@ class LayerParameters(object):
         self.ceil_used_PE_per_clm = math.ceil(used_PEs_per_clm)
 
         self.used_Y_cluster = (math.ceil(self.used_PEs_Y/params.PEs_Y))
-        self.used_Y_cluster = (math.floor(8/self.used_Y_cluster))
-        self.used_Y_cluster = (math.ceil(8/self.used_Y_cluster))
+        self.used_Y_cluster = (math.floor(params.Clusters_Y/self.used_Y_cluster))
+        self.used_Y_cluster = (math.ceil(params.Clusters_Y/self.used_Y_cluster))
         self.calculate_computing_matrix(params)
         if (params.SERIAL) :
             self.psum_delay = int(max([(math.ceil(self.used_psum_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
@@ -386,7 +385,7 @@ class LayerParameters(object):
         self.iact_size_y = self.input_shape[2]
         #FPGA parameters
         self.needed_standing_cycles = math.ceil(params.Clusters/math.floor((params.Clusters*params.PEs_X)/self.iact_size_x))
-        if (self.iact_size_x == 64) :
+        if (self.iact_size_x == (params.Clusters*params.PEs_X)) :
             self.direct_cycling = 1
             self.iact_x_lines = self.kernel_size[1] + self.iact_size_y - 1
             self.needed_standing_cycles = ((self.used_channels + 1) // 2) * self.needed_Iact_writes

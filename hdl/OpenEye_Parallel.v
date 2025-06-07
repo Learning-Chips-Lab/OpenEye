@@ -242,7 +242,6 @@ module OpenEye_Parallel #(
   wire [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o_wire;
   reg  [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i_reg;
   wire [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_cluster_enable_o_reg;
-  reg  [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_o_reg;
   wire [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_o_cluster_reg;
   ///Wires and Regs for Ports
   wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_w;
@@ -445,7 +444,6 @@ module OpenEye_Parallel #(
 
       psum_data_i_reg                <= 0;
       psum_ready_i_reg               <= 0;
-      psum_ready_o_reg               <= 0;
       psum_enable_i_reg              <= 0;
     end else begin
 

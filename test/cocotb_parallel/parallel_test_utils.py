@@ -586,7 +586,6 @@ def compare_dram_with_ref(layer_params, ref_output, dram):
 
     elif "Dense" in str(layer_params.layer_name):
         for f in range(len(ref_output)):
-            print(f)
             if dram[f] != ref_output[f]:
                 logger.error(f'Difference found at f = {f}')
                 logger.error(f'ReferenceData: {str(ref_output[f])}')
