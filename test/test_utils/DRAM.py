@@ -18,8 +18,6 @@ class DRAMContents(object):
         dram_fmap = []
         dram_weights = []
         dram_bias = []
-        print(layer_parameters[0].input_shape)
-        print(layer_parameters[0].output_shape)
         for i in range(len(layer_parameters)):
             if "Depthwise" in str(layer_parameters[i].layer_name):
                 dram_weights.append([[[0 for l in range(layer_parameters[i].kernel_size[1])]
