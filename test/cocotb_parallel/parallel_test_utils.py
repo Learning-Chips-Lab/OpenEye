@@ -638,8 +638,6 @@ def compare_dram_with_ref_mp(f, ref_output, dram, return_dict):
           
 def fill_dram_with_ref(ref_output, dram, layer_params):
     logger.info("Results are transmitted.")
-    print(ref_output)
-    print(dram)
     if "Conv" in str(layer_params.layer_name):
         for f in range(len(ref_output)):    
             for x in range(len(ref_output[f])):
