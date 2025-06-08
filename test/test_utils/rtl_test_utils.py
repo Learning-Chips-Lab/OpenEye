@@ -590,6 +590,44 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         logger.debug("f: " + str(f) + "\n")
     pass
 
+async def compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level):
+    """ Await the output stream and compare it to the reference output.
+
+    This function awaits the output stream and compares it to the reference output.
+    
+    Args:
+        dut: The DUT.
+        layer_number: The index of the layer.
+        model: The model.
+        layer_repetition: The index of the part of a layer, if it is too large to be processed at once.
+        layer_parameters: The layer parameters.
+        oep: The OpenEye parameters.
+        les: The layer execution state.
+    """
+    if(logging.DEBUG >= login_level):
+        filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt'
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        txt_file = open(filename, 'w')
+        filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/storage_input.txt'
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        storage_file = open(filename, 'w')
+
+    f = 0
+    dut._log.info("Output Stream started")
+    while (dut.enable_dma_o.value == 1):
+
+        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+
+    cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
+    
+    if(logging.DEBUG >= login_level):
+        txt_file.close()
+        storage_file.write("f: " + str(f) + "\n")
+        storage_file.close()
+        logger.debug("POST")
+        logger.debug("f: " + str(f) + "\n")
+    pass
+
 async def send_enable_conv(ptp, dut, layer_params, layer_repetition, oep):
 
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))

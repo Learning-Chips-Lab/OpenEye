@@ -171,9 +171,7 @@ async def single_layer_test(dut):
     for layer_number, layer in enumerate(model.layers):
 
         # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
-        if("Pooling" in str(layer_parameters[layer_number].layer_name)):
-            slo.pool(dram, layer_parameters[layer_number], layer_number)
-        elif("Flat" in str(layer_parameters[layer_number].layer_name)):
+        if("Flat" in str(layer_parameters[layer_number].layer_name)):
             slo.flat(dram, layer_parameters[layer_number], layer_number)
         else:
             time_printer.timestamp("Layer parameters created. ", logger)
@@ -202,15 +200,17 @@ async def single_layer_test(dut):
                             await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level, output_order))
                         elif("Dense" in str(layer_parameters[layer_number].layer_name)):
                             await cocotb.start_soon(rtl_test_utils.compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
+                        elif("Pooling" in str(layer_parameters[layer_number].layer_name)):
+                            await cocotb.start_soon(rtl_test_utils.compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                         if(logging.DEBUG >= log_level):
                             assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                                     'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
-                            
                         assert ptu.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
                     else :
                         await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
                         time_printer.timestamp("Ready signal detected. Start new stream" , logger)
-                        dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number])
-                    slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
+                        dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number])
+                    if (layer_parameters[layer_number].layer_name != "Pooling") :
+                        slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
 
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"

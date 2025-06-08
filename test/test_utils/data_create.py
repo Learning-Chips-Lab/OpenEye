@@ -13,13 +13,21 @@ def create_layer(layer_mode, filters, kernelsize, inputsize_x,  inputsize_y, str
     match layer_mode:
         case "Convolution":
             model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
+            model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "Depthwise_Convolution":
             model.add(tf.keras.layers.DepthwiseConv2D((kernelsize, kernelsize), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "FC":
-            model.add(tf.keras.layers.Dense( input_shape=(1, inputsize_x), units=outputsize, use_bias = True))
+            model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=outputsize, use_bias = True))
         case "Pooling":
-            model.add(tf.keras.Input(shape =(inputsize_x, inputsize_y, channels)))
-            model.add(tf.keras.layers.AveragePooling2D(pool_size = inputsize, padding="valid"))
+            channels = 4
+            x_axis = 64
+            y_axis = 1
+            filters = 16
+            outputvalue = 20
+            model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
+            model.add(tf.keras.layers.MaxPooling2D(pool_size = (x_axis, y_axis), padding="valid"))
+            model.add(tf.keras.layers.Dense(input_shape=(filters), units=outputvalue, use_bias = True))
+
         case _:
             logger.debug("Layer not detected!")
 

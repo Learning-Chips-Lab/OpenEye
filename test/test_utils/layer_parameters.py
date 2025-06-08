@@ -74,7 +74,10 @@ class LayerParameters(object):
         self.used_iact_per_PE = 1
         self.used_wght_per_PE = 1
         self.used_psum_per_PE = 1
+        self.needed_wght_transmissions = 1
         self.needed_total_transmissions = 1
+        self.psum_delay = 0
+        self.fully_connected = 0
 
         self.send_values_out = 1
         self.skipIact = 0
@@ -102,6 +105,10 @@ class LayerParameters(object):
         elif "Dense" in str(layer):
             logger.debug("Dense Layer")
             self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
+
+        elif "Pooling" in str(layer):
+            logger.debug("Pooling Layer")
+            self.write_pooling_layer(layer_parameters, layer, params, layer_number, max_layers)
             
         else:
             logger.debug("Layer type for " + str(layer) + " not supported.")
@@ -553,8 +560,8 @@ class LayerParameters(object):
             
         self.layer_name = "Dense"
         self.iact_size_x = 1
-        self.iact_size_y = layer.input.shape[1]
-        self.filters = layer.output.shape[2]
+        self.iact_size_y = layer.input.shape[2]
+        self.filters = layer.output.shape[3]
         self.fully_connected = 1
         if (layer_number == max_layers - 1) :
             self.send_values_out = 1
@@ -569,15 +576,15 @@ class LayerParameters(object):
         self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
             
-        self.used_channels = math.ceil(self.input_shape[2]/4)
+        self.used_channels = math.ceil(self.input_shape[3]/4)
         #Calculate Iact Cycles
         self.needed_Iact_writes = math.ceil(params.PEs_Y/params.NUM_GLB_IACT)
 
         # Calculate the number of refreshes needed for the layer
         
-        self.used_iact_per_PE = math.ceil(self.input_shape[2]/4)
-        self.used_wght_per_PE = math.ceil(self.input_shape[2]*self.output_shape[2]/(4*params.Clusters_X))
-        self.used_psum_per_PE = math.ceil(self.output_shape[2]/params.Clusters_X)
+        self.used_iact_per_PE = math.ceil(self.input_shape[3]/4)
+        self.used_wght_per_PE = math.ceil(self.input_shape[3]*self.output_shape[3]/(4*params.Clusters_X))
+        self.used_psum_per_PE = math.ceil(self.output_shape[3]/params.Clusters_X)
 
         self.used_Y_cluster = params.Clusters_Y
         self.used_X_cluster = 1
@@ -608,14 +615,13 @@ class LayerParameters(object):
         self.needed_iact_transmissions = self.iact_transmissions_pe * self.iact_transmissions_glb
         self.Used_refreshes = self.iact_transmissions_pe * self.wght_transmissions_pe * self.psum_transmissions_pe
         
-        self.used_iact_per_PE = math.ceil(self.input_shape[2]/4)
+        self.used_iact_per_PE = math.ceil(self.input_shape[3]/4)
         self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_Bit_AXI/2)/params.IACT_WOH_Bitwidth))
         logger.debug("Refreshes: " + str(self.Used_refreshes))
         logger.debug("Used complete new descriptions: " + str(self.Used_refreshes))
         logger.debug("self.needed_Iact_writes : " + str(self.needed_Iact_writes))
         logger.debug("Used_refreshes : " + str(self.Used_refreshes))
         self.psum_delay = int(max([((self.used_wght_per_PE/2/self.used_iact_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
-
         self.used_wght_addr_per_PE = (self.used_iact_per_PE) + 2
         if (self.used_wght_addr_per_PE >= 16):
             self.used_wght_addr_per_PE = 16
@@ -642,6 +648,19 @@ class LayerParameters(object):
         logger.debug("Needed transmissions WGHT    : " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions PSUM    : " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions TOTAL   : " + str(self.needed_total_transmissions))
+        return
+
+    def write_pooling_layer(self, layer_parameters, layer, params, layer_number, max_layers):
+        self.layer_name = "Pooling"
+        self.input_shape = layer.input.shape
+        self.output_shape = layer.output.shape
+        self.skipIact = 1
+        self.skipWght = 1
+        self.skipPsum = 1
+        self.computing_mx = [[[[1 for _ in range(params.PEs_X)]
+                                        for _ in range(params.PEs_Y)]
+                                        for _ in range(params.Clusters_Y)]
+                                        for _ in range(params.Clusters_X)]
         return
 
     def print_layer_parameters(self, debug_file):

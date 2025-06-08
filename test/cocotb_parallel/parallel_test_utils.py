@@ -9,6 +9,8 @@ directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__fil
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 import logging
 import math
+
+from test_utils.pooling_mapper import PoolingMapper
 from test_utils.dense_mapper import DenseMapper
 from test_utils.conv_mapper import ConvMapper
 from test_utils.dw_mapper import DWMapper
@@ -60,6 +62,9 @@ def write_stream_layer_mp(params, layer_params, dram_layer_content, return_dict,
         LayerStreamGenerator.make_stream()
     elif "Dense" in str(layer_params.layer_name):
         LayerStreamGenerator = DenseMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
+        LayerStreamGenerator.make_stream()
+    elif "Pooling" in str(layer_params.layer_name):
+        LayerStreamGenerator = PoolingMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
     return_dict[layer_repetition] = LayerStreamGenerator.get_stream()
 
@@ -218,8 +223,8 @@ def write_weight_file(layer_params, layer_number, dram):
 
     if "Dense" in str(layer_params.layer_name):
         wght_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_0.csv')
-        for c in range(layer_params.input_shape[2]):
-            for x in range(layer_params.output_shape[2]):
+        for c in range(layer_params.input_shape[3]):
+            for x in range(layer_params.output_shape[3]):
                 wght_ref.write(str(int(dram.weights[layer_number][x][c])).rjust(5) + ";")
             wght_ref.write("\n")
         wght_ref.close()
@@ -232,7 +237,7 @@ def write_weight_file(layer_params, layer_number, dram):
                     wght_ref[c].write(str(dram.weights[layer_number][c][y][x]).rjust(5) + ";")
                 wght_ref[c].write("\n")
             wght_ref[c].close()
-    else:
+    elif "Conv" in str(layer_params.layer_name):
         wght_ref = [[0 for f in range(layer_params.filters)] for c in range(layer_params.input_shape[3])]
         for c in range(layer_params.input_shape[3]):
             for f in range(layer_params.filters):
@@ -242,15 +247,25 @@ def write_weight_file(layer_params, layer_number, dram):
                         wght_ref[c][f].write(str(dram.weights[layer_number][c][f][y][x]).rjust(5) + ";")
                     wght_ref[c][f].write("\n")
                 wght_ref[c][f].close()
-    return wght_ref
+    else:
+        pass
 
 def write_iact_file(layer_params, layer_number, dram):
     if "Dense" in str(layer_params.layer_name):
         iact_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/iact/iact_ref' + '_0.csv')
-        for c in range(layer_params.input_shape[2]):
+        for c in range(layer_params.input_shape[3]):
             iact_ref.write(str(int(dram.fmap[layer_number][c])))
             iact_ref.write("\n")
         iact_ref.close()
+    elif "Pooling" in str(layer_params.layer_name):
+        iact_ref = [0 for c in range(layer_params.input_shape[3])]
+        for c in range(layer_params.input_shape[3]):
+            iact_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/iact/iact_ref' + '_' +  str(c) + '.csv')
+            for y in range(layer_params.input_shape[2]):
+                for x in range(layer_params.input_shape[1]):
+                    iact_ref[c].write(str(int(dram.fmap[layer_number][c][x][y])).rjust(5) + ";")
+                iact_ref[c].write("\n")
+            iact_ref[c].close()
     else:
         iact_ref = [0 for c in range(layer_params.input_shape[3])]
         for c in range(layer_params.input_shape[3]):
@@ -264,7 +279,6 @@ def write_iact_file(layer_params, layer_number, dram):
                         iact_ref[c].write(str(1).rjust(5) + ";")
                 iact_ref[c].write("\n")
             iact_ref[c].close()
-        return iact_ref
 
 def write_psum_file(layer_params, layer_number, dram, calculated_results):
     manager = mp.Manager()
@@ -272,7 +286,7 @@ def write_psum_file(layer_params, layer_number, dram, calculated_results):
     jobs = []
     if "Dense" in str(layer_params.layer_name):
         psum_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_0.csv')
-        for x in range(layer_params.output_shape[2]):
+        for x in range(layer_params.output_shape[3]):
             psum_ref.write(str(calculated_results[x]))
             psum_ref.write("\n")
         psum_ref.close()
@@ -286,7 +300,6 @@ def write_psum_file(layer_params, layer_number, dram, calculated_results):
                     psum_ref[c].write(str(calculated_results[c][y][x]).rjust(8) + ";")
                 psum_ref[c].write("\n")
             psum_ref[c].close()
-
     elif "Conv" in str(layer_params.layer_name):
         for f in range(layer_params.output_shape[3]):
             p = mp.Process(target = write_psum_file_conv_mp, args = (f, layer_params, calculated_results, return_dict))
@@ -299,7 +312,12 @@ def write_psum_file(layer_params, layer_number, dram, calculated_results):
             psum_ref[f] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_' +  str(f) + '.csv')
             psum_ref[f].write(return_dict[f])
             psum_ref[f].close()
-    return psum_ref
+    elif "Pooling" in str(layer_params.layer_name):
+        psum_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_0.csv')
+        for x in range(layer_params.output_shape[3]):
+            psum_ref.write(str(calculated_results[x]))
+            psum_ref.write("\n")
+        psum_ref.close()
 
 def write_psum_file_conv_mp(f, layer_params, calculated_results, return_dict):
     psum_ref = ""
@@ -314,11 +332,11 @@ def write_psum_file_conv_mp(f, layer_params, calculated_results, return_dict):
 def collect_results(layer_number, layer_params, dram, serial):
     #Calculate Bias
     if "Dense" in str(layer_params.layer_name):
-        calculated_results = [0 for i in range(layer_params.output_shape[2])]
+        calculated_results = [0 for i in range(layer_params.output_shape[3])]
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
-        for x in range(layer_params.output_shape[2]):
+        for x in range(layer_params.output_shape[3]):
             p = mp.Process(target = calculate_dense_results_mp, args = (x, layer_params, layer_number, dram, calculated_results[x], return_dict))
             p.start()
             jobs.append(p)
@@ -367,10 +385,15 @@ def collect_results(layer_number, layer_params, dram, serial):
             jobs[proc].join()
 
         calculated_results = return_dict
+
+    elif "Pooling" in str(layer_params.layer_name):
+        calculated_results = [0 for i in range(layer_params.output_shape[3])]
+        for f in range(layer_params.output_shape[3]):
+            calculated_results[f] = int(max(dram.fmap[layer_number][f])[0])
     return calculated_results
 
 def calculate_dense_results_mp(x, layer_params, layer_number, dram, calculated_results,return_dict):
-    for c in range(layer_params.input_shape[2]):
+    for c in range(layer_params.input_shape[3]):
         calculated_results = int(calculated_results + dram.weights[layer_number][x][c] * dram.fmap[layer_number][c])
     calculated_results = int(calculated_results + dram.bias[layer_number][x])
     return_dict[x] = calculated_results
@@ -591,6 +614,14 @@ def compare_dram_with_ref(layer_params, ref_output, dram):
                 logger.error(f'ReferenceData: {str(ref_output[f])}')
                 logger.error(f'Output Stream: {str(dram[f])}')
                 return False
+            
+    elif "Pooling" in str(layer_params.layer_name):
+        for f in range(len(ref_output)):
+            if dram[f] != ref_output[f]:
+                logger.error(f'Difference found at f = {f}')
+                logger.error(f'ReferenceData: {str(ref_output[f])}')
+                logger.error(f'Output Stream: {str(dram[f])}')
+                return False
 
     return True
 
@@ -605,10 +636,16 @@ def compare_dram_with_ref_mp(f, ref_output, dram, return_dict):
                 return_dict[f] = False
                 return
           
-def fill_dram_with_ref(ref_output, dram):
+def fill_dram_with_ref(ref_output, dram, layer_params):
     logger.info("Results are transmitted.")
-    for f in range(len(ref_output)):    
-        for x in range(len(ref_output[f])):
-            for y in range(len(ref_output[f][x])):
-                dram[f][x][y] = ref_output[f][x][y]
+    print(ref_output)
+    print(dram)
+    if "Conv" in str(layer_params.layer_name):
+        for f in range(len(ref_output)):    
+            for x in range(len(ref_output[f])):
+                for y in range(len(ref_output[f][x])):
+                    dram[f][x][y] = ref_output[f][x][y]
+    elif "Pooling" in str(layer_params.layer_name):
+        for f in range(len(ref_output)):
+            dram[f] = ref_output[f]
     return dram       

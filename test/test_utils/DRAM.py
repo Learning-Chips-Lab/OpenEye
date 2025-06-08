@@ -18,6 +18,8 @@ class DRAMContents(object):
         dram_fmap = []
         dram_weights = []
         dram_bias = []
+        print(layer_parameters[0].input_shape)
+        print(layer_parameters[0].output_shape)
         for i in range(len(layer_parameters)):
             if "Depthwise" in str(layer_parameters[i].layer_name):
                 dram_weights.append([[[0 for l in range(layer_parameters[i].kernel_size[1])]
@@ -29,9 +31,11 @@ class DRAMContents(object):
                                     for k in range(layer_parameters[i].filters)]
                                     for j in range(layer_parameters[i].input_shape[3])])
             elif "Dense" in str(layer_parameters[i].layer_name):
-                dram_weights.append([[0 for m in range(layer_parameters[i].input_shape[2])]
-                                    for l in range(layer_parameters[i].output_shape[2])])
+                dram_weights.append([[0 for m in range(layer_parameters[i].input_shape[3])]
+                                    for l in range(layer_parameters[i].output_shape[3])])
             elif "Flat" in str(layer_parameters[i].layer_name):
+                dram_weights.append([0])
+            elif "Pooling" in str(layer_parameters[i].layer_name):
                 dram_weights.append([0])
 
             if "Depthwise" in str(layer_parameters[i].layer_name):
@@ -39,6 +43,8 @@ class DRAMContents(object):
             elif "Conv" in str(layer_parameters[i].layer_name):
                 dram_bias.append([0 for m in range(layer_parameters[i].filters)])
             elif "Dense" in str(layer_parameters[i].layer_name):
+                dram_bias.append([0 for m in range(layer_parameters[i].output_shape[3])])
+            elif "Pooling" in str(layer_parameters[i].layer_name):
                 dram_bias.append([0 for m in range(layer_parameters[i].output_shape[2])])
 
             if "Conv" in str(layer_parameters[i].layer_name):
@@ -46,8 +52,12 @@ class DRAMContents(object):
                                 for k in range(layer_parameters[i].input_shape[1])]
                                 for j in range(layer_parameters[i].input_shape[3])])
             elif "Dense" in str(layer_parameters[i].layer_name):
-                dram_fmap.append([0 for j in range(layer_parameters[i].input_shape[2])])
+                dram_fmap.append([0 for j in range(layer_parameters[i].input_shape[3])])
             elif "Flat" in str(layer_parameters[i].layer_name):
+                dram_fmap.append([[[0 for l in range(layer_parameters[i].input_shape[2])]
+                                for k in range(layer_parameters[i].input_shape[1])]
+                                for j in range(layer_parameters[i].input_shape[3])])
+            elif "Pooling" in str(layer_parameters[i].layer_name):
                 dram_fmap.append([[[0 for l in range(layer_parameters[i].input_shape[2])]
                                 for k in range(layer_parameters[i].input_shape[1])]
                                 for j in range(layer_parameters[i].input_shape[3])])
@@ -58,7 +68,7 @@ class DRAMContents(object):
                                     for k in range(layer_parameters[i].output_shape[1])]
                                     for j in range(layer_parameters[i].output_shape[3])])
             elif "Dense" in str(layer_parameters[i].layer_name):
-                dram_fmap.append([0 for l in range(layer_parameters[i].output_shape[2])])
+                dram_fmap.append([0 for l in range(layer_parameters[i].output_shape[3])])
         self.fmap = dram_fmap
         self.weights = dram_weights
         self.bias = dram_bias
@@ -85,8 +95,8 @@ class DRAMContents(object):
                                     if (self.weights[l][c][f][x][y] == 0):
                                         self.weights[l][c][f][x][y] = int(np.random.choice([-1, 1]))
             elif "Dense" in str(layer_parameters[l].layer_name):
-                for c in range(layer_parameters[l].input_shape[2]):
-                    for x in range(layer_parameters[l].output_shape[2]):
+                for c in range(layer_parameters[l].input_shape[3]):
+                    for x in range(layer_parameters[l].output_shape[3]):
                         self.weights[l][x][c] = np.random.randint(-128, 127)
                         if (sparse_wghts & (((c+l+x) % 2) == 0)):
                             self.weights[l][x][c] = 0
@@ -106,7 +116,7 @@ class DRAMContents(object):
                     self.bias[l][x] = int(math.floor(float(model.layers[l].weights[1][x])))
                     #self.bias[l][x] = x * (-1)
             elif "Dense" in str(layer_parameters[l].layer_name):
-                for c in range(layer_parameters[l].output_shape[2]):
+                for c in range(layer_parameters[l].output_shape[3]):
                     #self.bias[l][c] = int(math.floor(float(model.layers[l].weights[1][c])))
                     self.bias[l][c] = int(c + 1)
 
@@ -121,7 +131,7 @@ class DRAMContents(object):
                             if (self.fmap[0][c][x][y] == 0):
                                 self.fmap[0][c][x][y] = int(np.random.choice([-1, 1]))
         elif "Dense" in str(layer_parameters[0].layer_name):
-            for c in range(layer_parameters[0].input_shape[2]):
+            for c in range(layer_parameters[0].input_shape[3]):
                 self.fmap[0][c] = np.random.randint(-128, 127)
                 """
                 if (sparse_iacts & (((c) % 2) == 0)):
