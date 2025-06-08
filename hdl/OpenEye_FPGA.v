@@ -1368,7 +1368,7 @@ module OpenEye_FPGA #(
               select_ram_offset          <= 0;
               ram_counter_storage        <= 0;
               select_ram_counter         <= 0;
-              buffer_SP_addr_upper_limit <= (CLUSTER_ROWS%8) * 4;
+              buffer_SP_addr_upper_limit <= (CLUSTER_ROWS%8) * iact_channels_per_pe_next_layer;
               buffer_SP_addr_lower_limit <= 0;
               for (a = 0; a < RAM_CELLS; a++) begin
                 buffer_SP_data_w_reg[a] <= 0;
@@ -1454,23 +1454,37 @@ module OpenEye_FPGA #(
                 end
               end
               if (iact_channels_per_pe_next_layer == 2) begin
-                if (select_ram_counter == {{8{1'd0}},select_ram_offset} + 8 - 1) begin
-                  select_ram_counter    <= {{8{1'd0}},select_ram_offset};
+                if (select_ram_counter == 16 - 1) begin
+                  select_ram_counter <= 0;
+                end
+                if (select_ram_counter == (CLUSTER_ROWS + ram_counter_storage - 1)%16) begin
+                  select_ram_counter    <= ram_counter_storage;
                   iact_channels_counter <= iact_channels_counter + 1;
                   if (iact_channels_counter == iact_channels_per_pe_next_layer - 1) begin
                     iact_channels_counter <= 0;
-                    select_ram_offset     <= select_ram_offset + 8;
+                    ram_counter_storage   <= select_ram_counter + 1;
+                    select_ram_counter    <= select_ram_counter + 1;
+                    if (select_ram_counter >= (32/2) - 1) begin
+                      select_ram_counter  <= 0;
+                      ram_counter_storage <= 0;
+                    end
                     for (a = 0; a < RAM_CELLS; a++) begin
-                      if ((a < ({{8{1'd0}},select_ram_offset} + 8) * 2) & (a >= {{8{1'd0}},select_ram_offset} * 2)) begin
+                      if (buffer_SP_addr_upper_limit == buffer_SP_addr_lower_limit) begin
                         buffer_SP_en_w_reg[a] <= 1;
+                      end else begin
+                        if (buffer_SP_addr_upper_limit > buffer_SP_addr_lower_limit) begin
+                          if ((a >= buffer_SP_addr_lower_limit) & (a < buffer_SP_addr_upper_limit)) begin
+                            buffer_SP_en_w_reg[a] <= 1;
+                          end
+                        end else begin
+                          if ((a >= buffer_SP_addr_lower_limit) | (a < buffer_SP_addr_upper_limit)) begin
+                            buffer_SP_en_w_reg[a] <= 1;
+                          end
+                        end
                       end
                     end
-                    if (select_ram_offset == 8) begin
-                      select_ram_offset <= 0;
-                      select_ram_counter <= 0;
-                    end else begin
-                      select_ram_counter <= select_ram_offset + 8;
-                    end
+                    buffer_SP_addr_lower_limit <= buffer_SP_addr_upper_limit;
+                    buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + CLUSTER_ROWS * 2) % 32;
                   end
                 end
                 for (a = 0; a < RAM_CELLS; a++) begin
@@ -1487,23 +1501,37 @@ module OpenEye_FPGA #(
                 end
               end
               if (iact_channels_per_pe_next_layer == 1) begin
-                if (select_ram_counter == {8'd0,select_ram_offset} + 7) begin
-                  select_ram_counter    <= {8'd0,select_ram_offset};
+                if (select_ram_counter == 32 - 1) begin
+                  select_ram_counter <= 0;
+                end
+                if (select_ram_counter == (CLUSTER_ROWS + ram_counter_storage - 1)%32) begin
+                  select_ram_counter    <= ram_counter_storage;
                   iact_channels_counter <= iact_channels_counter + 1;
                   if (iact_channels_counter == iact_channels_per_pe_next_layer - 1) begin
                     iact_channels_counter <= 0;
-                    select_ram_offset     <= select_ram_offset + 8;
+                    ram_counter_storage   <= select_ram_counter + 1;
+                    select_ram_counter    <= select_ram_counter + 1;
+                    if (select_ram_counter >= 32 - 1) begin
+                      select_ram_counter  <= 0;
+                      ram_counter_storage <= 0;
+                    end
                     for (a = 0; a < RAM_CELLS; a++) begin
-                      if ((a < (select_ram_offset + 8)) & (a >= select_ram_offset)) begin
+                      if (buffer_SP_addr_upper_limit == buffer_SP_addr_lower_limit) begin
                         buffer_SP_en_w_reg[a] <= 1;
+                      end else begin
+                        if (buffer_SP_addr_upper_limit > buffer_SP_addr_lower_limit) begin
+                          if ((a >= buffer_SP_addr_lower_limit) & (a < buffer_SP_addr_upper_limit)) begin
+                            buffer_SP_en_w_reg[a] <= 1;
+                          end
+                        end else begin
+                          if ((a >= buffer_SP_addr_lower_limit) | (a < buffer_SP_addr_upper_limit)) begin
+                            buffer_SP_en_w_reg[a] <= 1;
+                          end
+                        end
                       end
                     end
-                    if (select_ram_offset == 24) begin
-                      select_ram_offset <= 0;
-                      select_ram_counter <= 0;
-                    end else begin
-                      select_ram_counter <= {8'd0,select_ram_offset} + 8;
-                    end
+                    buffer_SP_addr_lower_limit <= buffer_SP_addr_upper_limit;
+                    buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + CLUSTER_ROWS) % 32;
                   end
                 end
                 for (a = 0; a < RAM_CELLS; a++) begin
