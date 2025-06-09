@@ -346,6 +346,7 @@ module OpenEye_FPGA #(
   reg buffer_SP_en_w_reg[RAM_CELLS-1:0];
   reg choose_iact_buffer;
   reg fully_connected_layer;
+  reg max_pooling;
   reg [RAM_CELLS_ADDR_WIDTH-2:0] buffer_SP_addr_reg[RAM_CELLS-1:0];
   reg [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w_reg[RAM_CELLS-1:0];
 
@@ -433,6 +434,8 @@ module OpenEye_FPGA #(
   localparam WAIT_CYCLE = 4'd9;
   localparam WAIT_FOR_RESULTS = 4'd10;
   localparam RECEIVE_PSUMS_TO_IACT = 4'd11;
+  localparam MAXPOOLING_READ = 4'd12;
+  localparam MAXPOOLING_SEND = 4'd13;
 
   reg [3:0] fsm_current_state;
   reg [3:0] fsm_last_state;
@@ -934,6 +937,43 @@ module OpenEye_FPGA #(
   reg [15:0] select_ram_counter;
   reg [15:0] ram_counter_storage;
   reg [ 7:0] select_ram_offset;
+  reg signed [ 7:0] pooling_regs    [31:0];
+  reg signed [ 7:0] pooling_stage_1 [7:0];
+  reg signed [ 7:0] pooling_stage_2 [3:0];
+  reg signed [ 7:0] pooling_stage_3 [1:0];
+  reg signed [ 7:0] pooling_stage_4;
+
+  wire [7:0] debug_pooling_regs0;
+  wire [7:0] debug_pooling_regs1;
+  wire [7:0] debug_pooling_regs2;
+  wire [7:0] debug_pooling_regs3;
+  wire [7:0] debug_pooling_regs4;
+  wire [7:0] debug_pooling_regs5;
+  wire [7:0] debug_pooling_regs6;
+  wire [7:0] debug_pooling_regs7;
+  wire [7:0] debug_pooling_regs12;
+  wire [7:0] debug_pooling_regs15;
+  wire [7:0] debug_pooling_regs31;
+  wire [7:0] debug_pooling_stage_1;
+  wire [7:0] debug_pooling_stage_2;
+  wire [7:0] debug_pooling_stage_3;
+  wire [7:0] debug_pooling_stage_4;
+
+  assign debug_pooling_regs0 = pooling_regs[0];
+  assign debug_pooling_regs1 = pooling_regs[1];
+  assign debug_pooling_regs2 = pooling_regs[2];
+  assign debug_pooling_regs3 = pooling_regs[3];
+  assign debug_pooling_regs4 = pooling_regs[4];
+  assign debug_pooling_regs5 = pooling_regs[5];
+  assign debug_pooling_regs6 = pooling_regs[6];
+  assign debug_pooling_regs7 = pooling_regs[7];
+  assign debug_pooling_regs12 = pooling_regs[12];
+  assign debug_pooling_regs15 = pooling_regs[15];
+  assign debug_pooling_regs31 = pooling_regs[31];
+  assign debug_pooling_stage_1 = pooling_stage_1[0];
+  assign debug_pooling_stage_2 = pooling_stage_2[0];
+  assign debug_pooling_stage_3 = pooling_stage_3[0];
+  assign debug_pooling_stage_4 = pooling_stage_4;
 
   reg [ 6:0] quant_exp  [31:0];
   reg [24:0] quant_mant [31:0];
@@ -1018,6 +1058,20 @@ module OpenEye_FPGA #(
       iact_converter_cycles          <= 0;
       iact_converter_buffer_addr_cycles <= 0;
       send_data_reg                     <= 0;
+      // Pooling
+      for (a = 0; a < 32; a = a + 1) begin
+        pooling_regs[a] <= 0;
+      end
+      for (a = 0; a < 8; a = a + 1) begin
+        pooling_stage_1[a] <= 0;
+      end
+      for (a = 0; a < 4; a = a + 1) begin
+        pooling_stage_2[a] <= 0;
+      end
+      for (a = 0; a < 2; a = a + 1) begin
+        pooling_stage_3[a] <= 0;
+      end
+      pooling_stage_4 <= 0;
       for (a = 0; a < 32; a = a + 1) begin
         quant_exp[a]  <= 0;
         quant_mant[a] <= 0;
@@ -1029,8 +1083,9 @@ module OpenEye_FPGA #(
         buffer_SP_addr_reg[a]   <= 0;
         buffer_SP_data_w_reg[a] <= 0;
       end
-      choose_iact_buffer <= 0;
+      choose_iact_buffer    <= 0;
       fully_connected_layer <= 0;
+      max_pooling           <= 0;
       converters_ready = 0;
       converter_needed_cycles      <= 0;
       iact_converter_enc_enable    <= 0;
@@ -1059,6 +1114,25 @@ module OpenEye_FPGA #(
           buffer_SP_addr_lower_limit <= 0;
           buffer_SP_addr_upper_limit <= 0;
           limit_increase_reg         <= 0;
+          for (a = 0; a < 32; a = a + 1) begin
+            buffer_SP_en_r_reg[a]   <= 0;
+            buffer_SP_en_w_reg[a]   <= 0;
+            buffer_SP_addr_reg[a]   <= 0;
+            buffer_SP_data_w_reg[a] <= 0;
+          end
+          for (a = 0; a < 32; a = a + 1) begin
+            pooling_regs[a] <= 0;
+          end
+          for (a = 0; a < 8; a = a + 1) begin
+            pooling_stage_1[a] <= 0;
+          end
+          for (a = 0; a < 4; a = a + 1) begin
+            pooling_stage_2[a] <= 0;
+          end
+          for (a = 0; a < 2; a = a + 1) begin
+            pooling_stage_3[a] <= 0;
+          end
+          pooling_stage_4 <= 0;
           for (a = 0; a < 32; a = a + 1) begin
             quant_exp[a]  <= 0;
             quant_mant[a] <= 0;
@@ -1114,13 +1188,13 @@ module OpenEye_FPGA #(
                 iact_needed_cycles                    <= data_dma_i_reg[10:0];
               end
               32'd3: begin
-
+                max_pooling                     <= data_dma_i_reg[18];
                 fully_connected_layer           <= data_dma_i_reg[17];
                 choose_iact_buffer              <= data_dma_i_reg[16];
                 iact_channels_per_pe_next_layer <= data_dma_i_reg[11:8];
                 needed_psum_storage_cycles_reg  <= data_dma_i_reg[7:0] * needed_y_cls_reg;
                 if (data_dma_i_reg[17]) begin
-                  needed_psum_storage_cycles_reg  <= data_dma_i_reg[7:0];
+                  needed_psum_storage_cycles_reg <= data_dma_i_reg[7:0];
                 end
                 iact_channel_max_cycles         <= data_dma_i_reg[7:0];
               end
@@ -1171,6 +1245,9 @@ module OpenEye_FPGA #(
               end else begin
                 fsm_current_state <= GET_WGHT;
               end
+              if (max_pooling) begin
+                fsm_current_state <= GET_QUANTIZE;
+              end
             end
           end
         end
@@ -1216,7 +1293,7 @@ module OpenEye_FPGA #(
             if (fully_connected_layer) begin
               iact_converter_max_cycles <= 2;
             end
-            min_standing_cycles                                         <= (needed_iact_cycles_reg * iact_channels_per_pe) / WORDS_PER_CYCLE[8-1:0];
+            min_standing_cycles <= (needed_iact_cycles_reg * iact_channels_per_pe) / WORDS_PER_CYCLE[8-1:0];
             for (b = 0; b < TRANS_BITWIDTH_WGHT; b = b + 1) begin
               wght_buffer_SP_data_w[fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b]
               <= data_dma_i_reg[b];
@@ -1275,11 +1352,21 @@ module OpenEye_FPGA #(
             quant_exp[2*fsm_cycle+1]  <= data_dma_i_reg[63:57];
             quant_mant[2*fsm_cycle+1] <= data_dma_i_reg[56:32];
           end
+          if (max_pooling) begin
+            for (a = 0; a < RAM_CELLS; a++) begin
+              buffer_SP_en_r_reg[a] <= 1;
+            end
+          end
           if (fsm_cycle == 16 - 1) begin
             fsm_cycle <= 0;
+            ready_dma_o       <= 0;
             fsm_last_state    <= GET_QUANTIZE;
             fsm_current_state <= START_CONVERTER;
-            ready_dma_o       <= 0;
+            if (max_pooling) begin
+              fsm_cycle          <= -4;
+              fsm_current_state  <= MAXPOOLING_READ;
+              select_ram_counter <= 0;
+            end
           end
         end
         
@@ -1368,7 +1455,7 @@ module OpenEye_FPGA #(
               select_ram_offset          <= 0;
               ram_counter_storage        <= 0;
               select_ram_counter         <= 0;
-              buffer_SP_addr_upper_limit <= (CLUSTER_ROWS%8) * iact_channels_per_pe_next_layer;
+              buffer_SP_addr_upper_limit <= CLUSTER_ROWS * iact_channels_per_pe_next_layer;
               buffer_SP_addr_lower_limit <= 0;
               for (a = 0; a < RAM_CELLS; a++) begin
                 buffer_SP_data_w_reg[a] <= 0;
@@ -1577,6 +1664,78 @@ module OpenEye_FPGA #(
             send_data_reg         <= 0;
             fsm_cycle             <= 0;
             iact_channels_counter <= 0;
+          end
+        end
+        MAXPOOLING_READ: begin
+          select_ram_counter <= select_ram_counter + 1;
+          if (select_ram_counter == RAM_CELLS - 1) begin
+            select_ram_counter <= 0;
+          end
+          fsm_cycle <= fsm_cycle + 1;
+          if (fsm_cycle == RAM_CELLS/4 - 1) begin
+            fsm_cycle <= 0;
+            iact_converter_cycles <= iact_converter_cycles + 1;
+          end
+          if (((select_ram_counter+2)%32) == 0) begin
+            for (a = 0; a < RAM_CELLS; a++) begin
+              buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
+            end
+          end
+          for (a = 0; a < 8; a = a + 1) begin
+            pooling_stage_1[a] <= buffer_SP_data_r[select_ram_counter*RAM_CELLS_WORD_BITWIDTH+8*a+:8];
+          end
+          for (a = 0; a < 4; a = a + 1) begin
+            if (pooling_stage_1[2*a] >= pooling_stage_1[2*a+1]) begin
+              pooling_stage_2[a] <= pooling_stage_1[2*a];
+            end else begin
+              pooling_stage_2[a] <= pooling_stage_1[2*a+1];
+            end
+          end
+          for (a = 0; a < 2; a = a + 1) begin
+            if (pooling_stage_2[2*a] >= pooling_stage_2[2*a+1]) begin
+              pooling_stage_3[a] <= pooling_stage_2[2*a];
+            end else begin
+              pooling_stage_3[a] <= pooling_stage_2[2*a+1];
+            end
+          end
+          if (pooling_stage_3[0] >= pooling_stage_3[1]) begin
+            pooling_stage_4 <= pooling_stage_3[0];
+          end else begin
+            pooling_stage_4 <= pooling_stage_3[1];
+          end
+          for (a = 0; a < 32; a = a + 1) begin
+            if (a == iact_converter_cycles) begin
+              if (pooling_regs[a] < pooling_stage_4) begin
+                pooling_regs[a] <= pooling_stage_4;
+              end
+            end
+          end
+          if ((fsm_cycle == 1) & (iact_converter_cycles == (iact_size_y * iact_channels))) begin
+            select_ram_counter    <= 0;
+            fsm_cycle             <= 0;
+            iact_converter_cycles <= 0;
+            fsm_last_state        <= MAXPOOLING_READ;
+            fsm_current_state     <= MAXPOOLING_SEND;
+          end
+        end
+        MAXPOOLING_SEND: begin
+          fsm_cycle <= fsm_cycle + 1;
+          for (a = 0; a < RAM_CELLS; a++) begin
+            buffer_SP_addr_reg[a] <= 0;
+          end
+          for (a = 0; a < RAM_CELLS; a++) begin
+            buffer_SP_en_w_reg[a] <= 0;
+            if (fsm_cycle == a) begin
+              buffer_SP_en_w_reg[a] <= 1;
+              for (b = 0; b < IACT_WORDS_IN_RAM; b++) begin
+                buffer_SP_data_w_reg[a][8*b+:8] <= pooling_regs[8*a + b];
+              end
+            end
+          end
+          if (fsm_cycle >= (iact_channel_max_cycles)/IACT_WORDS_IN_RAM - 1) begin
+            fsm_cycle         <= 0;
+            fsm_last_state    <= MAXPOOLING_SEND;
+            fsm_current_state <= GET_PARAMETERS;
           end
         end
         default: begin
@@ -2183,7 +2342,7 @@ reg [7:0] current_filter;
             end
           end
           fsm_psum_cycle <= fsm_psum_cycle + 1;
-          if (fsm_psum_cycle == 8 * filters_reg * iact_size_y) begin
+          if (fsm_psum_cycle == 8 * needed_wght_cycles_reg * filters_reg * iact_size_y) begin
             fsm_psum_cycle              <= 0;
             fsm_psum_last_state         <= PSUM_SEND_RESULTS;
             fsm_psum_current_state      <= PSUM_IDLE;
@@ -2405,7 +2564,6 @@ reg [7:0] current_filter;
 
     ) OpenEye_Parallel (
         //Clock and Reset Ports
-
         .clk_i    (clk_i),
         .rst_ni   (rst_n),
         .compute_i(compute_reg),
@@ -2430,31 +2588,31 @@ reg [7:0] current_filter;
         .psum_ready_i (psum_ready_i_reg),
 
         //Ports for Hyperparameters
-        .status_reg_enable_i    (status_reg_enable_reg),
-        .data_mode_i            (data_mode_reg),
-        .fraction_bit_i         (fraction_bit_reg),
-        .needed_cycles_i        (needed_cycles_reg),
-        .needed_x_cls_i         (needed_x_cls_reg),
-        .needed_y_cls_i         (needed_y_cls_reg),
-        .needed_iact_cycles_i   (needed_iact_cycles_reg),
-        .filters_i              (filters_reg),
-        .iact_addr_len_i        (iact_addr_len_reg),
-        .wght_addr_len_i        (wght_addr_len_reg),
-        .bano_cluster_mode_i    (bano_cluster_mode_reg),
-        .af_cluster_mode_i      (af_cluster_mode_reg),
-        .pooling_cluster_mode_i (4'd0),
-        .kernel_per_pe_cluster_i(kernel_per_pe_cluster_reg[$clog2(PE_ROWS)-1:0]),
-        .input_activations_i    (input_activations_reg),
-        .stride_x_i             (stride_x_reg),
-        .stride_y_i             (stride_y_reg),
-        .delay_psum_glb_i       (psum_delay_reg),
-        .compute_mask_i         (compute_mask_reg),
-        .router_mode_iact_i     (router_mode_iact_reg),
-        .router_mode_wght_i     (router_mode_wght_reg),
-        .router_mode_psum_i     (router_mode_psum_reg),
+        .status_reg_enable_i          (status_reg_enable_reg),
+        .data_mode_i                  (data_mode_reg),
+        .fraction_bit_i               (fraction_bit_reg),
+        .needed_cycles_i              (needed_cycles_reg),
+        .needed_x_cls_i               (needed_x_cls_reg),
+        .needed_y_cls_i               (needed_y_cls_reg),
+        .needed_iact_cycles_i         (needed_iact_cycles_reg),
+        .filters_i                    (filters_reg),
+        .iact_addr_len_i              (iact_addr_len_reg),
+        .wght_addr_len_i              (wght_addr_len_reg),
+        .bano_cluster_mode_i          (bano_cluster_mode_reg),
+        .af_cluster_mode_i            (af_cluster_mode_reg),
+        .pooling_cluster_mode_i       (4'd0),
+        .kernel_per_pe_cluster_i      (kernel_per_pe_cluster_reg[$clog2(PE_ROWS)-1:0]),
+        .input_activations_i          (input_activations_reg),
+        .stride_x_i                   (stride_x_reg),
+        .stride_y_i                   (stride_y_reg),
+        .delay_psum_glb_i             (psum_delay_reg),
+        .compute_mask_i               (compute_mask_reg),
+        .router_mode_iact_i           (router_mode_iact_reg),
+        .router_mode_wght_i           (router_mode_wght_reg),
+        .router_mode_psum_i           (router_mode_psum_reg),
         .needed_psum_storage_cycles_i (needed_psum_storage_cycles_reg),
         .needed_iact_channel_cycles_i (iact_channel_max_cycles),
-        .psum_transmitted_i (psum_transmitted)
+        .psum_transmitted_i           (psum_transmitted)
     );
 
     genvar cc_gen, cr_gen, pe_gen;

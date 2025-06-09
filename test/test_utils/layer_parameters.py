@@ -53,6 +53,7 @@ class LayerParameters(object):
         self.strideY = 1
         self.add_up = 1
         self.complete_iacts_in_design = 0
+        self.max_pooling = 0
 
         self.filters = 1
         self.input_shape = []
@@ -657,10 +658,18 @@ class LayerParameters(object):
         self.skipIact = 1
         self.skipWght = 1
         self.skipPsum = 1
+        self.channels = self.input_shape[3]
+        self.max_pooling = 1
+        self.send_values_out = 1
+        self.iact_size_x = self.input_shape[1]
+        self.iact_size_y = self.input_shape[2]
         self.computing_mx = [[[[1 for _ in range(params.PEs_X)]
                                         for _ in range(params.PEs_Y)]
                                         for _ in range(params.Clusters_Y)]
                                         for _ in range(params.Clusters_X)]
+        self.used_channels = 1
+        print(self.input_shape)
+        self.diff_iact_layer = self.input_shape[3]
         return
 
     def print_layer_parameters(self, debug_file):

@@ -70,9 +70,11 @@ class PoolingMapper(LayerMapper):
             dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.used_channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
             dma_storage.append(dma_line)
             dma_line = 0
+            dma_line = math.ceil(layer_params.diff_iact_layer)
             dma_line = dma_line + math.ceil(layer_params.diff_iact_layer_next_layer << 8)
             dma_line = dma_line + math.ceil(layer_params.choose_iact_storage << 16)
             dma_line = dma_line + math.ceil(layer_params.fully_connected << 17)
+            dma_line = dma_line + math.ceil(layer_params.max_pooling << 18)
             dma_storage.append(dma_line)
             dma_line = 0
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
