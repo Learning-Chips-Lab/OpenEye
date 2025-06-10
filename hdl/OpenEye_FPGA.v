@@ -1672,7 +1672,7 @@ module OpenEye_FPGA #(
             select_ram_counter <= 0;
           end
           fsm_cycle <= fsm_cycle + 1;
-          if (fsm_cycle == RAM_CELLS/4 - 1) begin
+          if (fsm_cycle == iact_size_y * (RAM_CELLS/4) - 1) begin
             fsm_cycle <= 0;
             iact_converter_cycles <= iact_converter_cycles + 1;
           end
@@ -1710,7 +1710,7 @@ module OpenEye_FPGA #(
               end
             end
           end
-          if ((fsm_cycle == 1) & (iact_converter_cycles == (iact_size_y * iact_channels))) begin
+          if ((fsm_cycle == 1) & (iact_converter_cycles == (iact_channels))) begin
             select_ram_counter    <= 0;
             fsm_cycle             <= 0;
             iact_converter_cycles <= 0;
@@ -2319,7 +2319,7 @@ reg [7:0] current_filter;
                     test_reg1 <= 0;
                     test_reg2 <= test_reg2 + 1;
                     psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
-                    <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + ({6'd0,filters_reg} - {8'd0,iact_channels_per_pe_next_layer}) + 1;
+                    <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + (needed_wght_cycles_reg * {6'd0,filters_reg} - {8'd0,iact_channels_per_pe_next_layer}) + 1;
                     if (test_reg2 == iact_size_y - 1) begin
                       test_reg2 <= 0;
                       psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]

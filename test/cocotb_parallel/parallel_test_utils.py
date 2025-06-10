@@ -9,6 +9,7 @@ directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__fil
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 import logging
 import math
+import numpy as np
 
 from test_utils.pooling_mapper import PoolingMapper
 from test_utils.dense_mapper import DenseMapper
@@ -389,7 +390,7 @@ def collect_results(layer_number, layer_params, dram, serial):
     elif "Pooling" in str(layer_params.layer_name):
         calculated_results = [0 for i in range(layer_params.output_shape[3])]
         for f in range(layer_params.output_shape[3]):
-            calculated_results[f] = int(max(dram.fmap[layer_number][f])[0])
+            calculated_results[f] = int(np.max(dram.fmap[layer_number][f]))
     return calculated_results
 
 def calculate_dense_results_mp(x, layer_params, layer_number, dram, calculated_results,return_dict):

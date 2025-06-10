@@ -187,11 +187,9 @@ async def single_layer_test(dut):
             time_printer.timestamp("Streams set. " , logger)
             for _ in range(1):
                 for layer_repetition in range(layer_parameters[layer_number].needed_total_transmissions):
-                    
                     logger.info("Send stream.")
                     await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters[layer_number], layer_repetition))
                     logger.info("Stream is sent.")
-
                     if (layer_number == max_layers - 1) :
                         await cocotb.start_soon(rtl_test_utils.await_enable_signal(ptp, dut))
                         if("Depthwise" in str(layer_parameters[layer_number].layer_name)):
