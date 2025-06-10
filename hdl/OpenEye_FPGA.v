@@ -1672,7 +1672,7 @@ module OpenEye_FPGA #(
             select_ram_counter <= 0;
           end
           fsm_cycle <= fsm_cycle + 1;
-          if (fsm_cycle == iact_size_y * (RAM_CELLS/4) - 1) begin
+          if (fsm_cycle == iact_size_y * CLUSTER_ROWS - 1) begin
             fsm_cycle <= 0;
             iact_converter_cycles <= iact_converter_cycles + 1;
           end
