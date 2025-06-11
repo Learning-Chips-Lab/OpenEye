@@ -114,6 +114,7 @@ module OpenEye_FPGA #(
     parameter FSM_CYCLE_MAX = 4294967295,
 
     parameter BUFFER_WIDTH = 12,
+    parameter BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR = (CLUSTER_ROWS == 8) ? BUFFER_WIDTH + 1 : BUFFER_WIDTH + 2,
     parameter real FSM_IACT_RTR_CCLS_A = (CLUSTERS * NUM_GLB_IACT),
     parameter real FSM_IACT_RTR_CCLS_B = DMA_BITWIDTH / ROUTER_MODES_IACT,
     parameter real FSM_IACT_RTR_CCLS = FSM_IACT_RTR_CCLS_A / FSM_IACT_RTR_CCLS_B,
@@ -1281,7 +1282,6 @@ module OpenEye_FPGA #(
             end
           end
         end
-
         GET_WGHT: begin
           ready_dma_o <= 1;
           for (a = 0; a < RAM_CELLS; a++) begin
@@ -2444,7 +2444,7 @@ reg [7:0] current_filter;
             .DATA_IACT_OVERHEAD(DATA_IACT_OVERHEAD),
             .RAM_CELLS         (RAM_CELLS),
             .WORD_BITWIDTH     (TRANS_BITWIDTH_IACT * NUM_GLB_IACT),
-            .ADDRWIDTH         (BUFFER_WIDTH + 1)
+            .ADDRWIDTH         (BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR)
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
             .rst_ni                      (rst_ni),
