@@ -61,7 +61,7 @@ async def single_layer_test(dut):
     This function tests the DUT with a given DNN model.
     """
     try:
-        only_files = os.getenv("ONLY_FILES")
+        only_files = int((os.getenv("ONLY_FILES")))
     except:
         only_files = 0
     # Get variables that are used for the execution of the test
