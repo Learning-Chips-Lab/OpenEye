@@ -395,8 +395,9 @@ module OpenEye_FPGA #(
   reg status_reg_enable_reg;
 
   reg compute_reg;
-  reg [CLUSTERS*PES-1:0] compute_mask_reg;
-
+  reg [192-1:0] compute_mask_reg; //Clusters * PEs in Cluster
+  wire [CLUSTERS * PES -1:0]compute_mask_reg_port;
+  assign compute_mask_reg_port = compute_mask_reg[CLUSTERS * PES -1:0];
   reg [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_reg;
   reg [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_reg;
   reg [ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_reg;
@@ -2606,7 +2607,7 @@ reg [7:0] current_filter;
         .stride_x_i                   (stride_x_reg),
         .stride_y_i                   (stride_y_reg),
         .delay_psum_glb_i             (psum_delay_reg),
-        .compute_mask_i               (compute_mask_reg),
+        .compute_mask_i               (compute_mask_reg_port),
         .router_mode_iact_i           (router_mode_iact_reg),
         .router_mode_wght_i           (router_mode_wght_reg),
         .router_mode_psum_i           (router_mode_psum_reg),
