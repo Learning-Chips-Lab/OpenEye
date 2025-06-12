@@ -1450,7 +1450,7 @@ module OpenEye_FPGA #(
               select_ram_offset          <= 0;
               ram_counter_storage        <= 0;
               select_ram_counter         <= 0;
-              buffer_SP_addr_upper_limit <= CLUSTER_ROWS * iact_channels_per_pe_next_layer;
+              buffer_SP_addr_upper_limit <= (CLUSTER_ROWS * iact_channels_per_pe_next_layer)%32;
               buffer_SP_addr_lower_limit <= 0;
               for (a = 0; a < RAM_CELLS; a++) begin
                 buffer_SP_data_w_reg[a] <= 0;
