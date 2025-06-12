@@ -200,12 +200,6 @@ module OpenEye_FPGA #(
 
     //DEBUG OUTPUT PSUM2
 
-    output reg                             debug_psum_we2,
-    output reg                             debug_psum_re2,
-    output reg [BUFFER_WIDTH-1:0]          debug_psum_addr2,
-    output reg [TRANS_BITWIDTH_PSUM*2-1:0] debug_psum_data_i2,
-    output reg [TRANS_BITWIDTH_PSUM*2-1:0] debug_psum_data_o2,
-
     output reg                      ready_dma_o,
     input      [DMA_BITWIDTH-1 : 0] data_dma_i,
     input                           enable_dma_i,
@@ -2515,12 +2509,6 @@ reg [7:0] current_filter;
     assign debug_psum_addr   = psum_buffer_SP_addr[0+:BUFFER_WIDTH];
     assign debug_psum_data_i = psum_buffer_SP_data_w[0+:TRANS_BITWIDTH_PSUM*2];
     assign debug_psum_data_o = psum_buffer_SP_data_r[0+:TRANS_BITWIDTH_PSUM*2];
-
-    assign debug_psum_re2     = psum_buffer_SP_en_r[31] & !psum_buffer_SP_en_w[31];
-    assign debug_psum_we2     = psum_buffer_SP_en_w[31];
-    assign debug_psum_addr2   = psum_buffer_SP_addr[31*BUFFER_WIDTH+:BUFFER_WIDTH];
-    assign debug_psum_data_i2 = psum_buffer_SP_data_w[31*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM*2];
-    assign debug_psum_data_o2 = psum_buffer_SP_data_r[31*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM*2];
 
     wire [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i_oep_w;
     wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_oep_w;
