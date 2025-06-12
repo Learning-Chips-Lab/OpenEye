@@ -6,6 +6,7 @@
 import os
 import shutil
 import logging
+import test_utils.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 
@@ -107,6 +108,20 @@ def reset_nested_list(lst):
         return [reset_nested_list(sublist) for sublist in lst]
     else:
         return 0
+
+def create_stream_file(stream, layer_number, layer_repetition):
+    open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_input.txt')
+    with open('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_input.txt', 'w') as f_dump:
+        for v in stream[strdic.stream_parallel_dict["status"]]:
+            f_dump.write(f'{v}\n')
+        for v in stream[strdic.stream_parallel_dict["iact"]]:
+            f_dump.write(f'{v}\n')
+        for v in stream[strdic.stream_parallel_dict["wght"]]:
+            f_dump.write(f'{v}\n')
+        for v in stream[strdic.stream_parallel_dict["psum"]]:
+            f_dump.write(f'{v}\n')
+        for v in stream[strdic.stream_parallel_dict["quantize"]]:
+            f_dump.write(f'{v}\n')
 
 class HDF5_Model:
     def save_model_to_hdf5(self, model, filename):

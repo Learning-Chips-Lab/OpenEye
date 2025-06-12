@@ -60,6 +60,10 @@ async def single_layer_test(dut):
 
     This function tests the DUT with a given DNN model.
     """
+    try:
+        only_files = os.getenv("ONLY_FILES")
+    except:
+        only_files = 0
     # Get variables that are used for the execution of the test
     try:
         layer_mode = os.getenv("LAYER")
@@ -151,12 +155,13 @@ async def single_layer_test(dut):
     openeye_parameter = oep.create_vh_file(serial)
     time_printer.timestamp("OpenEye parameters set. ", logger)
 
-    # Start the clock
-    clk = Clock(dut.clk_i, ptp.clk_cycle, units=ptp.clk_cycle_unit)
-    cocotb.start_soon(clk.start())
-    dut._log.info("Clock is %s " + ptp.clk_cycle_unit, ptp.clk_cycle)
-    # reset the DUT
-    await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
+    if (only_files == 0) :
+        # Start the clock
+        clk = Clock(dut.clk_i, ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        cocotb.start_soon(clk.start())
+        dut._log.info("Clock is %s " + ptp.clk_cycle_unit, ptp.clk_cycle)
+        # reset the DUT
+        await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
 
     # Process the layers of the model one after another
     max_layers = len(model.layers)
@@ -171,22 +176,20 @@ async def single_layer_test(dut):
     for layer_number, layer in enumerate(model.layers):
 
         # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
-        if("Flat" in str(layer_parameters[layer_number].layer_name)):
-            slo.flat(dram, layer_parameters[layer_number], layer_number)
-        else:
-            time_printer.timestamp("Layer parameters created. ", logger)
-            calculated_results = ptu.collect_results(layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
-            output_order = ptu.make_ref(openeye_parameter, layer_parameters[layer_number], layer_number, dram, calculated_results)
-            if(logging.DEBUG >= log_level):
-                time_printer.timestamp("Reference data created. ", logger)
+        time_printer.timestamp("Layer parameters created. ", logger)
+        calculated_results = ptu.collect_results(layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
+        output_order = ptu.make_ref(openeye_parameter, layer_parameters[layer_number], layer_number, dram, calculated_results)
+        if(logging.DEBUG >= log_level):
+            time_printer.timestamp("Reference data created. ", logger)
 
-            dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
-            time_printer.timestamp("Start creating stream. " , logger)
-            stream = ptu.write_stream(openeye_parameter, layer_parameters[layer_number], dram_layer_content, sparse_iacts, sparse_wghts)
-            
-            time_printer.timestamp("Streams set. " , logger)
-            for _ in range(1):
-                for layer_repetition in range(layer_parameters[layer_number].needed_total_transmissions):
+        dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
+        time_printer.timestamp("Start creating stream. " , logger)
+        stream = ptu.write_stream(openeye_parameter, layer_parameters[layer_number], dram_layer_content, sparse_iacts, sparse_wghts)
+        time_printer.timestamp("Streams set. " , logger)
+        for _ in range(1):
+            for layer_repetition in range(layer_parameters[layer_number].needed_total_transmissions):
+                gtu.create_stream_file(stream[layer_repetition],layer_number,layer_repetition)
+                if (only_files == 0) :
                     logger.info("Send stream.")
                     await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters[layer_number], layer_repetition))
                     logger.info("Stream is sent.")
@@ -211,4 +214,5 @@ async def single_layer_test(dut):
                     if (layer_parameters[layer_number].layer_name != "Pooling") :
                         slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
 
-    assert dut.rst_ni.value == 1, "rst_ni is not 1!"
+    if (only_files == 0) :
+        assert dut.rst_ni.value == 1, "rst_ni is not 1!"

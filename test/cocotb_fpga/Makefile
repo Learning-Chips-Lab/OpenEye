@@ -7,7 +7,6 @@ SIM ?= icarus
 #SIM ?= verilator
 #EXTRA_ARGS += --trace --trace-fst --trace-structs
 #COMPILE_ARGS += --trace --trace-fst --trace-structs
-VERILOG_COMPILE_ARGS += -DUSE_EXTERNAL_PARAMS
 TOPLEVEL_LANG ?= verilog
 WAVEFORM=on
 
@@ -64,21 +63,22 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 
 #export LAYER=FC
-export LAYER=Convolution
+#export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
-export NUM_FILTERS=8
+export LAYER=Pooling
+export NUM_FILTERS=32
 export KERNEL_SIZE=3
-export INPUT_SIZE_X=64
+export INPUT_SIZE_X=48
 export INPUT_SIZE_Y=1
 export STRIDE=1
-export INPUT_CHANNELS=4
-export OUTPUT_SIZE=4
+export INPUT_CHANNELS=32
+export OUTPUT_SIZE=20
 #Amout of parallel MACs
 export PARALLEL_MACS=2
 export USE_RANDOM_VALUES=1
 export USE_SPARSE_IACTS=0
 export USE_SPARSE_WEIGHTS=0
-	
+
 #Actual Datawidth of Data
 export DATA_IACT_BITWIDTH=8
 export DATA_PSUM_BITWIDTH=20
@@ -102,7 +102,7 @@ export PE_COLUMNS=4
 
 #Set number of Cluster rows need at least to be 2 COLUMNS
 export CLUSTER_COLUMNS=2
-export CLUSTER_ROWS=8
+export CLUSTER_ROWS=6
 
 #Number of Words per PE
 export IACT_PER_PE=16
@@ -110,6 +110,8 @@ export PE_IACT_ADDR_ADDR=9
 export WGHT_PER_PE=96
 export PE_WGHT_ADDR_ADDR=16
 export PSUM_PER_PE=32
+
+export ONLY_FILES=1
 
 # include cocotb's make rules to take care of the simulator setup
 export SCRIPT = $(PWD)/../test_utils/vh_file_creator.py
