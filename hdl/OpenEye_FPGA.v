@@ -199,6 +199,10 @@ module OpenEye_FPGA #(
     output reg [TRANS_BITWIDTH_PSUM*2-1:0] debug_psum_data_o,
 
     //DEBUG OUTPUT PSUM2
+    output reg                             debug_skip_iact_o,
+    output reg [DMA_BITWIDTH-1 : 0]        debug_data_dma_stream_o,
+    output reg                             debug_enable_dma_stream_o,
+    output reg [3:0]                       debug_fsm_cycle_o,
 
     output reg                      ready_dma_o,
     input      [DMA_BITWIDTH-1 : 0] data_dma_i,
@@ -934,22 +938,6 @@ module OpenEye_FPGA #(
   reg signed [ 7:0] pooling_stage_2 [3:0];
   reg signed [ 7:0] pooling_stage_3 [1:0];
   reg signed [ 7:0] pooling_stage_4;
-
-  wire [7:0] debug_pooling_regs0;
-  wire [7:0] debug_pooling_regs1;
-  wire [7:0] debug_pooling_regs2;
-  wire [7:0] debug_pooling_regs3;
-  wire [7:0] debug_pooling_regs4;
-  wire [7:0] debug_pooling_regs5;
-  wire [7:0] debug_pooling_regs6;
-  wire [7:0] debug_pooling_regs7;
-  wire [7:0] debug_pooling_regs12;
-  wire [7:0] debug_pooling_regs15;
-  wire [7:0] debug_pooling_regs31;
-  wire [7:0] debug_pooling_stage_1;
-  wire [7:0] debug_pooling_stage_2;
-  wire [7:0] debug_pooling_stage_3;
-  wire [7:0] debug_pooling_stage_4;
 
   assign debug_pooling_regs0 = pooling_regs[0];
   assign debug_pooling_regs1 = pooling_regs[1];
@@ -2507,6 +2495,10 @@ reg [7:0] current_filter;
     assign debug_psum_data_i = psum_buffer_SP_data_w[0+:TRANS_BITWIDTH_PSUM*2];
     assign debug_psum_data_o = psum_buffer_SP_data_r[0+:TRANS_BITWIDTH_PSUM*2];
 
+    assign debug_skip_iact_o = skipIact_reg;
+    assign debug_data_dma_stream_o = data_dma_i_reg;
+    assign debug_enable_dma_stream_o = enable_dma_i_reg;
+    assign debug_fsm_cycle_o = fsm_cycle[3:0];
     wire [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i_oep_w;
     wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_oep_w;
     wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
