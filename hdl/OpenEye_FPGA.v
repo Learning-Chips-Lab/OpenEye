@@ -396,7 +396,8 @@ module OpenEye_FPGA #(
   reg [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_reg;
   reg [ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_reg;
 
-  reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i_reg;
+  wire [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i_w;
+  assign wght_data_i_w = wght_buffer_SP_data_r;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] wght_enable_i_reg;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] wght_ready_o_reg;
 
@@ -741,7 +742,6 @@ module OpenEye_FPGA #(
       current_cycle                  <= 0;
       fsm_sending_cycle              <= 0;
       wght_enable_i_reg              <= 0;
-      wght_data_i_reg                <= 0;
       wght_buffer_SP_en_r            <= 0;
       wght_buffer_SP_rd_addr         <= 0;
       wght_buffer_SP_rd_addr_storage <= 0;
@@ -785,7 +785,6 @@ module OpenEye_FPGA #(
             wght_buffer_SP_rd_addr <= wght_buffer_SP_rd_addr + 1;
           end
           if (fsm_sending_cycle > 2) begin
-            wght_data_i_reg <= wght_buffer_SP_data_r;
             flat_help_var_send = 0;
             for (a = 0; a < CLUSTER_ROWS; a++) begin
               if ((a * (PE_COLUMNS * CLUSTER_COLUMNS)) <= (iact_size_x * iact_size_y) - 1) begin
@@ -879,7 +878,6 @@ module OpenEye_FPGA #(
       end else begin
         //Set Registers to 0
         fsm_sending_cycle   <= 0;
-        wght_data_i_reg     <= 0;
         wght_enable_i_reg   <= 0;
         wght_buffer_SP_en_r <= 0;
       end
@@ -889,7 +887,6 @@ module OpenEye_FPGA #(
         current_cycle          <= 0;
         fsm_sending_cycle      <= 0;
         wght_enable_i_reg      <= 0;
-        wght_data_i_reg        <= 0;
         wght_buffer_SP_en_r    <= 0;
         wght_buffer_SP_rd_addr <= 0;
         compute_reg            <= 0;
@@ -912,7 +909,6 @@ module OpenEye_FPGA #(
         current_cycle                  <= 0;
         fsm_sending_cycle              <= 0;
         wght_enable_i_reg              <= 0;
-        wght_data_i_reg                <= 0;
         wght_buffer_SP_en_r            <= 0;
         wght_buffer_SP_rd_addr         <= 0;
         wght_buffer_SP_rd_addr_storage <= 0;
@@ -2471,7 +2467,8 @@ reg [7:0] current_filter;
 
     RAM_SP #(
         .DataWidth(TRANS_BITWIDTH_WGHT * CLUSTERS * NUM_GLB_WGHT),
-        .AddrWidth(BUFFER_WIDTH + 1)
+        .AddrWidth(BUFFER_WIDTH + 1),
+        .Pipelined(1)
     ) wght_buffer_SP (
         .clk_i  (clk_i),
         .rd_en_i(wght_buffer_SP_en_r & !wght_buffer_SP_en_w),
@@ -2563,7 +2560,7 @@ reg [7:0] current_filter;
         .iact_enable_i(iact_enable_i_oep_w),
         .iact_ready_o (iact_ready_o_oep_w),
 
-        .wght_data_i  (wght_data_i_reg),
+        .wght_data_i  (wght_data_i_w),
         .wght_enable_i(wght_enable_i_reg),
         .wght_ready_o (wght_ready_o_reg),
 
