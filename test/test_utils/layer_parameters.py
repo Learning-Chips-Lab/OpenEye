@@ -235,7 +235,8 @@ class LayerParameters(object):
                     self.used_channels = self.input_shape[3]
 
         elif(self.kernel_size[0] == 5):
-            self.used_channels = 2
+            if(self.used_channels >= 2):
+                self.used_channels = 2
 
         elif(self.kernel_size[0] >= 8):
             if(self.used_channels >= 2):
@@ -259,9 +260,14 @@ class LayerParameters(object):
         logger.debug("iact_transmissions_pe " + str(self.iact_transmissions_pe))
             
         if((self.filters * self.used_iact_per_PE) <= params.Wghts_per_PE):
-            self.used_psum_per_PE = self.filters
+            if (self.filters <= 16) :
+                self.used_psum_per_PE = self.filters
+                self.wght_transmissions_pe = math.ceil(self.channels/self.used_channels)
+            else :
+                self.used_psum_per_PE = 16
+                self.wght_transmissions_pe = 2 * math.ceil(self.channels/self.used_channels)
             self.used_wght_per_PE = self.used_psum_per_PE*self.used_iact_per_PE
-            self.wght_transmissions_pe = math.ceil(self.channels/self.used_channels)
+
         else:
             if (self.kernel_size[0] == 5):
                 wght_factor = math.ceil((self.filters*self.used_iact_per_PE)/160)
