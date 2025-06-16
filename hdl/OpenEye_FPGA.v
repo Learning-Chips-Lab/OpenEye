@@ -1056,6 +1056,10 @@ module OpenEye_FPGA #(
           fifo_write_i               <= 0;
           status_reg_enable_reg      <= 1;
           ready_dma_o                <= 1;
+          if (ready_dma_o == 0) begin
+            enable_dma_i_reg <= 0;
+            data_dma_i_reg   <= 0;
+          end 
           reset_cycle_reg            <= 1;
           buffer_SP_addr_lower_limit <= 0;
           buffer_SP_addr_upper_limit <= 0;
