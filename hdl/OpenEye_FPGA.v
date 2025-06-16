@@ -450,17 +450,21 @@ module OpenEye_FPGA #(
   reg [                     19:0] current_cycle;
   reg [                     15:0] iact_cycle_count;
   reg                             single_iteration;
+  reg                             single_iteration3;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       current_cycle       <= 0;
       iact_cycle_count    <= 0;
       iact_router_counter <= 0;
       single_iteration    <= 0;
+      single_iteration3   <= 0;
     end else begin
+      single_iteration3 <= 0;
       if (current_cycle <= needed_cycles_reg - 1) begin
         if (iact_ready_o_oep_w == 0) begin
           if (!single_iteration) begin
             single_iteration  <= 1;
+            single_iteration3 <= 1;
             if (iact_channels_counter == iact_channel_max_cycles -1) begin
               if (iact_router_counter == needed_y_cls_reg - 1) begin
                 iact_cycle_count <= iact_cycle_count + 1;
@@ -477,7 +481,7 @@ module OpenEye_FPGA #(
       if (fsm_current_state == WAIT_FOR_RESULTS | fsm_current_state == RECEIVE_PSUMS_TO_IACT) begin
         if (single_iteration3) begin
           if (iact_channels_counter == iact_channel_max_cycles -1) begin
-            iact_router_counter      <= iact_router_counter + 1;
+            iact_router_counter <= iact_router_counter + 1;
             if (iact_router_counter == needed_y_cls_reg - 1) begin
               iact_router_counter  <= 0;
             end
@@ -486,10 +490,11 @@ module OpenEye_FPGA #(
       end
       if ((fsm_current_state == GET_PARAMETERS) |
         reset_cycle_reg) begin
-        current_cycle        <= 0;
-        iact_cycle_count     <= 0;
-        iact_router_counter  <= 0;
-        single_iteration     <= 0;
+        current_cycle       <= 0;
+        iact_cycle_count    <= 0;
+        iact_router_counter <= 0;
+        single_iteration    <= 0;
+        single_iteration3   <= 0;
       end
     end
   end
@@ -729,7 +734,6 @@ module OpenEye_FPGA #(
   end
   reg                             sending_data;
   reg                             wght_sendable;
-  reg                             single_iteration3;
   reg [                     12:0] fsm_sending_cycle;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] flat_help_var_send;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] temp_var;
@@ -814,8 +818,6 @@ module OpenEye_FPGA #(
             end
           end
         end
-
-        single_iteration3 <= 0;
         if (current_cycle < needed_cycles_reg - 1) begin
           if (iact_ready_o_oep_w == 0) begin
             if (!single_iteration) begin
@@ -842,14 +844,6 @@ module OpenEye_FPGA #(
                     wght_buffer_SP_rd_addr         <= 0;
                   end
                 end
-              end
-            end
-          end
-        end else begin
-          if (current_cycle == needed_cycles_reg - 1) begin
-            if (iact_ready_o_oep_w == 0) begin
-              if (!single_iteration) begin
-                single_iteration3 <= 1;
               end
             end
           end
@@ -884,7 +878,6 @@ module OpenEye_FPGA #(
       end
       if (reset_cycle_reg) begin
         sending_data                   <= 0;
-        single_iteration3              <= 0;
         fsm_sending_cycle              <= 0;
         wght_enable_i_reg              <= 0;
         wght_buffer_SP_en_r            <= 0;
