@@ -446,10 +446,10 @@ module OpenEye_FPGA #(
   //#######################
   //Process for manging counter regs
   //reg single_iteration;
-  //reg single_iteration2;
   reg [                     19:0] current_cycle;
   reg [                     15:0] iact_cycle_count;
   reg                             single_iteration;
+  reg                             single_iteration2;
   reg                             single_iteration3;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
@@ -457,6 +457,7 @@ module OpenEye_FPGA #(
       iact_cycle_count    <= 0;
       iact_router_counter <= 0;
       single_iteration    <= 0;
+      single_iteration2   <= 0;
       single_iteration3   <= 0;
     end else begin
       single_iteration3 <= 0;
@@ -486,6 +487,14 @@ module OpenEye_FPGA #(
               iact_router_counter  <= 0;
             end
           end
+        end
+      end
+      if ((RECEIVE_PSUMS_TO_IACT == fsm_current_state) | (WAIT_FOR_RESULTS == fsm_current_state)) begin
+        if (single_iteration) begin
+          single_iteration2 <= 1;
+        end
+        if (single_iteration == 0) begin
+          single_iteration2 <= 0;
         end
       end
       if ((fsm_current_state == GET_PARAMETERS) |
@@ -895,7 +904,6 @@ module OpenEye_FPGA #(
     end
     temp_var = 0;
   end
-  reg single_iteration2;
   reg [15:0] select_ram_counter;
   reg [15:0] ram_counter_storage;
   reg [ 7:0] select_ram_offset;
@@ -943,7 +951,6 @@ module OpenEye_FPGA #(
       padding_reg               <= 0;
       new_stream                <= 0;
       fsm_cycle                 <= 0;
-      single_iteration2         <= 0;
       fsm_last_state            <= IDLE;
       fsm_current_state         <= GET_PARAMETERS;
       fsm_x_cl                  <= 0;
@@ -1426,14 +1433,10 @@ module OpenEye_FPGA #(
             choose_iact_buffer       <= 0;
           end
           if (single_iteration & (single_iteration2 == 0)) begin
-            single_iteration2 <= 1;
             iact_channels_counter <= iact_channels_counter + 1;
             if (iact_channels_counter == iact_channel_max_cycles - 1) begin
               iact_channels_counter <= 0;
             end
-          end
-          if (single_iteration == 0) begin
-            single_iteration2 <= 0;
           end
           for (a = 0; a < RAM_CELLS; a++) begin
             buffer_SP_en_w_reg[a] <= 0;
@@ -1597,14 +1600,10 @@ module OpenEye_FPGA #(
             choose_iact_buffer       <= 0;
           end
           if (single_iteration & (single_iteration2 == 0)) begin
-            single_iteration2 <= 1;
             iact_channels_counter <= iact_channels_counter + 1;
             if (iact_channels_counter == iact_channel_max_cycles - 1) begin
               iact_channels_counter <= 0;
             end
-          end
-          if (single_iteration == 0) begin
-            single_iteration2 <= 0;
           end
           fsm_cycle <= fsm_cycle + 1;
           if (last_data_o) begin
