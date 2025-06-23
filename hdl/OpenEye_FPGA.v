@@ -1788,16 +1788,16 @@ module OpenEye_FPGA #(
               if (iact_router_counter == needed_y_cls_reg - 1) begin
                 router_mode_iact_reg <= router_mode_iact_storage;
               end else begin
-                for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                  for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                  for (g=0; g<NUM_GLB_IACT; g=g+1) begin
                     router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+3] <= 0;
                     router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+4] <= 1;
                     router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+5] <= 1;
                   end
                 end
-                for (int cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
-                  for (int cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                    for (int g=0; g<NUM_GLB_IACT; g=g+1) begin
+                for (cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
+                  for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                    for (g=0; g<NUM_GLB_IACT; g=g+1) begin
                       // If router is not on top of source already
                       if (!((router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT] == 1) &
                               (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] == 1) &
