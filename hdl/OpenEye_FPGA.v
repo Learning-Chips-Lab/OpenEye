@@ -294,6 +294,7 @@ module OpenEye_FPGA #(
   reg new_stream;
   reg reset_cycle_reg;
   reg send_data_out;
+  reg early_stream_start;
 
 
   // Register for the Buffer
@@ -962,6 +963,7 @@ module OpenEye_FPGA #(
       skipPsum_reg              <= 0;
       buffer_select             <= 0;
       needed_wght_cycles_reg    <= 0;
+      early_stream_start        <= 0;
       fifo_data_i                       <= 0;
       fifo_read_i                       <= 0;
       fifo_write_i                      <= 0;
@@ -1063,10 +1065,6 @@ module OpenEye_FPGA #(
           fifo_write_i               <= 0;
           status_reg_enable_reg      <= 1;
           ready_dma_o                <= 1;
-          if (ready_dma_o == 0) begin
-            enable_dma_i_reg <= 0;
-            data_dma_i_reg   <= 0;
-          end 
           reset_cycle_reg            <= 1;
           buffer_SP_addr_lower_limit <= 0;
           buffer_SP_addr_upper_limit <= 0;
@@ -1095,96 +1093,103 @@ module OpenEye_FPGA #(
             quant_mant[a] <= 0;
           end
           if (enable_dma_i_reg) begin
-            fsm_cycle       <= fsm_cycle + 1;
-            reset_cycle_reg <= 0;
-            case (fsm_cycle)
-              32'd0: begin
-                data_mode_reg <= data_dma_i_reg[PARAMETER_POS_1_0];
-                fraction_bit_reg <= data_dma_i_reg[$clog2(
-                    DATA_PSUM_BITWIDTH
-                )-1+PARAMETER_POS_1_1:PARAMETER_POS_1_1];
-                af_cluster_mode_reg <= {1'd0, data_dma_i_reg[PARAMETER_POS_1_2]};
-                //needed_cycles_reg <= data_dma_i_reg[7+PARAMETER_POS_1_4:PARAMETER_POS_1_4]; //8 Bit free
-                needed_x_cls_reg <= data_dma_i_reg[$clog2(
-                    CLUSTER_COLUMNS+1
-                )-1+PARAMETER_POS_1_5:PARAMETER_POS_1_5];
-                needed_y_cls_reg <= data_dma_i_reg[$clog2(
-                    CLUSTER_ROWS+1
-                )-1+PARAMETER_POS_1_6:PARAMETER_POS_1_6];
-                needed_iact_cycles_reg <= data_dma_i_reg[3+PARAMETER_POS_1_7:PARAMETER_POS_1_7];
-                filters_reg <= data_dma_i_reg[$clog2(
-                    PSUM_PER_PE+1
-                )-1+PARAMETER_POS_1_8:PARAMETER_POS_1_8];
-                iact_addr_len_reg <= data_dma_i_reg[3+PARAMETER_POS_1_9:PARAMETER_POS_1_9];
-                wght_addr_len_reg <= data_dma_i_reg[3+PARAMETER_POS_1_10:PARAMETER_POS_1_10];
-                input_activations_reg <= data_dma_i_reg[$clog2(
-                    IACT_PER_PE+1
-                )-1+PARAMETER_POS_1_11:PARAMETER_POS_1_11];
-                send_data_out <= data_dma_i_reg[PARAMETER_POS_1_12];
+            if (!ready_dma_o) begin
+              early_stream_start <= 1;
+            end else begin
+              early_stream_start <= 0;
+              if (!early_stream_start) begin 
+                fsm_cycle       <= fsm_cycle + 1;
+                reset_cycle_reg <= 0;
+                case (fsm_cycle)
+                  32'd0: begin
+                    data_mode_reg <= data_dma_i_reg[PARAMETER_POS_1_0];
+                    fraction_bit_reg <= data_dma_i_reg[$clog2(
+                        DATA_PSUM_BITWIDTH
+                    )-1+PARAMETER_POS_1_1:PARAMETER_POS_1_1];
+                    af_cluster_mode_reg <= {1'd0, data_dma_i_reg[PARAMETER_POS_1_2]};
+                    //needed_cycles_reg <= data_dma_i_reg[7+PARAMETER_POS_1_4:PARAMETER_POS_1_4]; //8 Bit free
+                    needed_x_cls_reg <= data_dma_i_reg[$clog2(
+                        CLUSTER_COLUMNS+1
+                    )-1+PARAMETER_POS_1_5:PARAMETER_POS_1_5];
+                    needed_y_cls_reg <= data_dma_i_reg[$clog2(
+                        CLUSTER_ROWS+1
+                    )-1+PARAMETER_POS_1_6:PARAMETER_POS_1_6];
+                    needed_iact_cycles_reg <= data_dma_i_reg[3+PARAMETER_POS_1_7:PARAMETER_POS_1_7];
+                    filters_reg <= data_dma_i_reg[$clog2(
+                        PSUM_PER_PE+1
+                    )-1+PARAMETER_POS_1_8:PARAMETER_POS_1_8];
+                    iact_addr_len_reg <= data_dma_i_reg[3+PARAMETER_POS_1_9:PARAMETER_POS_1_9];
+                    wght_addr_len_reg <= data_dma_i_reg[3+PARAMETER_POS_1_10:PARAMETER_POS_1_10];
+                    input_activations_reg <= data_dma_i_reg[$clog2(
+                        IACT_PER_PE+1
+                    )-1+PARAMETER_POS_1_11:PARAMETER_POS_1_11];
+                    send_data_out <= data_dma_i_reg[PARAMETER_POS_1_12];
+                  end
+                  32'd1: begin
+                    wght_cycles_reg           <= data_dma_i_reg[7+PARAMETER_POS_2_0:PARAMETER_POS_2_0];
+                    stride_x_reg              <= data_dma_i_reg[2+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
+                    stride_y_reg              <= data_dma_i_reg[2+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
+                    skipIact_reg              <= data_dma_i_reg[PARAMETER_POS_2_4:PARAMETER_POS_2_4];
+                    skipWght_reg              <= data_dma_i_reg[PARAMETER_POS_2_5:PARAMETER_POS_2_5];
+                    skipPsum_reg              <= data_dma_i_reg[PARAMETER_POS_2_6:PARAMETER_POS_2_6];
+                    psum_delay_reg            <= data_dma_i_reg[3+PARAMETER_POS_2_7:PARAMETER_POS_2_7];
+                    kernel_per_pe_cluster_reg <= data_dma_i_reg[3+PARAMETER_POS_2_8:PARAMETER_POS_2_8];
+                    kernel_size               <= data_dma_i_reg[3+PARAMETER_POS_2_9:PARAMETER_POS_2_9];
+                    x_lines_reg               <= data_dma_i_reg[7+PARAMETER_POS_2_10:PARAMETER_POS_2_10];
+                    needed_wght_cycles_reg    <= data_dma_i_reg[PARAMETER_POS_2_11+:8];
+                    needed_cycles_reg         <= {{2{1'd0}},data_dma_i_reg[PARAMETER_POS_2_12+:18]};
+                  end
+                  32'd2: begin
+                    padding_reg                           <= (kernel_size-1)/2;
+                    iact_converter_buffer_addr_max_cycles <= data_dma_i_reg[63:56];
+                    iact_channels_per_pe                  <= data_dma_i_reg[55:48];
+                    iact_size_y                           <= data_dma_i_reg[39:32];
+                    iact_size_x                           <= data_dma_i_reg[23:16];
+                    iact_needed_cycles                    <= data_dma_i_reg[10:0];
+                  end
+                  32'd3: begin
+                    max_pooling                     <= data_dma_i_reg[18];
+                    fully_connected_layer           <= data_dma_i_reg[17];
+                    choose_iact_buffer              <= data_dma_i_reg[16];
+                    iact_channels_per_pe_next_layer <= data_dma_i_reg[11:8];
+                    needed_psum_storage_cycles_reg  <= data_dma_i_reg[7:0] * needed_y_cls_reg;
+                    if (data_dma_i_reg[17]) begin
+                      needed_psum_storage_cycles_reg <= data_dma_i_reg[7:0];
+                    end
+                    iact_channel_max_cycles         <= data_dma_i_reg[7:0];
+                  end
+                  32'd4: begin
+                    iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
+                    if (fully_connected_layer) begin
+                      iact_channels <= iact_channels_per_pe * 4;
+                    end
+                    compute_mask_reg[DMA_BITWIDTH-1:0] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
+                  end
+                  32'd5: begin
+                    compute_mask_reg[2*DMA_BITWIDTH-1:DMA_BITWIDTH] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
+                  end
+                  32'd6: begin
+                    compute_mask_reg[3*DMA_BITWIDTH-1:2*DMA_BITWIDTH] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
+                    fsm_last_state <= GET_PARAMETERS;
+                    fsm_current_state <= GET_ROUTER_CONFIG;
+                    fsm_cycle <= 0;
+                    if (fully_connected_layer) begin
+                      iact_channel_max_cycles               <= 1;
+                      kernel_size                           <= 1;
+                      iact_converter_buffer_addr_max_cycles <= 2;
+                      needed_y_cls_reg                      <= 1;
+                      padding_reg                           <= 0;
+                      needed_cycles_reg                     <= 1;
+                    end
+                  end
+                  default: begin
+                    fsm_last_state    <= GET_PARAMETERS;
+                    fsm_current_state <= GET_ROUTER_CONFIG;
+                    fsm_cycle         <= 0;
+                  end
+                endcase
               end
-              32'd1: begin
-                wght_cycles_reg           <= data_dma_i_reg[7+PARAMETER_POS_2_0:PARAMETER_POS_2_0];
-                stride_x_reg              <= data_dma_i_reg[2+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
-                stride_y_reg              <= data_dma_i_reg[2+PARAMETER_POS_2_3:PARAMETER_POS_2_3];
-                skipIact_reg              <= data_dma_i_reg[PARAMETER_POS_2_4:PARAMETER_POS_2_4];
-                skipWght_reg              <= data_dma_i_reg[PARAMETER_POS_2_5:PARAMETER_POS_2_5];
-                skipPsum_reg              <= data_dma_i_reg[PARAMETER_POS_2_6:PARAMETER_POS_2_6];
-                psum_delay_reg            <= data_dma_i_reg[3+PARAMETER_POS_2_7:PARAMETER_POS_2_7];
-                kernel_per_pe_cluster_reg <= data_dma_i_reg[3+PARAMETER_POS_2_8:PARAMETER_POS_2_8];
-                kernel_size               <= data_dma_i_reg[3+PARAMETER_POS_2_9:PARAMETER_POS_2_9];
-                x_lines_reg               <= data_dma_i_reg[7+PARAMETER_POS_2_10:PARAMETER_POS_2_10];
-                needed_wght_cycles_reg    <= data_dma_i_reg[PARAMETER_POS_2_11+:8];
-                needed_cycles_reg         <= {{2{1'd0}},data_dma_i_reg[PARAMETER_POS_2_12+:18]};
-              end
-              32'd2: begin
-                padding_reg                           <= (kernel_size-1)/2;
-                iact_converter_buffer_addr_max_cycles <= data_dma_i_reg[63:56];
-                iact_channels_per_pe                  <= data_dma_i_reg[55:48];
-                iact_size_y                           <= data_dma_i_reg[39:32];
-                iact_size_x                           <= data_dma_i_reg[23:16];
-                iact_needed_cycles                    <= data_dma_i_reg[10:0];
-              end
-              32'd3: begin
-                max_pooling                     <= data_dma_i_reg[18];
-                fully_connected_layer           <= data_dma_i_reg[17];
-                choose_iact_buffer              <= data_dma_i_reg[16];
-                iact_channels_per_pe_next_layer <= data_dma_i_reg[11:8];
-                needed_psum_storage_cycles_reg  <= data_dma_i_reg[7:0] * needed_y_cls_reg;
-                if (data_dma_i_reg[17]) begin
-                  needed_psum_storage_cycles_reg <= data_dma_i_reg[7:0];
-                end
-                iact_channel_max_cycles         <= data_dma_i_reg[7:0];
-              end
-              32'd4: begin
-                iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
-                if (fully_connected_layer) begin
-                  iact_channels <= iact_channels_per_pe * 4;
-                end
-                compute_mask_reg[DMA_BITWIDTH-1:0] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
-              end
-              32'd5: begin
-                compute_mask_reg[2*DMA_BITWIDTH-1:DMA_BITWIDTH] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
-              end
-              32'd6: begin
-                compute_mask_reg[3*DMA_BITWIDTH-1:2*DMA_BITWIDTH] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
-                fsm_last_state <= GET_PARAMETERS;
-                fsm_current_state <= GET_ROUTER_CONFIG;
-                fsm_cycle <= 0;
-                if (fully_connected_layer) begin
-                  iact_channel_max_cycles               <= 1;
-                  kernel_size                           <= 1;
-                  iact_converter_buffer_addr_max_cycles <= 2;
-                  needed_y_cls_reg                      <= 1;
-                  padding_reg                           <= 0;
-                  needed_cycles_reg                     <= 1;
-                end
-              end
-              default: begin
-                fsm_last_state    <= GET_PARAMETERS;
-                fsm_current_state <= GET_ROUTER_CONFIG;
-                fsm_cycle         <= 0;
-              end
-            endcase
+            end
           end
         end
 
