@@ -831,7 +831,6 @@ module OpenEye_FPGA #(
         if (current_cycle < needed_cycles_reg - 1) begin
           if (iact_ready_o_oep_w == 0) begin
             if (!single_iteration) begin
-              single_iteration3 <= 1;
               for (a = 0; a < CLUSTER_COLUMNS; a++) begin
                 for (b = 0; b < CLUSTER_ROWS; b++) begin
                   iact_converter_en_enc_reg[a][b] <= 1;
