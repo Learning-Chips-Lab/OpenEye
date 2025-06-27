@@ -47,6 +47,7 @@ Contents
    :maxdepth: 1
    :caption: Contents:
 
+   tutorial/index
    architecture/index
    verilog/index
    test/index
