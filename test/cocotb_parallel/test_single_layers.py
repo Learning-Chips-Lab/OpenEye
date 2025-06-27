@@ -15,7 +15,7 @@ sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
 
-import parallel_test_utils as ptu
+import test.test_utils.test_utils as ptu
 import test_utils.vh_file_creator as vh_file_creator
 
 
@@ -50,7 +50,7 @@ USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL, CLUSTER_ROW
     dut = 'OpenEye_Parallel'
     module = 'OpenEye_Parallel_tb'
     toplevel = dut
-    verilog_sources = ptu.get_verilog_sources(hdl_dir, serial = False)
+    verilog_sources = ptu.get_verilog_sources(hdl_dir)
     target_dir = os.path.join(tests_dir, '.temp')
     #target_dir = os.path.join(tests_dir, '.temp/test_' + str(datetime.now().isoformat())) 
     os.makedirs(target_dir, exist_ok=True)
