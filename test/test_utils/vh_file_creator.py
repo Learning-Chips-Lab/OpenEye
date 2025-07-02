@@ -1,9 +1,7 @@
 
 import sys
 import os
-directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
-sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
-import test_utils.open_eye_parameters as oep
+import open_eye_parameters as oep
 
 def are_files_identical(file1_path, file2_path):
     try:
