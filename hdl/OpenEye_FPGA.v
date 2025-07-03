@@ -1169,17 +1169,6 @@ module OpenEye_FPGA #(
                   end
                   32'd6: begin
                     compute_mask_reg[3*DMA_BITWIDTH-1:2*DMA_BITWIDTH] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
-                    fsm_last_state <= GET_PARAMETERS;
-                    fsm_current_state <= GET_ROUTER_CONFIG;
-                    fsm_cycle <= 0;
-                    if (fully_connected_layer) begin
-                      iact_channel_max_cycles               <= 1;
-                      kernel_size                           <= 1;
-                      iact_converter_buffer_addr_max_cycles <= 2;
-                      needed_y_cls_reg                      <= 1;
-                      padding_reg                           <= 0;
-                      needed_cycles_reg                     <= 1;
-                    end
                   end
                   default: begin
                     fsm_last_state    <= GET_PARAMETERS;
@@ -1187,6 +1176,19 @@ module OpenEye_FPGA #(
                     fsm_cycle         <= 0;
                   end
                 endcase
+                if (fsm_cycle == 4 + (((CLUSTER_COLUMNS * CLUSTER_ROWS * PES) - 1)/64)) begin
+                  fsm_last_state <= GET_PARAMETERS;
+                  fsm_current_state <= GET_ROUTER_CONFIG;
+                  fsm_cycle <= 0;
+                  if (fully_connected_layer) begin
+                    iact_channel_max_cycles               <= 1;
+                    kernel_size                           <= 1;
+                    iact_converter_buffer_addr_max_cycles <= 2;
+                    needed_y_cls_reg                      <= 1;
+                    padding_reg                           <= 0;
+                    needed_cycles_reg                     <= 1;
+                  end
+                end
               end
             end
           end
