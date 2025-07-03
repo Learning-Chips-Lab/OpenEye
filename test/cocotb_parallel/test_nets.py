@@ -17,7 +17,7 @@ sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
 
-import test.test_utils.test_utils as ptu
+import test.test_utils.test_utils_main as ptu
 
 #As ref:
 #clk_cycle = 10; clk_cycle_unit = "ns"
