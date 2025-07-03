@@ -18,6 +18,7 @@ env/*
 *.ys
 *.json
 !requirements.txt
+netlist.v
 
 **/.temp
 **/.work/
