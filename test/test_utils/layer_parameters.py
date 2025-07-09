@@ -79,6 +79,7 @@ class LayerParameters(object):
         self.needed_total_transmissions = 1
         self.psum_delay = 0
         self.fully_connected = 0
+        self.store_in_psum = 0
 
         self.send_values_out = 1
         self.skipIact = 0
@@ -337,6 +338,8 @@ class LayerParameters(object):
             self.used_iact_addr_per_PE = 1
         else:
             self.used_iact_addr_per_PE = self.used_channels
+        print("GEnutzte IACT: " + str(self.used_channels))
+        print("GEnutzte IACT: " + str(self.used_iact_addr_per_PE))
         logger.debug("Refreshes: " + str(self.Used_refreshes))
         logger.debug("Used complete new descriptions: " + str(self.Used_refreshes))
         logger.debug("self.used_channels : " + str(self.used_channels))
@@ -404,7 +407,10 @@ class LayerParameters(object):
             self.iact_x_lines = self.kernel_size[1] + self.iact_size_y - 1
             self.needed_standing_cycles = ((self.used_channels + 1) // 2) * self.needed_Iact_writes
         else :
-            self.needed_standing_cycles = max(self.needed_standing_cycles,4)
+            self.needed_standing_cycles = max(self.needed_standing_cycles,4)          #Change later for interchangebility
+        self.direct_cycling = 1
+        self.iact_x_lines = self.kernel_size[1] + self.iact_size_y - 1
+        self.needed_standing_cycles = ((self.used_channels + 1) // 2) * self.needed_Iact_writes
  
     def write_convdw_layer(self, layer, params):
         """ Write the weights and bias of a Conv2D layer to a file. """

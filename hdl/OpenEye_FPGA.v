@@ -172,7 +172,8 @@ module OpenEye_FPGA #(
     parameter RAM_CELLS_WORD_BITWIDTH = 64,
 
     localparam IACT_WORDS_IN_RAM = RAM_CELLS_WORD_BITWIDTH / DATA_IACT_BITWIDTH,
-    localparam WORDS_PER_CYCLE   = 2
+    localparam WORDS_PER_CYCLE   = 2,
+    localparam CLUSTER_ROW_FOR_FC = (CLUSTER_ROWS > 4) ? (CLUSTER_ROWS-4) : 1
 
 ) (
     //Input DMA
@@ -358,6 +359,7 @@ module OpenEye_FPGA #(
   reg [7:0] x_lines_reg;
   reg direct_cycling_reg;
   reg send_data_reg;
+  reg store_in_psum;
   wire iact_converter_ready_w[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [2:0] iact_converter_n_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [BUFFER_WIDTH-1:0] iact_converter_mem_addr_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
@@ -812,9 +814,9 @@ module OpenEye_FPGA #(
             flat_help_var_send = 0;
             if (fully_connected_layer) begin
               wght_enable_i_reg <= {
-                  {(CLUSTER_ROWS-4){{NUM_GLB_WGHT{1'b0}}}},
+                  {CLUSTER_ROW_FOR_FC{{NUM_GLB_WGHT{1'b0}}}},
                   {4{3'b1}},
-                  {(CLUSTER_ROWS-4){{NUM_GLB_WGHT{1'b0}}}},
+                  {CLUSTER_ROW_FOR_FC{{NUM_GLB_WGHT{1'b0}}}},
                   {4{3'b1}}
               };
             end
@@ -1012,6 +1014,7 @@ module OpenEye_FPGA #(
       iact_converter_cycles             <= 0;
       iact_converter_buffer_addr_cycles <= 0;
       send_data_reg                     <= 0;
+      store_in_psum                     <= 0;
       // Pooling
       for (a = 0; a < 32; a = a + 1) begin
         pooling_regs[a] <= 0;
@@ -1147,6 +1150,7 @@ module OpenEye_FPGA #(
                     iact_needed_cycles                    <= data_dma_i_reg[10:0];
                   end
                   32'd3: begin
+                    store_in_psum                   <= data_dma_i_reg[19];
                     max_pooling                     <= data_dma_i_reg[18];
                     fully_connected_layer           <= data_dma_i_reg[17];
                     choose_iact_buffer              <= data_dma_i_reg[16];
@@ -2186,7 +2190,11 @@ reg [7:0] current_filter;
             fsm_psum_cycle         <= fsm_psum_cycle + 1;
             fsm_y_cl_psum          <= 0;
             if (fsm_psum_cycle >= 2) begin
-              fsm_psum_current_state <= SEND_PSUM_TO_IACT;
+              if (store_in_psum == 0) begin
+                fsm_psum_current_state <= SEND_PSUM_TO_IACT;
+              end else begin
+                fsm_psum_current_state <= PSUM_IDLE;
+              end
               fsm_psum_cycle         <= 0;
               test_reg1              <= 0;
               test_reg2              <= 0;
