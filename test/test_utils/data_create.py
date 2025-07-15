@@ -21,7 +21,7 @@ def create_layer(layer_mode, filters, kernelsize, inputsize_x,  inputsize_y, str
             channels = 4
             x_axis = 48
             y_axis = 1
-            filters = 4
+            filters = 16
             outputvalue = 20
             model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
             model.add(tf.keras.layers.MaxPooling2D(pool_size = (x_axis, y_axis), padding="valid"))
