@@ -346,6 +346,8 @@ module OpenEye_FPGA #(
   reg buffer_SP_en_r_reg[RAM_CELLS-1:0];
   reg buffer_SP_en_w_reg[RAM_CELLS-1:0];
   reg choose_iact_buffer;
+  reg choose_iact_buffer_input;
+  reg choose_iact_buffer_output;
   reg fully_connected_layer;
   reg max_pooling;
   reg [RAM_CELLS_ADDR_WIDTH-2:0] buffer_SP_addr_reg[RAM_CELLS-1:0];
@@ -420,6 +422,7 @@ module OpenEye_FPGA #(
   wire [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o_w;
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o_reg;
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i_reg;
+  reg [                    8-1:0] output_cycles;
 
   reg [7:0] needed_wght_cycles_reg;
   //#######################
@@ -713,6 +716,7 @@ module OpenEye_FPGA #(
       end
       if (GET_ROUTER_CONFIG == fsm_current_state) begin
         conv_array_reg <= (1 << (iact_size_x/PE_COLUMNS)) - 1;
+        //conv_array_reg <= (1 << (CLUSTER_COLUMNS*CLUSTER_ROWS)) - 1;
         if (fully_connected_layer) begin
           conv_array_reg <= ~0;
         end
@@ -1015,6 +1019,7 @@ module OpenEye_FPGA #(
       iact_converter_buffer_addr_cycles <= 0;
       send_data_reg                     <= 0;
       store_in_psum                     <= 0;
+      output_cycles                     <= 0;
       // Pooling
       for (a = 0; a < 32; a = a + 1) begin
         pooling_regs[a] <= 0;
@@ -1041,6 +1046,8 @@ module OpenEye_FPGA #(
         buffer_SP_data_w_reg[a] <= 0;
       end
       choose_iact_buffer           <= 0;
+      choose_iact_buffer_input     <= 0;
+      choose_iact_buffer_output    <= 0;
       fully_connected_layer        <= 0;
       max_pooling                  <= 0;
       converters_ready              = 0;
@@ -1150,10 +1157,12 @@ module OpenEye_FPGA #(
                     iact_needed_cycles                    <= data_dma_i_reg[10:0];
                   end
                   32'd3: begin
-                    store_in_psum                   <= data_dma_i_reg[19];
-                    max_pooling                     <= data_dma_i_reg[18];
-                    fully_connected_layer           <= data_dma_i_reg[17];
-                    choose_iact_buffer              <= data_dma_i_reg[16];
+                    output_cycles                   <= data_dma_i_reg[28:21];
+                    store_in_psum                   <= data_dma_i_reg[20];
+                    max_pooling                     <= data_dma_i_reg[19];
+                    fully_connected_layer           <= data_dma_i_reg[18];
+                    choose_iact_buffer_output       <= data_dma_i_reg[17];
+                    choose_iact_buffer_input        <= data_dma_i_reg[16];
                     iact_channels_per_pe_next_layer <= data_dma_i_reg[11:8];
                     needed_psum_storage_cycles_reg  <= data_dma_i_reg[7:0] * needed_y_cls_reg;
                     if (data_dma_i_reg[17]) begin
@@ -1162,6 +1171,7 @@ module OpenEye_FPGA #(
                     iact_channel_max_cycles         <= data_dma_i_reg[7:0];
                   end
                   32'd4: begin
+                    choose_iact_buffer <= choose_iact_buffer_input;
                     iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
                     if (fully_connected_layer) begin
                       iact_channels <= iact_channels_per_pe * 4;
@@ -1384,7 +1394,7 @@ module OpenEye_FPGA #(
           iact_converter_params_enable <= 0;
           if ((iact_converter_buffer_addr_cycles + 2 == (iact_converter_buffer_addr_max_cycles)) & 
           (iact_converter_cycles == 0) & 
-          (iact_channels_counter != (iact_channel_max_cycles))) begin
+          (iact_channels_counter != (iact_channel_max_cycles + 1))) begin //Change here  + 1
             iact_converter_enc_enable    <= 1;
             iact_converter_params_enable <= 1;
             select_ram_counter           <= 1;
@@ -1396,7 +1406,7 @@ module OpenEye_FPGA #(
             if (iact_converter_cycles == (iact_converter_max_cycles - 1)) begin
               iact_converter_cycles <= 0;
               iact_channels_counter <= iact_channels_counter + 1;
-              if (iact_channels_counter == (iact_channel_max_cycles - 1)) begin
+              if (iact_channels_counter == (iact_channel_max_cycles  + 1 - 1)) begin //Change here + 1
                 fsm_current_state     <= WAIT_CYCLE;
                 iact_channels_counter <= 0;
                 fsm_cycle             <= 0;
@@ -1440,7 +1450,7 @@ module OpenEye_FPGA #(
 
         RECEIVE_PSUMS_TO_IACT: begin
           if (fsm_psum_current_state == WAIT_FOR_SENDING_RESULTS) begin
-            choose_iact_buffer       <= 0;
+            choose_iact_buffer       <= choose_iact_buffer_output;
           end
           if (single_iteration & (single_iteration2 == 0)) begin
             iact_channels_counter <= iact_channels_counter + 1;
@@ -1607,7 +1617,7 @@ module OpenEye_FPGA #(
         end
         WAIT_FOR_RESULTS: begin
           if (fsm_psum_current_state == WAIT_FOR_SENDING_RESULTS) begin
-            choose_iact_buffer       <= 0;
+            choose_iact_buffer       <= choose_iact_buffer_output;
           end
           if (single_iteration & (single_iteration2 == 0)) begin
             iact_channels_counter <= iact_channels_counter + 1;
@@ -2195,17 +2205,17 @@ reg [7:0] current_filter;
               end else begin
                 fsm_psum_current_state <= PSUM_IDLE;
               end
-              fsm_psum_cycle         <= 0;
-              test_reg1              <= 0;
-              test_reg2              <= 0;
-              psum_sending_counter   <= 0;
-              psum_filter_offset     <= iact_channels_per_pe_next_layer;
-              fsm_psum_row_offset    <= 0;
+              fsm_psum_cycle       <= 0;
+              test_reg1            <= 0;
+              test_reg2            <= 0;
+              psum_sending_counter <= 0;
+              psum_filter_offset   <= iact_channels_per_pe_next_layer;
+              fsm_psum_row_offset  <= 0;
             end
           end
-          fsm_psum_r             <= 0;
-          fsm_y_cl_psum          <= 0;
-          fsm_x_cl_psum          <= 0;
+          fsm_psum_r    <= 0;
+          fsm_y_cl_psum <= 0;
+          fsm_x_cl_psum <= 0;
         end
         PSUM_SEND_RESULTS: begin
           psum_buffer_SP_en_r <= 0;
@@ -2233,7 +2243,7 @@ reg [7:0] current_filter;
                 if ((fsm_y_cl_psum == CLUSTER_ROWS - 1) | fully_connected_layer) begin
                   fsm_y_cl_psum <= 0;
                   fsm_psum_cycle <= fsm_psum_cycle + 1;
-                  if (fsm_psum_cycle == needed_wght_cycles_reg * filters_reg * iact_size_y - 1) begin
+                  if (fsm_psum_cycle == needed_wght_cycles_reg * filters_reg * output_cycles - 1) begin //CHange iact_size_y
                     fsm_psum_cycle      <= 0;
                     psum_buffer_SP_addr <= 0;
                     psum_buffer_SP_en_r <= 0;
@@ -2365,7 +2375,7 @@ reg [7:0] current_filter;
 
   generate
     genvar i_gen, j_gen, g_gen;
-    // Converter Buffer
+    // IACT Buffer
     for (j_gen = 0; j_gen < RAM_CELLS; j_gen++) begin : BUFFER_A
         RAM_SP #(
             .DataWidth(RAM_CELLS_WORD_BITWIDTH),

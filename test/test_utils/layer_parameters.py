@@ -30,6 +30,8 @@ class LayerParameters(object):
         self.current_input_Y = 0
         self.padding = "same"
         self.needed_refreshes_mx = []
+        self.calc_X = 0
+        self.calc_Y = 0
 
         self.used_iact_per_PE = []
         self.used_wght_per_PE = []
@@ -47,14 +49,16 @@ class LayerParameters(object):
 
         self.iact_addr_len = 1
         self.iact_data_len = 3
-        self.choose_iact_storage = 0
+        self.choose_iact_storage_input = 0
+        self.choose_iact_storage_output = 0
         
         self.strideX = 1
         self.strideY = 1
         self.add_up = 1
         self.complete_iacts_in_design = 0
         self.max_pooling = 0
-
+        self.output_cycles = 0
+        
         self.filters = 1
         self.input_shape = []
         self.kernel_shape = []
@@ -122,12 +126,12 @@ class LayerParameters(object):
         TODO: find a better name
         """
         if(self.padding == "same"):
-            calc_X = self.input_shape[1]
-            calc_Y = self.input_shape[2]
+            self.calc_X = self.input_shape[1]
+            self.calc_Y = self.input_shape[2]
         else:
-            calc_X = self.input_shape[1] - self.kernel_size[0] + 1
-            calc_Y = self.input_shape[2] - self.kernel_size[1] + 1
-        self.total_computations = calc_X * calc_Y
+            self.calc_X = self.input_shape[1] - self.kernel_size[0] + 1
+            self.calc_Y = self.input_shape[2] - self.kernel_size[1] + 1
+        self.total_computations = self.calc_X * self.calc_Y
 
     def calculate_iact_transmissions(self, params):
         #Calculate Iact Cycles
@@ -141,6 +145,14 @@ class LayerParameters(object):
                                             for _ in range(params.PEs_Y)]
                                             for _ in range(params.Clusters_Y)]
                                             for _ in range(params.Clusters_X)]
+            for x_cluster in range(params.Clusters_X):
+                for y_cluster in range(params.Clusters_Y):
+                    for y_pe in range(params.PEs_Y):
+                        for x_pe in range(params.PEs_X):
+                            x_pos_in_pes = x_cluster * 4 + y_cluster * 8 + x_pe
+                            x_values_per_cycle = self.calc_X * self.calc_Y
+                            if(x_pos_in_pes >= x_values_per_cycle):
+                                self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
             if((self.kernel_size[0]*self.kernel_per_pe_cluster) < params.PEs_Y):
                 for x_cluster in range(params.Clusters_X):
                     for y_cluster in range(params.Clusters_Y):
@@ -176,7 +188,7 @@ class LayerParameters(object):
             raise ValueError("Can't fit model, kernel size must be adjusted.")
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         self.layer_name = "Convolution2D"
-        self.choose_iact_storage = 1
+        self.choose_iact_storage_input = 1
         self.filters = layer.filters
         self.fully_connected = 0
         if (layer_number == max_layers - 1) :
@@ -188,13 +200,14 @@ class LayerParameters(object):
             self.quantize[f][1] = 9
         if (layer_number != 0) : 
             self.skipIact = 1
-            self.choose_iact_storage = 0
+            self.choose_iact_storage_input = 0
         self.input_shape = layer.input.shape
         self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size
         self.strideX = layer.strides[0]
         self.strideY = layer.strides[1]
+        self.output_cycles = self.calc_Y
         self.compute_total_computations()
         if (params.SERIAL == 0) :
             if (self.output_shape[1] <= 8):
@@ -338,8 +351,6 @@ class LayerParameters(object):
             self.used_iact_addr_per_PE = 1
         else:
             self.used_iact_addr_per_PE = self.used_channels
-        print("GEnutzte IACT: " + str(self.used_channels))
-        print("GEnutzte IACT: " + str(self.used_iact_addr_per_PE))
         logger.debug("Refreshes: " + str(self.Used_refreshes))
         logger.debug("Used complete new descriptions: " + str(self.Used_refreshes))
         logger.debug("self.used_channels : " + str(self.used_channels))

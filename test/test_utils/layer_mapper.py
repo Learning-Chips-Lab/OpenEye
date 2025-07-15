@@ -41,7 +41,7 @@ class LayerMapper(object):
         self.storage[strdic.stream_parallel_dict["status"]] = self.write_working_parameters(self.params, self.layer_params, self.layer_repetition)
         if (self.layer_params.skipIact == 0) :
             self.storage[strdic.stream_parallel_dict["iact"]] = self.IactStreamCreator.get_iact_stream()
-        else:
+        else :
             self.storage[strdic.stream_parallel_dict["iact"]] = []
         if (self.layer_params.skipWght == 0) :
             self.storage[strdic.stream_parallel_dict["wght"]] = self.WghtStreamCreator.get_wght_stream()
@@ -49,7 +49,7 @@ class LayerMapper(object):
             self.storage[strdic.stream_parallel_dict["wght"]] = []
         if (self.layer_params.skipPsum == 0) :
             self.storage[strdic.stream_parallel_dict["psum"]] = self.PsumStreamCreator.get_psum_stream()
-        else:
+        else :
             self.storage[strdic.stream_parallel_dict["psum"]] = []
         self.storage[strdic.stream_parallel_dict["quantize"]] = self.write_quantize(self.params, self.layer_params, self.layer_repetition)
         logger.info("Stream finished: " + str(self.layer_repetition + 1) + " of " + str(self.layer_params.needed_total_transmissions))
