@@ -1615,7 +1615,7 @@ module OpenEye_FPGA #(
             iact_channels_counter <= 0;
           end
         end
-        
+
         WAIT_FOR_RESULTS: begin
           if (fsm_psum_current_state == WAIT_FOR_SENDING_RESULTS) begin
             choose_iact_buffer       <= choose_iact_buffer_output;
@@ -2244,7 +2244,7 @@ reg [7:0] current_filter;
                 if ((fsm_y_cl_psum == CLUSTER_ROWS - 1) | fully_connected_layer) begin
                   fsm_y_cl_psum <= 0;
                   fsm_psum_cycle <= fsm_psum_cycle + 1;
-                  if (fsm_psum_cycle == needed_wght_cycles_reg * filters_reg * output_cycles - 1) begin //CHange iact_size_y
+                  if (fsm_psum_cycle == needed_wght_cycles_reg * filters_reg * output_cycles - 1) begin
                     fsm_psum_cycle      <= 0;
                     psum_buffer_SP_addr <= 0;
                     psum_buffer_SP_en_r <= 0;

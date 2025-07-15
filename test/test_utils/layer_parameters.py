@@ -58,7 +58,7 @@ class LayerParameters(object):
         self.complete_iacts_in_design = 0
         self.max_pooling = 0
         self.output_cycles = 0
-        
+
         self.filters = 1
         self.input_shape = []
         self.kernel_shape = []
@@ -207,8 +207,9 @@ class LayerParameters(object):
         self.kernel_size = layer.kernel_size
         self.strideX = layer.strides[0]
         self.strideY = layer.strides[1]
-        self.output_cycles = self.calc_Y
         self.compute_total_computations()
+        self.output_cycles = self.calc_Y
+        print(self.output_cycles)
         if (params.SERIAL == 0) :
             if (self.output_shape[1] <= 8):
                 self.single_cluster_computation = 2
