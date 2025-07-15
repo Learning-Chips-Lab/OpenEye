@@ -3,9 +3,21 @@
 These tutorials show how the OpenEye can be simulated as standalone Verilog code.
 We assume that a proper Verilog simulator and all Python requirements (according to the `requirements.txt` have been installed).
 
-## Example Use Case 1: MNIST 
+## Example Use Case 1: MNIST using Tensorflow/Keras
 
-**Todo**
+### Download the data and train the model
+
+You can use the following code to download the data and train the model:
+
+....
+
+### Convert the model to TFLite and quantize it to 8 bit integer
+
+...
+
+### Simulate the OpenEye classification using the trained and quantized model
+
+
 
 ## Example Use Case 2: MobileNet
 
