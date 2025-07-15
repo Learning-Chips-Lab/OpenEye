@@ -1615,6 +1615,7 @@ module OpenEye_FPGA #(
             iact_channels_counter <= 0;
           end
         end
+        
         WAIT_FOR_RESULTS: begin
           if (fsm_psum_current_state == WAIT_FOR_SENDING_RESULTS) begin
             choose_iact_buffer       <= choose_iact_buffer_output;
