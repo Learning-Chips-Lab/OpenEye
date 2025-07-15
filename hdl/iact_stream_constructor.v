@@ -85,12 +85,12 @@ module iact_stream_constructor #(
   generate
     reg [8-1:0] fsm_enc_cycle;
     reg [8-1:0] ram_inc_counter;
-    reg fsm_enc_current_state;
-    reg [8:0] iact_channel_counter;
-    reg [15:0] finished_output_channels;
-    reg [7:0] iact_y_counter;
-    reg [12:0] line_offset;
-    reg [3:0] y_cluster_counter;
+    reg         fsm_enc_current_state;
+    reg [  8:0] iact_channel_counter;
+    reg [ 15:0] finished_output_channels;
+    reg [  7:0] iact_y_counter;
+    reg [ 12:0] line_offset;
+    reg [  3:0] y_cluster_counter;
     integer pec, per, b;
     always @(posedge clk_i, negedge rst_ni) begin
       if (!rst_ni) begin
@@ -244,8 +244,8 @@ module iact_stream_constructor #(
     end
 
     reg signed [7:0] y_reg;
-    reg signed [7:0] x_reg             [NUM_GLB_IACT-1:0];
-    wire [7:0] x_reg_test;
+    reg signed [7:0] x_reg      [NUM_GLB_IACT-1:0];
+    wire       [7:0] x_reg_test;
     assign x_reg_test = x_reg[0];
     integer          router_loop;
     reg        [1:0] fsm_current_state;
