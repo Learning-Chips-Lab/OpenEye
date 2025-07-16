@@ -89,7 +89,7 @@ def quantize_scale(scale):
     shift = -e
     return q, shift
 
-def create_model_from_tflite(use_random, tflite_model_path=None, model_name='resnet'):
+def create_model_from_tflite(use_random=False, tflite_model_path=None, model_name='resnet'):
     #tflite model needed for bias and weights
     script_dir = Path(__file__).resolve().parent.parent / 'cocotb_fpga'
 
@@ -325,7 +325,7 @@ def create_model_from_tflite(use_random, tflite_model_path=None, model_name='res
 
 
 
-            if use_random == 0:
+            if not use_random:
                 weights = interpreter.get_tensor(weight_array[i])
                 reshaped_weights = np.transpose(weights, (1, 2, 3, 0))
                 bias = interpreter.get_tensor(bias_array[i])
@@ -343,5 +343,4 @@ def create_model_from_tflite(use_random, tflite_model_path=None, model_name='res
         return model
 
 if __name__ == "__main__":
-    use_random = 0
-    model = create_model_from_tflite(use_random)
+    model = create_model_from_tflite()

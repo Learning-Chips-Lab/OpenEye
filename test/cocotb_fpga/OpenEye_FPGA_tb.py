@@ -53,12 +53,7 @@ except:
     log_level = logging.INFO
 logger.setLevel(logging.INFO)
 
-@cocotb.test()
-async def single_layer_test(dut):
-    """ Test the DUT with a given DNN model.
-
-    This function tests the DUT with a given DNN model.
-    """
+async def envvars_to_vars():    
     try:
         only_files = int((os.getenv("ONLY_FILES")))
     except:
@@ -105,15 +100,6 @@ async def single_layer_test(dut):
     except:
         logger.debug("INPUT_CHANNELS not set")
 
-
-    try:
-        use_random = int((os.getenv("USE_RANDOM_VALUES")))
-        print("try use random")
-    except:
-        use_random = 1
-        logger.debug("USE_RANDOM_VALUES set to one")
-        print("except use random")
-
     try:
         sparse_iacts = int((os.getenv("USE_SPARSE_IACTS")))
     except:
@@ -125,6 +111,62 @@ async def single_layer_test(dut):
     except:
         sparse_wghts = 0
         logger.debug("No sparsety for wghts set")
+
+    return only_files, layer_mode, filters, kernelsize, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts
+
+@cocotb.test()
+async def model_test(dut):
+    """ Test the DUT with a given DNN model.
+
+    Load a trained DNN model (in TFLite format) 
+    and simulate the execution using the OpenEye FPGA wrapper.
+    """
+    only_files = int((os.getenv("ONLY_FILES")))
+
+    layer_es = les.LayerExecutionState()
+    serial = 1
+    clk_cycle = int(os.environ["CLOCK_LEN"])
+    clk_cycle_unit = os.environ["CLOCK_UNIT"]
+
+    clk_delay_in = int(os.environ["CLOCK_DELAY_INPUT"])
+    clk_delay_unit_in = os.environ["CLOCK_DELAY_UNIT_INPUT"]
+
+    clk_delay_out = int(os.environ["CLOCK_DELAY_OUTPUT"])
+    clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]
+
+    ptp = tp.PortTimingParameters()
+    ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
+    
+    tflite_model_path = os.environ["MODEL_PATH"]
+    model = tflite2model.create_model_from_tflite(tflite_model_path)
+
+    only_files, layer_mode, filters, kernelsize, \
+        inputsize_x, inputsize_y, outputsize, strides, \
+        channels, sparse_iacts, sparse_wghts = envvars_to_vars()
+
+    await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model)
+
+
+@cocotb.test()
+async def single_layer_test(dut):
+    """Simulate a single layer.
+    
+    Simulate a single layer using the OpenEye FPGA wrapper.
+    """
+
+    only_files, layer_mode, filters, kernelsize, \
+        inputsize_x, inputsize_y, outputsize, strides, \
+        channels, sparse_iacts, sparse_wghts = envvars_to_vars()
+
+    try:
+        use_random = int((os.getenv("USE_RANDOM_VALUES")))
+        print("try use random")
+    except:
+        use_random = 1
+        logger.debug("USE_RANDOM_VALUES set to one")
+        print("except use random")
+
+
     
     layer_es = les.LayerExecutionState()
     serial = 1
@@ -150,7 +192,10 @@ async def single_layer_test(dut):
         model = tflite2model.create_model_from_tflite(use_random)
     #load_model_function
     
+    await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model)
 
+
+async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model):
     openeye_parameter = oep.create_vh_file(serial)
     time_printer.timestamp("OpenEye parameters set. ", logger)
 
@@ -173,7 +218,6 @@ async def single_layer_test(dut):
     time_printer.timestamp("Initialized DRAM. ", logger)
     dram.write_initial_data_to_dram(model, layer_parameters, sparse_iacts, sparse_wghts)
     for layer_number, layer in enumerate(model.layers):
-
         # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
         time_printer.timestamp("Layer parameters created. ", logger)
         calculated_results = ptu.collect_results(layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
@@ -217,6 +261,6 @@ async def single_layer_test(dut):
                     if (layer_parameters[layer_number].layer_name != "Pooling") :
                         slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
 
-
+                
     if (only_files == 0) :
         assert dut.rst_ni.value == 1, "rst_ni is not 1!"
