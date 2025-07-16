@@ -40,7 +40,6 @@ class WghtStreamMapper(object):
                         for router in range(self.params.Wght_Routers):
                             if(self.layer_params.computing_mx[cl_x][cl_y][router][0] == 1):
                                 spad = self.write_wght_pe(cl_x, cl_y, router)
-
                                 if (self.sparse_data == 1):
                                     temp_storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
                                 else:
@@ -98,6 +97,7 @@ class WghtStreamMapper(object):
     def write_wght_pe(self, cl_x, cl_y, router):
         data_spad = self.write_wght_data_storage(cl_x, cl_y, router)
         addr_spad = self.write_wght_addr_storage(cl_x, cl_y, router, data_spad)
+        
 
         return [addr_spad, data_spad]
 
@@ -158,6 +158,7 @@ class WghtStreamMapper(object):
                 for router in range(params.Wght_Routers):
 
                     current_spad = spad_storage[cl_x][cl_y][router]
+                    
                     stream[cl_x][cl_y][router] = self.create_pe_addr_wght_stream(current_spad)
                     stream[cl_x][cl_y][router].extend(self.create_pe_data_wght_stream(current_spad))
         if(params.SERIAL):
@@ -169,7 +170,10 @@ class WghtStreamMapper(object):
                         try:
                             stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
                         except:
-                            stream.append(0)
+                            try :
+                                stream.append(temp_stream[0][cl_y][router][word])
+                            except :
+                                stream.append(0)
         return stream
     
     def create_pe_addr_wght_stream(self, spad):

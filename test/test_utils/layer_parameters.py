@@ -209,7 +209,6 @@ class LayerParameters(object):
         self.strideY = layer.strides[1]
         self.compute_total_computations()
         self.output_cycles = self.calc_Y
-        print(self.output_cycles)
         if (params.SERIAL == 0) :
             if (self.output_shape[1] <= 8):
                 self.single_cluster_computation = 2
@@ -692,7 +691,6 @@ class LayerParameters(object):
                                         for _ in range(params.Clusters_Y)]
                                         for _ in range(params.Clusters_X)]
         self.used_channels = 1
-        print(self.input_shape)
         self.diff_iact_layer = self.input_shape[3]
         return
 
