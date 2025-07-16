@@ -100,25 +100,27 @@ class LayerParameters(object):
         self.iact_x_lines = 3
         self.quantize = [[0 for _ in range(2)]for _ in range(256)]
 
-        if "Depthwise" in str(layer):
-            logger.debug("Depthwise Convolution Layer")
-            self.write_convdw_layer(layer, params)
+        match layer.name:
+            case "depthwise_conv2d":
+                logger.debug("Depthwise Convolution Layer")
+                self.write_convdw_layer(layer, params)
 
-        elif "Conv2D" in str(layer):
-            logger.debug("2D Convolution Layer")
-            self.write_conv2d_layer(layer_parameters, layer, params, layer_number, max_layers)
+            case "conv2d":
+                logger.debug("2D Convolution Layer")
+                self.write_conv2d_layer(layer_parameters, layer, params, layer_number, max_layers)
                 
-        elif "Dense" in str(layer):
-            logger.debug("Dense Layer")
-            self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
+            case "dense":
+                logger.debug("Dense Layer")
+                self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
 
-        elif "Pooling" in str(layer):
-            logger.debug("Pooling Layer")
-            self.write_pooling_layer(layer_parameters, layer, params, layer_number, max_layers)
+            case "max_pooling2d":
+                logger.debug("Pooling Layer")
+                self.write_pooling_layer(layer_parameters, layer, params, layer_number, max_layers)
             
-        else:
-            logger.debug("Layer type for " + str(layer) + " not supported.")
-            raise ValueError("Layer type not supported.")
+            case default:
+                logger.debug("Layer type for " + str(layer) + " not supported.")
+                print(str(layer))
+                raise ValueError("Layer type not supported.")
 
     def compute_total_computations(self):
         """ Compute the total number of computations for the layer.
@@ -195,15 +197,25 @@ class LayerParameters(object):
             self.send_values_out = 1
         else:
             self.send_values_out = 0
-        for f in range(self.filters):
-            self.quantize[f][0] = 1
-            self.quantize[f][1] = 9
+        if hasattr(layer, 'quantization_factor'):
+            for f in range(self.filters):
+                self.quantize[f][0] = layer.quantization_factor[f][0]
+                self.quantize[f][1] = layer.quantization_factor[f][1]
+        else:
+            for f in range(self.filters):
+                self.quantize[f][0] = 1
+                self.quantize[f][1] = 9
         if (layer_number != 0) : 
             self.skipIact = 1
             self.choose_iact_storage_input = 0
-        self.input_shape = layer.input.shape
+        if hasattr(layer, 'store_in_psum'):
+            self.store_in_psum = layer.store_in_psum
+        if hasattr(layer, 'skip_psum'):
+            self.skipPsum = layer.skip_psum
+            self.choose_iact_storage = 1
+        self.input_shape = layer.input_shape
         self.kernel_shape = layer.kernel.shape
-        self.output_shape = layer.output.shape
+        self.output_shape = layer.output_shape
         self.kernel_size = layer.kernel_size
         self.strideX = layer.strides[0]
         self.strideY = layer.strides[1]
@@ -584,8 +596,8 @@ class LayerParameters(object):
             
         self.layer_name = "Dense"
         self.iact_size_x = 1
-        self.iact_size_y = layer.input.shape[2]
-        self.filters = layer.output.shape[3]
+        self.iact_size_y = layer.input_shape[2]
+        self.filters = layer.output_shape[3]
         self.fully_connected = 1
         if (layer_number == max_layers - 1) :
             self.send_values_out = 1
@@ -596,9 +608,9 @@ class LayerParameters(object):
             self.quantize[f][1] = 9
         if (layer_number != 0) : 
             self.skipIact = 1
-        self.input_shape = layer.input.shape
+        self.input_shape = layer.input_shape
         self.kernel_shape = layer.kernel.shape
-        self.output_shape = layer.output.shape
+        self.output_shape = layer.output_shape
             
         self.used_channels = math.ceil(self.input_shape[3]/4)
         #Calculate Iact Cycles
@@ -676,8 +688,8 @@ class LayerParameters(object):
 
     def write_pooling_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         self.layer_name = "Pooling"
-        self.input_shape = layer.input.shape
-        self.output_shape = layer.output.shape
+        self.input_shape = layer.input_shape
+        self.output_shape = layer.output_shape
         self.skipIact = 1
         self.skipWght = 1
         self.skipPsum = 1

@@ -2,6 +2,7 @@
 # All rights reserved. © Fachhochschule Dortmund - University of Applied Sciences and Arts.
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
+import math
 import tensorflow as tf
 import numpy as np
 from pathlib import Path
@@ -9,13 +10,169 @@ from io import BytesIO
 import tarfile
 import requests
 
-def create_model_from_tflite(use_random, model_path=None, model_name='resnet'):
+class TFLite_layer(object):
+    def __init__(self, name, idx_in, idx_out, input_shape, output_shape):
+        self.name = name
+        self.idx_in = idx_in
+        self.idx_out = idx_out
+
+        self.input_shape = input_shape
+        self.output_shape = output_shape
+
+class TFLite_conv2d(TFLite_layer):
+    weights = []
+    store_in_psum = 0
+    skip_psum = 0
+
+    def __init__(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu=False, bn=False):
+        super().__init__('conv2d', idx_in, idx_out, input_shape, output_shape)
+        
+        self.weights = [weights, bias]
+
+        self.filters = len(bias)
+        self.kernel_size = weights.shape[:2]
+        self.kernel = weights
+
+        self.relu = relu
+        self.batchnorm = bn
+        self.strides = (1, 1)
+
+        # quantization
+        self.quantization_factor = qf
+        self.zero_point = zp
+
+class TFLite_max_pooling2d(TFLite_layer):
+    def __init__(self, idx_in, idx_out, input_shape, output_shape):
+        super().__init__('max_pooling2d', idx_in, idx_out, input_shape, output_shape)
+
+class TFLite_dense(TFLite_layer):
+    weights = []
+    qf = None
+
+    def __init__(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp):
+        super().__init__('dense', idx_in, idx_out, input_shape, output_shape)
+
+        self.weights = [weights, bias]
+
+        # quantization
+        self.quantization_factor = qf
+        self.zero_point = zp
+
+class TFLite_model(object):
+    layers = []
+    def __init__(self):
+        pass
+
+    def add_conv2d(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu=None, bn=None):
+        layer = TFLite_conv2d(idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu, bn)
+        self.layers.append(layer)
+
+    def add_max_pooling2d(self, idx_in, idx_out, input_shape, output_shape):
+        layer = TFLite_max_pooling2d(idx_in, idx_out, input_shape, output_shape)
+        self.layers.append(layer)
+
+    def add_dense(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp):
+        layer = TFLite_dense(idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp)
+        self.layers.append(layer)
+
+def quantize_scale(scale):
+    if scale == 0:
+        return 0, 0
+
+    m, e = math.frexp(scale)
+    q = int(round(m * (1 << 31)))
+    
+    if q == (1 << 31):
+        q //= 2
+        e += 1
+
+    shift = -e
+    return q, shift
+
+def create_model_from_tflite(use_random, tflite_model_path=None, model_name='resnet'):
     #tflite model needed for bias and weights
     script_dir = Path(__file__).resolve().parent.parent / 'cocotb_fpga'
 
-    if model_path:
-        # TODO: Code for importing model from file
-        raise NotImplementedError
+    if tflite_model_path:
+        interpreter = tf.lite.Interpreter(model_path=str(tflite_model_path))
+        interpreter.allocate_tensors()
+        tensor_details = interpreter.get_tensor_details()
+        graph = interpreter._get_ops_details()
+
+        input_layer_idx = -1
+        tflite_model = TFLite_model()
+
+        for op in graph:
+            match op['op_name']:
+                case 'QUANTIZE':
+                    input_layer_idx = op['outputs'][0]
+                case 'CONV_2D':
+                    idx_in, idx_w, idx_b = (op['inputs'])
+                    input_shape = tensor_details[idx_in]['shape']
+                    w = interpreter.get_tensor(idx_w)
+                    w = np.transpose(w, (1, 2, 3, 0))
+                    b = interpreter.get_tensor(idx_b)
+                    
+                    idx_out = op['outputs'][0]
+                    output_shape = tensor_details[idx_out]['shape']
+                    
+                    qf_i, zp_i = tensor_details[idx_in]['quantization']
+                    qf_w = tensor_details[idx_w]['quantization_parameters']['scales']
+                    zp_w = tensor_details[idx_w]['quantization_parameters']['zero_points']
+                    qf_o, zp_o = tensor_details[idx_out]['quantization']
+
+                    qf = []
+                    for qf_n in qf_w:
+                        mult, shift = quantize_scale(qf_i * qf_n / qf_o)
+                        qf.append((mult, shift+31))
+
+                    relu = False
+                    if 'Relu' in tensor_details[idx_b]['name']:
+                        relu = True
+
+                    bn = False
+                    if 'FusedBatchNorm' in tensor_details[idx_b]['name']:
+                        bn = True
+
+                    tflite_model.add_conv2d(idx_in, idx_out, input_shape, output_shape, w, b, qf, zp_o, relu, bn)
+                case 'ADD':
+                    pass
+                case 'MUL':
+                    pass
+                case 'REDUCE_MAX':
+                    idx_in = op['inputs'][0]
+                    input_shape = tensor_details[idx_in]['shape']
+                    idx_out = op['outputs'][0]
+                    output_shape = tensor_details[idx_out]['shape']
+
+                    # tflite_model.add_max_pooling2d(idx_in, idx_out, input_shape, output_shape)
+
+                case 'FULLY_CONNECTED':
+                    idx_in, idx_w, idx_b = (op['inputs'])
+                    input_shape = tensor_details[idx_in]['shape']
+                    w = interpreter.get_tensor(idx_w)
+                    w = np.transpose(w, (1, 0))
+                    b = interpreter.get_tensor(idx_b)
+                    
+                    idx_out = op['outputs'][0]
+                    output_shape = tensor_details[idx_out]['shape']
+                    
+                    qf_i, zp_i = tensor_details[idx_in]['quantization']
+                    qf_w = tensor_details[idx_w]['quantization_parameters']['scales']
+                    zp_w = tensor_details[idx_w]['quantization_parameters']['zero_points']
+                    qf_o, zp_o = tensor_details[idx_out]['quantization']
+
+                    qf = []
+                    for qf_n in qf_w:
+                        mult, shift = quantize_scale(qf_i * qf_n / qf_o)
+                        qf.append((mult, shift+31))
+
+                    # tflite_model.add_dense(idx_in, idx_out, input_shape, output_shape, w, b, qf, zp_o)
+
+                case default:
+                    pass
+        
+        return tflite_model
 
     elif model_name:
         match model_name:
