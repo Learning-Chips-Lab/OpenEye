@@ -137,7 +137,7 @@ async def model_test(dut):
     ptp = tp.PortTimingParameters()
     ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
     
-    tflite_model_path = os.environ["MODEL_PATH"]
+    tflite_model_path = os.getenv("MODEL_PATH")
     model = tflite2model.create_model_from_tflite(tflite_model_path)
 
     only_files, layer_mode, filters, kernelsize, \

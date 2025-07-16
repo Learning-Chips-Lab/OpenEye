@@ -51,7 +51,7 @@ USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL, CLUSTER_ROW
     verilog_sources = ptu.get_verilog_sources(hdl_dir)
     target_dir = os.path.join(tests_dir, '.temp')
     os.makedirs(target_dir, exist_ok=True)
-    vh_file_creator.create_vh_file(target_dir, hdl_dir + "/", toplevel = "OpenEye_FPGA")
+    vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel = "OpenEye_FPGA")
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],
         verilog_sources=verilog_sources,
