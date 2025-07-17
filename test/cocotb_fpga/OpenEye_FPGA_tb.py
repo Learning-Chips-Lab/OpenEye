@@ -53,7 +53,11 @@ except:
     log_level = logging.INFO
 logger.setLevel(logging.INFO)
 
-async def envvars_to_vars():    
+async def load_env_to_variable() :
+
+    return 0
+
+def envvars_to_vars():    
     try:
         only_files = int((os.getenv("ONLY_FILES")))
     except:
@@ -73,6 +77,7 @@ async def envvars_to_vars():
         kernelsize = int((os.getenv("KERNEL_SIZE")))
     except:
         logger.debug("KERNEL_SIZE not set")
+        kernelsize = int((os.getenv("KERNEL_SIZE")))
 
     try:
         inputsize_x = int((os.getenv("INPUT_SIZE_X")))
@@ -154,9 +159,7 @@ async def single_layer_test(dut):
     Simulate a single layer using the OpenEye FPGA wrapper.
     """
 
-    only_files, layer_mode, filters, kernelsize, \
-        inputsize_x, inputsize_y, outputsize, strides, \
-        channels, sparse_iacts, sparse_wghts = envvars_to_vars()
+    only_files, layer_mode, filters, kernelsize, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts = envvars_to_vars()
 
     try:
         use_random = int((os.getenv("USE_RANDOM_VALUES")))

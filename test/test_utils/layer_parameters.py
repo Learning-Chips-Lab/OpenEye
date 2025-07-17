@@ -213,9 +213,9 @@ class LayerParameters(object):
         if hasattr(layer, 'skip_psum'):
             self.skipPsum = layer.skip_psum
             self.choose_iact_storage = 1
-        self.input_shape = layer.input_shape
+        self.input_shape = layer.input.shape
         self.kernel_shape = layer.kernel.shape
-        self.output_shape = layer.output_shape
+        self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size
         self.strideX = layer.strides[0]
         self.strideY = layer.strides[1]
@@ -610,7 +610,7 @@ class LayerParameters(object):
             self.skipIact = 1
         self.input_shape = layer.input_shape
         self.kernel_shape = layer.kernel.shape
-        self.output_shape = layer.output_shape
+        self.output_shape = layer.output.shape
             
         self.used_channels = math.ceil(self.input_shape[3]/4)
         #Calculate Iact Cycles
@@ -693,17 +693,17 @@ class LayerParameters(object):
         self.skipIact = 1
         self.skipWght = 1
         self.skipPsum = 1
-        self.channels = self.input_shape[3]
+        self.channels = self.input.shape[3]
         self.max_pooling = 1
         self.send_values_out = 1
-        self.iact_size_x = self.input_shape[1]
-        self.iact_size_y = self.input_shape[2]
+        self.iact_size_x = self.input.shape[1]
+        self.iact_size_y = self.input.shape[2]
         self.computing_mx = [[[[1 for _ in range(params.PEs_X)]
                                         for _ in range(params.PEs_Y)]
                                         for _ in range(params.Clusters_Y)]
                                         for _ in range(params.Clusters_X)]
         self.used_channels = 1
-        self.diff_iact_layer = self.input_shape[3]
+        self.diff_iact_layer = self.input.shape[3]
         return
 
     def print_layer_parameters(self, debug_file):
