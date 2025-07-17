@@ -49,6 +49,7 @@ TOPLEVEL = OpenEye_FPGA
 
 # MODULE is the basename of the Python test file
 MODULE = OpenEye_FPGA_tb
+TESTCASE = single_layer_test
 export COCOTB_TRACE=1
 export IVERILOG_DUMPER=fst
 export CLOCK_LEN=10
@@ -63,15 +64,15 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 
 #export LAYER=FC
-#export LAYER=Convolution
+export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
-export LAYER=Pooling
-export NUM_FILTERS=32
+#export LAYER=Pooling
+export NUM_FILTERS=8
 export KERNEL_SIZE=3
-export INPUT_SIZE_X=48
+export INPUT_SIZE_X=64
 export INPUT_SIZE_Y=1
 export STRIDE=1
-export INPUT_CHANNELS=32
+export INPUT_CHANNELS=4
 export OUTPUT_SIZE=20
 #Amout of parallel MACs
 export PARALLEL_MACS=2
@@ -102,7 +103,7 @@ export PE_COLUMNS=4
 
 #Set number of Cluster rows need at least to be 2 COLUMNS
 export CLUSTER_COLUMNS=2
-export CLUSTER_ROWS=6
+export CLUSTER_ROWS=8
 
 #Number of Words per PE
 export IACT_PER_PE=16
@@ -111,9 +112,8 @@ export WGHT_PER_PE=96
 export PE_WGHT_ADDR_ADDR=16
 export PSUM_PER_PE=32
 
-export ONLY_FILES=1
+export ONLY_FILES=0
 
-# include cocotb's make rules to take care of the simulator setup
 export SCRIPT = $(PWD)/../test_utils/vh_file_creator.py
 
 export

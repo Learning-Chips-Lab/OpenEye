@@ -213,9 +213,9 @@ class LayerParameters(object):
         if hasattr(layer, 'skip_psum'):
             self.skipPsum = layer.skip_psum
             self.choose_iact_storage = 1
-        self.input_shape = layer.input_shape
+        self.input_shape = layer.input.shape
         self.kernel_shape = layer.kernel.shape
-        self.output_shape = layer.output_shape
+        self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size
         self.strideX = layer.strides[0]
         self.strideY = layer.strides[1]
@@ -596,8 +596,8 @@ class LayerParameters(object):
             
         self.layer_name = "Dense"
         self.iact_size_x = 1
-        self.iact_size_y = layer.input_shape[2]
-        self.filters = layer.output_shape[3]
+        self.iact_size_y = layer.input.shape[2]
+        self.filters = layer.output.shape[3]
         self.fully_connected = 1
         if (layer_number == max_layers - 1) :
             self.send_values_out = 1
@@ -608,9 +608,9 @@ class LayerParameters(object):
             self.quantize[f][1] = 9
         if (layer_number != 0) : 
             self.skipIact = 1
-        self.input_shape = layer.input_shape
+        self.input_shape = layer.input.shape
         self.kernel_shape = layer.kernel.shape
-        self.output_shape = layer.output_shape
+        self.output_shape = layer.output.shape
             
         self.used_channels = math.ceil(self.input_shape[3]/4)
         #Calculate Iact Cycles
@@ -688,22 +688,22 @@ class LayerParameters(object):
 
     def write_pooling_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         self.layer_name = "Pooling"
-        self.input_shape = layer.input_shape
-        self.output_shape = layer.output_shape
+        self.input_shape = layer.input.shape
+        self.output_shape = layer.output.shape
         self.skipIact = 1
         self.skipWght = 1
         self.skipPsum = 1
-        self.channels = self.input_shape[3]
+        self.channels = self.input.shape[3]
         self.max_pooling = 1
         self.send_values_out = 1
-        self.iact_size_x = self.input_shape[1]
-        self.iact_size_y = self.input_shape[2]
+        self.iact_size_x = self.input.shape[1]
+        self.iact_size_y = self.input.shape[2]
         self.computing_mx = [[[[1 for _ in range(params.PEs_X)]
                                         for _ in range(params.PEs_Y)]
                                         for _ in range(params.Clusters_Y)]
                                         for _ in range(params.Clusters_X)]
         self.used_channels = 1
-        self.diff_iact_layer = self.input_shape[3]
+        self.diff_iact_layer = self.input.shape[3]
         return
 
     def print_layer_parameters(self, debug_file):

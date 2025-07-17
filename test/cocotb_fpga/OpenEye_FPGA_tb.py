@@ -53,7 +53,11 @@ except:
     log_level = logging.INFO
 logger.setLevel(logging.INFO)
 
-async def envvars_to_vars():    
+async def load_env_to_variable() :
+
+    return 0
+
+def envvars_to_vars():    
     try:
         only_files = int((os.getenv("ONLY_FILES")))
     except:
@@ -73,6 +77,7 @@ async def envvars_to_vars():
         kernelsize = int((os.getenv("KERNEL_SIZE")))
     except:
         logger.debug("KERNEL_SIZE not set")
+        kernelsize = int((os.getenv("KERNEL_SIZE")))
 
     try:
         inputsize_x = int((os.getenv("INPUT_SIZE_X")))
@@ -137,8 +142,8 @@ async def model_test(dut):
     ptp = tp.PortTimingParameters()
     ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
     
-    tflite_model_path = os.getenv("MODEL_PATH")
-    model = tflite2model.create_model_from_tflite(tflite_model_path)
+    tflite_model_path = os.environ["MODEL_PATH"]
+    model = tflite2model.create_model_from_tflite(tflite_model_path=tflite_model_path)
 
     only_files, layer_mode, filters, kernelsize, \
         inputsize_x, inputsize_y, outputsize, strides, \
@@ -154,9 +159,7 @@ async def single_layer_test(dut):
     Simulate a single layer using the OpenEye FPGA wrapper.
     """
 
-    only_files, layer_mode, filters, kernelsize, \
-        inputsize_x, inputsize_y, outputsize, strides, \
-        channels, sparse_iacts, sparse_wghts = envvars_to_vars()
+    only_files, layer_mode, filters, kernelsize, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts = envvars_to_vars()
 
     try:
         use_random = int((os.getenv("USE_RANDOM_VALUES")))
