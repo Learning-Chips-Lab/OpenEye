@@ -3,10 +3,7 @@
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
-import sys
 import os
-directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
-sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 import test_utils.generic_test_utils as generic_test_utils
 
 

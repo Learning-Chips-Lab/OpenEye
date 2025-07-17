@@ -2,8 +2,8 @@
 # All rights reserved. © Fachhochschule Dortmund - University of Applied Sciences and Arts.
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
-import math
 
+import math
 
 def pool(dram, layer, layer_number):
     temp_number = 0

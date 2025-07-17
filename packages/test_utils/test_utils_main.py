@@ -3,10 +3,7 @@
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
-import sys
 import os
-directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
-sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 import logging
 import math
 import numpy as np
@@ -16,7 +13,6 @@ from test_utils.dense_mapper import DenseMapper
 from test_utils.conv_mapper import ConvMapper
 from test_utils.dw_mapper import DWMapper
 import test_utils.generic_test_utils as gtu
-import test_utils.stream_dicts as strdic
 import multiprocessing as mp
 
 logger = logging.getLogger("cocotb")

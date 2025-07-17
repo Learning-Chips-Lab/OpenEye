@@ -1,7 +1,6 @@
 
-import sys
 import os
-import open_eye_parameters as oep
+import test_utils.open_eye_parameters as oep
 
 def are_files_identical(file1_path, file2_path):
     try:

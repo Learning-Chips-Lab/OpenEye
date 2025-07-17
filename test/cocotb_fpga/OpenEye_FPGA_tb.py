@@ -5,11 +5,8 @@
 
 import sys
 import os
-directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
-sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge
 import test_utils.test_utils_main as ptu
 import test_utils.rtl_test_utils as rtl_test_utils
 import test_utils.timing_parameters as tp
@@ -22,7 +19,6 @@ import test_utils.simple_layer_operations as slo
 import test_utils.layer_execution_state as les
 import test_utils.data_create as data_create
 import test_utils.tflite2model as tflite2model
-import test_utils.stream_dicts as str_dic
 
 os.environ["CLOCK_LEN"] = "10"
 os.environ["CLOCK_UNIT"] = "ns"

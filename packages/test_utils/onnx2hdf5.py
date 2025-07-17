@@ -2,6 +2,7 @@
 # All rights reserved. © Fachhochschule Dortmund - University of Applied Sciences and Arts.
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
+
 import onnx
 import numpy as np
 import h5py

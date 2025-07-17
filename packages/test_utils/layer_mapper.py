@@ -3,14 +3,8 @@
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
-import sys
-import os
-directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
-sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
-import math
 import logging
-import generic_test_utils as gtu
-import stream_dicts as strdic
+import test_utils.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 

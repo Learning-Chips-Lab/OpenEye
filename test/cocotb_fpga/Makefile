@@ -114,11 +114,10 @@ export PSUM_PER_PE=32
 
 export ONLY_FILES=0
 
-export SCRIPT = $(PWD)/../test_utils/vh_file_creator.py
-
+export SCRIPT = $(shell python -c "import site; print(site.getsitepackages()[0] + '/test_utils/vh_file_creator.py')")
 export
 run:
-	@python $(SCRIPT) && make -f $(shell cocotb-config --makefiles)/Makefile.sim
+	@python -m test_utils.vh_file_creator && make -f $(shell cocotb-config --makefiles)/Makefile.sim
 
 gtkwave:
 	touch $(abspath $(PWD)/../../hdl/OpenEye_FPGA.v)
