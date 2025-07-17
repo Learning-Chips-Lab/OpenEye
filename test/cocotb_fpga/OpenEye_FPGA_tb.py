@@ -49,70 +49,30 @@ except:
     log_level = logging.INFO
 logger.setLevel(logging.INFO)
 
-async def load_env_to_variable() :
 
-    return 0
+def load_env_to_variable(variable_string, default_value) :
+    try:
+        if (type(default_value) == int) :
+            return int((os.getenv(variable_string)))
+        else :
+            return os.getenv(variable_string)
+    except:
+        logger.debug(variable_string + " not set")
+        return default_value
 
 def envvars_to_vars():    
-    try:
-        only_files = int((os.getenv("ONLY_FILES")))
-    except:
-        only_files = 0
     # Get variables that are used for the execution of the test
-    try:
-        layer_mode = os.getenv("LAYER")
-    except:
-        logger.error("LAYER not given.")
-    try:
-        filters = int((os.getenv("NUM_FILTERS")))
-    except:
-        logger.debug("NUM_FILTERS not set")
-        filters = 1
-
-    try:
-        kernelsize = int((os.getenv("KERNEL_SIZE")))
-    except:
-        logger.debug("KERNEL_SIZE not set")
-        kernelsize = int((os.getenv("KERNEL_SIZE")))
-
-    try:
-        inputsize_x = int((os.getenv("INPUT_SIZE_X")))
-    except:
-        logger.debug("INPUT_SIZE_X not set")
-
-    try:
-        inputsize_y = int((os.getenv("INPUT_SIZE_Y")))
-    except:
-        logger.debug("INPUT_SIZE_Y not set")
-
-    try:
-        outputsize = int((os.getenv("OUTPUT_SIZE")))
-    except:
-        outputsize = 1
-        logger.debug("OUTPUT_SIZE not set")
-
-    try:
-        strides = (int((os.getenv("STRIDE"))),int((os.getenv("STRIDE"))))
-    except:
-        logger.debug("STRIDE not set")
-
-    try:
-        channels = int((os.getenv("INPUT_CHANNELS")))
-    except:
-        logger.debug("INPUT_CHANNELS not set")
-
-    try:
-        sparse_iacts = int((os.getenv("USE_SPARSE_IACTS")))
-    except:
-        sparse_iacts = 0
-        logger.debug("No sparsety for wghts set")
-
-    try:
-        sparse_wghts = int((os.getenv("USE_SPARSE_WEIGHTS")))
-    except:
-        sparse_wghts = 0
-        logger.debug("No sparsety for wghts set")
-
+    only_files = load_env_to_variable("ONLY_FILES", 0)
+    layer_mode = load_env_to_variable("LAYER", "CONVOLUTION")
+    filters = load_env_to_variable("NUM_FILTERS", 1)
+    kernelsize = load_env_to_variable("KERNEL_SIZE", 3)
+    inputsize_x = load_env_to_variable("INPUT_SIZE_X", 1)
+    inputsize_y = load_env_to_variable("INPUT_SIZE_Y", 1)
+    outputsize = load_env_to_variable("OUTPUT_SIZE", 1)
+    strides = load_env_to_variable("STRIDE", 1),load_env_to_variable("STRIDE", 1)
+    channels = load_env_to_variable("INPUT_CHANNELS", 1)
+    sparse_iacts = load_env_to_variable("USE_SPARSE_IACTS", 1)
+    sparse_wghts = load_env_to_variable("USE_SPARSE_WEIGHTS", 1)
     return only_files, layer_mode, filters, kernelsize, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts
 
 @cocotb.test()
