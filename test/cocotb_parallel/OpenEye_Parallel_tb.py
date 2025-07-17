@@ -118,7 +118,7 @@ async def single_layer_test(dut):
         logger.debug("No sparsety for wghts set")
     
     layer_es = les.LayerExecutionState()
-    serial = 0
+    serial = False
     clk_cycle = int(os.environ["CLOCK_LEN"])
     clk_cycle_unit = os.environ["CLOCK_UNIT"]
 

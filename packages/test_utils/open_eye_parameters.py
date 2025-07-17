@@ -14,7 +14,7 @@ class OpenEyeParameters(object):
     are fixed before the accelerator is synthesized.
     
     """
-    def __init__(self, serial = 0):
+    def __init__(self, serial = False):
 
         try:
             self.Clusters_Y = int(os.getenv("CLUSTER_ROWS"))
@@ -82,25 +82,7 @@ class OpenEyeParameters(object):
         self.Wght_Router_Bits = 1
         self.Psum_Router_Bits = 3
 
-#Change to OpenEyeParameters
 
-def make_vh_file(params, filename):
-    generic_test_utils.delete_files_in_directory('demo/')
-    #os.makedirs(os.path.dirname(filename), exist_ok=True)
-    txt_file = open(filename, 'w')
-    txt_file.write("parameter CLUSTER_ROWS  = "  + str(params.Clusters_Y)+ ",\n")
-    txt_file.write("parameter NUM_GLB_IACT  = "  + str(params.NUM_GLB_IACT)+ ",\n")
-    txt_file.write("parameter PE_COLUMNS  = "  + str(params.PEs_X)+ ",\n")
-    txt_file.write("parameter NUM_GLB_PSUM  = "  + str(params.NUM_GLB_PSUM)+ ",\n")
-    txt_file.write("parameter NUM_GLB_WGHT = "  + str(params.NUM_GLB_WGHT)+ ",\n")
-    txt_file.write("parameter PE_ROWS  = "  + str(params.PEs_Y)+ ",\n")
-    txt_file.close()
-
-def create_vh_file(serial = 0, filename = 'parameters.vh'):
-    openeye_parameter = get_oep(serial)
-    make_vh_file(openeye_parameter, filename)
-    return openeye_parameter
-
-def get_oep(serial = 0):
+def get_oep(serial = False):
     openeye_parameter = OpenEyeParameters(serial)
     return openeye_parameter

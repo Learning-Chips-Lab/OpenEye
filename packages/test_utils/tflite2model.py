@@ -20,6 +20,14 @@ class TFLite_layer(object):
         self.input_shape = input_shape
         self.output_shape = output_shape
 
+    @property
+    def input(self):
+        return tf.TensorSpec(shape=tuple(self.input_shape))
+
+    @property
+    def output(self):
+        return tf.TensorSpec(shape=tuple(self.output_shape))
+
 class TFLite_conv2d(TFLite_layer):
     weights = []
     store_in_psum = 0

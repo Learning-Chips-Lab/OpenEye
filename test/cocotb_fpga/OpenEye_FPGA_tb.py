@@ -139,7 +139,7 @@ async def model_test(dut):
     ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
     
     tflite_model_path = os.environ["MODEL_PATH"]
-    model = tflite2model.create_model_from_tflite(tflite_model_path)
+    model = tflite2model.create_model_from_tflite(tflite_model_path=tflite_model_path)
 
     only_files, layer_mode, filters, kernelsize, \
         inputsize_x, inputsize_y, outputsize, strides, \
@@ -195,7 +195,7 @@ async def single_layer_test(dut):
 
 
 async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model):
-    openeye_parameter = oep.create_vh_file(serial)
+    openeye_parameter = oep.get_oep(serial)
     time_printer.timestamp("OpenEye parameters set. ", logger)
 
     if (only_files == 0) :

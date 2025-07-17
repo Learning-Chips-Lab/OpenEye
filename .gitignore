@@ -19,6 +19,7 @@ env/*
 *.json
 !requirements.txt
 netlist.v
+test/simulation
 
 **/.temp
 **/.work/

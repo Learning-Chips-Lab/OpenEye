@@ -597,8 +597,8 @@ class LayerParameters(object):
             
         self.layer_name = "Dense"
         self.iact_size_x = 1
-        self.iact_size_y = layer.input_shape[2]
-        self.filters = layer.output_shape[3]
+        self.iact_size_y = layer.input.shape[2]
+        self.filters = layer.output.shape[3]
         self.fully_connected = 1
         if (layer_number == max_layers - 1) :
             self.send_values_out = 1
@@ -609,7 +609,7 @@ class LayerParameters(object):
             self.quantize[f][1] = 9
         if (layer_number != 0) : 
             self.skipIact = 1
-        self.input_shape = layer.input_shape
+        self.input_shape = layer.input.shape
         self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
             
@@ -689,8 +689,8 @@ class LayerParameters(object):
 
     def write_pooling_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         self.layer_name = "Pooling"
-        self.input_shape = layer.input_shape
-        self.output_shape = layer.output_shape
+        self.input_shape = layer.input.shape
+        self.output_shape = layer.output.shape
         self.skipIact = 1
         self.skipWght = 1
         self.skipPsum = 1
