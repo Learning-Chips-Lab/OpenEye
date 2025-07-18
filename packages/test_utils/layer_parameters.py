@@ -172,7 +172,6 @@ class LayerParameters(object):
                                     self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
 
             if((self.output_shape[1] % params.PEs_X) != 0):
-                if((self.output_shape[1] < 8) | ((self.output_shape[1] > 12) & (self.output_shape[1] < 16))):
                     self.add_up = params.PEs_X - (self.output_shape[1] % params.PEs_X)
                     yc_step = math.ceil(self.output_shape[1]/(params.PEs_X*params.Clusters_X))
                     yc_start = yc_step - 1
@@ -182,8 +181,6 @@ class LayerParameters(object):
                             for x_pe in range(self.output_shape[1] % params.PEs_X,params.PEs_X):
                                 for y_pe in range(params.PEs_Y):
                                     self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
-                else:
-                    assert False, "Kernel cant be caclulated"
             else:
                 self.add_up = 0
         else:

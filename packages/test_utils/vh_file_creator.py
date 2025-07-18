@@ -1,7 +1,6 @@
 
 import os
 import sys
-import test_utils.open_eye_parameters as oep
 
 directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])

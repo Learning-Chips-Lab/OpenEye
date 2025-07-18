@@ -715,7 +715,7 @@ module OpenEye_FPGA #(
         end
       end
       if (GET_ROUTER_CONFIG == fsm_current_state) begin
-        conv_array_reg <= (1 << (iact_size_x/PE_COLUMNS)) - 1;
+        conv_array_reg <= (1 << ((iact_size_x + PE_COLUMNS - 1)/PE_COLUMNS)) - 1;
         //conv_array_reg <= (1 << (CLUSTER_COLUMNS*CLUSTER_ROWS)) - 1;
         if (fully_connected_layer) begin
           conv_array_reg <= ~0;
@@ -1247,7 +1247,7 @@ module OpenEye_FPGA #(
               current_buffer_n <= 0;
             end
 
-            if (fsm_cycle == ((iact_size_x*iact_size_y*iact_channels)/IACT_WORDS_IN_RAM) - 1) begin
+            if (fsm_cycle == ((iact_size_x*iact_size_y*iact_channels + IACT_WORDS_IN_RAM - 1)/IACT_WORDS_IN_RAM) - 1) begin
               fsm_cycle         <= 0;
               fsm_current_state <= GET_WGHT;
               fsm_last_state    <= GET_IACT;
@@ -1310,7 +1310,7 @@ module OpenEye_FPGA #(
             fsm_last_state         <= GET_BIAS;
             fsm_current_state      <= GET_QUANTIZE;
             wght_buffer_SP_wr_addr <= 0;
-            limit_increase_reg     <= ((iact_size_x*iact_channels_per_pe)/(WORDS_PER_CYCLE[7:0]*4));
+            limit_increase_reg     <= ((iact_size_x*iact_channels_per_pe + (WORDS_PER_CYCLE[7:0]*4) - 1)/(WORDS_PER_CYCLE[7:0]*4));
             if (fully_connected_layer) begin
               limit_increase_reg <= iact_channels_per_pe/2;
             end
@@ -1394,7 +1394,7 @@ module OpenEye_FPGA #(
           iact_converter_params_enable <= 0;
           if ((iact_converter_buffer_addr_cycles + 2 == (iact_converter_buffer_addr_max_cycles)) & 
           (iact_converter_cycles == 0) & 
-          (iact_channels_counter != (iact_channel_max_cycles + 1))) begin //Change here  + 1
+          (iact_channels_counter != (iact_channel_max_cycles))) begin //Change here + 1
             iact_converter_enc_enable    <= 1;
             iact_converter_params_enable <= 1;
             select_ram_counter           <= 1;
@@ -1406,7 +1406,7 @@ module OpenEye_FPGA #(
             if (iact_converter_cycles == (iact_converter_max_cycles - 1)) begin
               iact_converter_cycles <= 0;
               iact_channels_counter <= iact_channels_counter + 1;
-              if (iact_channels_counter == (iact_channel_max_cycles  + 1 - 1)) begin //Change here + 1
+              if (iact_channels_counter == (iact_channel_max_cycles - 1)) begin //Change here + 1
                 fsm_current_state     <= WAIT_CYCLE;
                 iact_channels_counter <= 0;
                 fsm_cycle             <= 0;
@@ -2405,7 +2405,7 @@ reg [7:0] current_filter;
         wire [                    NUM_GLB_IACT-1:0] iact_ready_w;
         wire [                    NUM_GLB_IACT-1:0] iact_enable_w;
         iact_stream_constructor #(
-            .CLUSTER_ROWS   (CLUSTER_ROWS),
+            .CLUSTER_ROWS      (CLUSTER_ROWS),
             .NUM_GLB_IACT      (NUM_GLB_IACT),
             .PE_X              (PE_COLUMNS),
             .PE_Y              (PE_ROWS),

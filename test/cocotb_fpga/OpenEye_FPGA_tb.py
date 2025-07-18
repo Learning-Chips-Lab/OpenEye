@@ -125,8 +125,6 @@ async def single_layer_test(dut):
         logger.debug("USE_RANDOM_VALUES set to one")
         print("except use random")
 
-
-    
     layer_es = les.LayerExecutionState()
     serial = 1
     clk_cycle = int(os.environ["CLOCK_LEN"])
@@ -183,7 +181,6 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         output_order = ptu.make_ref(openeye_parameter, layer_parameters[layer_number], layer_number, dram, calculated_results)
         if(logging.DEBUG >= log_level):
             time_printer.timestamp("Reference data created. ", logger)
-
         dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
         time_printer.timestamp("Start creating stream. " , logger)
         stream = ptu.write_stream(openeye_parameter, layer_parameters[layer_number], dram_layer_content, sparse_iacts, sparse_wghts)
