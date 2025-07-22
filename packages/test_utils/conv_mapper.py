@@ -49,6 +49,7 @@ class ConvMapper(LayerMapper):
         if (params.SERIAL):
             dma_line = 0
             dma_storage = []
+            # 1. transmission
             dma_line = params.data_mode + ((layer_params.realfactor) << 1) 
             dma_line = dma_line + (params.autofunction << 6)
             dma_line = dma_line + (params.poolingmode << 7)
@@ -64,6 +65,7 @@ class ConvMapper(LayerMapper):
             #dma_line = dma_line + ((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 8))
             dma_storage.append(dma_line)
             dma_line = 0
+            # 2. transmission
             dma_line = dma_line + (layer_params.needed_wght_transmissions)
             dma_line = dma_line + (layer_params.strideY << 10) #Also includes Stride X
             dma_line = dma_line + (layer_params.skipIact << 14)
@@ -77,9 +79,11 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + (math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 45)
             dma_storage.append(dma_line)
             dma_line = 0
+            # 3. transmission
             dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.used_channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
             dma_storage.append(dma_line)
             dma_line = 0
+            # 4. transmission
             dma_line = math.ceil(layer_params.diff_iact_layer)
             dma_line = dma_line + math.ceil(layer_params.diff_iact_layer_next_layer << 8)
             dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_input << 16)

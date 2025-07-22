@@ -281,15 +281,15 @@ module iact_stream_constructor #(
     end
 
     reg [16-1:0] fsm_cycle;
-    reg [8-1:0] y_cycle;
-    reg [8-1:0] x_pos_in_w_cycle;
-    reg [8-1:0] router_cycle;
-    reg [8-1:0] addr_cycle;
-    reg [8-1:0] ram_var;
-    reg [8-1:0] ram_var_debug;
-    reg [8-1:0] byte_var_debug;
-    reg [8-1:0] byte_var;
-    reg [8-1:0] byte_var_pre_calc;
+    reg [ 8-1:0] y_cycle;
+    reg [ 8-1:0] x_pos_in_w_cycle;
+    reg [ 8-1:0] router_cycle;
+    reg [ 8-1:0] addr_cycle;
+    reg [ 8-1:0] ram_var;
+    reg [ 8-1:0] ram_var_debug;
+    reg [ 8-1:0] byte_var_debug;
+    reg [ 8-1:0] byte_var;
+    reg [ 8-1:0] byte_var_pre_calc;
     reg [ADDRWIDTH-1:0] ram_wr_addr_reg;
     integer r, w;
     always @(posedge clk_i, negedge rst_ni) begin
@@ -343,7 +343,6 @@ module iact_stream_constructor #(
             channels               <= 0;
             pos                    <= 0;
             change_state           <= 0;
-            ready_o                <= 0;
             ram_wr_en              <= 0;
             ram_wr_addr            <= 0;
             ram_wr_addr_reg        <= 0;
@@ -356,6 +355,7 @@ module iact_stream_constructor #(
             wght_size_reg          <= 0;
             x_lines_reg            <= 0;
             x_pos_in_w_cycle       <= 0;
+            ready_o                <= 1;
           end
 
           GET_PARAMETER: begin
@@ -503,9 +503,9 @@ module iact_stream_constructor #(
           y                      <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4];
           channels               <= params[(PARAMS_SIZE/4)-1:0];
           ready_o                <= 1;
-          needed_iact_cycles_reg <= needed_iact_router_cycles_i;
-          wght_size_reg          <= wght_size_i;
         end
+        needed_iact_cycles_reg <= needed_iact_router_cycles_i;
+        wght_size_reg          <= wght_size_i;
         if (reset_cycle_i) begin
           fsm_current_state      <= INITIALIZE;
         end

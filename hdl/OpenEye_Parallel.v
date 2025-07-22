@@ -348,7 +348,6 @@ module OpenEye_Parallel #(
     end else begin
       iact_data_i_reg <= iact_data_i;
     end
-
   end
   ///#######################
   ///Process
@@ -407,7 +406,6 @@ module OpenEye_Parallel #(
       compute_mask_reg               <= 0;
       fsm_last_state                 <= MAIN_IDLE;
       fsm_current_state              <= MAIN_IDLE;
-
       data_write_enable              <= 1;
       finished_cycles                <= 0;
       compute_mask_i_reg             <= 0;
@@ -441,7 +439,6 @@ module OpenEye_Parallel #(
       psum_choose_reg                <= 0;
       needed_psum_storage_cycles_reg <= 0;
       iact_ready_o                   <= 0;
-
       psum_data_i_reg                <= 0;
       psum_ready_i_reg               <= 0;
       psum_enable_i_reg              <= 0;
@@ -468,12 +465,10 @@ module OpenEye_Parallel #(
       wght_addr_len_i_reg         <= wght_addr_len_i;
       compute_mask_i_reg          <= compute_mask_i;
       iact_ready_o                <= iact_ready_o_w;
-
       psum_data_i_reg             <= psum_data_i;
       psum_ready_i_reg            <= psum_ready_i;
       psum_ready_o                <= psum_ready_o_cluster_reg;
       psum_enable_i_reg           <= psum_enable_i;
-
       if (status_reg_enable_i_w) begin
         cycle_break_counter         <= 0;
         data_mode_reg               <= data_mode_i_w;
@@ -517,6 +512,7 @@ module OpenEye_Parallel #(
             finished_cycles <= 0;
           end
         end
+
         COMPUTING: begin
           compute_cluster_i_reg <= 0;
           cycle_break_counter   <= 0;
@@ -537,7 +533,7 @@ module OpenEye_Parallel #(
               end
             end
           end else begin
-            start_new_cycle       <= 0;
+            start_new_cycle <= 0;
           end
         end
 
@@ -564,7 +560,7 @@ module OpenEye_Parallel #(
             fsm_wght_current_state <= WGHT_BUSY;
           end
         end
-
+        
         WGHT_BUSY: begin
           if ((compute_cluster_i_reg != 0) & (finished_cycles == needed_cycles_i_reg)) begin
             fsm_wght_current_state <= WGHT_READY;
@@ -836,7 +832,6 @@ module OpenEye_Parallel #(
       assign iact_enable_i_w           = iact_enable_i_reg;
       assign wght_data_i_w             = wght_data_i_reg;
       assign wght_enable_i_w           = wght_enable_i_reg;
-
       assign compute_i_w               = compute_i_reg;
       assign status_reg_enable_i_w     = status_reg_enable_i_reg;
       assign data_mode_i_w             = data_mode_i_reg;
