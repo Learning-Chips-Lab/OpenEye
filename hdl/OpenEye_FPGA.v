@@ -436,13 +436,14 @@ module OpenEye_FPGA #(
   localparam GET_WGHT = 4'd4;
   localparam GET_BIAS = 4'd5;
   localparam GET_QUANTIZE = 4'd6;
-  localparam START_CONVERTER = 4'd7;
-  localparam CONVERT_IACT = 4'd8;
-  localparam WAIT_CYCLE = 4'd9;
-  localparam WAIT_FOR_RESULTS = 4'd10;
-  localparam RECEIVE_PSUMS_TO_IACT = 4'd11;
-  localparam MAXPOOLING_READ = 4'd12;
-  localparam MAXPOOLING_SEND = 4'd13;
+  localparam GET_OFFSET = 4 'd7;
+  localparam START_CONVERTER = 4'd8;
+  localparam CONVERT_IACT = 4'd9;
+  localparam WAIT_CYCLE = 4'd10;
+  localparam WAIT_FOR_RESULTS = 4'd11;
+  localparam RECEIVE_PSUMS_TO_IACT = 4'd12;
+  localparam MAXPOOLING_READ = 4'd13;
+  localparam MAXPOOLING_SEND = 4'd14;
 
   reg [3:0] fsm_current_state;
   reg [3:0] fsm_last_state;
@@ -942,8 +943,9 @@ module OpenEye_FPGA #(
   assign debug_pooling_stage_3 = pooling_stage_3[0];
   assign debug_pooling_stage_4 = pooling_stage_4;
 
-  reg [ 6:0] quant_exp  [31:0];
-  reg [24:0] quant_mant [31:0];
+  reg [ 7:0] quant_offset [31:0];
+  reg [ 6:0] quant_exp    [31:0];
+  reg [24:0] quant_mant   [31:0];
   integer cr, cc, g;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
@@ -1042,8 +1044,9 @@ module OpenEye_FPGA #(
       end
       pooling_stage_4 <= 0;
       for (a = 0; a < 32; a = a + 1) begin
-        quant_exp[a]  <= 0;
-        quant_mant[a] <= 0;
+        quant_offset[a] <= 0;
+        quant_exp[a]    <= 0;
+        quant_mant[a]   <= 0;
       end
 
       for (a = 0; a < RAM_CELLS; a++) begin
@@ -1105,8 +1108,9 @@ module OpenEye_FPGA #(
           end
           pooling_stage_4 <= 0;
           for (a = 0; a < 32; a = a + 1) begin
-            quant_exp[a]  <= 0;
-            quant_mant[a] <= 0;
+            quant_offset[a] <= 0;
+            quant_exp[a]    <= 0;
+            quant_mant[a]   <= 0;
           end
           if (enable_dma_i_reg) begin
             if (!ready_dma_o) begin
@@ -1342,6 +1346,33 @@ module OpenEye_FPGA #(
             end
           end
           if (fsm_cycle == 16 - 1) begin
+            fsm_cycle         <= 0;
+            ready_dma_o       <= 0;
+            fsm_last_state    <= GET_QUANTIZE;
+            fsm_current_state <= GET_OFFSET;
+          end
+        end
+
+        GET_OFFSET: begin
+          ready_dma_o         <= 1;
+          wght_buffer_SP_en_w <= 0;
+          if (enable_dma_i_reg) begin
+            fsm_cycle <= fsm_cycle + 1;
+            quant_offset[8*fsm_cycle]   <= data_dma_i_reg[7:0];
+            quant_offset[8*fsm_cycle+1] <= data_dma_i_reg[15:8];
+            quant_offset[8*fsm_cycle+2] <= data_dma_i_reg[23:16];
+            quant_offset[8*fsm_cycle+3] <= data_dma_i_reg[31:24];
+            quant_offset[8*fsm_cycle+4] <= data_dma_i_reg[39:32];
+            quant_offset[8*fsm_cycle+5] <= data_dma_i_reg[47:40];
+            quant_offset[8*fsm_cycle+6] <= data_dma_i_reg[55:48];
+            quant_offset[8*fsm_cycle+7] <= data_dma_i_reg[63:56];
+          end
+          if (max_pooling) begin
+            for (a = 0; a < RAM_CELLS; a++) begin
+              buffer_SP_en_r_reg[a] <= 1;
+            end
+          end
+          if (fsm_cycle == 4 - 1) begin
             fsm_cycle         <= 0;
             ready_dma_o       <= 0;
             fsm_last_state    <= GET_QUANTIZE;
@@ -2277,8 +2308,14 @@ reg [7:0] current_filter;
         end
         SEND_PSUM_TO_IACT: begin
           for (cr_psum = 0; cr_psum < 4; cr_psum = cr_psum + 1) begin
-            quantized_value_reg[2*cr_psum]     <= (quant_mant[current_filter] * psum_buffer_SP_data_r[(cr_psum/2)*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum%2)*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM]) >>> quant_exp[current_filter];
-            quantized_value_reg[2*cr_psum + 1] <= (quant_mant[current_filter] * psum_buffer_SP_data_r[(cr_psum/2)*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum%2)*TRANS_BITWIDTH_PSUM*2+TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]) >>> quant_exp[current_filter];
+            quantized_value_reg[2*cr_psum]     <= (quant_mant[current_filter] *
+            (psum_buffer_SP_data_r[(cr_psum/2)*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum%2)*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM]
+            + quant_exp[current_filter]))
+            >>> quant_offset[current_filter];
+            quantized_value_reg[2*cr_psum + 1] <= (quant_mant[current_filter] *
+            (psum_buffer_SP_data_r[(cr_psum/2)*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum%2)*TRANS_BITWIDTH_PSUM*2+TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]
+            + quant_offset[current_filter]))
+            >>> quant_exp[current_filter];
           end
           psum_sending_counter <= psum_sending_counter + 1;
           if (psum_sending_counter == CLUSTER_ROWS - 1) begin

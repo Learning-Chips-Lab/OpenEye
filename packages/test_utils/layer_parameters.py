@@ -100,6 +100,7 @@ class LayerParameters(object):
         self.direct_cycling = 0
         self.iact_x_lines = 3
         self.quantize = [[0 for _ in range(2)]for _ in range(256)]
+        self.offset =  [0 for _ in range(256)]
 
         match layer.name:
             case "depthwise_conv2d":

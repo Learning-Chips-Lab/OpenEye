@@ -144,6 +144,23 @@ class ConvMapper(LayerMapper):
             
             dma_storage.append(dma_line)
         return dma_storage
+    
+    def write_offset(self, params, layer_params, layer_repetition):
+        dma_line = 0
+        dma_storage = []
+        for f in range(math.ceil(32/8)):
+            dma_line = 0
+            dma_line = dma_line + (layer_params.offset[8*f] << 0)
+            dma_line = dma_line + (layer_params.offset[8*f+1] << 8)
+            dma_line = dma_line + (layer_params.offset[8*f+2] << 16)
+            dma_line = dma_line + (layer_params.offset[8*f+3] << 24)
+            dma_line = dma_line + (layer_params.offset[8*f+4] << 32)
+            dma_line = dma_line + (layer_params.offset[8*f+5] << 40)
+            dma_line = dma_line + (layer_params.offset[8*f+6] << 48)
+            dma_line = dma_line + (layer_params.offset[8*f+7] << 56)
+            dma_storage.append(dma_line)
+        return dma_storage
+    
     def write_router_iact(self, params, layer_params):
         line = 0
         if(params.SERIAL):

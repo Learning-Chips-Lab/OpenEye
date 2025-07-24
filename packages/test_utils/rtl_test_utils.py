@@ -179,6 +179,9 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
         for data_word in range(len(stream[strdic.stream_parallel_dict["quantize"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["quantize"]][data_word]))
             await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        for data_word in range(len(stream[strdic.stream_parallel_dict["offset"]])):
+            cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["offset"]][data_word]))
+            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
