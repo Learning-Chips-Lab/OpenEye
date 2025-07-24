@@ -39,3 +39,7 @@ doc/source/verilog/*
 *.onnx
 *.h5
 *.log
+
+# generated header files
+dma_stream.h
+dma_stream_out.h
