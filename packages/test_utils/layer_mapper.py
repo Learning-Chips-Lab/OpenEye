@@ -46,6 +46,8 @@ class LayerMapper(object):
         else :
             self.storage[strdic.stream_parallel_dict["psum"]] = []
         self.storage[strdic.stream_parallel_dict["quantize"]] = self.write_quantize(self.params, self.layer_params, self.layer_repetition)
+        self.storage[strdic.stream_parallel_dict["offset"]] = self.write_offset(self.params, self.layer_params, self.layer_repetition)
+        
         logger.info("Stream finished: " + str(self.layer_repetition + 1) + " of " + str(self.layer_params.needed_total_transmissions))
 
     def get_stream(self):
