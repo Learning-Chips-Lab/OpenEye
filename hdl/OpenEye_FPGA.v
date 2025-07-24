@@ -545,7 +545,6 @@ module OpenEye_FPGA #(
       end else begin
         if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
           if (fsm_iact_params > 0) begin
-            
             for (a = 0; a < CLUSTER_COLUMNS; a++) begin 
               iact_converter_params_reg[a
               ][fsm_row[$clog2(
@@ -632,7 +631,7 @@ module OpenEye_FPGA #(
               fsm_iact_params <= fsm_iact_params - 1;
             end
             if (iact_converter_params_enable & (fsm_current_state == CONVERT_IACT)) begin
-              fsm_iact_params <= fsm_iact_params + (iact_size_x / (2 * PE_COLUMNS));
+              fsm_iact_params <= fsm_iact_params + ((iact_size_x - 1 + (2 * PE_COLUMNS)) / (2 * PE_COLUMNS));
             end
             if (fsm_iact_params > 0) begin
               for (a = 0; a < CLUSTER_COLUMNS; a++) begin 
@@ -665,7 +664,7 @@ module OpenEye_FPGA #(
                   fsm_row_offset <= 0;
                 end
               end
-              iact_converter_x <= iact_converter_x + (PE_COLUMNS * 2);
+              iact_converter_x <= iact_converter_x + (PE_COLUMNS * CLUSTER_COLUMNS);
               if (iact_converter_x >= iact_size_x - (PE_COLUMNS * 2)) begin
                 iact_converter_x <= 0;
                 fsm_iact_params  <= 0;
@@ -1674,6 +1673,7 @@ module OpenEye_FPGA #(
             iact_channels_counter <= 0;
           end
         end
+
         MAXPOOLING_READ: begin
           select_ram_counter <= select_ram_counter + 1;
           if (select_ram_counter == RAM_CELLS - 1) begin
@@ -1726,6 +1726,7 @@ module OpenEye_FPGA #(
             fsm_current_state     <= MAXPOOLING_SEND;
           end
         end
+
         MAXPOOLING_SEND: begin
           fsm_cycle <= fsm_cycle + 1;
           for (a = 0; a < RAM_CELLS; a++) begin
@@ -1746,6 +1747,7 @@ module OpenEye_FPGA #(
             fsm_current_state <= GET_PARAMETERS;
           end
         end
+
         default: begin
         end
       endcase
