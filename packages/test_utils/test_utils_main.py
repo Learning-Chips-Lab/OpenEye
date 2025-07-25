@@ -152,7 +152,7 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                     partial_result_a = gtu.to_twos_complement_string(0,20)
                     partial_result_b = gtu.to_twos_complement_string(0,20)
                     try:
-                        partial_result_b = gtu.to_twos_complement_string(calculated_results[refresh + x * 10],20)
+                        partial_result_b = gtu.to_twos_complement_string(calculated_results[refresh + x * layer_params.used_psum_per_PE],20)
                     except:
                         partial_result_b = partial_result_b
                     file_dma_ref.write(partial_result_a + partial_result_b + "\n")

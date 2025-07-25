@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger("cocotb")
 
-def create_layer(layer_mode, filters, kernelsize, inputsize_x,  inputsize_y, strides, channels,outputsize):
+def create_layer(layer_mode, filters, kernelsize, inputsize_x, inputsize_y, strides, channels,outputsize):
     logger.debug("Start compiling.")
     model = tf.keras.models.Sequential()
     match layer_mode:

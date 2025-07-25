@@ -1320,7 +1320,7 @@ module OpenEye_FPGA #(
           ready_dma_o         <= 1;
           wght_buffer_SP_en_w <= 0;
           if (((psum_cnt != 0) & !fully_connected_layer) |
-            (fully_connected_layer & (fsm_psum_cycle == 10 - 1) & (fsm_x_cl_psum == (CLUSTER_COLUMNS - 1)))) begin
+            (fully_connected_layer & (fsm_psum_cycle == filters_reg - 1) & (fsm_x_cl_psum == (CLUSTER_COLUMNS - 1)))) begin
             fsm_last_state         <= GET_BIAS;
             fsm_current_state      <= GET_QUANTIZE;
             wght_buffer_SP_wr_addr <= 0;

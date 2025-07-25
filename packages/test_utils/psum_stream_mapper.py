@@ -106,7 +106,7 @@ class DensePsumStreamMapper(PsumStreamMapper):
     def get_psum_stream(self):
         block_length = 2
         psum_stream = []
-        values = 10
+        values = math.ceil(self.layer_params.used_psum_per_PE)
         for i in range(values):
             for j in range(2):
                 psum_stream.extend([gtu.to_twos_complement(self.dram_bias[i + j * values],20)])
