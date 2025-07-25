@@ -593,11 +593,14 @@ module OpenEye_FPGA #(
             end
             fsm_iact_params  <= fsm_iact_params - 1;
             iact_converter_x <= iact_converter_x + (PE_COLUMNS * CLUSTER_COLUMNS);
-            if (iact_converter_x + (PE_COLUMNS * CLUSTER_COLUMNS) >= iact_size_x) begin
+            if ((!fully_connected_layer & (iact_converter_x + (PE_COLUMNS * CLUSTER_COLUMNS) >= iact_size_x))
+             | (fully_connected_layer)) begin
               iact_converter_x <= 0;
-              fsm_iact_params  <= 0;
-              fsm_row          <= 0;
-              fsm_row_offset   <= 0;
+              if (!fully_connected_layer) begin
+                fsm_iact_params  <= 0;
+                fsm_row          <= 0;
+                fsm_row_offset   <= 0;
+              end
               iact_converter_c <= iact_converter_c + iact_channels_per_pe;
               if (iact_converter_c + iact_channels_per_pe == iact_channels) begin
                 iact_converter_c <= 0;
