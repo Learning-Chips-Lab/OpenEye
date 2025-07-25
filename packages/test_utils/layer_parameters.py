@@ -598,6 +598,8 @@ class LayerParameters(object):
         self.iact_size_y = layer.input.shape[2]
         self.filters = layer.output.shape[3]
         self.fully_connected = 1
+        self.diff_iact_layer = 1
+        self.output_cycles = 1
         if (layer_number == max_layers - 1) :
             self.send_values_out = 1
         else:

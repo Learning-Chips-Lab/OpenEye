@@ -283,6 +283,7 @@ module OpenEye_FPGA #(
   reg [CLUSTERS-1:0] conv_array_reg;
   reg [CLUSTERS-1:0] param_array_reg;
   reg [7:0]needed_psum_storage_cycles_reg;
+
   //Register for the FSM
   reg [32-1:0] fsm_cycle;
   reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_x_cl;
@@ -296,7 +297,6 @@ module OpenEye_FPGA #(
   reg reset_cycle_reg;
   reg send_data_out;
   reg early_stream_start;
-
 
   // Register for the Buffer
   reg buffer_select;
@@ -2279,6 +2279,9 @@ reg [7:0] current_filter;
             if ((fsm_psum_r == NUM_GLB_PSUM - 3) | fully_connected_layer) begin //NUM_GLB_PSUM / PARALLEL_MACS - 1
               fsm_psum_r <= 0;
               fsm_x_cl_psum <= fsm_x_cl_psum + 1;
+              if (fully_connected_layer) begin
+                fsm_psum_cycle <= fsm_psum_cycle + 1;
+              end
               if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
                 fsm_x_cl_psum <= 0;
                 fsm_y_cl_psum <= fsm_y_cl_psum + 1;

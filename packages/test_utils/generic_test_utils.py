@@ -11,16 +11,16 @@ import test_utils.stream_dicts as strdic
 logger = logging.getLogger("cocotb")
 
 def delete_files_in_directory(directory_path):
-   try:
-     with os.scandir(directory_path) as entries:
-       for entry in entries:
-         if entry.is_file():
-            os.unlink(entry.path)
-         else:
-            shutil.rmtree(entry.path)
-     logger.debug("All files and subdirectories deleted successfully.")
-   except OSError:
-     logger.debug("Error occurred while deleting files and subdirectories.")
+    try:
+        with os.scandir(directory_path) as entries:
+            for entry in entries:
+                if entry.is_file():
+                    os.unlink(entry.path)
+                else:
+                    shutil.rmtree(entry.path)
+            logger.debug("All files and subdirectories deleted successfully.")
+    except OSError:
+        logger.debug("Error occurred while deleting files and subdirectories.")
 
 def to_twos_complement(value, bits):
     if value < 0:

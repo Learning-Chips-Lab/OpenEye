@@ -48,6 +48,7 @@ class DenseMapper(LayerMapper):
         if (params.SERIAL):
             dma_line = 0
             dma_storage = []
+            # 1. transmission
             dma_line = params.data_mode + ((layer_params.realfactor) << 1) 
             dma_line = dma_line + (params.autofunction << 6)
             dma_line = dma_line + (params.poolingmode << 7)
@@ -60,8 +61,10 @@ class DenseMapper(LayerMapper):
             dma_line = dma_line + (layer_params.used_wght_addr_per_PE << 36)
             dma_line = dma_line + (layer_params.used_iact_per_PE << 41)
             dma_line = dma_line + (layer_params.send_values_out << 46)
+            #dma_line = dma_line + ((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 8))
             dma_storage.append(dma_line)
             dma_line = 0
+            # 2. transmission
             dma_line = dma_line + (layer_params.needed_wght_transmissions)
             dma_line = dma_line + (layer_params.strideY << 10) #Also includes Stride X
             dma_line = dma_line + (layer_params.skipIact << 14)
@@ -70,17 +73,24 @@ class DenseMapper(LayerMapper):
             dma_line = dma_line + (layer_params.psum_delay << 17)
             dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21)
             #dma_line = dma_line + (layer_params.kernel_size[1] << 25)
-            dma_line = dma_line + (1 << 29)
-            dma_line = dma_line + (1 << 37)
+            dma_line = dma_line + (layer_params.iact_x_lines << 29)
+            dma_line = dma_line + (math.ceil(layer_params.filters/16) << 37) #Calculate right at a later stage
             #dma_line = dma_line + (math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 45)
             dma_storage.append(dma_line)
+            dma_line = 0
+            # 3. transmission
             dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.used_channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
             dma_storage.append(dma_line)
             dma_line = 0
+            # 4. transmission
+            dma_line = math.ceil(layer_params.diff_iact_layer)
             dma_line = dma_line + math.ceil(layer_params.diff_iact_layer_next_layer << 8)
-            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage << 16)
-            dma_line = dma_line + math.ceil(layer_params.fully_connected << 17)
-            dma_line = dma_line + math.ceil(layer_params.max_pooling << 18)
+            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_input << 16)
+            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_output << 17)
+            dma_line = dma_line + math.ceil(layer_params.fully_connected << 18)
+            dma_line = dma_line + math.ceil(layer_params.max_pooling << 19)
+            dma_line = dma_line + math.ceil(layer_params.store_in_psum << 20)
+            dma_line = dma_line + math.ceil(layer_params.output_cycles << 21)
             dma_storage.append(dma_line)
             dma_line = 0
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
@@ -90,6 +100,7 @@ class DenseMapper(LayerMapper):
             dma_storage.extend(self.write_router_iact(params, layer_params))
             dma_storage.extend(self.write_router_wght(params, layer_params))
             dma_storage.extend(self.write_router_psum(params, layer_params))
+            
             storage = dma_storage
         else:
             storage[strdic.status_dict["data_mode"]] = params.data_mode
@@ -128,6 +139,23 @@ class DenseMapper(LayerMapper):
             dma_line = dma_line + (layer_params.quantize[2*f][1] << 25)
             dma_line = dma_line + (layer_params.quantize[2*f+1][0] << 32)
             dma_line = dma_line + (layer_params.quantize[2*f+1][1] << 57)
+            
+            dma_storage.append(dma_line)
+        return dma_storage
+    
+    def write_offset(self, params, layer_params, layer_repetition):
+        dma_line = 0
+        dma_storage = []
+        for f in range(math.ceil(32/8)):
+            dma_line = 0
+            dma_line = dma_line + (layer_params.offset[8*f] << 0)
+            dma_line = dma_line + (layer_params.offset[8*f+1] << 8)
+            dma_line = dma_line + (layer_params.offset[8*f+2] << 16)
+            dma_line = dma_line + (layer_params.offset[8*f+3] << 24)
+            dma_line = dma_line + (layer_params.offset[8*f+4] << 32)
+            dma_line = dma_line + (layer_params.offset[8*f+5] << 40)
+            dma_line = dma_line + (layer_params.offset[8*f+6] << 48)
+            dma_line = dma_line + (layer_params.offset[8*f+7] << 56)
             dma_storage.append(dma_line)
         return dma_storage
     

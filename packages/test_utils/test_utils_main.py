@@ -62,6 +62,7 @@ def write_stream(params, layer_params, dram_layer_content, sparse_iacts, sparse_
 def make_ref(params, layer_params, layer_number, dram, calculated_results):
     
 
+    gtu.delete_files_in_directory('demo/')
     #Write wght File
     write_weight_file(layer_params, layer_number, dram)
     logger.info("All weight-files written")
