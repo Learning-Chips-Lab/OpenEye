@@ -2318,8 +2318,8 @@ reg [7:0] current_filter;
           for (cr_psum = 0; cr_psum < 4; cr_psum = cr_psum + 1) begin
             quantized_value_reg[2*cr_psum]     <= (quant_mant[current_filter] *
             (psum_buffer_SP_data_r[(cr_psum/2)*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum%2)*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM]
-            + quant_exp[current_filter]))
-            >>> quant_offset[current_filter];
+            + quant_offset[current_filter]))
+            >>> quant_exp[current_filter];
             quantized_value_reg[2*cr_psum + 1] <= (quant_mant[current_filter] *
             (psum_buffer_SP_data_r[(cr_psum/2)*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum%2)*TRANS_BITWIDTH_PSUM*2+TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]
             + quant_offset[current_filter]))
