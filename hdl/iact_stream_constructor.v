@@ -452,7 +452,7 @@ module iact_stream_constructor #(
                 if (fully_connected_i) begin
                   byte_var = (channels + (x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
                 end else begin
-                  byte_var = ((x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
+                  byte_var = ((iact_size_x_i * iact_channels_i * y_reg) + (x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
                 end
                 if ((r == 0) & (w == 0)) begin
                   byte_var_debug = byte_var;

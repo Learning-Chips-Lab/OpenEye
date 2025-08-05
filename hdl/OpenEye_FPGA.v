@@ -1440,7 +1440,7 @@ module OpenEye_FPGA #(
           end
           if (select_ram_counter == 1) begin
             select_ram_counter <= {{8{1'd0}},iact_converter_buffer_addr_max_cycles};
-            if ((iact_converter_cycles >= {{4{1'd0}},padding_reg}) & (iact_converter_cycles <= {{4{1'd0}},padding_reg} + iact_size_y - 1)) begin // ÄNDERN - 1
+            if ((iact_converter_cycles >= {{4{1'd0}},padding_reg} + 1 - y_lines_per_calc) & (iact_converter_cycles <= {{4{1'd0}},padding_reg} + iact_size_y - 1)) begin
               for (a = 0; a < RAM_CELLS; a++) begin
                 buffer_SP_en_r_reg[a] <= 1;
                 if (buffer_SP_addr_upper_limit > buffer_SP_addr_lower_limit) begin
