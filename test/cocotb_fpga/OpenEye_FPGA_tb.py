@@ -156,6 +156,8 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     openeye_parameter = oep.get_oep(serial)
     time_printer.timestamp("OpenEye parameters set. ", logger)
 
+    gtu.delete_files_in_directory('demo/')
+
     if (only_files == 0) :
         # Start the clock
         clk = Clock(dut.clk_i, ptp.clk_cycle, units=ptp.clk_cycle_unit)
