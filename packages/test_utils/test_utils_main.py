@@ -98,7 +98,6 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                                                 dma_line = dma_line + (calculated_results[2 * psum_pe + counter][x_cor][y_cor] << (params.PSUM_Bitwidth * counter))
                                             else:
                                                 dma_line = dma_line
-
                                     file_dma_ref[layer_repetition].write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
                                     dma_line = 0
                 file_dma_ref[layer_repetition].close()
@@ -107,11 +106,9 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
             for a in range(layer_params.used_Y_cluster):
                 for b in range(0,params.Clusters_Y,layer_params.used_Y_cluster):
                     cluster_order.append(a+b)
-
             manager = mp.Manager()
             return_dict = manager.dict()
             jobs = []
-
             for layer_repetition in range(layer_params.needed_total_transmissions):
                 p = mp.Process(target = calculate_dw_output_stream_mp, \
                                args = (layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict))
@@ -383,31 +380,27 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                 for cl_y in range(params.Clusters_Y):
                     for cl_x in range(params.Clusters_X):
                         for router in range(0, params.Psum_Routers, 2):
-                        
+                            elements_per_calculation = layer_params.y_lines_per_calculation*(layer_params.iact_size_x + layer_params.add_up)
+                            position = (router + cl_x * params.PEs_X + \
+                                math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
+                                ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles) * layer_params.used_Y_cluster) * elements_per_calculation)
                             partial_result_a = gtu.to_twos_complement_string(0,20)
                             partial_result_b = gtu.to_twos_complement_string(0,20)
-                            for counter in range(params.PARALLEL_MACS):
-                                x_cor= int(((router + \
-                                cl_x * params.PEs_X + \
-                                math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
-                                ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles) * layer_params.used_Y_cluster) * (params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster)) \
-                                % (layer_params.output_shape[1] + layer_params.add_up)))
-
-                                y_cor= int(((router + \
-                                cl_x * params.PEs_X + \
-                                math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
-                                ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles)*layer_params.used_Y_cluster) * params.Clusters_Y * params.Clusters_X * params.PEs_X/layer_params.used_Y_cluster) \
-                                / (layer_params.output_shape[1] + layer_params.add_up)))
-                                filter = psum_pe + layer_params.used_psum_per_PE * (refresh % filter_cycles)
-                                try:
-                                    if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[2])):
-                                        if (counter == 0):
-                                            partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
-                                        else:
-                                            partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor+1][y_cor],20)
-                                except:
-                                    partial_result_b = partial_result_b
-                                    partial_result_a = partial_result_a
+                            current_position_in_calculation = cl_x * params.Psum_Routers + cl_y * params.Psum_Routers * params.Clusters_X + router
+                            if (current_position_in_calculation < math.ceil(elements_per_calculation)) :
+                                for counter in range(params.PARALLEL_MACS):
+                                    x_cor= int(position % (layer_params.output_shape[1] + layer_params.add_up))
+                                    y_cor= int(position / (layer_params.output_shape[1] + layer_params.add_up))
+                                    filter = psum_pe + layer_params.used_psum_per_PE * (refresh % filter_cycles)
+                                    try:
+                                        if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[2])):
+                                            if (counter == 0):
+                                                partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
+                                            else:
+                                                partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor+1][y_cor],20)
+                                    except:
+                                        partial_result_b = partial_result_b
+                                        partial_result_a = partial_result_a
 
                             file_dma_ref.write(partial_result_a + partial_result_b + "\n")
     else:

@@ -46,6 +46,7 @@ module iact_stream_constructor #(
     input      [                            8-1:0] needed_wght_cycles_i,
     input      [                            4-1:0] needed_iact_router_cycles_i,
     input      [                            4-1:0] wght_size_i,
+    input      [                            4-1:0] y_lines_per_calc,
     input                                          fully_connected_i
 );
   reg                           ram_wr_en;
@@ -91,6 +92,9 @@ module iact_stream_constructor #(
     reg [  7:0] iact_y_counter;
     reg [ 12:0] line_offset;
     reg [  3:0] y_cluster_counter;
+
+    wire [         ADDRWIDTH-1:0] ram_rd_addr_reset_value;
+    assign ram_rd_addr_reset_value = {{9{1'd0}},needed_iact_cycles_reg} * (({{5{1'd0}},iact_channels_i} + 1)/2) * (y_lines_per_calc + finished_output_channels[12:0] * y_lines_per_calc);
     integer pec, per, b;
     always @(posedge clk_i, negedge rst_ni) begin
       if (!rst_ni) begin
@@ -161,7 +165,8 @@ module iact_stream_constructor #(
                 if (((pec[3:0] + per[3:0] + (fsm_row_offset * PE_Y)) >=  (NUM_GLB_IACT[3:0] * current_iact_cycle_mod_reg[3:0]))
                 &    (pec[3:0] + per[3:0] + (fsm_row_offset * PE_Y))  <  (NUM_GLB_IACT[3:0] *(current_iact_cycle_mod_reg[3:0] + 1))
                 ) begin
-                  iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+: $clog2(NUM_GLB_IACT+1)] <= (pec[3:0] + per[3:0]  + (fsm_row_offset * PE_Y) - (NUM_GLB_IACT[3:0] * (current_iact_cycle_mod_reg[3:0])));
+                  iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+: $clog2(NUM_GLB_IACT+1)] <=
+                      (pec[3:0] + per[3:0]  + (fsm_row_offset * PE_Y) - (NUM_GLB_IACT[3:0] * (current_iact_cycle_mod_reg[3:0])));
                 end else begin
                   iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+: $clog2(NUM_GLB_IACT+1)] <=
                       NUM_GLB_IACT;
@@ -196,8 +201,8 @@ module iact_stream_constructor #(
                     iact_y_counter       <= iact_y_counter + 1;
                     if (iact_y_counter == needed_wght_cycles_i - 1) begin
                       iact_y_counter           <= 0;
-                      ram_rd_addr              <= {{9{1'd0}},needed_iact_cycles_reg} * (({{5{1'd0}},iact_channels_i} + 1)/2) * (1 + finished_output_channels[12:0]);
-                      line_offset              <= {{9{1'd0}},needed_iact_cycles_reg} * (({{5{1'd0}},iact_channels_i} + 1)/2) * (1 + finished_output_channels[12:0]);
+                      ram_rd_addr              <= ram_rd_addr_reset_value;
+                      line_offset              <= ram_rd_addr_reset_value;
                       finished_output_channels <= finished_output_channels + 1;
                       if (finished_output_channels == {{8{1'd0}},iact_size_y_i} - 1) begin
                         finished_output_channels <= 0;

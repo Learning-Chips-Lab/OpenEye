@@ -2517,6 +2517,7 @@ reg [7:0] current_filter;
             .needed_wght_cycles_i        (needed_wght_cycles_reg),
             .needed_iact_router_cycles_i (needed_iact_cycles_reg),
             .wght_size_i                 (kernel_size),
+            .y_lines_per_calc            (y_lines_per_calc),
             .fully_connected_i           (fully_connected_layer)
         );
       end

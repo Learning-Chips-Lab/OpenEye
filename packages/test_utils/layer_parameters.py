@@ -150,15 +150,16 @@ class LayerParameters(object):
                                             for _ in range(params.PEs_Y)]
                                             for _ in range(params.Clusters_Y)]
                                             for _ in range(params.Clusters_X)]
-            
+            #Elimenate every PE, that is not required 
             for x_cluster in range(params.Clusters_X):
                 for y_cluster in range(params.Clusters_Y):
                     for y_pe in range(params.PEs_Y):
                         for x_pe in range(params.PEs_X):
                             x_pos_in_pes = x_cluster * 4 + y_cluster * 8 + x_pe
-                            x_values_per_cycle = self.calc_X * self.calc_Y
+                            x_values_per_cycle = self.calc_X * self.y_lines_per_calculation
                             if(x_pos_in_pes >= x_values_per_cycle):
                                 self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
+
             if((self.kernel_size[0]*self.kernel_per_pe_cluster) < params.PEs_Y):
                 for x_cluster in range(params.Clusters_X):
                     for y_cluster in range(params.Clusters_Y):
@@ -189,7 +190,7 @@ class LayerParameters(object):
         else:
             logger.error("Can't fit model, kernel size must be adjusted.")
             raise ValueError("Can't fit model, kernel size must be adjusted.")
-        print(self.computing_mx)
+        
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         self.layer_name = "Convolution2D"
         self.choose_iact_storage_input = 1
