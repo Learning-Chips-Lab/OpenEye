@@ -94,6 +94,7 @@ class LayerParameters(object):
 
         self.computing_mx = 0
         self.data_mode = 0
+        self.y_lines_per_calculation = 1
 
         #FPGA parameters
         self.needed_standing_cycles = 0
@@ -149,6 +150,7 @@ class LayerParameters(object):
                                             for _ in range(params.PEs_Y)]
                                             for _ in range(params.Clusters_Y)]
                                             for _ in range(params.Clusters_X)]
+            
             for x_cluster in range(params.Clusters_X):
                 for y_cluster in range(params.Clusters_Y):
                     for y_pe in range(params.PEs_Y):
@@ -187,6 +189,7 @@ class LayerParameters(object):
         else:
             logger.error("Can't fit model, kernel size must be adjusted.")
             raise ValueError("Can't fit model, kernel size must be adjusted.")
+        print(self.computing_mx)
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         self.layer_name = "Convolution2D"
         self.choose_iact_storage_input = 1
@@ -220,6 +223,9 @@ class LayerParameters(object):
         self.strideY = layer.strides[1]
         self.compute_total_computations()
         self.output_cycles = self.calc_Y
+
+        self.y_lines_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1])
+        self.y_lines_per_calculation = min(self.y_lines_per_calculation,params.Clusters_Y,self.input_shape[2])
         if (params.SERIAL == 0) :
             if (self.output_shape[1] <= 8):
                 self.single_cluster_computation = 2
@@ -622,6 +628,7 @@ class LayerParameters(object):
         self.used_iact_per_PE = math.ceil(self.input_shape[3]/4)
         self.used_wght_per_PE = math.ceil(self.input_shape[3]*self.output_shape[3]/(4*params.Clusters_X))
         self.used_psum_per_PE = math.ceil(self.output_shape[3]/params.Clusters_X)
+        
 
         self.used_Y_cluster = params.Clusters_Y
         self.used_X_cluster = 1

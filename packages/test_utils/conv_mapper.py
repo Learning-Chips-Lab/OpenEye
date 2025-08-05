@@ -43,7 +43,6 @@ class ConvMapper(LayerMapper):
                         if layer_params.computing_mx[x][y][pe_y][pe_x] == 1:
                             computing_pes |= (1 << counter)
                         counter += 1
-
         total_bits = params.Clusters_X * params.Clusters_Y * params.PEs_Y * params.PEs_X
         bitstring = format(computing_pes, f"0{total_bits}b")[::-1]
         if (params.SERIAL):
@@ -92,6 +91,7 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + math.ceil(layer_params.max_pooling << 19)
             dma_line = dma_line + math.ceil(layer_params.store_in_psum << 20)
             dma_line = dma_line + math.ceil(layer_params.output_cycles << 21)
+            dma_line = dma_line + math.ceil(layer_params.y_lines_per_calculation << 29)
             dma_storage.append(dma_line)
             dma_line = 0
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):

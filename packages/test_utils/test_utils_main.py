@@ -156,7 +156,6 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                     except:
                         partial_result_b = partial_result_b
                     file_dma_ref.write(partial_result_a + partial_result_b + "\n")
-
             file_dma_ref.close()
         else:
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
