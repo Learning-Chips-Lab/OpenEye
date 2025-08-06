@@ -490,6 +490,7 @@ module OpenEye_FPGA #(
       end
       if (fsm_current_state == WAIT_FOR_RESULTS | fsm_current_state == RECEIVE_PSUMS_TO_IACT) begin
         if (single_iteration3) begin
+          current_cycle <= current_cycle + 1;
           if (iact_channels_counter == iact_channel_max_cycles -1) begin
             iact_router_counter <= iact_router_counter + 1;
             if (iact_router_counter == needed_y_cls_reg - 1) begin
