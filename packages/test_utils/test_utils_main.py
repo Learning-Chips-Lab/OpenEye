@@ -398,9 +398,7 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
                                                 partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
                                             else:
                                                 partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor+1][y_cor],20)
-                                        else :
-                                            print(str(refresh) + " " + str(psum_pe) + " " + str(cl_y) + " " + str(cl_x) + " " + str(router))
-                                            print(y_cor)
+
                                     except:
                                         partial_result_b = partial_result_b
                                         partial_result_a = partial_result_a

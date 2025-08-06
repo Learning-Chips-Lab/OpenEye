@@ -123,7 +123,6 @@ class LayerParameters(object):
             
             case default:
                 logger.debug("Layer type for " + str(layer) + " not supported.")
-                print(str(layer))
                 raise ValueError("Layer type not supported.")
 
     def check_for_multiple_lines_per_computation(self, params):
