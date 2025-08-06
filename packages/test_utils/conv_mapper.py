@@ -49,7 +49,8 @@ class ConvMapper(LayerMapper):
             dma_line = 0
             dma_storage = []
             # 1. transmission
-            dma_line = params.data_mode + ((layer_params.realfactor) << 1) 
+            dma_line = params.data_mode
+            dma_line = dma_line + ((layer_params.realfactor) << 1) 
             dma_line = dma_line + (params.autofunction << 6)
             dma_line = dma_line + (params.poolingmode << 7)
             #dma_line = dma_line + ((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 8))
@@ -226,7 +227,7 @@ class ConvMapper(LayerMapper):
         for cl_x in range(params.Clusters_X):
             for cl_y in range(params.Clusters_Y):   
                 for router in range(params.Wght_Routers):
-                    if((cl_x == 0) | (layer_params.single_cluster_computation == 1)):
+                    if((cl_x == 0) | (layer_params.single_cluster_computation == 1) | (layer_params.different_kernels_per_calculation >= 2)):
                         if(params.SERIAL):
                             line = line + (0 << (params.Wght_Router_Bits * router_cycle))
                         else:

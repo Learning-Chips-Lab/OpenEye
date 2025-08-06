@@ -359,7 +359,6 @@ module OpenEye_FPGA #(
   reg iact_converter_en_store_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg iact_converter_en_enc_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [7:0] x_lines_reg;
-  reg direct_cycling_reg;
   reg send_data_reg;
   reg store_in_psum;
   wire iact_converter_ready_w[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
@@ -1023,7 +1022,6 @@ module OpenEye_FPGA #(
       wght_cnt                          <= 0;
       iact_converter_buffer_addr_max_cycles <= 0;
       x_lines_reg                       <= 0;
-      direct_cycling_reg                <= 0;
       wght_cycles_reg                   <= 0;
       // iact converter
       iact_out_reg                      <= 0;
