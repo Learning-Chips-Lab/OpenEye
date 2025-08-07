@@ -398,7 +398,14 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
         while (dut.enable_dma_o.value == 1):
 
             if(logging.DEBUG >= login_level):
-                txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(40) + "\n")
+                try:
+                    txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(40) + "\n")
+                except:
+                    txt_file.close()
+                    storage_file.close()
+                    logger.error("Error writing output txt-file")
+                    raise Exception("X detected.")
+
             for i in range(2):
                 if(logging.DEBUG >= login_level):
                     storage_file.write("f: " + str(f) + " x: " + str(flat_list[x]) + " y: " + str(y) + "\n")
