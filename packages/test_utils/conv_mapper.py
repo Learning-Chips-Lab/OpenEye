@@ -75,7 +75,7 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21)
             dma_line = dma_line + (layer_params.kernel_size[1] << 25)
             dma_line = dma_line + (layer_params.iact_x_lines << 29)
-            dma_line = dma_line + (math.ceil(layer_params.filters/16) << 37) #Calculate right at a later stage
+            dma_line = dma_line + (math.ceil(layer_params.filters/(layer_params.used_psum_per_PE * layer_params.different_kernels_per_calculation)) << 37)
             dma_line = dma_line + (math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 45)
             dma_storage.append(dma_line)
             dma_line = 0
@@ -93,6 +93,7 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + math.ceil(layer_params.store_in_psum << 20)
             dma_line = dma_line + math.ceil(layer_params.output_cycles << 21)
             dma_line = dma_line + math.ceil(layer_params.y_lines_per_calculation << 29)
+            dma_line = dma_line + math.ceil(layer_params.different_kernels_per_calculation << 33)
             dma_storage.append(dma_line)
             dma_line = 0
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):

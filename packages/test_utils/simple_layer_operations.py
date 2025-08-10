@@ -27,6 +27,7 @@ def pool(dram, layer, layer_number):
                                 temp_number = dram.fmap[layer_number][oc][ix][iy]
 
                     dram.fmap[layer_number + 1][oc][ox][oy] = temp_number
+        
 
 def flat(dram, layer, layer_number):
     for ic in range(layer.input.shape[3]):

@@ -395,6 +395,10 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
 
 
         dut._log.info("Output Stream started")
+        used_clusters_per_calc = math.ceil(layer_parameters.iact_size_x / 4) * 4
+        values_per_transmission = math.ceil(layer_parameters.different_kernels_per_calculation*used_clusters_per_calc/2)
+        transmissions_per_cycle = (oep.Clusters_Y * oep.Clusters_X * oep.PEs_X)//2
+        current_cycle = 0
         while (dut.enable_dma_o.value == 1):
 
             if(logging.DEBUG >= login_level):
@@ -405,25 +409,33 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                     storage_file.close()
                     logger.error("Error writing output txt-file")
                     raise Exception("X detected.")
-
-            for i in range(2):
-                if(logging.DEBUG >= login_level):
-                    storage_file.write("f: " + str(f) + " x: " + str(flat_list[x]) + " y: " + str(y) + "\n")
-                try:
-                    dram.fmap[layer_number + 1][f][flat_list[x]][y] = int(dut.data_dma_o.value[44-20*i:63-20*i])
-                    if (dram.fmap[layer_number + 1][f][flat_list[x]][y] >= 2**19) :
-                        dram.fmap[layer_number + 1][f][flat_list[x]][y] = dram.fmap[layer_number + 1][f][flat_list[x]][y] - 2**20
-                except:
-                    pass
-                x = x + 1
-            if(x >= layer_parameters.iact_size_x):
-                x = 0
-                f = f + 1
-                if(f == layer_parameters.filters):
-                    f = 0
-                    y = y + 1
-                    if(y >= layer_parameters.iact_size_y):
-                        y = 0
+            if (current_cycle < values_per_transmission):
+                for i in range(2):
+                    if(logging.DEBUG >= login_level):
+                        storage_file.write("f: " + str(f) + " x: " + str(flat_list[x]) + " y: " + str(y) + "\n")
+                    try:
+                        dram.fmap[layer_number + 1][f][flat_list[x]][y] = int(dut.data_dma_o.value[44-20*i:63-20*i])
+                        if (dram.fmap[layer_number + 1][f][flat_list[x]][y] >= 2**19):
+                            dram.fmap[layer_number + 1][f][flat_list[x]][y] = dram.fmap[layer_number + 1][f][flat_list[x]][y] - 2**20
+                    except:
+                        pass
+                    x = x + 1
+                if (current_cycle % math.ceil(oep.PEs_X/2) == math.ceil(oep.PEs_X/2) - 1):
+                    if(x >= layer_parameters.iact_size_x):
+                        x = 0
+                        f = f + 1
+                        if(f == layer_parameters.filters):
+                            f = 0
+                            y = y + 1
+                            if(y >= layer_parameters.iact_size_y):
+                                y = 0
+            else:
+                for i in range(2):
+                    if(logging.DEBUG >= login_level):
+                        storage_file.write("Empty storage line." + "\n")
+            current_cycle = current_cycle + 1
+            if (current_cycle == transmissions_per_cycle):
+                current_cycle = 0
 
             await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
 

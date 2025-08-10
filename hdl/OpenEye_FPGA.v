@@ -282,6 +282,8 @@ module OpenEye_FPGA #(
   reg [3:0] psum_delay_reg;
   reg [CLUSTERS-1:0] conv_array_reg;
   reg [CLUSTERS-1:0] param_array_reg;
+  wire [CLUSTERS-1:0] start_param_array;
+  assign start_param_array = (1 << (((kernels_per_calc * y_lines_per_calc * (PE_COLUMNS+iact_size_x-1)/PE_COLUMNS*PE_COLUMNS) + PE_COLUMNS - 1)/PE_COLUMNS)) - 1;
   reg [7:0]needed_psum_storage_cycles_reg;
 
   //Register for the FSM
@@ -306,6 +308,10 @@ module OpenEye_FPGA #(
   reg [8-1:0] buffer_SP_addr_upper_limit;
   reg [8-1:0] buffer_SP_addr_lower_limit;
   reg [8-1:0] limit_increase_reg;
+  reg [4-1:0] overhang_discrepancy;
+  reg [4-1:0] overhang_counter;
+  reg         overhang;
+  reg         overhang_delay;
   wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_r;
 
   reg wght_buffer_SP_en_r;
@@ -422,6 +428,7 @@ module OpenEye_FPGA #(
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o_reg;
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i_reg;
   reg [                    8-1:0] output_cycles;
+  reg [                    4-1:0] kernels_per_calc;
   reg [                    4-1:0] y_lines_per_calc;
 ;
 
@@ -519,6 +526,7 @@ module OpenEye_FPGA #(
   //Process for sending parameters to Iact Converters
   reg [7:0] fsm_iact_params;
   reg [7:0] fsm_iact_params_y_line;
+  reg [7:0] fsm_iact_params_kernel;
   reg [7:0] iact_converter_x;
   reg [7:0] iact_converter_y;
   reg [7:0] iact_converter_c;
@@ -531,6 +539,7 @@ module OpenEye_FPGA #(
       param_array_reg                 <= 0;
       fsm_iact_params                 <= 0;
       fsm_iact_params_y_line          <= 0;
+      fsm_iact_params_kernel          <= 0;
       iact_converter_x                <= 0;
       iact_converter_y                <= 0;
       iact_converter_c                <= 0;
@@ -544,7 +553,7 @@ module OpenEye_FPGA #(
       end
     end else begin
       if (GET_ROUTER_CONFIG == fsm_current_state) begin
-        param_array_reg <= (1 << (iact_size_x / PE_COLUMNS)) - 1;
+        param_array_reg <= start_param_array;
         fsm_iact_params <= CLUSTER_ROWS;
       end else begin
         if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
@@ -573,11 +582,11 @@ module OpenEye_FPGA #(
                 end
               end
 
-              if ((a != 0) & ((iact_converter_x + a[7:0] * PE_COLUMNS[7:0]) >= iact_size_x)) begin
+              if ((a != 0) & ((iact_converter_x + a[7:0] * PE_COLUMNS[7:0]) >= iact_size_x) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
                 iact_converter_params_reg[a
                 ][fsm_row[$clog2(
                     CLUSTER_ROWS
-                )-1:0]][23:16] <= iact_converter_y +1;
+                )-1:0]][23:16] <= iact_converter_y + 1;
               end else begin
                 iact_converter_params_reg[a
                 ][fsm_row[$clog2(
@@ -617,19 +626,23 @@ module OpenEye_FPGA #(
               if ((iact_converter_x + PE_COLUMNS[7:0]) >= iact_size_x) begin
                 iact_converter_x <= PE_COLUMNS[7:0];
               end
-              fsm_iact_params_y_line <= fsm_iact_params_y_line + 1;
-              if (!fsm_iact_params_y_line == y_lines_per_calc) begin
-                fsm_iact_params_y_line <= 0;
-                fsm_iact_params        <= 0;
-                fsm_row                <= 0;
-                fsm_row_offset         <= 0;
-                iact_converter_c       <= iact_converter_c + iact_channels_per_pe;
-              end
-              if (iact_converter_c + iact_channels_per_pe == iact_channels) begin
-                iact_converter_c <= 0;
-                iact_converter_y <= iact_converter_y + 1;
-                if (iact_converter_y + 1 >= iact_size_y) begin
-                iact_converter_y <= 0;
+              fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
+              if (fsm_iact_params_kernel == kernels_per_calc - 1) begin
+                fsm_iact_params_kernel <= 0;
+                fsm_iact_params_y_line <= fsm_iact_params_y_line + 1;
+                if (fsm_iact_params_y_line == y_lines_per_calc - 1) begin
+                  fsm_iact_params_y_line <= 0;
+                  fsm_iact_params        <= 0;
+                  fsm_row                <= 0;
+                  fsm_row_offset         <= 0;
+                  iact_converter_c       <= iact_converter_c + iact_channels_per_pe;
+                end
+                if (iact_converter_c + iact_channels_per_pe == iact_channels) begin
+                  iact_converter_c <= 0;
+                  iact_converter_y <= iact_converter_y + 1;
+                  if (iact_converter_y + 1 >= iact_size_y) begin
+                  iact_converter_y <= 0;
+                  end
                 end
               end
             end
@@ -650,14 +663,14 @@ module OpenEye_FPGA #(
                 end
               end
             end
-            param_array_reg <= (param_array_reg<<(iact_size_x/PE_COLUMNS) | param_array_reg>>(CLUSTERS-(iact_size_x/PE_COLUMNS)));
+            param_array_reg <= ((kernels_per_calc * iact_size_x / PE_COLUMNS) | param_array_reg>>(CLUSTERS-(kernels_per_calc * iact_size_x / PE_COLUMNS)));
           end
           if ((iact_converter_params_enable) | (fsm_iact_params > 0)) begin
             if (fsm_iact_params > 0) begin
               fsm_iact_params <= fsm_iact_params - 1;
             end
             if (iact_converter_params_enable & (fsm_current_state == CONVERT_IACT)) begin
-              fsm_iact_params <= fsm_iact_params + ((iact_size_x - 1 + (2 * PE_COLUMNS)) / (2 * PE_COLUMNS));
+              fsm_iact_params <= fsm_iact_params + kernels_per_calc * ((iact_size_x - 1 + (2 * PE_COLUMNS)) / (2 * PE_COLUMNS));
             end
             if (fsm_iact_params > 0) begin
               for (a = 0; a < CLUSTER_COLUMNS; a++) begin 
@@ -688,21 +701,28 @@ module OpenEye_FPGA #(
                 end
               end
               iact_converter_x <= iact_converter_x + (PE_COLUMNS * CLUSTER_COLUMNS);
-              if (iact_converter_x >= iact_size_x - (PE_COLUMNS * 2)) begin
+              if ((iact_converter_x + (PE_COLUMNS * CLUSTER_COLUMNS) >= iact_size_x)) begin
                 iact_converter_x <= 0;
-                fsm_iact_params_y_line <= fsm_iact_params_y_line + 1;
-                if (!fsm_iact_params_y_line == y_lines_per_calc) begin
-                  fsm_iact_params_y_line <= 0;
-                  fsm_iact_params        <= 0;
-                  fsm_row                <= 0;
-                  fsm_row_offset         <= 0;
+                if ((iact_converter_x + PE_COLUMNS[7:0]) >= iact_size_x) begin
+                  iact_converter_x <= PE_COLUMNS[7:0];
                 end
-                iact_converter_c <= iact_converter_c + iact_channels_per_pe;
-                if (iact_converter_c == iact_channels - iact_channels_per_pe) begin
-                  iact_converter_c <= 0;
-                  iact_converter_y <= iact_converter_y + 1;
-                  if (iact_converter_y >= iact_size_y - 1) begin
-                  iact_converter_y <= 0;
+                fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
+                if (fsm_iact_params_kernel == kernels_per_calc - 1) begin
+                  fsm_iact_params_kernel <= 0;
+                  fsm_iact_params_y_line <= fsm_iact_params_y_line + 1;
+                  if (fsm_iact_params_y_line == y_lines_per_calc - 1) begin
+                    fsm_iact_params_y_line <= 0;
+                    fsm_iact_params        <= 0;
+                    fsm_row                <= 0;
+                    fsm_row_offset         <= 0;
+                  end
+                  iact_converter_c <= iact_converter_c + iact_channels_per_pe;
+                  if (iact_converter_c == iact_channels - iact_channels_per_pe) begin
+                    iact_converter_c <= 0;
+                    iact_converter_y <= iact_converter_y + 1;
+                    if (iact_converter_y >= iact_size_y - 1) begin
+                    iact_converter_y <= 0;
+                    end
                   end
                 end
               end
@@ -749,7 +769,7 @@ module OpenEye_FPGA #(
         end
       end
       if (GET_ROUTER_CONFIG == fsm_current_state) begin
-        conv_array_reg <= (1 << (((y_lines_per_calc * (PE_COLUMNS+iact_size_x-1)/PE_COLUMNS*PE_COLUMNS) + PE_COLUMNS - 1)/PE_COLUMNS)) - 1;
+        conv_array_reg <= start_param_array;
         //conv_array_reg <= (1 << (CLUSTER_COLUMNS*CLUSTER_ROWS)) - 1;
         if (fully_connected_layer) begin
           conv_array_reg <= ~0;
@@ -841,7 +861,7 @@ module OpenEye_FPGA #(
           if (fsm_sending_cycle > 2) begin
             flat_help_var_send = 0;
             for (a = 0; a < CLUSTER_ROWS; a++) begin
-              if ((a * (PE_COLUMNS * CLUSTER_COLUMNS)) <= (iact_size_x * iact_size_y) - 1) begin
+              if ((a * (PE_COLUMNS * CLUSTER_COLUMNS)) <= (((iact_size_x%PE_COLUMNS)+iact_size_x) * y_lines_per_calc * kernels_per_calc) - 1) begin
                 temp_var = {{EXTENDEDBITS{1'b0}}, {NUM_GLB_WGHT{1'b1}}};
                 flat_help_var_send = flat_help_var_send + (temp_var << (a * NUM_GLB_WGHT));
                 temp_var = 0;
@@ -898,7 +918,6 @@ module OpenEye_FPGA #(
           end
         end
         if (current_cycle == needed_cycles_reg) begin
-          //sending_data      <= 0;
           fsm_sending_cycle <= 0;
         end
       end else begin
@@ -1028,6 +1047,10 @@ module OpenEye_FPGA #(
       iact_ready                        <= 0;
       buffer_SP_addr_upper_limit        <= 0;
       limit_increase_reg                <= 0;
+      overhang_discrepancy              <= 0;
+      overhang_counter                  <= 0;
+      overhang                          <= 0;
+      overhang_delay                    <= 0;
       buffer_SP_addr_lower_limit        <= 0;
       current_buffer_n                  <= 0;
       current_buffer_n_1                <= 0;
@@ -1040,7 +1063,7 @@ module OpenEye_FPGA #(
       iact_channels_per_pe              <= 0;
       iact_channels_per_pe_next_layer   <= 0;
       iact_channels_counter             <= 0;
-      iact_needed_cycles                <= 1;  // params
+      iact_needed_cycles                <= 1;
       reset_cycle_reg                   <= 0;
       needed_psum_storage_cycles_reg    <= 0;
       select_ram_counter                <= 0;
@@ -1054,6 +1077,7 @@ module OpenEye_FPGA #(
       send_data_reg                     <= 0;
       store_in_psum                     <= 0;
       output_cycles                     <= 0;
+      kernels_per_calc                  <= 0;
       y_lines_per_calc                  <= 0;
       // Pooling
       for (a = 0; a < 32; a = a + 1) begin
@@ -1143,7 +1167,7 @@ module OpenEye_FPGA #(
               early_stream_start <= 1;
             end else begin
               early_stream_start <= 0;
-              if (!early_stream_start) begin 
+              if (!early_stream_start) begin
                 fsm_cycle       <= fsm_cycle + 1;
                 reset_cycle_reg <= 0;
                 case (fsm_cycle)
@@ -1194,6 +1218,7 @@ module OpenEye_FPGA #(
                     iact_needed_cycles                    <= data_dma_i_reg[10:0];
                   end
                   32'd3: begin
+                    kernels_per_calc                <= data_dma_i_reg[37:33];
                     y_lines_per_calc                <= data_dma_i_reg[32:29];
                     output_cycles                   <= data_dma_i_reg[28:21];
                     store_in_psum                   <= data_dma_i_reg[20];
@@ -1312,7 +1337,7 @@ module OpenEye_FPGA #(
             for (b = 0; b < TRANS_BITWIDTH_WGHT; b = b + 1) begin
               wght_buffer_SP_data_w[fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b]
               <= data_dma_i_reg[b];
-              wght_buffer_SP_data_w[CLUSTER_ROWS*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b] 
+              wght_buffer_SP_data_w[CLUSTER_ROWS*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b]
               <= data_dma_i_reg[TRANS_BITWIDTH_WGHT+b];
             end
             if (fsm_wght_r != NUM_GLB_WGHT - 1) begin
@@ -1350,14 +1375,19 @@ module OpenEye_FPGA #(
             fsm_current_state      <= GET_QUANTIZE;
             wght_buffer_SP_wr_addr <= 0;
             limit_increase_reg     <= ((iact_size_x*iact_channels_per_pe + (WORDS_PER_CYCLE[7:0]*4) - 1)/(WORDS_PER_CYCLE[7:0]*4));
+            overhang_discrepancy   <= ((WORDS_PER_CYCLE[7:0]*4) - ((iact_size_x*iact_channels_per_pe)%(WORDS_PER_CYCLE[7:0]*4)))%(WORDS_PER_CYCLE[7:0]*4);
+            overhang               <= 0;
+            overhang_delay         <= 0;
             if (fully_connected_layer) begin
               limit_increase_reg <= iact_channels_per_pe/2;
+              overhang <= 0;
             end
             fsm_cycle              <= 0;
           end
         end
 
         GET_QUANTIZE: begin
+          overhang_counter    <= overhang_discrepancy;
           ready_dma_o         <= 1;
           wght_buffer_SP_en_w <= 0;
           if (enable_dma_i_reg) begin
@@ -1452,13 +1482,20 @@ module OpenEye_FPGA #(
                   end
                 end
               end
-              buffer_SP_addr_upper_limit <= ((buffer_SP_addr_upper_limit + limit_increase_reg)%RAM_CELLS);
-              buffer_SP_addr_lower_limit <= ((buffer_SP_addr_lower_limit + limit_increase_reg)%RAM_CELLS);
+              buffer_SP_addr_upper_limit <= ((buffer_SP_addr_upper_limit + limit_increase_reg - overhang)%RAM_CELLS);
+              buffer_SP_addr_lower_limit <= ((buffer_SP_addr_lower_limit + limit_increase_reg - overhang_delay)%RAM_CELLS);
+              overhang                   <= 0;
+              overhang_delay             <= overhang;
+              overhang_counter           <= overhang_counter + overhang_discrepancy;
+              if (overhang_counter + overhang_discrepancy >= (WORDS_PER_CYCLE[7:0]*4)) begin
+                overhang_counter <= overhang_counter + overhang_discrepancy - (WORDS_PER_CYCLE[7:0]*4);
+                overhang         <= 1;
+              end
             end
           end
           iact_converter_enc_enable    <= 0;
           iact_converter_params_enable <= 0;
-          if ((iact_converter_buffer_addr_cycles + 2 == (iact_converter_buffer_addr_max_cycles)) & 
+          if ((iact_converter_buffer_addr_cycles + 2 == (iact_converter_buffer_addr_max_cycles)) &
           (iact_converter_cycles == 0) & 
           (iact_channels_counter != (iact_channel_max_cycles))) begin //Change here + 1
             iact_converter_enc_enable    <= 1;
@@ -1703,6 +1740,7 @@ module OpenEye_FPGA #(
         end
 
         MAXPOOLING_READ: begin
+          //Counting and setting inputs for reading values
           select_ram_counter <= select_ram_counter + 1;
           if (select_ram_counter == RAM_CELLS - 1) begin
             select_ram_counter <= 0;
@@ -1717,6 +1755,8 @@ module OpenEye_FPGA #(
               buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
             end
           end
+
+          //Comparing stage
           for (a = 0; a < 8; a = a + 1) begin
             pooling_stage_1[a] <= buffer_SP_data_r[select_ram_counter*RAM_CELLS_WORD_BITWIDTH+8*a+:8];
           end
@@ -1746,6 +1786,8 @@ module OpenEye_FPGA #(
               end
             end
           end
+
+          //Ending Condition
           if ((fsm_cycle == 1) & (iact_converter_cycles == (iact_channels))) begin
             select_ram_counter    <= 0;
             fsm_cycle             <= 0;

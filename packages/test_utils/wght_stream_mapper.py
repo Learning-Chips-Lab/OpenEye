@@ -245,10 +245,13 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         channel = (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + \
         math.ceil((math.ceil((router%layer_params.kernel_per_pe_cluster) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)))
         channel_offset = channel
-        filters_per_calculation = math.ceil(layer_params.used_wght_per_PE/layer_params.used_iact_per_PE)
+        filters_per_calculation = math.ceil(layer_params.used_wght_per_PE/layer_params.used_iact_per_PE) * layer_params.different_kernels_per_calculation
 
 
         start_current_repetition = int((math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.needed_wght_transmissions) * filters_per_calculation)
+        amount_of_used_clusters = math.ceil(layer_params.iact_size_x/ params.PEs_X)
+        channel_offset_in_calculation = (2 * cl_y + cl_x) // amount_of_used_clusters
+        start_current_repetition = start_current_repetition + channel_offset_in_calculation
         match layer_params.single_cluster_computation:
             case 1:
                 start_current_repetition = start_current_repetition + ((cl_x  + cl_y * params.Clusters_X) * layer_params.used_psum_per_PE)
@@ -259,12 +262,12 @@ class ConvWghtStreamMapper(WghtStreamMapper):
             case _:
                 start_current_repetition = start_current_repetition
                 amount_of_words = int((layer_params.filters*amout_of_iacts)/ \
-                                      (self.layer_params.needed_wght_transmissions//self.layer_params.needed_iact_transmissions)/2)
+                                      (layer_params.needed_wght_transmissions//layer_params.needed_iact_transmissions)/2/layer_params.different_kernels_per_calculation)
 
         filters = start_current_repetition
         for words_in_storage in range(amount_of_words):
             kernel_row = ((cl_y % (layer_params.used_Y_cluster)) * params.PEs_Y + (router%layer_params.kernel_size[0]))
-            for spad_val_number in range(self.params.PARALLEL_MACS): 
+            for spad_val_number in range(params.PARALLEL_MACS): 
                 if(channel != 1 + int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)): #TODO: Correct this line +1 could be wrong here                    
                     try:
 
@@ -273,7 +276,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                         spad_storage[words_in_storage][spad_val_number][0] = 0
 
                     spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
-                    filters = filters + 1
+                    filters = filters + layer_params.different_kernels_per_calculation
                     if((filters == (start_current_repetition + filters_per_calculation))):
                         filters = start_current_repetition
                         channel = channel + 1

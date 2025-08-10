@@ -450,14 +450,17 @@ module iact_stream_constructor #(
             end
             for (r = 0; r < NUM_GLB_IACT; r++) begin
               for (w = 0; w < WORDS_PER_CYCLE; w++) begin
-                ram_var = ((((channels * iact_size_x_i * iact_size_y_i)/ 8) + (iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r])) / 8)) % RAM_CELLS;
+                ram_var = (((channels * iact_size_x_i * iact_size_y_i) + iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r])) / 8);
+                ram_var = ram_var % RAM_CELLS;
                 if (r == 0) begin
                   ram_var_debug = ram_var;
                 end
                 if (fully_connected_i) begin
-                  byte_var = (channels + (x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
+                  byte_var = channels + (x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2;
+                  byte_var = byte_var % IACT_WORDS_IN_RAM;
                 end else begin
-                  byte_var = ((iact_size_x_i * iact_channels_i * y_reg) + (x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2)%IACT_WORDS_IN_RAM;
+                  byte_var = (iact_size_y_i * (iact_size_x_i%2) * channels) + (iact_size_x_i * iact_channels_i * y_reg) + (x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2;
+                  byte_var = byte_var % IACT_WORDS_IN_RAM;
                 end
                 if ((r == 0) & (w == 0)) begin
                   byte_var_debug = byte_var;

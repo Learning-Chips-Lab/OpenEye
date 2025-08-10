@@ -24,7 +24,7 @@ class PsumStreamMapper(object):
 
     def get_psum_stream(self):
         if (self.params.SERIAL) :
-            block_length = 2 * self.params.Clusters * math.ceil(4 * 2 / 8)
+            block_length = (2 * self.params.Clusters)//self.layer_params.different_kernels_per_calculation
             psum_stream = []
 
             for j in range(self.layer_params.iact_size_y):
