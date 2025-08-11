@@ -91,6 +91,8 @@ class DenseMapper(LayerMapper):
             dma_line = dma_line + math.ceil(layer_params.max_pooling << 19)
             dma_line = dma_line + math.ceil(layer_params.store_in_psum << 20)
             dma_line = dma_line + math.ceil(layer_params.output_cycles << 21)
+            dma_line = dma_line + math.ceil(layer_params.y_lines_per_calculation << 29)
+            dma_line = dma_line + math.ceil(layer_params.different_kernels_per_calculation << 33)
             dma_storage.append(dma_line)
             dma_line = 0
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):

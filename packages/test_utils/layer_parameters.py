@@ -239,7 +239,7 @@ class LayerParameters(object):
             self.store_in_psum = layer.store_in_psum
         if hasattr(layer, 'skip_psum'):
             self.skipPsum = layer.skip_psum
-            self.choose_iact_storage = 1
+            self.choose_iact_storage_input = 1
         if hasattr(layer, 'quantization_factor'):
             for f in range(self.filters):
                 self.quantize[f][0] = layer.quantization_factor[f][0]
@@ -624,6 +624,7 @@ class LayerParameters(object):
         self.fully_connected = 1
         self.diff_iact_layer = 1
         self.output_cycles = 1
+        self.y_lines_per_calculation = 1
         if (layer_number == max_layers - 1) :
             self.send_values_out = 1
         else:
@@ -719,17 +720,17 @@ class LayerParameters(object):
         self.skipIact = 1
         self.skipWght = 1
         self.skipPsum = 1
-        self.channels = self.input.shape[3]
+        self.channels = self.input_shape[3]
         self.max_pooling = 1
         self.send_values_out = 1
-        self.iact_size_x = self.input.shape[1]
-        self.iact_size_y = self.input.shape[2]
+        self.iact_size_x = self.input_shape[1]
+        self.iact_size_y = self.input_shape[2]
         self.computing_mx = [[[[1 for _ in range(params.PEs_X)]
                                         for _ in range(params.PEs_Y)]
                                         for _ in range(params.Clusters_Y)]
                                         for _ in range(params.Clusters_X)]
         self.used_channels = 1
-        self.diff_iact_layer = self.input.shape[3]
+        self.diff_iact_layer = self.input_shape[3]
         return
 
     def print_layer_parameters(self, debug_file):

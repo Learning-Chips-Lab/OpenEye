@@ -19,11 +19,11 @@ def create_layer(layer_mode, filters, kernelsize, inputsize_x, inputsize_y, stri
             model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=outputsize, use_bias = True))
         case "Pooling":
             channels = 4
-            x_axis = 32
-            y_axis = 2
-            pool_x_axis = 2
-            pool_y_axis = 2
-            filters = 16
+            x_axis = 64
+            y_axis = 1
+            pool_x_axis = 64
+            pool_y_axis = 1
+            filters = 8
             outputvalue = 20
             model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
             model.add(tf.keras.layers.MaxPooling2D(pool_size = (pool_x_axis, pool_y_axis), padding="valid"))
