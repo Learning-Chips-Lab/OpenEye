@@ -103,27 +103,25 @@ class LayerParameters(object):
         self.iact_x_lines = 3
         self.quantize = [[0 for _ in range(2)]for _ in range(256)]
         self.offset =  [0 for _ in range(256)]
+        if "depthwise_conv2d" in layer.name:
+            logger.debug("Depthwise Convolution Layer")
+            self.write_convdw_layer(layer, params)
 
-        match layer.name:
-            case "depthwise_conv2d":
-                logger.debug("Depthwise Convolution Layer")
-                self.write_convdw_layer(layer, params)
+        elif "conv2d" in layer.name:
+            logger.debug("2D Convolution Layer")
+            self.write_conv2d_layer(layer_parameters, layer, params, layer_number, max_layers)
 
-            case "conv2d":
-                logger.debug("2D Convolution Layer")
-                self.write_conv2d_layer(layer_parameters, layer, params, layer_number, max_layers)
-                
-            case "dense":
-                logger.debug("Dense Layer")
-                self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
+        elif "dense" in layer.name:
+            logger.debug("Dense Layer")
+            self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
 
-            case "max_pooling2d":
-                logger.debug("Pooling Layer")
-                self.write_pooling_layer(layer_parameters, layer, params, layer_number, max_layers)
-            
-            case default:
-                logger.debug("Layer type for " + str(layer) + " not supported.")
-                raise ValueError("Layer type not supported.")
+        elif "max_pooling2d" in layer.name:
+            logger.debug("Pooling Layer")
+            self.write_pooling_layer(layer_parameters, layer, params, layer_number, max_layers)
+
+        else:
+            logger.debug(f"Layer type for {layer.name} not supported.")
+            raise ValueError("Layer type not supported.")
 
     def check_for_multiple_lines_per_computation(self, params):
         self.different_kernels_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1])
@@ -723,14 +721,20 @@ class LayerParameters(object):
         self.channels = self.input_shape[3]
         self.max_pooling = 1
         self.send_values_out = 1
+        self.strideX = layer.strides[0]
+        self.strideY = layer.strides[1]
         self.iact_size_x = self.input_shape[1]
         self.iact_size_y = self.input_shape[2]
         self.computing_mx = [[[[1 for _ in range(params.PEs_X)]
                                         for _ in range(params.PEs_Y)]
                                         for _ in range(params.Clusters_Y)]
                                         for _ in range(params.Clusters_X)]
-        self.used_channels = 1
         self.diff_iact_layer = self.input_shape[3]
+        if (layer_parameters[max_layers - layer_number - 2].layer_name == "Dense"):
+            self.used_channels = 1
+        else:
+            self.used_channels = 4
+        self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
         return
 
     def print_layer_parameters(self, debug_file):
