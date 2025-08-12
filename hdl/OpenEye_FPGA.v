@@ -312,7 +312,6 @@ module OpenEye_FPGA #(
   reg [4-1:0] overhang_counter;
   reg         overhang;
   reg         overhang_delay;
-  wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_buffer_SP_data_r;
 
   reg wght_buffer_SP_en_r;
   reg wght_buffer_SP_en_w;
@@ -533,7 +532,7 @@ module OpenEye_FPGA #(
   // additional register for fsm
   reg [$clog2(CLUSTER_ROWS+1)-1:0] fsm_row;
   reg [$clog2(CLUSTER_ROWS+1)-1:0] fsm_row_offset;
-  integer a, b, word;
+  integer a, b, word, line;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       param_array_reg                 <= 0;
@@ -980,26 +979,14 @@ module OpenEye_FPGA #(
   reg [15:0] ram_counter_storage;
   reg [ 7:0] select_ram_offset;
   reg signed [ 7:0] pooling_regs    [31:0];
+  reg signed [ 7:0] debug_pooling_regs0    ;
+  assign debug_pooling_regs0 = pooling_regs[0];
+  reg signed [ 7:0] debug_pooling_regs1    ;
+  assign debug_pooling_regs1 = pooling_regs[1];
   reg signed [ 7:0] pooling_stage_1 [7:0];
   reg signed [ 7:0] pooling_stage_2 [3:0];
   reg signed [ 7:0] pooling_stage_3 [1:0];
   reg signed [ 7:0] pooling_stage_4;
-
-  assign debug_pooling_regs0 = pooling_regs[0];
-  assign debug_pooling_regs1 = pooling_regs[1];
-  assign debug_pooling_regs2 = pooling_regs[2];
-  assign debug_pooling_regs3 = pooling_regs[3];
-  assign debug_pooling_regs4 = pooling_regs[4];
-  assign debug_pooling_regs5 = pooling_regs[5];
-  assign debug_pooling_regs6 = pooling_regs[6];
-  assign debug_pooling_regs7 = pooling_regs[7];
-  assign debug_pooling_regs12 = pooling_regs[12];
-  assign debug_pooling_regs15 = pooling_regs[15];
-  assign debug_pooling_regs31 = pooling_regs[31];
-  assign debug_pooling_stage_1 = pooling_stage_1[0];
-  assign debug_pooling_stage_2 = pooling_stage_2[0];
-  assign debug_pooling_stage_3 = pooling_stage_3[0];
-  assign debug_pooling_stage_4 = pooling_stage_4;
 
   reg [ 7:0] quant_offset [31:0];
   reg [ 6:0] quant_exp    [31:0];
@@ -1158,7 +1145,7 @@ module OpenEye_FPGA #(
             buffer_SP_data_w_reg[a] <= 0;
           end
           for (a = 0; a < 32; a = a + 1) begin
-            pooling_regs[a] <= 0;
+            pooling_regs[a] <= -128;
           end
           for (a = 0; a < 8; a = a + 1) begin
             pooling_stage_1[a] <= 0;
@@ -1553,7 +1540,7 @@ module OpenEye_FPGA #(
               select_ram_offset          <= 0;
               ram_counter_storage        <= 0;
               select_ram_counter         <= 0;
-              buffer_SP_addr_upper_limit <= (CLUSTER_ROWS * iact_channels_per_pe_next_layer)%32;
+              buffer_SP_addr_upper_limit <= (CLUSTER_ROWS * (iact_channels_per_pe_next_layer/kernels_per_calc))%32;
               buffer_SP_addr_lower_limit <= 0;
               for (a = 0; a < RAM_CELLS; a++) begin
                 buffer_SP_data_w_reg[a] <= 0;
@@ -1591,10 +1578,11 @@ module OpenEye_FPGA #(
             if (fsm_cycle >= 1) begin
               select_ram_counter <= select_ram_counter + 1;
               if (iact_channels_per_pe_next_layer == 4) begin
+                select_ram_counter <= select_ram_counter + 1;
                 if (select_ram_counter == 8 - 1) begin
                   select_ram_counter <= 0;
                 end
-                if (select_ram_counter == (CLUSTER_ROWS + ram_counter_storage - 1)%8) begin
+                if (select_ram_counter == ram_counter_storage + 2*(iact_channels_per_pe_next_layer/kernels_per_calc) - 1) begin
                   select_ram_counter <= ram_counter_storage;
                   iact_channels_counter <= iact_channels_counter + 1;
                   if (iact_channels_counter == {4'd0,iact_channels_per_pe_next_layer} - 1) begin
@@ -1621,12 +1609,12 @@ module OpenEye_FPGA #(
                       end
                     end
                     buffer_SP_addr_lower_limit <= buffer_SP_addr_upper_limit;
-                    buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + CLUSTER_ROWS * 4) % 32;
+                    buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + CLUSTER_ROWS * (iact_channels_per_pe_next_layer/kernels_per_calc)) % 32;
                   end
                 end
                 for (a = 0; a < RAM_CELLS; a++) begin
                   for (word = 0; word < 8; word++) begin
-                    if ((a >= select_ram_counter * 4) & (a < 4 * select_ram_counter + 4)) begin
+                    if ((a >= select_ram_counter * 4) & ((a < 4 * select_ram_counter + 4) | )) begin
                       if ((word == (4 + {{24{1'd0}},iact_channels_counter})) | (word == {{24{1'd0}},iact_channels_counter})) begin
                         buffer_SP_data_w_reg[a][8*word+:8] <= quantized_value_reg[word / 4 + (a%4) * 2];
                       end
@@ -1808,9 +1796,13 @@ module OpenEye_FPGA #(
             end
           //Comparing stage with variable stride
           end else begin
-
-            for (a = 0; a < 8; a = a + 1) begin
-              pooling_stage_1[a] <= buffer_SP_data_r[select_ram_counter*RAM_CELLS_WORD_BITWIDTH+8*a+:8];
+            for (word = 0; word < 2; word = word + 1) begin
+              for (line = 0; line < 2; line = line + 1) begin
+                for (a = 0; a < 2; a = a + 1) begin
+                  pooling_stage_1[a+2*line+4*word] <=
+                  buffer_SP_data_r[line*iact_size_x*4+4*8*a+8*word+:8];
+                end
+              end
             end
             for (a = 0; a < 4; a = a + 1) begin
               if (pooling_stage_1[2*a] >= pooling_stage_1[2*a+1]) begin
@@ -2098,8 +2090,8 @@ localparam WAIT_FOR_SENDING_RESULTS = 4;
 localparam PSUM_SEND_RESULTS = 5;
 localparam SEND_PSUM_TO_IACT = 6;
 
-reg [7:0]test_reg1;
-reg [7:0]test_reg2;
+reg [7:0]psum_cycle_buffer_1;
+reg [7:0]psum_cycle_buffer_2;
 reg [7:0]psum_sending_counter;
 reg [7:0]psum_filter_offset;
 reg [3:0]fsm_psum_row_offset;
@@ -2145,8 +2137,8 @@ reg [7:0] current_filter;
       psum_buffer_SP_en_r         <= 0;
       last_data_o                 <= 0;
       current_filter              <= 0;
-      test_reg1                   <= 0;
-      test_reg2                   <= 0;
+      psum_cycle_buffer_1                   <= 0;
+      psum_cycle_buffer_2                   <= 0;
       psum_sending_counter        <= 0;
       psum_filter_offset          <= 0;
       fsm_psum_row_offset         <= 0;
@@ -2370,10 +2362,10 @@ reg [7:0] current_filter;
                 fsm_psum_current_state <= PSUM_IDLE;
               end
               fsm_psum_cycle       <= 0;
-              test_reg1            <= 0;
-              test_reg2            <= 0;
+              psum_cycle_buffer_1            <= 0;
+              psum_cycle_buffer_2            <= 0;
               psum_sending_counter <= 0;
-              psum_filter_offset   <= iact_channels_per_pe_next_layer;
+              psum_filter_offset   <= iact_channels_per_pe_next_layer / kernels_per_calc;
               fsm_psum_row_offset  <= 0;
             end
           end
@@ -2444,28 +2436,28 @@ reg [7:0] current_filter;
             + quant_offset[current_filter]))
             >>> quant_exp[current_filter];
           end
-          psum_sending_counter <= psum_sending_counter + 1;
-          if (psum_sending_counter == CLUSTER_ROWS - 1) begin
+          psum_sending_counter <= psum_sending_counter + CLUSTER_COLUMNS * PE_COLUMNS;
+          if (psum_sending_counter  == kernels_per_calc * iact_size_x - CLUSTER_COLUMNS * PE_COLUMNS) begin //Einfügen add_up
             psum_sending_counter        <= 0;
           end
-          if (psum_sending_counter == CLUSTER_ROWS - 2) begin
+          if (psum_sending_counter == kernels_per_calc * iact_size_x - 2 * CLUSTER_COLUMNS * PE_COLUMNS) begin
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                  test_reg1 <= test_reg1 + 1;
-                  if (test_reg1[3:0] != iact_channels_per_pe_next_layer - 1) begin
+                  psum_cycle_buffer_1 <= psum_cycle_buffer_1 + kernels_per_calc;
+                  if (psum_cycle_buffer_1[3:0] != iact_channels_per_pe_next_layer - kernels_per_calc) begin
                     psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
                     <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
                   end else begin
-                    test_reg1 <= 0;
-                    test_reg2 <= test_reg2 + 1;
+                    psum_cycle_buffer_1 <= 0;
+                    psum_cycle_buffer_2 <= psum_cycle_buffer_2 + 1;
                     psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
-                    <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + (needed_wght_cycles_reg * {6'd0,filters_reg} - {8'd0,iact_channels_per_pe_next_layer}) + 1;
-                    if (test_reg2 == iact_size_y - 1) begin
-                      test_reg2 <= 0;
+                    <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + (needed_wght_cycles_reg * {6'd0,filters_reg} - {8'd0,iact_channels_per_pe_next_layer / kernels_per_calc}) + 1;
+                    if (psum_cycle_buffer_2 == iact_size_y - 1) begin
+                      psum_cycle_buffer_2 <= 0;
                       psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
                       <= {4'd0,psum_filter_offset};
-                      psum_filter_offset <= psum_filter_offset + {4'd0,iact_channels_per_pe_next_layer};
+                      psum_filter_offset <= psum_filter_offset + {4'd0,iact_channels_per_pe_next_layer / kernels_per_calc};
                     end
                   end
                 end
