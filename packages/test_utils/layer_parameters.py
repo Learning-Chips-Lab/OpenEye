@@ -33,6 +33,7 @@ class LayerParameters(object):
         self.needed_refreshes_mx = []
         self.calc_X = 0
         self.calc_Y = 0
+        self.total_computations = 0
 
         self.used_iact_per_PE = []
         self.used_wght_per_PE = []
@@ -47,7 +48,6 @@ class LayerParameters(object):
         self.realfactor = 0
         self.used_iact_addr_per_PE = 2
         self.used_wght_addr_per_PE = 5
-
         self.iact_addr_len = 1
         self.iact_data_len = 3
         self.choose_iact_storage_input = 0
@@ -438,7 +438,6 @@ class LayerParameters(object):
             self.psum_delay = int(max([(math.ceil(self.needed_refreshes_mx[layer_repetition][0]/2) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
         if((self.output_shape[2] % params.PEs_X)== 0):
             self.used_X_cluster = 1
-        self.iact_addr_len = math.ceil((self.used_channels)/(math.ceil(params.DMA_Bit_AXI/params.Clusters_X)/params.IACT_Addr_Bitwidth))
         self.iact_addr_len = 1
         self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_Bit_AXI/params.Clusters_X)/params.IACT_WOH_Bitwidth))
         self.calculate_glb_transmissions(params)

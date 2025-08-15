@@ -285,6 +285,7 @@ module OpenEye_FPGA #(
   wire [CLUSTERS-1:0] start_param_array;
   assign start_param_array = (1 << (((kernels_per_calc * y_lines_per_calc * (PE_COLUMNS+iact_size_x-1)/PE_COLUMNS*PE_COLUMNS) + PE_COLUMNS - 1)/PE_COLUMNS)) - 1;
   reg [7:0]needed_psum_storage_cycles_reg;
+  reg [7:0] debug_reg;
 
   //Register for the FSM
   reg [32-1:0] fsm_cycle;
@@ -298,6 +299,7 @@ module OpenEye_FPGA #(
   reg new_stream;
   reg reset_cycle_reg;
   reg send_data_out;
+  reg [1:0] add_up_reg;
   reg early_stream_start;
 
   // Register for the Buffer
@@ -690,14 +692,28 @@ module OpenEye_FPGA #(
                 ][fsm_row[$clog2(
                     CLUSTER_ROWS
                 )-1:0]][31:24] <= iact_converter_x + a[7:0] * PE_COLUMNS[7:0];
-                iact_converter_params_reg[a
-                ][fsm_row[$clog2(
-                    CLUSTER_ROWS
-                )-1:0]][23:16] <= iact_converter_y;
-                iact_converter_params_reg[a
-                ][fsm_row[$clog2(
-                    CLUSTER_ROWS
-                )-1:0]][15:8] <= iact_size_x;
+                if ((a != 0) & ((iact_converter_x + a[7:0] * PE_COLUMNS[7:0]) >= iact_size_x) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
+                  iact_converter_params_reg[a
+                  ][fsm_row[$clog2(
+                      CLUSTER_ROWS
+                  )-1:0]][23:16] <= iact_converter_y + 1;
+                end else begin
+                  iact_converter_params_reg[a
+                  ][fsm_row[$clog2(
+                      CLUSTER_ROWS
+                  )-1:0]][23:16] <= iact_converter_y;
+                end
+                if ((a != 0) & ((iact_converter_x + a[7:0] * PE_COLUMNS[7:0]) >= iact_size_x)) begin
+                  iact_converter_params_reg[a
+                  ][fsm_row[$clog2(
+                      CLUSTER_ROWS
+                  )-1:0]][31:24] <= 0;
+                end else begin
+                  iact_converter_params_reg[a
+                  ][fsm_row[$clog2(
+                      CLUSTER_ROWS
+                  )-1:0]][31:24] <= iact_converter_x + a[7:0] * PE_COLUMNS[7:0];
+                end
                 iact_converter_params_reg[a
                 ][fsm_row[$clog2(
                     CLUSTER_ROWS
@@ -978,6 +994,7 @@ module OpenEye_FPGA #(
   reg [15:0] select_ram_counter;
   reg [15:0] ram_counter_storage;
   reg [ 7:0] select_ram_offset;
+  reg [ 7:0] ram_iact_modulo;
   reg signed [ 7:0] pooling_regs    [31:0];
   reg signed [ 7:0] debug_pooling_regs0    ;
   assign debug_pooling_regs0 = pooling_regs[0];
@@ -1069,6 +1086,7 @@ module OpenEye_FPGA #(
       select_ram_counter                <= 0;
       ram_counter_storage               <= 0;
       send_data_out                     <= 0;
+      add_up_reg                        <= 0;
       //new iact regs
       iact_converter_max_cycles         <= 0;
       min_standing_cycles               <= 0;
@@ -1114,6 +1132,8 @@ module OpenEye_FPGA #(
       converter_needed_cycles      <= 0;
       iact_converter_enc_enable    <= 0;
       iact_converter_params_enable <= 0;
+
+      ram_iact_modulo                  <= 0;
 
     end else begin
       case (fsm_current_state)
@@ -1194,6 +1214,7 @@ module OpenEye_FPGA #(
                         IACT_PER_PE+1
                     )-1+PARAMETER_POS_1_11:PARAMETER_POS_1_11];
                     send_data_out <= data_dma_i_reg[PARAMETER_POS_1_12];
+                    add_up_reg <= data_dma_i_reg[PARAMETER_POS_1_12 + 3:PARAMETER_POS_1_12 + 1];
                   end
                   32'd1: begin
                     wght_cycles_reg           <= data_dma_i_reg[7+PARAMETER_POS_2_0:PARAMETER_POS_2_0];
@@ -1503,7 +1524,7 @@ module OpenEye_FPGA #(
           iact_converter_params_enable <= 0;
           if ((iact_converter_buffer_addr_cycles + 2 == (iact_converter_buffer_addr_max_cycles)) &
           (iact_converter_cycles == 0) & 
-          (iact_channels_counter != (iact_channel_max_cycles))) begin //Change here + 1
+          (iact_channels_counter != (iact_channel_max_cycles))) begin
             iact_converter_enc_enable    <= 1;
             iact_converter_params_enable <= 1;
             select_ram_counter           <= 1;
@@ -1515,7 +1536,7 @@ module OpenEye_FPGA #(
             if (iact_converter_cycles == (iact_converter_max_cycles - 1)) begin
               iact_converter_cycles <= 0;
               iact_channels_counter <= iact_channels_counter + 1;
-              if (iact_channels_counter == (iact_channel_max_cycles - 1)) begin //Change here + 1
+              if (iact_channels_counter == (iact_channel_max_cycles - 1)) begin
                 fsm_current_state     <= WAIT_CYCLE;
                 iact_channels_counter <= 0;
                 fsm_cycle             <= 0;
@@ -1537,10 +1558,12 @@ module OpenEye_FPGA #(
               fsm_current_state <= WAIT_FOR_RESULTS;
             end else begin
               fsm_current_state          <= RECEIVE_PSUMS_TO_IACT;
+              ram_iact_modulo                <= iact_size_x % (CLUSTER_COLUMNS * PE_COLUMNS);
               select_ram_offset          <= 0;
               ram_counter_storage        <= 0;
               select_ram_counter         <= 0;
               buffer_SP_addr_upper_limit <= (CLUSTER_ROWS * (iact_channels_per_pe_next_layer/kernels_per_calc))%32;
+              buffer_SP_addr_upper_limit <= (4*iact_size_x/PE_COLUMNS/CLUSTER_COLUMNS)%32;
               buffer_SP_addr_lower_limit <= 0;
               for (a = 0; a < RAM_CELLS; a++) begin
                 buffer_SP_data_w_reg[a] <= 0;
@@ -1578,21 +1601,15 @@ module OpenEye_FPGA #(
             if (fsm_cycle >= 1) begin
               select_ram_counter <= select_ram_counter + 1;
               if (iact_channels_per_pe_next_layer == 4) begin
-                select_ram_counter <= select_ram_counter + 1;
-                if (select_ram_counter == 8 - 1) begin
-                  select_ram_counter <= 0;
-                end
-                if (select_ram_counter == ram_counter_storage + 2*(iact_channels_per_pe_next_layer/kernels_per_calc) - 1) begin
-                  select_ram_counter <= ram_counter_storage;
+                select_ram_counter <= select_ram_counter + iact_channels_per_pe_next_layer;
+                
+                if (select_ram_counter >= ram_counter_storage + ((iact_size_x + add_up_reg)/2) - iact_channels_per_pe_next_layer) begin
+                  select_ram_counter <= select_ram_counter + iact_channels_per_pe_next_layer - ((iact_size_x + add_up_reg)/2);
                   iact_channels_counter <= iact_channels_counter + 1;
                   if (iact_channels_counter == {4'd0,iact_channels_per_pe_next_layer} - 1) begin
                     iact_channels_counter <= 0;
-                    ram_counter_storage   <= select_ram_counter + 1;
-                    select_ram_counter    <= select_ram_counter + 1;
-                    if (select_ram_counter >= (32/4) - 1) begin
-                      select_ram_counter  <= 0;
-                      ram_counter_storage <= 0;
-                    end
+                    ram_counter_storage   <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up_reg/2))%32;
+                    select_ram_counter    <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up_reg/2))%32;
                     for (a = 0; a < RAM_CELLS; a++) begin
                       if (buffer_SP_addr_upper_limit == buffer_SP_addr_lower_limit) begin
                         buffer_SP_en_w_reg[a] <= 1;
@@ -1609,14 +1626,31 @@ module OpenEye_FPGA #(
                       end
                     end
                     buffer_SP_addr_lower_limit <= buffer_SP_addr_upper_limit;
-                    buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + CLUSTER_ROWS * (iact_channels_per_pe_next_layer/kernels_per_calc)) % 32;
+                    buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + (iact_size_x/2)) % 32;
                   end
                 end
                 for (a = 0; a < RAM_CELLS; a++) begin
                   for (word = 0; word < 8; word++) begin
-                    if ((a >= select_ram_counter * 4) & ((a < 4 * select_ram_counter + 4) | )) begin
+                    if (((select_ram_counter - ram_counter_storage + iact_channels_per_pe_next_layer  > ((iact_size_x + add_up_reg)/2)) &
+                      (((a >= ram_counter_storage) & (a < ram_counter_storage + ram_iact_modulo/2)) |
+                      (((a > (select_ram_counter + 1)%32) | (a < (select_ram_counter + ram_iact_modulo)%32)) & ((select_ram_counter)%8 + ram_iact_modulo >= 32))
+                      ))) begin
                       if ((word == (4 + {{24{1'd0}},iact_channels_counter})) | (word == {{24{1'd0}},iact_channels_counter})) begin
-                        buffer_SP_data_w_reg[a][8*word+:8] <= quantized_value_reg[word / 4 + (a%4) * 2];
+                        buffer_SP_data_w_reg[a][8*(word+1)+:8] <= quantized_value_reg[((word / 4) + ((a-ram_counter_storage) * 2) + overhang_discrepancy + 4)%8];
+                      end
+                      overhang_discrepancy <= (overhang_discrepancy + 4)%8;
+                    end else begin
+                      if (((a >= (select_ram_counter%32)) & (a < (select_ram_counter%32) + iact_channels_per_pe_next_layer)) |
+                      (((a >= (select_ram_counter)%32) | (a < (select_ram_counter + iact_channels_per_pe_next_layer)%32)) & ((select_ram_counter%32) >= 32 - 4 + 1))) begin
+                        if (a == 28) begin
+                          debug_reg <= select_ram_counter;
+                        end
+                        if ((word == (iact_channels_per_pe_next_layer + {{24{1'd0}},iact_channels_counter})) | (word == {{24{1'd0}},iact_channels_counter})) begin
+                          buffer_SP_data_w_reg[a][8*word+:8] <= quantized_value_reg[((word / 4) + ((a-ram_counter_storage) * 2) - overhang_discrepancy)%8];
+                        end
+                        if (select_ram_counter - ram_counter_storage + iact_channels_per_pe_next_layer == (iact_size_x/2)) begin
+                          overhang_discrepancy <= 0;
+                        end
                       end
                     end
                   end
@@ -1828,7 +1862,6 @@ module OpenEye_FPGA #(
                 end
               end
             end
-
           end
 
           //Ending Condition
@@ -2109,8 +2142,22 @@ reg last_data_reg;
 reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_x_cl_psum;
 reg [   $clog2(CLUSTER_ROWS)-1:0] fsm_y_cl_psum;
 reg [7:0] quantized_value_reg [7:0];
-wire [7:0] testquant;
-assign testquant = quantized_value_reg[0];
+wire [7:0] testquant1;
+wire [7:0] testquant2;
+wire [7:0] testquant3;
+wire [7:0] testquant4;
+wire [7:0] testquant5;
+wire [7:0] testquant6;
+wire [7:0] testquant7;
+wire [7:0] testquant8;
+assign testquant1 = quantized_value_reg[0];
+assign testquant2 = quantized_value_reg[1];
+assign testquant3 = quantized_value_reg[2];
+assign testquant4 = quantized_value_reg[3];
+assign testquant5 = quantized_value_reg[4];
+assign testquant6 = quantized_value_reg[5];
+assign testquant7 = quantized_value_reg[6];
+assign testquant8 = quantized_value_reg[7];
 reg [7:0] current_filter;
   integer g_psum, b_psum, cc_psum, cr_psum;
   always @(posedge clk_i, negedge rst_n) begin
@@ -2137,8 +2184,8 @@ reg [7:0] current_filter;
       psum_buffer_SP_en_r         <= 0;
       last_data_o                 <= 0;
       current_filter              <= 0;
-      psum_cycle_buffer_1                   <= 0;
-      psum_cycle_buffer_2                   <= 0;
+      psum_cycle_buffer_1         <= 0;
+      psum_cycle_buffer_2         <= 0;
       psum_sending_counter        <= 0;
       psum_filter_offset          <= 0;
       fsm_psum_row_offset         <= 0;
@@ -2362,8 +2409,8 @@ reg [7:0] current_filter;
                 fsm_psum_current_state <= PSUM_IDLE;
               end
               fsm_psum_cycle       <= 0;
-              psum_cycle_buffer_1            <= 0;
-              psum_cycle_buffer_2            <= 0;
+              psum_cycle_buffer_1  <= 0;
+              psum_cycle_buffer_2  <= 0;
               psum_sending_counter <= 0;
               psum_filter_offset   <= iact_channels_per_pe_next_layer / kernels_per_calc;
               fsm_psum_row_offset  <= 0;
@@ -2390,7 +2437,7 @@ reg [7:0] current_filter;
               end
             end
             fsm_psum_r <= fsm_psum_r + 1;
-            if ((fsm_psum_r == NUM_GLB_PSUM - 3) | fully_connected_layer) begin //NUM_GLB_PSUM / PARALLEL_MACS - 1
+            if ((fsm_psum_r == NUM_GLB_PSUM - 3) | fully_connected_layer) begin
               fsm_psum_r <= 0;
               fsm_x_cl_psum <= fsm_x_cl_psum + 1;
               if (fully_connected_layer) begin
@@ -2437,15 +2484,16 @@ reg [7:0] current_filter;
             >>> quant_exp[current_filter];
           end
           psum_sending_counter <= psum_sending_counter + CLUSTER_COLUMNS * PE_COLUMNS;
-          if (psum_sending_counter  == kernels_per_calc * iact_size_x - CLUSTER_COLUMNS * PE_COLUMNS) begin //Einfügen add_up
+          if (psum_sending_counter >= kernels_per_calc * (iact_size_x + add_up_reg) - CLUSTER_COLUMNS * PE_COLUMNS) begin
             psum_sending_counter        <= 0;
           end
-          if (psum_sending_counter == kernels_per_calc * iact_size_x - 2 * CLUSTER_COLUMNS * PE_COLUMNS) begin
+          if ((psum_sending_counter >= kernels_per_calc * (iact_size_x + add_up_reg) - 2 * CLUSTER_COLUMNS * PE_COLUMNS) &
+          (psum_sending_counter < kernels_per_calc * (iact_size_x + add_up_reg) - CLUSTER_COLUMNS * PE_COLUMNS)) begin
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
                   psum_cycle_buffer_1 <= psum_cycle_buffer_1 + kernels_per_calc;
-                  if (psum_cycle_buffer_1[3:0] != iact_channels_per_pe_next_layer - kernels_per_calc) begin
+                  if (psum_cycle_buffer_1 != iact_channels_per_pe_next_layer - kernels_per_calc) begin
                     psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
                     <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
                   end else begin
@@ -2466,7 +2514,7 @@ reg [7:0] current_filter;
           end
 
           fsm_y_cl_psum <= fsm_y_cl_psum[2:0] + needed_y_cls_reg[2:0];
-          if (fsm_y_cl_psum + needed_y_cls_reg >= CLUSTER_ROWS) begin
+          if (fsm_y_cl_psum + needed_y_cls_reg >= (((iact_size_x + add_up_reg) * kernels_per_calc)/8)) begin
             fsm_y_cl_psum       <= fsm_psum_row_offset[2:0] + 1;
             fsm_psum_row_offset <= fsm_psum_row_offset + 1;
             if (fsm_psum_row_offset == needed_y_cls_reg - 1) begin
@@ -2475,7 +2523,7 @@ reg [7:0] current_filter;
             end
           end
           fsm_psum_cycle <= fsm_psum_cycle + 1;
-          if (fsm_psum_cycle == 8 * needed_wght_cycles_reg * filters_reg * iact_size_y) begin
+          if (fsm_psum_cycle == (((iact_size_x + add_up_reg) * kernels_per_calc)/8) * needed_wght_cycles_reg * filters_reg * iact_size_y) begin
             fsm_psum_cycle              <= 0;
             fsm_psum_last_state         <= PSUM_SEND_RESULTS;
             fsm_psum_current_state      <= PSUM_IDLE;
@@ -2643,7 +2691,6 @@ reg [7:0] current_filter;
         end
       end
     end
-
     assign debug_psum_re     = psum_buffer_SP_en_r[0] & !psum_buffer_SP_en_w[0];
     assign debug_psum_we     = psum_buffer_SP_en_w[0];
     assign debug_psum_addr   = psum_buffer_SP_addr[0+:BUFFER_WIDTH];

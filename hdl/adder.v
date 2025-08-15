@@ -9,12 +9,12 @@
 ///
 /// A simple registered adder module.
 ///
-/// The adder computes the sum of `summand_1_i` and `summand_2_i` when `adder_en_i` is high.
-/// The result is stored in `sum_o` and is updated on the rising edge of `clk_i`.
+/// The adder computes the sum of `summand_1_i` and `summand_2_i` (both signed inputs) when `adder_en_i` is high.
+/// The result (a signed value) is stored in `sum_o` and is updated on the rising edge of `clk_i`.
 /// The result is reset to 0 when `rst_ni` is low.
 ///
 /// Parameters:
-///   DATA_WIDTH_SUM:   Bitwidth of the sum output
+///   DATA_WIDTH_SUM:   Bitwidth of the sum output (default: 20)
 ///
 /// Ports:
 ///   clk_i:            Clock input
@@ -26,7 +26,8 @@
 ///
 
 module adder #(
-    parameter DATA_WIDTH_SUM = 20
+    parameter DATA_WIDTH_SUM = 20,
+    parameter RESET_VALUE = 0
 ) (
     input                                  clk_i,
     input                                  rst_ni,
@@ -36,13 +37,13 @@ module adder #(
     output reg signed [DATA_WIDTH_SUM-1:0] sum_o
 );
 
-  always @(posedge clk_i, negedge rst_ni) begin
+  always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin  // Reset
-      sum_o <= 0;
+      sum_o <= RESET_VALUE;
     end else begin
       if (adder_en_i) begin
         sum_o <= summand_1_i + summand_2_i;
-      end else begin  // Keep output, if `adder_en_i` is low
+      end else begin  // Set to 0, if `adder_en_i` is low
         sum_o <= 0;
       end
     end

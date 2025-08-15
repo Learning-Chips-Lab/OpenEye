@@ -210,10 +210,12 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                         assert ptu.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
                     else :
                         await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
-                        time_printer.timestamp("Ready signal detected. Start new stream" , logger)
+                        time_printer.timestamp("Ready signal detected. Start new stream " , logger)
                         dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number])
                     if (layer_parameters[layer_number].layer_name != "Pooling") :
                         slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
+                    if (layer_number != max_layers - 1) :
+                        assert rtl_test_utils.compare_iact_storage(ptp, dut, dram.fmap[1 + layer_number], openeye_parameter)
                 else :
                     dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number])
                     if (layer_parameters[layer_number].layer_name != "Pooling") :

@@ -75,7 +75,7 @@ module iact_stream_constructor #(
   reg  [                 4-1:0] iact_router_counter;
   reg  [                 8-1:0] kernel_y_counter;
 
-  localparam INITIALIZE = 2'b0;
+  localparam FSM_INITIALIZE = 2'b0;
   localparam GET_PARAMETER = 2'b1;
   localparam WRITE_TO_MEMORY = 2'b10;
   localparam PARAM_EXTENDING = CALC_DATA_WIDTH - PARAM_LENGTH;
@@ -251,6 +251,18 @@ module iact_stream_constructor #(
     reg signed [7:0] y_reg;
     reg signed [7:0] x_reg      [NUM_GLB_IACT-1:0];
     wire       [7:0] x_reg_test;
+    wire [7:0]debug_iact_storage1;
+    wire [7:0]debug_iact_storage2;
+    wire [7:0]debug_iact_storage3;
+    wire [7:0]debug_iact_storage4;
+    wire [7:0]debug_iact_storage5;
+    wire [7:0]debug_iact_storage6;
+    assign debug_iact_storage1 = ram_data_i[7:0];
+    assign debug_iact_storage2 = ram_data_i[19:12];
+    assign debug_iact_storage3 = ram_data_i[31:24];
+    assign debug_iact_storage4 = ram_data_i[43:36];
+    assign debug_iact_storage5 = ram_data_i[55:48];
+    assign debug_iact_storage6 = ram_data_i[67:60];
     assign x_reg_test = x_reg[0];
     integer          router_loop;
     reg        [1:0] fsm_current_state;
@@ -300,11 +312,12 @@ module iact_stream_constructor #(
     always @(posedge clk_i, negedge rst_ni) begin
       // Reset
       if (!rst_ni) begin
+        // Initialize the FSM cycle counter to 0 for tracking FSM state transitions
         fsm_cycle              <= 0;
         y_cycle                <= 0;
         router_cycle           <= 0;
         addr_cycle             <= 0;
-        fsm_current_state      <= INITIALIZE;
+        fsm_current_state      <= FSM_INITIALIZE;
         x                      <= 0;
         y                      <= 0;
         fsm_row_offset         <= 0;
@@ -336,7 +349,7 @@ module iact_stream_constructor #(
         end
       end else begin
         case (fsm_current_state)
-          INITIALIZE: begin
+          FSM_INITIALIZE: begin
             fsm_cycle              <= 0;
             y_cycle                <= 0;
             router_cycle           <= 0;
@@ -499,7 +512,7 @@ module iact_stream_constructor #(
           end
 
           default: begin
-            fsm_current_state <= INITIALIZE;
+            fsm_current_state <= FSM_INITIALIZE;
 
           end
         endcase
@@ -515,7 +528,7 @@ module iact_stream_constructor #(
         needed_iact_cycles_reg <= needed_iact_router_cycles_i;
         wght_size_reg          <= wght_size_i;
         if (reset_cycle_i) begin
-          fsm_current_state      <= INITIALIZE;
+          fsm_current_state      <= FSM_INITIALIZE;
         end
       end
     end
