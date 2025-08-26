@@ -128,6 +128,7 @@ class LayerParameters(object):
         self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.output_shape[3]/8))
         self.y_lines_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1]/self.different_kernels_per_calculation)
         self.y_lines_per_calculation = min(self.y_lines_per_calculation,params.Clusters_Y,self.input_shape[2])
+        self.y_lines_per_calculation = 1
 
     def calculate_used_Y_cluster(self, params):
         self.used_Y_cluster = (math.ceil(self.used_PEs_Y/params.PEs_Y))
@@ -172,7 +173,7 @@ class LayerParameters(object):
                                     self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
             else:
                 self.add_up = 0
-            #Elimenate every PE, that is not required
+            #Eliminate every PE, that is not required
             x_values_per_cycle = (self.calc_X + self.add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation
             for x_cluster in range(params.Clusters_X):
                 for y_cluster in range(params.Clusters_Y):

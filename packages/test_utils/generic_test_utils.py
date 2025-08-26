@@ -10,6 +10,15 @@ import test_utils.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 
+def load_env_to_variable(variable_string, default_value) :
+    try:
+        if (type(default_value) == int) :
+            return int((os.getenv(variable_string)))
+        else :
+            return os.getenv(variable_string)
+    except:
+        logger.debug(variable_string + " not set")
+        return default_value
 def delete_files_in_directory(directory_path):
     try:
         with os.scandir(directory_path) as entries:

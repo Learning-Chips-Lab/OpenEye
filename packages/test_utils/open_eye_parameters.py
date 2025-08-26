@@ -15,7 +15,6 @@ class OpenEyeParameters(object):
     
     """
     def __init__(self, serial = False):
-
         try:
             self.Clusters_Y = int(os.getenv("CLUSTER_ROWS"))
         except:

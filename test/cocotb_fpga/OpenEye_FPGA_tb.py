@@ -50,29 +50,19 @@ except:
 logger.setLevel(logging.INFO)
 
 
-def load_env_to_variable(variable_string, default_value) :
-    try:
-        if (type(default_value) == int) :
-            return int((os.getenv(variable_string)))
-        else :
-            return os.getenv(variable_string)
-    except:
-        logger.debug(variable_string + " not set")
-        return default_value
-
 def envvars_to_vars():    
     # Get variables that are used for the execution of the test
-    only_files = load_env_to_variable("ONLY_FILES", 0)
-    layer_mode = load_env_to_variable("LAYER", "CONVOLUTION")
-    filters = load_env_to_variable("NUM_FILTERS", 1)
-    kernelsize = load_env_to_variable("KERNEL_SIZE", 3)
-    inputsize_x = load_env_to_variable("INPUT_SIZE_X", 1)
-    inputsize_y = load_env_to_variable("INPUT_SIZE_Y", 1)
-    outputsize = load_env_to_variable("OUTPUT_SIZE", 1)
-    strides = load_env_to_variable("STRIDE", 1),load_env_to_variable("STRIDE", 1)
-    channels = load_env_to_variable("INPUT_CHANNELS", 1)
-    sparse_iacts = load_env_to_variable("USE_SPARSE_IACTS", 1)
-    sparse_wghts = load_env_to_variable("USE_SPARSE_WEIGHTS", 1)
+    only_files = gtu.load_env_to_variable("ONLY_FILES", 0)
+    layer_mode = gtu.load_env_to_variable("LAYER", "CONVOLUTION")
+    filters = gtu.load_env_to_variable("NUM_FILTERS", 1)
+    kernelsize = gtu.load_env_to_variable("KERNEL_SIZE", 3)
+    inputsize_x = gtu.load_env_to_variable("INPUT_SIZE_X", 1)
+    inputsize_y = gtu.load_env_to_variable("INPUT_SIZE_Y", 1)
+    outputsize = gtu.load_env_to_variable("OUTPUT_SIZE", 1)
+    strides = gtu.load_env_to_variable("STRIDE", 1),gtu.load_env_to_variable("STRIDE", 1)
+    channels = gtu.load_env_to_variable("INPUT_CHANNELS", 1)
+    sparse_iacts = gtu.load_env_to_variable("USE_SPARSE_IACTS", 1)
+    sparse_wghts = gtu.load_env_to_variable("USE_SPARSE_WEIGHTS", 1)
     return only_files, layer_mode, filters, kernelsize, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts
 
 @cocotb.test()
