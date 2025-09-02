@@ -194,7 +194,7 @@ module GLB_cluster #(
   assign router_cluster_wght_data_o = ext_mem_wght_data_i;
   assign router_cluster_wght_enable_o = ext_mem_wght_enable_i;
   assign ext_mem_wght_ready_o = router_cluster_wght_ready_i;
-
+  assign ext_mem_iact_ready_o = router_cluster_iact_ready_i;
   if (SERIAL == 1) begin : gen_serial_router
     assign router_cluster_psum_data_o   = ext_mem_psum_data_i;
     assign router_cluster_psum_enable_o = ext_mem_psum_enable_i;
@@ -204,7 +204,6 @@ module GLB_cluster #(
     assign router_cluster_psum_ready_o  = ext_mem_psum_ready_i;
     assign router_cluster_iact_data_o   = ext_mem_iact_data_i;
     assign router_cluster_iact_enable_o = ext_mem_iact_enable_i;
-    assign ext_mem_iact_ready_o         = router_cluster_iact_ready_i;
   end else begin : gen_parallel_router
     for (
         glb_counter = 0;
@@ -223,7 +222,6 @@ module GLB_cluster #(
       end
     end
 
-    assign ext_mem_iact_ready_o = router_cluster_iact_ready_i;
 
     for (
         glb_counter = 0;

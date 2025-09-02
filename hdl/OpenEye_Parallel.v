@@ -148,7 +148,7 @@ module OpenEye_Parallel #(
     input                                                      status_reg_enable_i,
     input                                                      data_mode_i,
     input      [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i,
-    input      [                                         19:0] needed_cycles_i,
+    input      [                                         17:0] needed_cycles_i,
     input      [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i,
     input      [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                                          3:0] needed_iact_cycles_i,
