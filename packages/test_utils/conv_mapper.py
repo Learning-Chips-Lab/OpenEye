@@ -9,6 +9,7 @@ from test_utils.layer_mapper import LayerMapper
 from test_utils.iact_stream_mapper import ConvIactStreamMapper
 from test_utils.wght_stream_mapper import ConvWghtStreamMapper
 from test_utils.psum_stream_mapper import ConvPsumStreamMapper
+from regmap_pack import pack_registers, unpack_registers, TRANSMISSIONS, DMA_BITWIDTH, REGISTERS
 
 logger = logging.getLogger("cocotb")
 
@@ -35,7 +36,6 @@ class ConvMapper(LayerMapper):
         counter = 0
         computing_pes = 0
 
-        
         for x in range(params.Clusters_X):
             for y in range(params.Clusters_Y):
                 for pe_y in range(params.PEs_Y):
@@ -45,8 +45,50 @@ class ConvMapper(LayerMapper):
                         counter += 1
         total_bits = params.Clusters_X * params.Clusters_Y * params.PEs_Y * params.PEs_X
         bitstring = format(computing_pes, f"0{total_bits}b")[::-1]
+        #reg_defaults = {r['name']: 0 for r in unpack_registers([0]*TRANSMISSIONS).keys()}
+        #reg_defaults.update(values)
+        #words = pack_registers(reg_defaults)
+        words = pack_registers({
+        "wght_cycles_reg": layer_params.needed_wght_transmissions,
+        "stride_x_reg": layer_params.strideX,
+        "stride_y_reg": layer_params.strideY,
+        "skipIact_reg": layer_params.skipIact,
+        "skipWght_reg": layer_params.skipWght,
+        "skipPsum_reg": layer_params.skipPsum,
+        "psum_delay_reg": layer_params.psum_delay,
+        "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
+        "kernel_size": layer_params.kernel_size[1],
+        "x_lines_reg": layer_params.iact_x_lines,
+        "needed_wght_cycles_reg": math.ceil(layer_params.filters/(layer_params.used_psum_per_PE * layer_params.different_kernels_per_calculation)),
+        "needed_cycles_reg": math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer),
+        "iact_converter_buffer_addr_max_cycles": layer_params.needed_standing_cycles,
+        "iact_channels_per_pe": layer_params.used_channels,
+        "iact_size_y": layer_params.iact_size_y,
+        "iact_size_x":layer_params.iact_size_x,
+        "iact_needed_cycles": layer_params.iact_stream_cycles,
+        "kernels_per_calc": layer_params.different_kernels_per_calculation,
+        "y_lines_per_calc": layer_params.y_lines_per_calculation,
+        "output_cycles": layer_params.output_cycles, 
+        "store_in_psum": layer_params.store_in_psum,
+        "max_pooling": layer_params.max_pooling,
+        "fully_connected_layer": layer_params.fully_connected,
+        "choose_iact_buffer_output": layer_params.choose_iact_storage_output,
+        "choose_iact_buffer_input": layer_params.choose_iact_storage_input,
+        "iact_channels_per_pe_next_layer": layer_params.diff_iact_layer_next_layer,
+        "needed_psum_storage_cycles_reg": layer_params.psum_storage_cycles,
+        "iact_channel_max_cycles": layer_params.diff_iact_layer,
+        "input_activations_reg": layer_params.used_iact_per_PE,
+        "filters_reg": layer_params.used_psum_per_PE,
+        "needed_x_cls_reg": layer_params.used_X_cluster,
+        "needed_y_cls_reg": layer_params.used_Y_cluster,
+        "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
+        "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
+        "iact_addr_len_reg": layer_params.used_iact_addr_per_PE,
+        "send_data_out": layer_params.send_values_out
+        })
+
         if (params.SERIAL):
-            dma_line = 0
+            """dma_line = 0
             dma_storage = []
             # 1. transmission
             dma_line = params.data_mode
@@ -96,7 +138,8 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + math.ceil(layer_params.y_lines_per_calculation << 29)
             dma_line = dma_line + math.ceil(layer_params.different_kernels_per_calculation << 33)
             dma_storage.append(dma_line)
-            dma_line = 0
+            dma_line = 0"""
+            dma_storage = words
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
                 segment = bitstring[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI]
                 dma_storage.append(int(segment[::-1], 2))
