@@ -452,6 +452,11 @@ class LayerParameters(object):
 
         if(self.used_wght_addr_per_PE == (params.Wghts_Addr_per_PE + 1)):
             self.used_wght_addr_per_PE = self.used_wght_addr_per_PE - 1
+        if (self.choose_iact_storage_output == 0) :
+            self.different_kernels_per_calculation = self.different_kernels_per_calculation * self.used_Y_cluster
+        self.psum_storage_cycles = self.diff_iact_layer * self.used_Y_cluster
+        if (self.choose_iact_storage_output) :
+            self.psum_storage_cycles = self.diff_iact_layer
         self.calculate_needed_refreshes_mx(params)
         self.calculate_fpga_parameters(params)
         self.output_logger()
