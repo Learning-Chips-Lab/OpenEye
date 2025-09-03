@@ -1155,10 +1155,6 @@ module OpenEye_FPGA #(
                     compute_mask_reg[2*DMA_BITWIDTH-1:DMA_BITWIDTH] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
                   end
                   32'd5: begin
-                    iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
-                    if (fully_connected_layer) begin
-                      iact_channels <= iact_channels_per_pe * 4;
-                    end
                     compute_mask_reg[3*DMA_BITWIDTH-1:2*DMA_BITWIDTH] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
                   end
                   default: begin
@@ -1189,6 +1185,10 @@ module OpenEye_FPGA #(
         GET_ROUTER_CONFIG: begin
           ready_dma_o <= 1;
           new_stream  <= 1;
+          iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
+          if (fully_connected_layer) begin
+            iact_channels <= iact_channels_per_pe * 4;
+          end
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
             if(fsm_cycle == FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS + FSM_CEIL_PSUM_RTR_CCLS - 1) begin
@@ -2404,7 +2404,7 @@ reg [7:0] current_filter;
               end
             end
           end
-          fsm_y_cl_psum <= fsm_y_cl_psum[2:0] + needed_y_cls_reg[2:0];
+          fsm_y_cl_psum <= fsm_y_cl_psum + needed_y_cls_reg[2:0];
           if (fsm_y_cl_psum + needed_y_cls_reg >= (((iact_size_x + add_up_reg) * kernels_per_calc)/8)) begin
             fsm_y_cl_psum       <= fsm_psum_row_offset[2:0] + 1;
             fsm_psum_row_offset <= fsm_psum_row_offset + 1;
@@ -2450,7 +2450,6 @@ reg [7:0] current_filter;
         psum_buffer_SP_en_r         <= 0;
         finished_cycles             <= 0;
         fsm_psum_r                  <= 0;
-        fsm_y_cl_psum               <= 0;
         fsm_x_cl_psum               <= 0;
       end
     end
@@ -2732,7 +2731,6 @@ reg [7:0] current_filter;
         .needed_iact_channel_cycles_i (iact_channel_max_cycles),
         .psum_transmitted_i           (psum_transmitted)
     );
-
     genvar cc_gen, cr_gen, pe_gen;
     for (cc_gen = 0; cc_gen < CLUSTER_COLUMNS; cc_gen = cc_gen + 1) begin
       for (cr_gen = 0; cr_gen < CLUSTER_ROWS; cr_gen = cr_gen + 1) begin
@@ -2740,7 +2738,7 @@ reg [7:0] current_filter;
           /*assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
                 iact_ready_o_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen];*/
           assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
-                iact_ready_o_oep_w == ~0;
+                (iact_ready_o_oep_w == (2**(CLUSTER_COLUMNS*CLUSTER_ROWS*NUM_GLB_IACT))-1);
           assign iact_enable_i_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen] =
                 IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_enable_w[g_gen];
           assign iact_data_i_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * TRANS_BITWIDTH_IACT +
