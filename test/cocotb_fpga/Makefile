@@ -10,8 +10,12 @@ SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 WAVEFORM=on
 
+HDL_PATH = $(abspath $(PWD)/../../hdl)
+VH_PATH = $(abspath $(PWD))
+
 # use VHDL_SOURCES for VHDL files
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_FPGA.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/dma_storage.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/varlenFIFO.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_Parallel.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_Cluster.v)
@@ -114,13 +118,12 @@ export PSUM_PER_PE=32
 
 export ONLY_FILES=0
 
-export SCRIPT = $(shell python -c "import site; print(site.getsitepackages()[0] + '/test_utils/vh_file_creator.py')")
 export
 run:
-	@python -m test_utils.vh_file_creator && make -f $(shell cocotb-config --makefiles)/Makefile.sim
+	@python -m test_utils.generator && python -m test_utils.vh_file_creator && make -f $(shell cocotb-config --makefiles)/Makefile.sim
 
 gtkwave:
-	touch $(abspath $(PWD)/../../hdl/OpenEye_FPGA.v)
+	touch $($(HDL_PATH)OpenEye_FPGA.v)
 	gtkwave $(PWD)/sim_build/OpenEye_FPGA.vcd
 
 clean:
