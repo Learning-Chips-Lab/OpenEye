@@ -252,6 +252,10 @@ module OpenEye_FPGA #(
   reg [CLUSTERS-1:0] conv_array_reg;
   reg [CLUSTERS-1:0] param_array_reg;
   wire [CLUSTERS-1:0] start_param_array;
+  wire [5-1:0] kernels_per_calc;
+  wire [8-1:0] output_cycles;
+  wire [4-1:0] y_lines_per_calc;
+  wire [ 7:0] iact_size_x;
   assign start_param_array = (1 << (((kernels_per_calc * y_lines_per_calc * ((iact_size_x-1+PE_COLUMNS)/PE_COLUMNS)*PE_COLUMNS) + PE_COLUMNS - 1)/PE_COLUMNS)) - 1;
   wire [7:0]needed_psum_storage_cycles_reg;
   reg [7:0] debug_reg;
@@ -307,7 +311,6 @@ module OpenEye_FPGA #(
   reg [ 7:0] current_buffer_n;
   reg [ 7:0] current_buffer_n_1;
   reg [ 7:0] current_channel;
-  wire [ 7:0] iact_size_x;
   wire [ 7:0] iact_size_y;
   reg [ 7:0] iact_channels;
   wire [ 7:0] iact_channels_per_pe;
@@ -397,12 +400,14 @@ module OpenEye_FPGA #(
   wire [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o_w;
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o_reg;
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i_reg;
-  wire [                    8-1:0] output_cycles;
-  wire [                    5-1:0] kernels_per_calc;
-  wire [                    4-1:0] y_lines_per_calc;
-;
+
+  wire [CLUSTERS*NUM_GLB_IACT-1:0] iact_ready_o_oep_w;
+  localparam EXTENDEDBITS = 48 - NUM_GLB_WGHT;
 
   wire [7:0] needed_wght_cycles_reg;
+  wire [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i_oep_w;
+  wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_oep_w;
+  wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
   //#######################
   //States of the FSM
   //#######################
@@ -805,9 +810,7 @@ module OpenEye_FPGA #(
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] flat_help_var_send;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] temp_var;
   reg [                     63:0] prepared_iact [31:0];
-  localparam EXTENDEDBITS = 48 - NUM_GLB_WGHT;
   //Process for sending data to OpenEye
-  wire [CLUSTERS*NUM_GLB_IACT-1:0] iact_ready_o_oep_w;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       //Reset Registers
@@ -981,6 +984,66 @@ module OpenEye_FPGA #(
   reg [ 7:0] quant_offset [31:0];
   reg [ 6:0] quant_exp    [31:0];
   reg [24:0] quant_mant   [31:0];
+localparam PSUM_IDLE = 0;
+localparam WAIT_TO_SEND_READY_SIGNAL = 1;
+localparam CALCULATE_PSUM = 2;
+localparam PSUM_GET_RESULTS = 3;
+localparam WAIT_FOR_SENDING_RESULTS = 4;
+localparam PSUM_SEND_RESULTS = 5;
+localparam SEND_PSUM_TO_IACT = 6;
+
+reg [7:0]psum_cycle_buffer_1;
+reg [7:0]psum_cycle_buffer_2;
+reg [7:0]psum_sending_counter;
+reg [7:0]psum_filter_offset;
+reg [3:0]fsm_psum_row_offset;
+
+reg [ 7:0] iact_channel_counter_reg;
+reg [15:0] fsm_psum_cycle;
+reg [ 3:0] fsm_psum_last_state;
+reg [ 3:0] fsm_psum_current_state;
+reg        psum_transmitted;
+reg psum_router_set_reg;
+reg start_new_cycle;
+reg last_data_reg;
+reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_x_cl_psum;
+reg [   $clog2(CLUSTER_ROWS)-1:0] fsm_y_cl_psum;
+reg [7:0] quantized_value_reg [7:0];
+wire [7:0] testquant1;
+wire [7:0] testquant2;
+wire [7:0] testquant3;
+wire [7:0] testquant4;
+wire [7:0] testquant5;
+wire [7:0] testquant6;
+wire [7:0] testquant7;
+wire [7:0] testquant8;
+assign testquant1 = quantized_value_reg[0];
+assign testquant2 = quantized_value_reg[1];
+assign testquant3 = quantized_value_reg[2];
+assign testquant4 = quantized_value_reg[3];
+assign testquant5 = quantized_value_reg[4];
+assign testquant6 = quantized_value_reg[5];
+assign testquant7 = quantized_value_reg[6];
+assign testquant8 = quantized_value_reg[7];
+reg [7:0] current_filter;
+reg [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_storage;
+reg [                                        7:0] storage_cycles;
+reg [                                        7:0] storage_cycles_router;
+reg                                               first_cycle;
+reg [                  CLUSTERS*NUM_GLB_PSUM-1:0] psum_choose_i_reg;
+reg [7:0] iact_channels_counter_psum_router;
+//#######################
+//Wires
+//#######################
+
+
+wire                                           buffer_SP_en_r     [RAM_CELLS-1:0];
+wire                                           buffer_SP_en_w     [RAM_CELLS-1:0];
+wire [             RAM_CELLS_ADDR_WIDTH-2:0]   buffer_SP_addr     [RAM_CELLS-1:0];
+wire [          RAM_CELLS_WORD_BITWIDTH-1:0]   buffer_SP_data_w   [RAM_CELLS-1:0];
+wire [2*RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r_w;
+wire [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0]   buffer_SP_data_r;
+
   integer cr, cc, g;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
@@ -1795,12 +1858,6 @@ module OpenEye_FPGA #(
     end
   end
 
-  reg [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_storage;
-  reg [                                        7:0] storage_cycles;
-  reg [                                        7:0] storage_cycles_router;
-  reg                                               first_cycle;
-  reg [                  CLUSTERS*NUM_GLB_PSUM-1:0] psum_choose_i_reg;
-  reg [7:0] iact_channels_counter_psum_router;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       router_mode_iact_reg              <= 0;
@@ -2009,48 +2066,6 @@ module OpenEye_FPGA #(
     end
   end
 
-localparam PSUM_IDLE = 0;
-localparam WAIT_TO_SEND_READY_SIGNAL = 1;
-localparam CALCULATE_PSUM = 2;
-localparam PSUM_GET_RESULTS = 3;
-localparam WAIT_FOR_SENDING_RESULTS = 4;
-localparam PSUM_SEND_RESULTS = 5;
-localparam SEND_PSUM_TO_IACT = 6;
-
-reg [7:0]psum_cycle_buffer_1;
-reg [7:0]psum_cycle_buffer_2;
-reg [7:0]psum_sending_counter;
-reg [7:0]psum_filter_offset;
-reg [3:0]fsm_psum_row_offset;
-
-reg [ 7:0] iact_channel_counter_reg;
-reg [15:0] fsm_psum_cycle;
-reg [ 3:0] fsm_psum_last_state;
-reg [ 3:0] fsm_psum_current_state;
-reg        psum_transmitted;
-reg psum_router_set_reg;
-reg start_new_cycle;
-reg last_data_reg;
-reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_x_cl_psum;
-reg [   $clog2(CLUSTER_ROWS)-1:0] fsm_y_cl_psum;
-reg [7:0] quantized_value_reg [7:0];
-wire [7:0] testquant1;
-wire [7:0] testquant2;
-wire [7:0] testquant3;
-wire [7:0] testquant4;
-wire [7:0] testquant5;
-wire [7:0] testquant6;
-wire [7:0] testquant7;
-wire [7:0] testquant8;
-assign testquant1 = quantized_value_reg[0];
-assign testquant2 = quantized_value_reg[1];
-assign testquant3 = quantized_value_reg[2];
-assign testquant4 = quantized_value_reg[3];
-assign testquant5 = quantized_value_reg[4];
-assign testquant6 = quantized_value_reg[5];
-assign testquant7 = quantized_value_reg[6];
-assign testquant8 = quantized_value_reg[7];
-reg [7:0] current_filter;
   integer g_psum, b_psum, cc_psum, cr_psum;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
@@ -2455,18 +2470,6 @@ reg [7:0] current_filter;
     end
   end
 
-  //#######################
-  //Wires
-  //#######################
-
-
-  wire                                           buffer_SP_en_r     [RAM_CELLS-1:0];
-  wire                                           buffer_SP_en_w     [RAM_CELLS-1:0];
-  wire [             RAM_CELLS_ADDR_WIDTH-2:0]   buffer_SP_addr     [RAM_CELLS-1:0];
-  wire [          RAM_CELLS_WORD_BITWIDTH-1:0]   buffer_SP_data_w   [RAM_CELLS-1:0];
-  wire [2*RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r_w;
-  wire [RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0]   buffer_SP_data_r;
-
   genvar k_gen;
   for (k_gen = 0; k_gen < RAM_CELLS; k_gen++) begin : gen_RAM_wires
     assign buffer_SP_en_r[k_gen] = buffer_SP_en_r_reg[k_gen];
@@ -2591,9 +2594,6 @@ reg [7:0] current_filter;
     assign debug_data_dma_stream_o = data_dma_i_reg;
     assign debug_enable_dma_stream_o = enable_dma_i_reg;
     assign debug_fsm_cycle_o = fsm_cycle[3:0];
-    wire [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i_oep_w;
-    wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_oep_w;
-    wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
 
     dma_storage  #(
       
