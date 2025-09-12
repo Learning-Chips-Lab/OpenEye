@@ -136,10 +136,10 @@ module PE #(
 
   reg  [                $clog2(16)-1:0] current_state_computing;
 
-  reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_SPad_data_r;
-  reg  [          IACT_DATA_DATA-1 : 0] iact_data_SPad_data_r;
-  reg  [          WGHT_ADDR_DATA-1 : 0] wght_addr_SPad_data_r;
-  reg  [          WGHT_DATA_DATA-1 : 0] wght_data_SPad_data_r;
+  wire  [          IACT_ADDR_DATA-1 : 0] iact_addr_SPad_data_r;
+  wire  [          IACT_DATA_DATA-1 : 0] iact_data_SPad_data_r;
+  wire  [          WGHT_ADDR_DATA-1 : 0] wght_addr_SPad_data_r;
+  wire  [          WGHT_DATA_DATA-1 : 0] wght_data_SPad_data_r;
   reg  [   IACT_ADDR_ADDR_BITWIDTH-1:0] iact_addr_SPad_addr;
   reg  [   IACT_DATA_ADDR_BITWIDTH-1:0] iact_data_SPad_addr;
   wire [   WGHT_ADDR_ADDR_BITWIDTH-1:0] wght_addr_SPad_addr;
@@ -170,8 +170,8 @@ module PE #(
   reg                                   next_iact;
   reg                                   next_iact2;
   reg                                   computing;
-  reg  [       TRANS_BITWIDTH_IACT-1:0] mux_iact_a_o_w;
-  reg                                   mux_iact_b_o_w;
+  wire  [       TRANS_BITWIDTH_IACT-1:0] mux_iact_a_o_w;
+  wire                                   mux_iact_b_o_w;
   wire                                  mux_iact_c_i_w;
   reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_max_reg;
   reg  [ WGHT_ADDR_ADDR_BITWIDTH-1 : 0] wght_addr_max_reg;
@@ -1133,9 +1133,8 @@ module PE #(
   // SPad for IACT_ADDR
   SPad_SP #(
       .DATA_WIDTH(IACT_ADDR_DATA),
-      .ADDR_WIDTH(IACT_ADDR_ADDR_BITWIDTH)
-
-      , .Implementation("pe_iact_addr")
+      .ADDR_WIDTH(IACT_ADDR_ADDR_BITWIDTH),
+      .Implementation("pe_iact_addr")
   ) iact_addr_SPad (
       .clk_i (clk_i),
       .re_i  (iact_addr_SPad_en_r & !first_spad_iact_en_w),
@@ -1148,9 +1147,8 @@ module PE #(
   // SPad for IACT_DATA
   SPad_SP #(
       .DATA_WIDTH(IACT_DATA_DATA),
-      .ADDR_WIDTH(IACT_DATA_ADDR_BITWIDTH)
-
-      , .Implementation("pe_iact_data")
+      .ADDR_WIDTH(IACT_DATA_ADDR_BITWIDTH),
+      .Implementation("pe_iact_data")
   ) iact_data_SPad (
       .clk_i (clk_i),
       .re_i  (iact_data_SPad_en_r & !second_spad_iact_en_w),

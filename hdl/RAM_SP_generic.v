@@ -39,7 +39,7 @@ module RAM_SP_generic #(
 );
   localparam Depth = 2 ** AddrWidth;
 
-  reg [DataWidth-1:0] mem    [(Depth)];
+  reg [DataWidth-1:0] mem    [0:Depth-1];
   reg [DataWidth-1:0] memout;
 
   generate

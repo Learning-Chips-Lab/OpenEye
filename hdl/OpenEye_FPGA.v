@@ -267,6 +267,8 @@ module OpenEye_FPGA #(
   reg reset_cycle_reg;
   wire send_data_out;
   reg [1:0] add_up_reg;
+  reg [7:0] iact_x_with_add_up;
+  reg [16:0] fsm_psum_limt;
   reg early_stream_start;
 
   // Register for the Buffer
@@ -288,7 +290,7 @@ module OpenEye_FPGA #(
   reg [BUFFER_WIDTH:0] wght_buffer_SP_rd_addr;
   reg [BUFFER_WIDTH:0] wght_buffer_SP_rd_addr_storage;
   reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_w;
-  reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_r;
+  wire [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_r;
 
   reg [CLUSTERS*NUM_GLB_PSUM/2-1:0]psum_buffer_SP_en_r;
   reg [CLUSTERS*NUM_GLB_PSUM/2-1:0]psum_buffer_SP_en_w;
@@ -320,10 +322,10 @@ module OpenEye_FPGA #(
   reg buffer_SP_en_r_reg[RAM_CELLS-1:0];
   reg buffer_SP_en_w_reg[RAM_CELLS-1:0];
   reg choose_iact_buffer;
-  reg choose_iact_buffer_input;
-  reg choose_iact_buffer_output;
-  reg fully_connected_layer;
-  reg max_pooling;
+  wire choose_iact_buffer_input;
+  wire choose_iact_buffer_output;
+  wire fully_connected_layer;
+  wire max_pooling;
   reg [RAM_CELLS_ADDR_WIDTH-2:0] buffer_SP_addr_reg[RAM_CELLS-1:0];
   reg [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w_reg[RAM_CELLS-1:0];
 
@@ -381,7 +383,7 @@ module OpenEye_FPGA #(
   wire [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i_w;
   assign wght_data_i_w = wght_buffer_SP_data_r;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] wght_enable_i_reg;
-  reg [CLUSTERS*NUM_GLB_WGHT-1:0] wght_ready_o_reg;
+  wire [CLUSTERS*NUM_GLB_WGHT-1:0] wght_ready_o_reg;
 
   wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_wire;
   wire [CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_wire;
@@ -390,10 +392,10 @@ module OpenEye_FPGA #(
 
   reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_i_reg;
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_i_reg;
-  reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_o_reg;
+  wire [CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_o_reg;
 
   wire [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o_w;
-  reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o_reg;
+  wire [CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o_reg;
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i_reg;
   wire [                    8-1:0] output_cycles;
   wire [                    5-1:0] kernels_per_calc;
@@ -1098,6 +1100,8 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
       select_ram_counter                    <= 0;
       ram_counter_storage                   <= 0;
       add_up_reg                            <= 0;
+      iact_x_with_add_up                    <= 0;
+      fsm_psum_limt                         <= 0;
       //new iact regs
       iact_converter_max_cycles             <= 0;
       min_standing_cycles                   <= 0;
@@ -1251,12 +1255,14 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
           ready_dma_o <= 1;
           new_stream  <= 1;
           iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
+          iact_x_with_add_up <= iact_size_x + add_up_reg;
           if (fully_connected_layer) begin
             iact_channels <= iact_channels_per_pe * 4;
           end
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
             if(fsm_cycle == FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS + FSM_CEIL_PSUM_RTR_CCLS - 1) begin
+              fsm_psum_limt <= ((iact_x_with_add_up * kernels_per_calc)/8) * needed_wght_cycles_reg * filters_reg * iact_size_y;
               fsm_cycle             <= 0;
               fsm_last_state        <= GET_ROUTER_CONFIG;
               status_reg_enable_reg <= 0;
@@ -1561,8 +1567,8 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
               if (iact_channels_per_pe_next_layer == 4) begin
                 select_ram_counter <= select_ram_counter + iact_channels_per_pe_next_layer;
                 
-                if (select_ram_counter >= ram_counter_storage + ((iact_size_x + add_up_reg)/2) - iact_channels_per_pe_next_layer) begin
-                  select_ram_counter <= select_ram_counter + iact_channels_per_pe_next_layer - ((iact_size_x + add_up_reg)/2);
+                if (select_ram_counter >= ram_counter_storage + (iact_x_with_add_up/2) - iact_channels_per_pe_next_layer) begin
+                  select_ram_counter <= select_ram_counter + iact_channels_per_pe_next_layer - (iact_x_with_add_up/2);
                   iact_channels_counter <= iact_channels_counter + 1;
                   if (iact_channels_counter == {4'd0,iact_channels_per_pe_next_layer} - 1) begin
                     iact_channels_counter <= 0;
@@ -1589,20 +1595,18 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
                 end
                 for (a = 0; a < RAM_CELLS; a=a+1) begin
                   for (word = 0; word < 8; word=word+1) begin
-                    if (((select_ram_counter - ram_counter_storage + iact_channels_per_pe_next_layer  > ((iact_size_x + add_up_reg)/2)) &
+                    if (((select_ram_counter - ram_counter_storage + iact_channels_per_pe_next_layer  > (iact_x_with_add_up/2)) &
                       (((a >= ram_counter_storage) & (a < ram_counter_storage + ram_iact_modulo/2)) |
                       (((a > (select_ram_counter + 1)%RAM_CELLS) | (a < (select_ram_counter + ram_iact_modulo)%RAM_CELLS)) & ((select_ram_counter)%8 + ram_iact_modulo >= RAM_CELLS))
                       ))) begin
                       if ((word == (4 + {{24{1'd0}},iact_channels_counter})) | (word == {{24{1'd0}},iact_channels_counter})) begin
-                        buffer_SP_data_w_reg[a][8*(word+1)+:8] <= quantized_value_reg[((word / 4) + ((a-ram_counter_storage) * 2) + overhang_discrepancy + 4)%8];
+                        buffer_SP_data_w_reg[a][8*word+:8] <= quantized_value_reg[((word / 4) + ((a-ram_counter_storage) * 2) + overhang_discrepancy + 4)%8];
                       end
                       overhang_discrepancy <= (overhang_discrepancy + 4)%8;
                     end else begin
                       if (((a >= (select_ram_counter%RAM_CELLS)) & (a < (select_ram_counter%RAM_CELLS) + iact_channels_per_pe_next_layer)) |
                       (((a >= (select_ram_counter)%RAM_CELLS) | (a < (select_ram_counter + iact_channels_per_pe_next_layer)%RAM_CELLS)) & ((select_ram_counter%RAM_CELLS) >= RAM_CELLS - 4 + 1))) begin
-                        if (a == 28) begin
-                          debug_reg <= select_ram_counter;
-                        end
+
                         if ((word == (iact_channels_per_pe_next_layer + {{24{1'd0}},iact_channels_counter})) | (word == {{24{1'd0}},iact_channels_counter})) begin
                           buffer_SP_data_w_reg[a][8*word+:8] <= quantized_value_reg[((word / 4) + ((a-ram_counter_storage) * 2) - overhang_discrepancy)%8];
                         end
@@ -2399,11 +2403,11 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
             >>> quant_exp[current_filter];
           end
           psum_sending_counter <= psum_sending_counter + CLUSTER_COLUMNS * PE_COLUMNS;
-          if (psum_sending_counter >= kernels_per_calc * (iact_size_x + add_up_reg) - CLUSTER_COLUMNS * PE_COLUMNS) begin
+          if (psum_sending_counter >= kernels_per_calc * iact_x_with_add_up - CLUSTER_COLUMNS * PE_COLUMNS) begin
             psum_sending_counter        <= 0;
           end
-          if ((psum_sending_counter >= kernels_per_calc * (iact_size_x + add_up_reg) - 2 * CLUSTER_COLUMNS * PE_COLUMNS) &
-          (psum_sending_counter < kernels_per_calc * (iact_size_x + add_up_reg) - CLUSTER_COLUMNS * PE_COLUMNS)) begin
+          if ((psum_sending_counter >= kernels_per_calc * iact_x_with_add_up - 2 * CLUSTER_COLUMNS * PE_COLUMNS) &
+          (psum_sending_counter < kernels_per_calc * iact_x_with_add_up - CLUSTER_COLUMNS * PE_COLUMNS)) begin
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
@@ -2428,7 +2432,7 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
             end
           end
           fsm_y_cl_psum <= fsm_y_cl_psum + needed_y_cls_reg[2:0];
-          if (fsm_y_cl_psum + needed_y_cls_reg >= (((iact_size_x + add_up_reg) * kernels_per_calc)/8)) begin
+          if (fsm_y_cl_psum + needed_y_cls_reg >= ((iact_x_with_add_up * kernels_per_calc)/8)) begin
             fsm_y_cl_psum       <= fsm_psum_row_offset[2:0] + 1;
             fsm_psum_row_offset <= fsm_psum_row_offset + 1;
             if (fsm_psum_row_offset == needed_y_cls_reg - 1) begin
@@ -2437,7 +2441,7 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
             end
           end
           fsm_psum_cycle <= fsm_psum_cycle + 1;
-          if (fsm_psum_cycle == (((iact_size_x + add_up_reg) * kernels_per_calc)/8) * needed_wght_cycles_reg * filters_reg * iact_size_y) begin
+          if (fsm_psum_cycle == fsm_psum_limt) begin
             fsm_psum_cycle              <= 0;
             fsm_psum_last_state         <= PSUM_SEND_RESULTS;
             fsm_psum_current_state      <= PSUM_IDLE;
@@ -2513,7 +2517,7 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
 
     // IACT Converter
     for (i_gen = 0; i_gen < CLUSTER_COLUMNS; i_gen=i_gen+1) begin : IACT_CONVERTER_X
-      for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen=+j_gen) begin : IACT_CONVERTER_Y
+      for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen=j_gen+1) begin : IACT_CONVERTER_Y
         wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] iact_data_w;
         wire [      $clog2(NUM_GLB_IACT+1)*PES-1:0] iact_choose_w;
         wire [                    NUM_GLB_IACT-1:0] iact_ready_w;

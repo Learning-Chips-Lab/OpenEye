@@ -270,19 +270,19 @@ module iact_stream_constructor #(
       // Reset
       if (!rst_ni) begin
         y_reg <= 0;
-        for (router_loop = 0; router_loop < NUM_GLB_IACT; router_loop++) begin
+        for (router_loop = 0; router_loop < NUM_GLB_IACT; router_loop=router_loop+1) begin
           x_reg[router_loop] <= 0;
         end
       end else begin
         if ((fsm_current_state == WRITE_TO_MEMORY) | (enable_store & (fsm_current_state == GET_PARAMETER))) begin
           //localparam TESTPARAM = DATA_IACT_OVERHEAD;
           y_reg <= y - {{(8 - 4) {1'd0}}, padding_reg};
-          for (router_loop = 0; router_loop < NUM_GLB_IACT; router_loop++) begin
+          for (router_loop = 0; router_loop < NUM_GLB_IACT; router_loop=router_loop+1) begin
             x_reg[router_loop] <= (iact_router_counter * NUM_GLB_IACT[7:0]) + (router_loop[7:0] + x) - {{(8 - 4){1'd0}},padding_reg};
           end
         end
         if (enable_config) begin
-          for (router_loop = 0; router_loop < NUM_GLB_IACT; router_loop++) begin
+          for (router_loop = 0; router_loop < NUM_GLB_IACT; router_loop=router_loop+1) begin
             x_reg[router_loop] <= (iact_router_counter * NUM_GLB_IACT[7:0]) + (router_loop[7:0] +
             params[PARAMS_SIZE-1:3*PARAMS_SIZE/4]) - {{(8 - 4){1'd0}},padding_reg};
           end
@@ -290,7 +290,7 @@ module iact_stream_constructor #(
         end
         if (reset_cycle_i) begin
           y_reg <= 0;
-          for (router_loop = 0; router_loop < NUM_GLB_IACT; router_loop++) begin
+          for (router_loop = 0; router_loop < NUM_GLB_IACT; router_loop=router_loop+1) begin
             x_reg[router_loop] <= 0;
           end
         end
@@ -440,29 +440,29 @@ module iact_stream_constructor #(
                 ram_wr_addr <= address_storage;
               end
               //Reset payload to 0
-              for (r = 0; r < NUM_GLB_IACT; r++) begin
-                for (w = 0; w < WORDS_PER_TRANS; w++) begin
+              for (r = 0; r < NUM_GLB_IACT; r=r+1) begin
+                for (w = 0; w < WORDS_PER_TRANS; w=w+1) begin
                   mem_data_payload_reg[r][w] <= 0;
                 end
               end
               x_pos_in_w_cycle <= x_pos_in_w_cycle + 1;
               if (x_pos_in_w_cycle == (iact_channels_i / WORDS_PER_CYCLE)) begin
                 x_pos_in_w_cycle <= 0;
-                for (r = 0; r < NUM_GLB_IACT; r++) begin
-                  for (w = 0; w < WORDS_PER_TRANS; w++) begin
+                for (r = 0; r < NUM_GLB_IACT; r=r+1) begin
+                  for (w = 0; w < WORDS_PER_TRANS; w=w+1) begin
                     mem_data_overhead_reg[r][w] <= 0;
                   end
                 end
               end else begin
-                for (r = 0; r < NUM_GLB_IACT; r++) begin
-                  for (w = 0; w < WORDS_PER_TRANS; w++) begin
+                for (r = 0; r < NUM_GLB_IACT; r=r+1) begin
+                  for (w = 0; w < WORDS_PER_TRANS; w=w+1) begin
                     mem_data_overhead_reg[r][w] <= 0;
                   end
                 end
               end
             end
-            for (r = 0; r < NUM_GLB_IACT; r++) begin
-              for (w = 0; w < WORDS_PER_CYCLE; w++) begin
+            for (r = 0; r < NUM_GLB_IACT; r=r+1) begin
+              for (w = 0; w < WORDS_PER_CYCLE; w=w+1) begin
                 ram_var = (((channels * iact_size_x_i * iact_size_y_i) + iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r])) / 8);
                 ram_var = ram_var % RAM_CELLS;
                 if (r == 0) begin
