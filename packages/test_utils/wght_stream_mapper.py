@@ -202,7 +202,6 @@ class WghtStreamMapper(object):
     def create_pe_data_wght_stream(self, spad):
         layer_params = self.layer_params
         params = self.params
-
         data_per_trans = math.floor(params.WGHT_Trans_Bitwidth/params.WGHT_WOH_Bitwidth)
         line_counter = 0
         stream = []
@@ -241,7 +240,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
 
         amount_of_channels = ((math.ceil((router+1) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)) - \
             (math.ceil(router * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)))
-        amout_of_iacts = amount_of_channels * layer_params.kernel_size[1]
+        amount_of_iacts = amount_of_channels * layer_params.kernel_size[1]
         channel = (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + \
         math.ceil((math.ceil((router%layer_params.kernel_per_pe_cluster) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)))
         channel_offset = channel
@@ -255,13 +254,13 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         match layer_params.single_cluster_computation:
             case 1:
                 start_current_repetition = start_current_repetition + ((cl_x  + cl_y * params.Clusters_X) * layer_params.used_psum_per_PE)
-                amount_of_words = int((layer_params.filters*amout_of_iacts)/params.Clusters/2)
+                amount_of_words = int((layer_params.filters*amount_of_iacts)/params.Clusters/2)
             case 2:
                 start_current_repetition = start_current_repetition + (cl_y * layer_params.used_psum_per_PE)
-                amount_of_words = int((layer_params.filters*amout_of_iacts)/params.Clusters_Y/2)
+                amount_of_words = int((layer_params.filters*amount_of_iacts)/params.Clusters_Y/2)
             case _:
                 start_current_repetition = start_current_repetition
-                amount_of_words = int((layer_params.filters*amout_of_iacts)/ \
+                amount_of_words = int((layer_params.filters*amount_of_iacts)/ \
                                       (layer_params.needed_wght_transmissions//layer_params.needed_iact_transmissions)/2/layer_params.different_kernels_per_calculation)
 
         filters = start_current_repetition
