@@ -13,9 +13,9 @@ logger = logging.getLogger("cocotb")
 def load_env_to_variable(variable_string, default_value) :
     try:
         if (type(default_value) == int) :
-            return int((os.getenv(variable_string)))
+            return int((os.environ[variable_string]))
         else :
-            return os.getenv(variable_string)
+            return os.environ[variable_string]
     except:
         logger.debug(variable_string + " not set")
         return default_value
