@@ -141,14 +141,8 @@ async def single_layer_test(dut):
     
     await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model)
 
-def get_sim_time():
-    return int(cocotb.simulator.get_sim_time()[1]/10000)
 
 async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model):
-
-    compute_time_total = 0
-    time_last_step = 0
-
     openeye_parameter = oep.get_oep(serial)
     time_printer.timestamp("OpenEye parameters set. ", logger)
 
@@ -190,10 +184,8 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                     logger.info("Send stream.")
                     await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters[layer_number], layer_repetition))
                     logger.info("Stream is sent.")
-                    time_last_step = get_sim_time()
                     if (layer_number == max_layers - 1) :
                         await cocotb.start_soon(rtl_test_utils.await_enable_signal(ptp, dut))
-                        compute_time_total = compute_time_total + get_sim_time() - time_last_step
                         if("Depthwise" in str(layer_parameters[layer_number].layer_name)):
                             await cocotb.start_soon(rtl_test_utils.compare_stream_Dw(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                         elif("Conv" in str(layer_parameters[layer_number].layer_name)):
@@ -209,7 +201,6 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                     else :
                         await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
                         time_printer.timestamp("Ready signal detected. Start new stream " , logger)
-                        compute_time_total = compute_time_total + get_sim_time() - time_last_step
                         dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number])
                     if (layer_parameters[layer_number].layer_name != "Pooling") :
                         slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
@@ -223,7 +214,3 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                 
     if (only_files == 0) :
         assert dut.rst_ni.value == 1, "rst_ni is not 1!"
-    print("Computing-Time = " + str(compute_time_total))
-    txt = gtu.open_or_create_file("./computing_time.txt")
-    txt.write(str(compute_time_total) + "\n")
-    txt.close()
