@@ -10,7 +10,6 @@ import test_utils.generic_test_utils as generic_test_utils
 
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
 
-
 def are_files_identical(file1_path, file2_path):
     try:
         with open(file1_path, 'r') as file1, open(file2_path, 'r') as file2:
@@ -59,5 +58,7 @@ def create_vh_file_from_envvars(file_path_vh = gtu.load_env_to_variable("VH_PATH
 
         print("Different vh-file, updated vh-file")
 
-create_vh_file_from_envvars()
+
+if __name__ == "__main__":
+    create_vh_file_from_envvars()
 
