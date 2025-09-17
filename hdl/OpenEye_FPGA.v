@@ -214,7 +214,7 @@ module OpenEye_FPGA #(
   end
 
 `ifdef COCOTB_SIM
-  initial begin
+ initial begin
    string fst_path;
    // Read the path from the command line argument
    if ($value$plusargs("FST_PATH=%s", fst_path)) begin
@@ -223,9 +223,9 @@ module OpenEye_FPGA #(
    end else begin
      // Fallback for when the argument is not provided
      $dumpfile("OpenEye_FPGA.fst");
-      $dumpvars(0, OpenEye_FPGA);
-    end
-  end
+     $dumpvars(0, OpenEye_FPGA);
+   end
+ end
 `endif
 
   //Register, that occupy hyperparameters
@@ -1019,7 +1019,8 @@ reg [7:0]psum_cycle_buffer_2;
 reg [7:0]psum_sending_counter;
 reg [7:0]psum_filter_offset;
 reg [3:0]fsm_psum_row_offset;
-
+reg past_padding;
+wire iact_buffer_next_addr;
 reg [ 7:0] iact_channel_counter_reg;
 reg [15:0] fsm_psum_cycle;
 reg [ 3:0] fsm_psum_last_state;
@@ -1053,6 +1054,9 @@ wire [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i_oep_w;
 wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_oep_w;
 wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
 
+assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_converter_buffer_addr_max_cycles)) &
+          (iact_converter_cycles == 0) & 
+          (iact_channels_counter != (iact_channel_max_cycles)));
 
   integer cr, cc, g;
   always @(posedge clk_i, negedge rst_n) begin
@@ -1117,6 +1121,7 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
       write_dma_en                          <= 0;
       write_dma_addr                        <= ~0;
       dma_data_i                            <= 0;
+      past_padding                              <= 0;
       // Pooling
       for (a = 0; a < 32; a = a + 1) begin
         pooling_regs[a] <= 0;
@@ -1430,6 +1435,7 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
             ready_dma_o       <= 0;
             fsm_last_state    <= GET_OFFSET;
             fsm_current_state <= START_CONVERTER;
+            buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + limit_increase_reg);
             if (max_pooling) begin
               fsm_cycle          <= -4;
               fsm_current_state  <= MAXPOOLING_READ;
@@ -1446,8 +1452,8 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
             end
           end
           if (converters_ready == 1) begin
-            buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + limit_increase_reg);
             fsm_current_state          <= CONVERT_IACT;
+            past_padding                   <= 0;
             select_ram_counter         <= 0;
             ram_counter_storage        <= 0;
             for (a = 0; a < RAM_CELLS; a=a+1) begin
@@ -1458,13 +1464,16 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
         end
 
         CONVERT_IACT: begin
-          fsm_cycle <= fsm_cycle + 1;
+          fsm_cycle           <= fsm_cycle + 1;
           select_ram_counter  <= 0;
-          if (select_ram_counter > 0) begin
-            select_ram_counter <= select_ram_counter - 1;
+          if (past_padding & (select_ram_counter < {{8{1'd0}},iact_converter_buffer_addr_max_cycles})) begin
+            select_ram_counter <= select_ram_counter + 1;
           end
-          if (select_ram_counter == 1) begin
-            select_ram_counter <= {{8{1'd0}},iact_converter_buffer_addr_max_cycles};
+          if ((select_ram_counter > {{8{1'd0}},iact_converter_buffer_addr_max_cycles} - 2)) begin
+            select_ram_counter <= 0;
+          end
+          if ((select_ram_counter == {{8{1'd0}},iact_converter_buffer_addr_max_cycles} - 2)
+          | iact_buffer_next_addr) begin
             if ((iact_converter_cycles > {{4{1'd0}},padding_reg} - y_lines_per_calc) & (iact_converter_cycles < {{4{1'd0}},padding_reg} + iact_size_y)) begin
               for (a = 0; a < RAM_CELLS; a=a+1) begin
                 buffer_SP_en_r_reg[a] <= 1;
@@ -1491,12 +1500,11 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
           end
           iact_converter_enc_enable    <= 0;
           iact_converter_params_enable <= 0;
-          if ((iact_converter_buffer_addr_cycles + 2 == (iact_converter_buffer_addr_max_cycles)) &
-          (iact_converter_cycles == 0) & 
-          (iact_channels_counter != (iact_channel_max_cycles))) begin
+          if (iact_buffer_next_addr) begin
             iact_converter_enc_enable    <= 1;
             iact_converter_params_enable <= 1;
-            select_ram_counter           <= 1;
+            select_ram_counter           <= 0;
+            past_padding                 <= 1;
           end
           iact_converter_buffer_addr_cycles <= iact_converter_buffer_addr_cycles + 1;
           if (iact_converter_buffer_addr_cycles == (iact_converter_buffer_addr_max_cycles - 1)) begin
@@ -1510,6 +1518,7 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
                 overhang_discrepancy  <= 0;
                 iact_channels_counter <= 0;
                 fsm_cycle             <= 0;
+                past_padding          <= 0;
               end
             end
           end
@@ -2504,7 +2513,8 @@ wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;
     for (j_gen = 0; j_gen < RAM_CELLS; j_gen=j_gen+1) begin : BUFFER_A
         RAM_SP #(
             .DataWidth(RAM_CELLS_WORD_BITWIDTH),
-            .AddrWidth(RAM_CELLS_ADDR_WIDTH)
+            .AddrWidth(RAM_CELLS_ADDR_WIDTH),
+            .Pipelined(1)
         ) iact_converter_buffer_SP (
             .clk_i(clk_i),
             .rd_en_i(buffer_SP_en_r[j_gen] & !buffer_SP_en_w[j_gen]),
