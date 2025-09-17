@@ -251,18 +251,6 @@ module iact_stream_constructor #(
     reg signed [7:0] y_reg;
     reg signed [7:0] x_reg      [NUM_GLB_IACT-1:0];
     wire       [7:0] x_reg_test;
-    wire [7:0]debug_iact_storage1;
-    wire [7:0]debug_iact_storage2;
-    wire [7:0]debug_iact_storage3;
-    wire [7:0]debug_iact_storage4;
-    wire [7:0]debug_iact_storage5;
-    wire [7:0]debug_iact_storage6;
-    assign debug_iact_storage1 = ram_data_i[7:0];
-    assign debug_iact_storage2 = ram_data_i[19:12];
-    assign debug_iact_storage3 = ram_data_i[31:24];
-    assign debug_iact_storage4 = ram_data_i[43:36];
-    assign debug_iact_storage5 = ram_data_i[55:48];
-    assign debug_iact_storage6 = ram_data_i[67:60];
     assign x_reg_test = x_reg[0];
     integer          router_loop;
     reg        [1:0] fsm_current_state;
@@ -303,8 +291,6 @@ module iact_stream_constructor #(
     reg [ 8-1:0] router_cycle;
     reg [ 8-1:0] addr_cycle;
     reg [ 8-1:0] ram_var;
-    reg [ 8-1:0] ram_var_debug;
-    reg [ 8-1:0] byte_var_debug;
     reg [ 8-1:0] byte_var;
     reg [ 8-1:0] byte_var_pre_calc;
     reg [ADDRWIDTH-1:0] ram_wr_addr_reg;
@@ -337,9 +323,7 @@ module iact_stream_constructor #(
         wght_size_reg          <= 0;
         x_lines_reg            <= 0;
         x_pos_in_w_cycle       <= 0;
-        ram_var  = 0;
-        ram_var_debug = 0;
-        byte_var_debug = 0;
+        ram_var                 = 0;
         byte_var = 0;
         for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
           for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
@@ -465,18 +449,12 @@ module iact_stream_constructor #(
               for (w = 0; w < WORDS_PER_CYCLE; w=w+1) begin
                 ram_var = (((channels * iact_size_x_i * iact_size_y_i) + iact_channels_i * ((y_reg * iact_size_x_i) + x_reg[r])) / 8);
                 ram_var = ram_var % RAM_CELLS;
-                if (r == 0) begin
-                  ram_var_debug = ram_var;
-                end
                 if (fully_connected_i) begin
                   byte_var = channels + (x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2;
                   byte_var = byte_var % IACT_WORDS_IN_RAM;
                 end else begin
                   byte_var = (iact_size_y_i * (iact_size_x_i%2) * channels) + (iact_size_x_i * iact_channels_i * y_reg) + (x_reg[r]*iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2;
                   byte_var = byte_var % IACT_WORDS_IN_RAM;
-                end
-                if ((r == 0) & (w == 0)) begin
-                  byte_var_debug = byte_var;
                 end
                 //PADDING
                 if ((
@@ -516,8 +494,8 @@ module iact_stream_constructor #(
 
           end
         endcase
-        //ram_var  = 0;
-        //byte_var = 0;
+        ram_var  = 0;
+        byte_var = 0;
         if (enable_config) begin
           fsm_row_offset         <= params[35:32];
           x                      <= params[PARAMS_SIZE-1:3*PARAMS_SIZE/4];
