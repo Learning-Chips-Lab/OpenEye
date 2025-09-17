@@ -215,8 +215,14 @@ module OpenEye_FPGA #(
 
 `ifdef COCOTB_SIM
   initial begin
-    if (IS_TOPLEVEL) begin
-      $dumpfile("sim_build/OpenEye_FPGA.fst");
+   string fst_path;
+   // Read the path from the command line argument
+   if ($value$plusargs("FST_PATH=%s", fst_path)) begin
+     $dumpfile(fst_path);
+     $dumpvars(0, OpenEye_FPGA);
+   end else begin
+     // Fallback for when the argument is not provided
+     $dumpfile("OpenEye_FPGA.fst");
       $dumpvars(0, OpenEye_FPGA);
     end
   end
