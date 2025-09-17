@@ -48,7 +48,7 @@ def create_layer(layer_mode, filters, kernelsize, inputsize_x, inputsize_y, stri
             model.add(tf.keras.layers.Dense(input_shape=(filters), units=outputvalue, use_bias = True))
 
         case _:
-            logger.debug("Layer not detected!")
+            logger.error("Layer not detected!")
 
     # Compile the model
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
