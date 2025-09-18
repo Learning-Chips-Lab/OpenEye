@@ -468,6 +468,7 @@ module OpenEye_Cluster #(
       );
     end
   endgenerate
+  
   /////////////////////////////////////////
   ///Wires to lead to Activation Functions
   /////////////////////////////////////////
