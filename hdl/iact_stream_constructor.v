@@ -117,7 +117,6 @@ module iact_stream_constructor #(
         case (fsm_enc_current_state)
           IDLE: begin
             iact_data_o                <= 0;
-            iact_enable_o              <= 0;
             iact_choose_o              <= ~0;
             fsm_enc_cycle              <= 0;
             ram_inc_counter            <= 0;
@@ -127,7 +126,10 @@ module iact_stream_constructor #(
             if (enable_store) begin
               ram_rd_addr <= 0;
             end
-            if (fsm_enc_cycle >= 1) begin
+            if (fsm_enc_cycle == 0) begin
+              iact_enable_o              <= 0;
+            end
+            if (fsm_enc_cycle == 1) begin
               if (iact_ready_i != {((NUM_GLB_IACT)) {1'b1}}) begin
                 fsm_enc_cycle <= fsm_enc_cycle;
               end else begin
@@ -135,6 +137,7 @@ module iact_stream_constructor #(
                 fsm_enc_cycle              <= 0;
                 current_iact_cycle_reg     <= ~0;
                 current_iact_cycle_mod_reg <= ~0;
+                ram_inc_counter            <= ~0;
                 if (fsm_row_offset == y_cluster_counter) begin
                   ram_rd_en             <= 1;
                 end
@@ -147,7 +150,7 @@ module iact_stream_constructor #(
             iact_enable_o <= 0;
             if (fsm_row_offset == y_cluster_counter) begin
               ram_rd_en             <= 1;
-              if (current_iact_cycle_reg != {16{1'b1}}) begin
+              if (current_iact_cycle_reg[16:1] != {15{1'b1}}) begin
                 iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
               end
               iact_data_o   <= ram_data_o;
@@ -191,7 +194,7 @@ module iact_stream_constructor #(
               //All Iacts per Computing Cycle are transmitted
               if (current_iact_cycle_reg == (needed_iact_cycles_reg * wght_size_reg) - 1) begin
                 current_iact_cycle_reg <= 0;
-                ram_rd_addr            <= (ram_rd_addr + ({{(8 - 4) {1'd0}},iact_size_y_i} - 1) * (({{(8 - 4) {1'd0}},iact_channels_i} + 1)/2) * {{(8 - 4) {1'd0}},needed_iact_cycles_reg});
+                ram_rd_addr            <= (1 + ram_rd_addr + ({{(8 - 4) {1'd0}},iact_size_y_i} - 1) * (({{(8 - 4) {1'd0}},iact_channels_i} + 1)/2) * {{(8 - 4) {1'd0}},needed_iact_cycles_reg});
                 iact_channel_counter   <= iact_channel_counter + 1;
                 if (iact_channel_counter == needed_iact_channel_cycles_i - 1) begin
                   ram_rd_addr          <= line_offset;
@@ -215,8 +218,7 @@ module iact_stream_constructor #(
                 end
                 fsm_enc_current_state      <= IDLE;
                 current_iact_cycle_mod_reg <= 0;
-                ram_rd_en                  <= 0;
-                fsm_enc_cycle              <= 0;
+                ram_rd_en                  <= 1;
                 ram_inc_counter            <= 0;
               end
             end
@@ -227,7 +229,7 @@ module iact_stream_constructor #(
           end
         endcase
         if (enable_converter) begin
-          fsm_enc_cycle <= fsm_enc_cycle + 1;
+          fsm_enc_cycle <= 1;
         end
         if (reset_cycle_i) begin
           fsm_enc_current_state      <= IDLE;
@@ -514,7 +516,8 @@ module iact_stream_constructor #(
 
     RAM_DP #(
         .DataWidth(WORD_BITWIDTH),
-        .AddrWidth(ADDRWIDTH)
+        .AddrWidth(ADDRWIDTH),
+        .Pipelined(1)
     ) iact_buffer_SP (
         .clk_i   (clk_i),
         .rd_en_i (ram_rd_en),
