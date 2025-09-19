@@ -150,7 +150,7 @@ module iact_stream_constructor #(
             iact_enable_o <= 0;
             if (fsm_row_offset == y_cluster_counter) begin
               ram_rd_en             <= 1;
-              if (current_iact_cycle_reg[16:1] != {15{1'b1}}) begin
+              if ((current_iact_cycle_reg >> 1) != {15{1'b1}}) begin
                 iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
               end
               iact_data_o   <= ram_data_o;
@@ -514,7 +514,7 @@ module iact_stream_constructor #(
       end
     end
 
-    RAM_DP #(
+    RAM_SP #(
         .DataWidth(WORD_BITWIDTH),
         .AddrWidth(ADDRWIDTH),
         .Pipelined(1)
@@ -522,8 +522,7 @@ module iact_stream_constructor #(
         .clk_i   (clk_i),
         .rd_en_i (ram_rd_en),
         .wr_en_i (ram_wr_en),
-        .addr_r_i(ram_rd_addr),
-        .addr_w_i(ram_wr_addr),
+        .addr_i  (ram_rd_addr | ram_wr_addr),
         .data_i  (ram_data_i),
         .data_o  (ram_data_o)
     );
