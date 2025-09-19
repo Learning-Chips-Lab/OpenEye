@@ -2222,9 +2222,11 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                  if ((fsm_psum_cycle != 0) & (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1)) begin
+                  if (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) begin
                     psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH]
                     <= psum_buffer_SP_addr[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM/2 * BUFFER_WIDTH + cr_psum * NUM_GLB_PSUM/2 * BUFFER_WIDTH + g_psum * BUFFER_WIDTH +: BUFFER_WIDTH] + 1;
+                  end
+                  if ((fsm_psum_cycle != 0) & (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1)) begin
                     psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] <= 1;
                     psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2 + 1] <= 1;
                   end
@@ -2328,24 +2330,27 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
           end
         end
         WAIT_FOR_SENDING_RESULTS: begin
-          fsm_psum_cycle      <= 0;
-          fsm_psum_last_state <= WAIT_FOR_SENDING_RESULTS;
+          fsm_psum_cycle       <= fsm_psum_cycle + 1;
+          fsm_psum_last_state  <= WAIT_FOR_SENDING_RESULTS;
+          psum_sending_counter <= 0;
           if (send_data_out) begin
-            fsm_psum_current_state <= PSUM_SEND_RESULTS;
-            psum_buffer_SP_en_r    <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
+            if (fsm_psum_cycle == 1) begin
+              fsm_psum_cycle         <= 0;
+              fsm_psum_current_state <= PSUM_SEND_RESULTS;
+              psum_buffer_SP_en_r    <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
+            end
           end else begin
-            fsm_psum_cycle         <= fsm_psum_cycle + 1;
             fsm_y_cl_psum          <= 0;
             if (fsm_psum_cycle >= 2) begin
               if (store_in_psum == 0) begin
                 fsm_psum_current_state <= SEND_PSUM_TO_IACT;
+                psum_sending_counter <= psum_sending_counter + CLUSTER_COLUMNS * PE_COLUMNS;
               end else begin
                 fsm_psum_current_state <= PSUM_IDLE;
               end
               fsm_psum_cycle       <= 0;
               psum_cycle_buffer_1  <= 0;
               psum_cycle_buffer_2  <= 0;
-              psum_sending_counter <= 0;
               psum_filter_offset   <= iact_channels_per_pe_next_layer / kernels_per_calc;
               fsm_psum_row_offset  <= 0;
             end
@@ -2419,7 +2424,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
           end
           psum_sending_counter <= psum_sending_counter + CLUSTER_COLUMNS * PE_COLUMNS;
           if (psum_sending_counter >= kernels_per_calc * iact_x_with_add_up - CLUSTER_COLUMNS * PE_COLUMNS) begin
-            psum_sending_counter        <= 0;
+            psum_sending_counter <= 0;
           end
           if ((psum_sending_counter >= kernels_per_calc * iact_x_with_add_up - 2 * CLUSTER_COLUMNS * PE_COLUMNS) &
           (psum_sending_counter < kernels_per_calc * iact_x_with_add_up - CLUSTER_COLUMNS * PE_COLUMNS)) begin
@@ -2596,12 +2601,12 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
     for (i_gen = 0; i_gen < CLUSTER_COLUMNS; i_gen=i_gen+1) begin : PSUM_RAM_X
       for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen=j_gen+1) begin : PSUM_RAM_Y
         for (g_gen = 0; g_gen < NUM_GLB_PSUM/2; g_gen=g_gen+1) begin : PSUM_RAM_GLB
-
           RAM_SP #(
               //.DataWidth(TRANS_BITWIDTH_PSUM * CLUSTERS * NUM_GLB_PSUM),
               //.AddrWidth(BUFFER_WIDTH)
               .DataWidth(TRANS_BITWIDTH_PSUM*2),
-              .AddrWidth(BUFFER_WIDTH)
+              .AddrWidth(BUFFER_WIDTH),
+              .Pipelined(1)
           ) psum_buffer_SP (
               .clk_i  (clk_i),
               .rd_en_i(psum_buffer_SP_en_r[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen] & !psum_buffer_SP_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen]),
