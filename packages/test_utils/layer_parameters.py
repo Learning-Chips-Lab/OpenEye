@@ -275,21 +275,11 @@ class LayerParameters(object):
                 divisor = math.ceil(temp / params.Iacts_Addr_per_PE)
             self.used_channels = math.ceil(temp/divisor)
             self.used_channels = 6
-        elif(self.kernel_size[0] == 3):
-            if (self.used_channels >= 4):
-                self.used_channels = 4
-                if(self.used_channels >= self.input_shape[3]):
-                    self.used_channels = self.input_shape[3]
-
-        elif(self.kernel_size[0] == 5):
-            if(self.used_channels >= 2):
-                self.used_channels = 2
-
-        elif(self.kernel_size[0] >= 8):
-            if(self.used_channels >= 2):
-                self.used_channels = 1
-        else: 
-            assert False
+        else:
+            self.used_channels = 16//self.kernel_size[0]
+            self.used_channels = 1 << (self.used_channels.bit_length() - 1) #Round down to 2^n
+            if (self.used_channels == 0) : 
+                assert False
 
     def calculate_needed_refreshes_mx(self, params):
         if (params.SERIAL == 1) :
@@ -449,11 +439,8 @@ class LayerParameters(object):
                 self.used_wght_addr_per_PE = (math.ceil(self.kernel_size[0] * self.input_shape[3]/self.kernel_per_pe_cluster / self.iact_transmissions_pe/ self.wght_transmissions_pe)) + 2
             case _:
                 self.used_wght_addr_per_PE = (math.ceil(self.kernel_size[0] * self.input_shape[3]/self.kernel_per_pe_cluster / self.iact_transmissions_pe)) + 2
-
         if(self.used_wght_addr_per_PE == (params.Wghts_Addr_per_PE + 1)):
             self.used_wght_addr_per_PE = self.used_wght_addr_per_PE - 1
-        if (self.choose_iact_storage_output == 0) :
-            self.different_kernels_per_calculation = self.different_kernels_per_calculation * self.used_Y_cluster
         self.psum_storage_cycles = self.diff_iact_layer * self.used_Y_cluster
         if (self.choose_iact_storage_output) :
             self.psum_storage_cycles = self.diff_iact_layer

@@ -131,7 +131,7 @@ module PE #(
     input                                             psum_ready_i,
     input                                             compute_i,
     input                                             enable_stream_i,
-    input      [                                 7:0] data_stream_i
+    input      [                                11:0] data_stream_i
 );
 
   reg  [                $clog2(16)-1:0] current_state_computing;

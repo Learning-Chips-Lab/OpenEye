@@ -115,7 +115,7 @@ module PE_cluster #(
     output [                    PE_COLUMNS-1:0] pe_router_psum_enable_o,
 
     input       enable_stream_i,
-    input [7:0] data_stream_i
+    input [11:0] data_stream_i
 );
 
   ///#######################

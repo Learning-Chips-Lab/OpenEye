@@ -386,12 +386,11 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
         x_cor = les.x_start
         y_cor = les.y_start
         filter = les.f_start
+        position = 0
+        print(layer_params.used_Y_cluster)
         for psum_pe in range(layer_params.used_psum_per_PE):
             for cl_y in range(params.Clusters_Y):
                 for cl_x in range(params.Clusters_X):
-                    position = (cl_x * params.PEs_X + \
-                        math.floor(cl_y/layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X + \
-                        ((cl_y%layer_params.used_Y_cluster) + (refresh // filter_cycles) * layer_params.used_Y_cluster) * math.floor(elements_per_calculation/layer_params.used_Y_cluster))
                     for router in range(0, params.Psum_Routers, 2):
                         partial_result_a, partial_result_b = gtu.to_twos_complement_string(0,20), gtu.to_twos_complement_string(0,20)
                         current_position_in_calculation = cl_x * params.Psum_Routers + cl_y * params.Psum_Routers * params.Clusters_X + router
@@ -403,12 +402,13 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                                             partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
                                         else:
                                             partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
-                                    x_cor = x_cor+1
+                                    x_cor = x_cor + 1
                                 except:
                                     pass
                         file_dma_ref.write(partial_result_a + partial_result_b + "\n")
                     if (x_cor >= layer_params.output_shape[1]) :
                         x_cor = 0
+                        les.x_start = 0
                         if (kernel_counter == layer_params.different_kernels_per_calculation - 1) :
                             kernel_counter = 0
                             if (y_line_counter == layer_params.y_lines_per_calculation - 1) :
@@ -419,6 +419,19 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                         else :
                             kernel_counter = kernel_counter + 1
                             filter = filter + 1
+                if (position == layer_params.used_Y_cluster - 1) :
+                    position = 0
+                    #x_cor = x_cor - ((params.Clusters_X * params.Clusters_Y * params.Psum_Routers)//layer_params.used_Y_cluster)
+
+                    print("preX: " + str(x_cor))
+                    les.x_start = les.x_start + (params.Clusters_X * params.Psum_Routers)
+                    x_cor = les.x_start
+                    print("postX: " + str(x_cor))
+                else:
+                    position = position + 1
+                    x_cor = x_cor - (params.Clusters_X * params.Psum_Routers) + ((params.Clusters_X * params.Clusters_Y * params.Psum_Routers)//layer_params.used_Y_cluster) 
+            x_cor = 0
+            les.x_start = 0
             y_cor = les.y_start
             filter = filter + 1
 

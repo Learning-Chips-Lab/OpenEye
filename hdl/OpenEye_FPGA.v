@@ -237,7 +237,7 @@ module OpenEye_FPGA #(
   wire [3:0] needed_iact_cycles_reg;
   wire [$clog2(PSUM_PER_PE+1)-1:0] filters_reg;
   wire [$clog2(IACT_ADDR_PER_PE+1)-1:0] iact_addr_len_reg;
-  wire [$clog2(WGHT_ADDR_PER_PE)-1:0] wght_addr_len_reg;
+  wire [$clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_reg;
   reg [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_reg;
   reg [$clog2(AF_MODES)-1:0] af_cluster_mode_reg;
   wire [4:0] input_activations_reg;
@@ -1453,7 +1453,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
           end
           if (converters_ready == 1) begin
             fsm_current_state          <= CONVERT_IACT;
-            past_padding                   <= 0;
+            past_padding               <= 0;
             select_ram_counter         <= 0;
             ram_counter_storage        <= 0;
             for (a = 0; a < RAM_CELLS; a=a+1) begin
@@ -2595,8 +2595,6 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
         .data_i (wght_buffer_SP_data_w),
         .data_o (wght_buffer_SP_data_r)
     );
-
-
 
     for (i_gen = 0; i_gen < CLUSTER_COLUMNS; i_gen=i_gen+1) begin : PSUM_RAM_X
       for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen=j_gen+1) begin : PSUM_RAM_Y
