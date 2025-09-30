@@ -41,7 +41,7 @@ module dma_storage (
     output reg [1:0] needed_x_cls_reg,
     output reg [3:0] needed_y_cls_reg,
     output reg [3:0] needed_iact_cycles_reg,
-    output reg [3:0] wght_addr_len_reg,
+    output reg [4:0] wght_addr_len_reg,
     output reg [3:0] iact_addr_len_reg,
     output reg [0:0] send_data_out
 );
@@ -81,7 +81,7 @@ always @(posedge clk_i, negedge rst_ni) begin
         needed_x_cls_reg <= 2'd0;
         needed_y_cls_reg <= 4'd0;
         needed_iact_cycles_reg <= 4'd0;
-        wght_addr_len_reg <= 4'd0;
+        wght_addr_len_reg <= 5'd0;
         iact_addr_len_reg <= 4'd0;
         send_data_out <= 1'd0;
     end else if (write_en) begin
@@ -124,7 +124,7 @@ always @(posedge clk_i, negedge rst_ni) begin
                 needed_x_cls_reg <= dma_data_i[PARAMETER_POS_2_6 + 1 : PARAMETER_POS_2_6];
                 needed_y_cls_reg <= dma_data_i[PARAMETER_POS_2_7 + 3 : PARAMETER_POS_2_7];
                 needed_iact_cycles_reg <= dma_data_i[PARAMETER_POS_2_8 + 3 : PARAMETER_POS_2_8];
-                wght_addr_len_reg <= dma_data_i[PARAMETER_POS_2_9 + 3 : PARAMETER_POS_2_9];
+                wght_addr_len_reg <= dma_data_i[PARAMETER_POS_2_9 + 4 : PARAMETER_POS_2_9];
                 iact_addr_len_reg <= dma_data_i[PARAMETER_POS_2_10 + 3 : PARAMETER_POS_2_10];
                 send_data_out <= dma_data_i[PARAMETER_POS_2_11 + 0 : PARAMETER_POS_2_11];
             end
