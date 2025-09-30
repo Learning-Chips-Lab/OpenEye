@@ -1346,9 +1346,9 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
                 fsm_cycle              <= fsm_cycle + 1;
                 wght_buffer_SP_en_w    <= 1;
                 wght_buffer_SP_wr_addr <= wght_buffer_SP_wr_addr + 1;
-                wght_cnt               <= ({7'd0,wght_cycles_reg} * ({9'd0,wght_addr_len_reg} + {7'd0,input_activations_reg} * ({7'd0,filters_reg} / PARALLEL_MACS[12:0]))) - 1;
-                if(fsm_cycle == (wght_cycles_reg * ({27'd0,wght_addr_len_reg} + input_activations_reg * ({26'd0,filters_reg} / PARALLEL_MACS))) - 1)begin
-                  wght_cnt  <= ({9'd0,wght_addr_len_reg} + input_activations_reg * ({7'd0,filters_reg} / PARALLEL_MACS[12:0]));
+                wght_cnt               <= ({7'd0,wght_cycles_reg} * ({7'd0,input_activations_reg} * ({7'd0,filters_reg} / PARALLEL_MACS[12:0]))) - 1;
+                if(fsm_cycle == (wght_cycles_reg * (input_activations_reg * ({26'd0,filters_reg} / PARALLEL_MACS))) - 1)begin
+                  wght_cnt  <= (input_activations_reg * ({7'd0,filters_reg} / PARALLEL_MACS[12:0]));
                   fsm_cycle <= 0;
                   fsm_last_state <= GET_WGHT;
                   if (!skipPsum_reg) begin

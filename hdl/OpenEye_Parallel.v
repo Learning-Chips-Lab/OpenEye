@@ -375,7 +375,7 @@ module OpenEye_Parallel #(
         end
         SECOND_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{8{1'd0}}, {iact_addr_len_i_reg}};
+          data_stream_reg        <= {{3{1'd0}},{filters_i_reg}, {iact_addr_len_i_reg}};
           fsm_transmission_state <= IDLE_TRANSMI;
         end
         default: begin

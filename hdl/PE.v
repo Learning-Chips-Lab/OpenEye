@@ -251,7 +251,8 @@ module PE #(
   wire [                         4 : 0] first_spad_words_wght;
   wire [                         6 : 0] second_spad_words_wght;
   reg                                   values_valid;
-  reg   [                        3 : 0] channel_reg;
+  reg  [                         4 : 0] filters_reg;
+  reg  [                         3 : 0] channel_reg;
   wire                                  psum_data_SPad_en_a_w_i;
   wire                                  psum_data_SPad_en_b_w_i;
   reg                                   data_mode_reg;
@@ -359,6 +360,7 @@ module PE #(
       input_activations_reg <= 0;
       wght_addr_max_reg     <= 0;
       iact_addr_max_reg     <= 0;
+      filters_reg           <= 0;
       channel_reg           <= 0;
     end else begin
       case (current_state_stream)
@@ -374,6 +376,7 @@ module PE #(
         SECOND_PARAMS: begin
           if (enable_stream_i) begin
             current_state_stream <= THIRD_PARAMS;
+            filters_reg          <= data_stream_i[8:4];
             channel_reg          <= data_stream_i[3:0];
             iact_addr_max_reg    <= 5;
           end else begin
@@ -473,7 +476,7 @@ module PE #(
       end else begin
         psum_enable_o <= psum_enable;
       end
-      iact_oh_delay_1 <= iact_data_spad_oh;
+      iact_oh_delay_1 <= iact_data_spad_oh == 0 ? 0 : iact_data_spad_oh - 1;
       iact_oh_delay_2 <= iact_oh_delay_1;
       case (current_state_computing)
         IDLE: begin
@@ -588,8 +591,6 @@ module PE #(
             iact_data_SPad_en_r     <= 1;
             psum_data_SPad_en_a_r   <= 0;
             psum_data_SPad_en_b_r   <= 0;
-            wght_addr_use_vec       <= 0;
-            wght_data_use_vec       <= 0;
             use_psum_1              <= 0;
             use_psum_2              <= 0;
             if (SERIAL == 1) begin
@@ -614,6 +615,7 @@ module PE #(
         LOADING_2: begin
           //Get first WGHT Data Address
           current_state_computing <= LOADING_3;
+          wght_addr_use_vec       <= 0;
           if (iact_addr_SPad_data_r == 0) begin
             if (iact_addr_SPad_addr == 4) begin
               current_state_computing <= WAIT_TO_SEND_PSUM;
@@ -632,7 +634,6 @@ module PE #(
             end
           end else begin
             wght_data_SPad_en_r <= 1;
-            wght_addr_vec       <= iact_data_spad_oh + 1;
             wght_addr_use_vec   <= 1;
             iact_data_current_1 <= iact_data_spad_pay;
             iact_data_SPad_addr <= iact_data_SPad_addr + 1;
@@ -646,6 +647,7 @@ module PE #(
 
         LOADING_3: begin
           current_state_computing <= LOADING_4;
+          wght_data_use_vec       <= 0;
           iact_data_SPad_addr <= iact_data_SPad_addr + 1;
           wght_addr_use_vec <= 1;
           if (wght_addr_vec == iact_data_spad_oh) begin
@@ -655,7 +657,7 @@ module PE #(
           end
           iact_data_current_1 <= iact_data_spad_pay;
           iact_data_current_2 <= iact_data_current_1;
-          wght_data_start     <= wght_addr_SPad_data_r;
+          wght_data_start     <= 0;
           iact_addr_SPad_en_r <= 0;
         end
 
@@ -1257,7 +1259,7 @@ module PE #(
 
   // Parallel to serial converter for weight data and address
   // e.g., converts a 24-bit parallel weight word to multiple 8-bit/4-bit pairs of data and address
-  data_pipeline #(
+  data_pipeline_wght #(
       .DATA_WIDTH      (TRANS_BITWIDTH_WGHT),
       .FIRST_SPAD_ADDR (WGHT_ADDR_ADDR),
       .FIRST_SPAD_DATA (WGHT_ADDR_DATA),
@@ -1267,13 +1269,13 @@ module PE #(
       .clk_i    (clk_i),
       .rst_ni   (rst_ni),
       .compute_i(compute_i | enable_stream_i),
-      .data_mode(1'd0),
+      //.data_mode(1'd0), ReAdd later
 
       .data_i  (wght_data_i),
       .enable_i(wght_enable_i),
 
       .first_spad_words_o (first_spad_words_wght),
-      .first_spad_max_i   (wght_addr_max_reg),
+      .first_spad_max_i   (filters_reg[4:1]),
       .second_spad_words_o(second_spad_words_wght),
 
       .first_spad_addr_o(first_spad_wght_addr_w),
