@@ -387,7 +387,6 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
         y_cor = les.y_start
         filter = les.f_start
         position = 0
-        print(layer_params.used_Y_cluster)
         for psum_pe in range(layer_params.used_psum_per_PE):
             for cl_y in range(params.Clusters_Y):
                 for cl_x in range(params.Clusters_X):
@@ -423,10 +422,8 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                     position = 0
                     #x_cor = x_cor - ((params.Clusters_X * params.Clusters_Y * params.Psum_Routers)//layer_params.used_Y_cluster)
 
-                    print("preX: " + str(x_cor))
                     les.x_start = les.x_start + (params.Clusters_X * params.Psum_Routers)
                     x_cor = les.x_start
-                    print("postX: " + str(x_cor))
                 else:
                     position = position + 1
                     x_cor = x_cor - (params.Clusters_X * params.Psum_Routers) + ((params.Clusters_X * params.Clusters_Y * params.Psum_Routers)//layer_params.used_Y_cluster) 
