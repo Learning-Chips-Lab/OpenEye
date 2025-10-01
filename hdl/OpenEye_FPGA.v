@@ -1472,7 +1472,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
           if ((select_ram_counter > {{8{1'd0}},iact_converter_buffer_addr_max_cycles} - 2)) begin
             select_ram_counter <= 0;
           end
-          if ((select_ram_counter == {{8{1'd0}},iact_converter_buffer_addr_max_cycles} - 2)
+          if ((select_ram_counter == {{8{1'd0}},iact_converter_buffer_addr_max_cycles} - 1)
           | iact_buffer_next_addr) begin
             if ((iact_converter_cycles > {{4{1'd0}},padding_reg} - y_lines_per_calc) & (iact_converter_cycles < {{4{1'd0}},padding_reg} + iact_size_y)) begin
               for (a = 0; a < RAM_CELLS; a=a+1) begin
