@@ -14,6 +14,31 @@ from regmap_pack import pack_registers, unpack_registers, TRANSMISSIONS, DMA_BIT
 logger = logging.getLogger("cocotb")
 
 class ConvMapper(LayerMapper):
+    """Mapper for convolutional layers in the OpenEye accelerator.
+
+    This class handles the mapping and configuration of convolutional layers by coordinating
+    input activation (iact), weight (wght), and bias (psum) stream mappers. It generates
+    the necessary register configurations, router settings, and data layouts for executing
+    convolution operations on the hardware accelerator.
+
+    The mapper supports various convolution configurations including different kernel sizes,
+    strides, and cluster distributions. It produces binary-formatted data streams compatible
+    with both serial and parallel transmission modes.
+
+    Args:
+        params: Hardware configuration parameters defining the accelerator architecture
+        layer_params: Layer-specific parameters including kernel size, stride, filters, etc.
+        layer_repetition: Current repetition index for layers that execute multiple times
+        dram_layer_content: Tuple containing (input_data, weight_data, bias_data) from DRAM
+        sparse_iacts: Sparsity information for input activations
+        sparse_wghts: Sparsity information for weights
+
+    Attributes:
+        Inherits all attributes from LayerMapper base class, including:
+        - input_mapper: ConvIactStreamMapper for input activation data
+        - weight_mapper: ConvWghtStreamMapper for weight data
+        - bias_mapper: ConvPsumStreamMapper for bias/partial sum data
+    """
         
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts):
         input_mapper = ConvIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0], sparse_iacts)
