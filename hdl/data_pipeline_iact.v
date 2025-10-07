@@ -123,8 +123,9 @@ module data_pipeline_iact #(
         second_spad_en_o    <= 1;
         second_spad_addr_o  <= address_temp_2[SECOND_SPAD_ADDR_BITWIDTH-1:0];
         //second_spad_words_o <= ($clog2(SECOND_SPAD_ADDR+1))'(32'(second_spad_addr_o) + 2);
-        second_spad_words_o <= second_spad_addr_o + 2;
-
+        if (data_i != 0) begin
+          second_spad_words_o <= second_spad_addr_o + 2;
+        end
         address_temp_2      <= address_temp_2 + 1;
 
         payload_reg         <= current_data[SECOND_PAYLOAD_WIDTH-1 : 0];
