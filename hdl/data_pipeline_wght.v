@@ -64,13 +64,13 @@ module data_pipeline_wght #(
     input      [   $clog2(FIRST_SPAD_ADDR)-1 : 0] first_spad_max_i,
     output reg [$clog2(SECOND_SPAD_ADDR+1)-1 : 0] second_spad_words_o,
 
-    output reg [FIRST_SPAD_ADDR_BITWIDTH-1 : 0] first_spad_addr_o,
-    output reg [         FIRST_SPAD_DATA-1 : 0] first_spad_data_o,
-    output reg                                  first_spad_en_o,
+    output reg [  FIRST_SPAD_ADDR_BITWIDTH-1 : 0] first_spad_addr_o,
+    output reg [           FIRST_SPAD_DATA-1 : 0] first_spad_data_o,
+    output reg                                    first_spad_en_o,
 
-    output reg [SECOND_SPAD_ADDR_BITWIDTH-1 : 0] second_spad_addr_o,
-    output     [         SECOND_SPAD_DATA-1 : 0] second_spad_data_o,
-    output reg                                   second_spad_en_o
+    output reg [ SECOND_SPAD_ADDR_BITWIDTH-1 : 0] second_spad_addr_o,
+    output     [          SECOND_SPAD_DATA-1 : 0] second_spad_data_o,
+    output reg                                    second_spad_en_o
 );
 
   reg  [            FIRST_SPAD_DATA-1 : 0] data_storage_1;  // Temporary storage for data
@@ -115,9 +115,7 @@ module data_pipeline_wght #(
         second_spad_addr_o  <= address_temp_2[SECOND_SPAD_ADDR_BITWIDTH-1:0];
         //second_spad_words_o <= ($clog2(SECOND_SPAD_ADDR+1))'(32'(second_spad_addr_o) + 2);
         second_spad_words_o <= second_spad_addr_o + 2;
-
         address_temp_2      <= address_temp_2 + 1;
-
         first_spad_data_o   <= overhead_reg + 1'd1;
         overhead_reg        <= overhead_reg + 1;
         overhead_delay_reg  <= overhead_reg;
@@ -144,8 +142,13 @@ module data_pipeline_wght #(
       end
       compute_delay <= compute_i;
       if (compute_i) begin  // Reset SPAD addresses and state of module
-        first_spad_en_o     <= 1;
-        first_spad_addr_o   <= first_spad_addr_o + 1;
+        if ((cycle_counter != 0) | (second_spad_addr_o != 0)) begin 
+          first_spad_en_o   <= 1;
+          first_spad_addr_o <= first_spad_addr_o + 1;
+        end else begin
+          first_spad_en_o   <= 0;
+          first_spad_addr_o <= 0;
+        end
         second_spad_en_o    <= 0;
         data_storage_1      <= 0;
         first_spad_data_o   <= 0;
@@ -159,7 +162,6 @@ module data_pipeline_wght #(
       if (compute_delay) begin
         first_spad_en_o     <= 0;
         first_spad_addr_o   <= 0;
-
       end
     end
   end
