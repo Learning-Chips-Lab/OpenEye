@@ -7,7 +7,39 @@ import logging
 
 logger = logging.getLogger("cocotb")
 
-def create_layer(layer_mode, filters, kernelsize, inputsize_x, inputsize_y, strides, channels,outputsize):
+def create_layer(layer_mode, filters, kernelsize, inputsize_x, inputsize_y, strides, channels, outputsize):
+    """Create a TensorFlow/Keras neural network layer based on the specified configuration.
+
+    Constructs a Keras Sequential model containing the requested layer type with the
+    given parameters. Supports various layer types including convolution, depthwise
+    convolution, fully connected (dense), and pooling layers.
+
+    Args:
+        layer_mode (str): Type of layer to create. Supported values:
+            - "Convolution": Standard 2D convolution layer
+            - "Depthwise_Convolution": Depthwise 2D convolution layer
+            - "FC": Fully connected (Dense) layer
+            - "Pooling": Conv2D followed by MaxPooling2D and another Conv2D
+            - "Pooling_OLD": Conv2D, MaxPooling2D, and Dense layer sequence
+        filters (int): Number of output filters/channels for convolution layers
+        kernelsize (int): Size of the convolution kernel (assumes square kernel)
+        inputsize_x (int): Width of the input tensor
+        inputsize_y (int): Height of the input tensor
+        strides (int or tuple): Stride value(s) for convolution operations
+        channels (int): Number of input channels
+        outputsize (int): Number of output units for fully connected layers
+
+    Returns:
+        tf.keras.models.Sequential: Compiled Keras Sequential model containing the
+            specified layer(s). The model is compiled with Adam optimizer and
+            sparse categorical crossentropy loss.
+
+    Note:
+        - All convolution layers use "SAME" padding
+        - The "Pooling" and "Pooling_OLD" modes use hardcoded dimensions for
+          specific network architectures
+        - Invalid layer_mode values will log an error and return an empty model
+    """
     logger.debug("Start compiling.")
     model = tf.keras.models.Sequential()
     match layer_mode:

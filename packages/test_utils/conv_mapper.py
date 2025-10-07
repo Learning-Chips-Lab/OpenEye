@@ -14,6 +14,31 @@ from regmap_pack import pack_registers, unpack_registers, TRANSMISSIONS, DMA_BIT
 logger = logging.getLogger("cocotb")
 
 class ConvMapper(LayerMapper):
+    """Mapper for convolutional layers in the OpenEye accelerator.
+
+    This class handles the mapping and configuration of convolutional layers by coordinating
+    input activation (iact), weight (wght), and bias (psum) stream mappers. It generates
+    the necessary register configurations, router settings, and data layouts for executing
+    convolution operations on the hardware accelerator.
+
+    The mapper supports various convolution configurations including different kernel sizes,
+    strides, and cluster distributions. It produces binary-formatted data streams compatible
+    with both serial and parallel transmission modes.
+
+    Args:
+        params: Hardware configuration parameters defining the accelerator architecture
+        layer_params: Layer-specific parameters including kernel size, stride, filters, etc.
+        layer_repetition: Current repetition index for layers that execute multiple times
+        dram_layer_content: Tuple containing (input_data, weight_data, bias_data) from DRAM
+        sparse_iacts: Sparsity information for input activations
+        sparse_wghts: Sparsity information for weights
+
+    Attributes:
+        Inherits all attributes from LayerMapper base class, including:
+        - input_mapper: ConvIactStreamMapper for input activation data
+        - weight_mapper: ConvWghtStreamMapper for weight data
+        - bias_mapper: ConvPsumStreamMapper for bias/partial sum data
+    """
         
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts):
         input_mapper = ConvIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0], sparse_iacts)
@@ -22,6 +47,22 @@ class ConvMapper(LayerMapper):
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, input_mapper, weight_mapper, bias_mapper)
 
     def write_working_parameters(self, params, layer_params, layer_repetition):
+        """Generate working parameters and register configuration for the layer.
+
+        Packs all layer configuration parameters into register format for hardware transmission.
+        This includes computation settings (stride, skip flags), resource allocation (clusters,
+        PEs), and stream configuration. Handles both serial (DMA) and parallel transmission modes.
+
+        Args:
+            params: Hardware configuration parameters
+            layer_params: Layer-specific parameters containing kernel size, stride, filters, etc.
+            layer_repetition: Current repetition index for the layer
+
+        Returns:
+            list: Packed register values ready for transmission to hardware. In serial mode,
+                  returns DMA words including register configuration, PE enable bitmap, and
+                  router configurations. In parallel mode, returns indexed configuration values.
+        """
         if (params.SERIAL):
             storage = [[] for b in range(len(strdic.stream_serial_dict))]
         else:
@@ -179,6 +220,20 @@ class ConvMapper(LayerMapper):
         return storage
 
     def write_quantize(self, params, layer_params, layer_repetition):
+        """Generate quantization parameters for the layer.
+
+        Packs quantization values into DMA transmission format. Each DMA line contains
+        two quantization parameter pairs, with 16 pairs total (32 values).
+
+        Args:
+            params: Hardware configuration parameters
+            layer_params: Layer-specific parameters containing quantization values
+            layer_repetition: Current repetition index for the layer
+
+        Returns:
+            list: 16 DMA words containing packed quantization parameters, where each word
+                  contains two quantization parameter pairs at specific bit offsets.
+        """
         dma_line = 0
         dma_storage = []
         for f in range(math.ceil(16)):
@@ -192,6 +247,20 @@ class ConvMapper(LayerMapper):
         return dma_storage
     
     def write_offset(self, params, layer_params, layer_repetition):
+        """Generate offset parameters for the layer.
+
+        Packs 32 offset values into DMA transmission format. Each DMA line contains
+        8 offset values packed at 8-bit intervals.
+
+        Args:
+            params: Hardware configuration parameters
+            layer_params: Layer-specific parameters containing offset values
+            layer_repetition: Current repetition index for the layer
+
+        Returns:
+            list: 4 DMA words containing packed offset parameters, where each word
+                  contains 8 consecutive offset values at 8-bit intervals.
+        """
         dma_line = 0
         dma_storage = []
         for f in range(math.ceil(32/8)):
@@ -208,6 +277,28 @@ class ConvMapper(LayerMapper):
         return dma_storage
     
     def write_router_iact(self, params, layer_params):
+        """Configure input activation (iact) router settings for all clusters.
+
+        Generates routing configuration for distributing input activations across the
+        cluster array. The routing values determine how data flows through the network-on-chip
+        to reach the appropriate PEs. Supports both single and multi-cluster Y configurations.
+
+        Routing values:
+        - 1: Single Y cluster mode
+        - 9: First cluster in multi-Y-cluster group (multiple PEs per cluster)
+        - 17: Last cluster in multi-Y-cluster group (multiple PEs per cluster)
+        - 25: Middle cluster in multi-Y-cluster group (multiple PEs per cluster)
+        - 3: First cluster (single PE per cluster)
+        - 33: Non-first cluster (single PE per cluster)
+
+        Args:
+            params: Hardware configuration parameters including cluster dimensions
+            layer_params: Layer-specific parameters including used cluster counts
+
+        Returns:
+            In serial mode: list of DMA words with packed router values
+            In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
+        """
         line = 0
         if(params.SERIAL):
             storage = []
@@ -263,6 +354,24 @@ class ConvMapper(LayerMapper):
         return storage
 
     def write_router_wght(self, params, layer_params):
+        """Configure weight (wght) router settings for all clusters.
+
+        Generates routing configuration for distributing weights across the cluster array.
+        Routing is simplified compared to iact routing: first cluster or single-cluster
+        computations use local routing (0), while subsequent clusters use network routing (1).
+
+        Routing values:
+        - 0: Use local weight data (first cluster, single cluster mode, or multi-kernel mode)
+        - 1: Forward weight data from previous cluster
+
+        Args:
+            params: Hardware configuration parameters including cluster dimensions
+            layer_params: Layer-specific parameters including computation mode flags
+
+        Returns:
+            In serial mode: list of DMA words with packed router values
+            In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
+        """
         line = 0
         if(params.SERIAL):
             storage = []
@@ -293,6 +402,26 @@ class ConvMapper(LayerMapper):
         return storage
 
     def write_router_psum(self, params, layer_params):
+        """Configure partial sum (psum) router settings for all clusters.
+
+        Generates routing configuration for collecting and forwarding partial sums through
+        the cluster array. The routing depends on PE utilization and cluster Y organization.
+
+        Routing values:
+        - 0: No routing (inactive cluster)
+        - 2: Pass-through cluster (middle of Y-cluster group)
+        - 3: Final accumulation cluster (last in Y-cluster group)
+        - 4: Output cluster (single PE per cluster mode)
+        - 5: First accumulation cluster (first in Y-cluster group)
+
+        Args:
+            params: Hardware configuration parameters including cluster dimensions
+            layer_params: Layer-specific parameters including PE and cluster usage
+
+        Returns:
+            In serial mode: list of DMA words with packed router values
+            In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
+        """
         line = 0
         if(params.SERIAL):
             storage = []
@@ -340,6 +469,25 @@ class ConvMapper(LayerMapper):
         return storage
 
     def write_psum_data_glb(self, params, layer_params, layer_repetition, dram, cl_y, router, cycle):
+        """Write partial sum data to global buffer format.
+
+        Converts partial sum (bias) data from DRAM format to the global buffer format
+        expected by the hardware. Scales floating-point values to fixed-point representation
+        based on the configured bitwidths.
+
+        Args:
+            params: Hardware configuration parameters including bitwidth settings
+            layer_params: Layer-specific parameters including filter counts
+            layer_repetition: Current repetition index for the layer
+            dram: Source data from DRAM containing bias values
+            cl_y: Cluster Y coordinate (currently unused in implementation)
+            router: Router index (currently unused in implementation)
+            cycle: Cycle index (currently unused in implementation)
+
+        Returns:
+            In serial mode: list of DMA words containing scaled bias values
+            In parallel mode: 2D list [cluster_x][data_index] of scaled bias values
+        """
         storage, line = self.initialize_storage(params.SERIAL), 0
         for part_data_num in range(int(layer_params.filters/layer_params.needed_wght_transmissions)):
             if(part_data_num < layer_params.used_psum_per_PE):
