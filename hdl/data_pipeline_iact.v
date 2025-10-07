@@ -88,8 +88,6 @@ module data_pipeline_iact #(
     overhead_delay_reg, payload_reg[SECOND_PAYLOAD_WIDTH-1 : 0]
   };  // Assign data to the second SPAD output
 
-
-
   always @(posedge clk_i, negedge rst_ni) begin
     if (!rst_ni) begin  // Reset
       first_spad_words_o  <= 0;
