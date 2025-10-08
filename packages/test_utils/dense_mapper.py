@@ -3,6 +3,18 @@
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
+"""Dense (Fully Connected) layer mapper for the OpenEye accelerator.
+
+This module provides the DenseMapper class, which handles the mapping and configuration
+of fully connected (dense) layers for execution on the OpenEye hardware accelerator.
+It coordinates input activation, weight, and bias stream mappers to generate the
+necessary register configurations and data layouts for dense layer operations.
+
+The mapper supports both serial (DMA-based) and parallel transmission modes, and
+generates router configurations for distributing data across the accelerator's
+cluster array.
+"""
+
 import math
 import logging
 import test_utils.stream_dicts as strdic
@@ -14,7 +26,32 @@ from test_utils.psum_stream_mapper import DensePsumStreamMapper
 logger = logging.getLogger("cocotb")
 
 class DenseMapper(LayerMapper):
-    
+    """Mapper for fully connected (dense) layers in the OpenEye accelerator.
+
+    This class handles the mapping and configuration of fully connected layers by
+    coordinating input activation (iact), weight (wght), and bias (psum) stream mappers.
+    It generates register configurations, router settings, and data layouts optimized
+    for matrix multiplication operations in dense layers.
+
+    Dense layers differ from convolutional layers in that they perform full matrix
+    multiplication without spatial convolution, typically used in classification heads
+    or fully connected network sections.
+
+    Args:
+        params: Hardware configuration parameters defining the accelerator architecture
+        layer_params: Layer-specific parameters including input/output dimensions
+        layer_repetition: Current repetition index for layers that execute multiple times
+        dram_layer_content: Tuple containing (input_data, weight_data, bias_data) from DRAM
+        sparse_iacts: Sparsity information for input activations
+        sparse_wghts: Sparsity information for weights
+
+    Attributes:
+        Inherits all attributes from LayerMapper base class, including:
+        - input_mapper: DenseIactStreamMapper for input activation data
+        - weight_mapper: DenseWghtStreamMapper for weight data
+        - bias_mapper: DensePsumStreamMapper for bias/partial sum data
+    """
+
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts):
         input_mapper = DenseIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0], sparse_iacts)
         weight_mapper = DenseWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1], sparse_wghts)
@@ -22,6 +59,26 @@ class DenseMapper(LayerMapper):
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, input_mapper, weight_mapper, bias_mapper)
 
     def write_working_parameters(self, params, layer_params, layer_repetition):
+        """Generate working parameters and register configuration for the dense layer.
+
+        Packs all layer configuration parameters into register format for hardware transmission.
+        For dense layers, this includes matrix multiplication settings, PE allocation, and
+        stream configuration. Handles both serial (DMA) and parallel transmission modes.
+
+        The method computes the PE enable bitmap to indicate which processing elements
+        are active for this layer, and generates four DMA transmission words containing
+        packed configuration data.
+
+        Args:
+            params: Hardware configuration parameters
+            layer_params: Layer-specific parameters for the dense layer
+            layer_repetition: Current repetition index for the layer
+
+        Returns:
+            list: Packed register values ready for transmission to hardware. In serial mode,
+                  returns DMA words including register configuration, PE enable bitmap, and
+                  router configurations. In parallel mode, returns indexed configuration values.
+        """
         if (params.SERIAL):
             storage = [[] for b in range(len(strdic.stream_serial_dict))]
         else:
@@ -133,6 +190,22 @@ class DenseMapper(LayerMapper):
         return storage
 
     def write_quantize(self, params, layer_params, layer_repetition):
+        """Generate quantization parameters for the dense layer.
+
+        Packs quantization values into DMA transmission format. Each DMA line contains
+        two quantization parameter pairs, with 16 pairs total (32 values). These parameters
+        are used for converting between floating-point and fixed-point representations.
+
+        Args:
+            params: Hardware configuration parameters
+            layer_params: Layer-specific parameters containing quantization values
+            layer_repetition: Current repetition index for the layer
+
+        Returns:
+            list: 16 DMA words containing packed quantization parameters, where each word
+                  contains two quantization parameter pairs at specific bit offsets
+                  (0, 25, 32, 57).
+        """
         dma_line = 0
         dma_storage = []
         for f in range(math.ceil(16)):
@@ -146,6 +219,22 @@ class DenseMapper(LayerMapper):
         return dma_storage
     
     def write_offset(self, params, layer_params, layer_repetition):
+        """Generate offset parameters for the dense layer.
+
+        Packs 32 offset values into DMA transmission format. Each DMA line contains
+        8 offset values packed at 8-bit intervals. Offset values are used for
+        bias correction or activation adjustments.
+
+        Args:
+            params: Hardware configuration parameters
+            layer_params: Layer-specific parameters containing offset values
+            layer_repetition: Current repetition index for the layer
+
+        Returns:
+            list: 4 DMA words containing packed offset parameters, where each word
+                  contains 8 consecutive offset values at 8-bit intervals (0, 8, 16,
+                  24, 32, 40, 48, 56).
+        """
         dma_line = 0
         dma_storage = []
         for f in range(math.ceil(32/8)):
@@ -162,6 +251,25 @@ class DenseMapper(LayerMapper):
         return dma_storage
     
     def write_router_iact(self, params, layer_params):
+        """Configure input activation (iact) router settings for dense layer.
+
+        Generates routing configuration for distributing input activations across the
+        cluster array for dense layer operations. For dense layers, routing is simplified
+        compared to convolutional layers, using broadcast mode (routing value 1) for
+        clusters within the first 4 rows.
+
+        Routing values:
+        - 1: Broadcast input data to this cluster (for cl_y < 4)
+        - 0: No routing (implicit for cl_y >= 4)
+
+        Args:
+            params: Hardware configuration parameters including cluster dimensions
+            layer_params: Layer-specific parameters for the dense layer
+
+        Returns:
+            In serial mode: list of DMA words with packed router values
+            In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
+        """
         line = 0
         if(params.SERIAL):
             storage = []
@@ -188,6 +296,23 @@ class DenseMapper(LayerMapper):
         return storage
 
     def write_router_wght(self, params, layer_params):
+        """Configure weight (wght) router settings for dense layer.
+
+        Generates routing configuration for distributing weights across the cluster array
+        for dense layer operations. For dense layers, all clusters use local weight data
+        (routing value 0), as each cluster typically processes different weight rows.
+
+        Routing values:
+        - 0: Use local weight data (all clusters)
+
+        Args:
+            params: Hardware configuration parameters including cluster dimensions
+            layer_params: Layer-specific parameters for the dense layer
+
+        Returns:
+            In serial mode: list of DMA words with packed router values
+            In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
+        """
         line = 0
         if(params.SERIAL):
             storage = []
@@ -213,6 +338,26 @@ class DenseMapper(LayerMapper):
         return storage
 
     def write_router_psum(self, params, layer_params):
+        """Configure partial sum (psum) router settings for dense layer.
+
+        Generates routing configuration for collecting and forwarding partial sums through
+        the cluster array for dense layer operations. The routing depends on PE utilization
+        and cluster Y organization, determining how partial sums are accumulated.
+
+        Routing values:
+        - 2: Pass-through cluster (middle of Y-cluster group)
+        - 3: Final accumulation cluster (last in Y-cluster group)
+        - 4: Output cluster (single PE per cluster mode)
+        - 5: First accumulation cluster (first in Y-cluster group)
+
+        Args:
+            params: Hardware configuration parameters including cluster dimensions
+            layer_params: Layer-specific parameters including PE and cluster usage
+
+        Returns:
+            In serial mode: list of DMA words with packed router values
+            In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
+        """
         line = 0
         if(params.SERIAL):
             storage = []
@@ -256,6 +401,25 @@ class DenseMapper(LayerMapper):
         return storage
 
     def write_psum_data_glb(self, params, layer_params, layer_repetition, dram, cl_y, router, cycle):
+        """Write partial sum data to global buffer format for dense layer.
+
+        Converts partial sum (bias) data from DRAM format to the global buffer format
+        expected by the hardware. For dense layers, this typically initializes bias values
+        to zero, with scaling based on the configured bitwidths.
+
+        Args:
+            params: Hardware configuration parameters including bitwidth settings
+            layer_params: Layer-specific parameters including filter/neuron counts
+            layer_repetition: Current repetition index for the layer
+            dram: Source data from DRAM containing bias values
+            cl_y: Cluster Y coordinate (currently unused in implementation)
+            router: Router index (currently unused in implementation)
+            cycle: Cycle index (currently unused in implementation)
+
+        Returns:
+            In serial mode: list of DMA words containing scaled bias values (currently zeros)
+            In parallel mode: 2D list [cluster_x][data_index] of scaled bias values
+        """
         storage, line = self.initialize_storage(params.SERIAL), 0
         for part_data_num in range(math.ceil(self.layer_params.used_psum_per_PE/2)):
             if(part_data_num < self.layer_params.used_psum_per_PE):
