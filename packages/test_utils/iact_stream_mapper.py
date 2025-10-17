@@ -57,7 +57,7 @@ class IactStreamMapper(object):
                             val_twos = gtu.to_twos_complement(flat_values[i + j], bitwidth)
                             word |= val_twos << (j * bitwidth)
                     iact_stream.append(word)
-            return iact_stream
+        return iact_stream
             
     
     def write_iact_data_glb(self, cl_x, cl_y, router):
