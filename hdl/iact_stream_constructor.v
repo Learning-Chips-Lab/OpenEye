@@ -51,7 +51,6 @@ module iact_stream_constructor #(
 );
   reg                           ram_wr_en;
   reg  [         ADDRWIDTH-1:0] ram_wr_addr;
-  wire [     WORD_BITWIDTH-1:0] ram_data_i;
   reg                           ram_rd_en;
   reg  [         ADDRWIDTH-1:0] ram_rd_addr;
   wire [     WORD_BITWIDTH-1:0] ram_data_o;
@@ -139,7 +138,7 @@ module iact_stream_constructor #(
                 current_iact_cycle_mod_reg <= ~0;
                 ram_inc_counter            <= ~0;
                 if (fsm_row_offset == y_cluster_counter) begin
-                  ram_rd_en             <= 1;
+                  ram_rd_en <= 1;
                 end
               end
             end
@@ -153,7 +152,7 @@ module iact_stream_constructor #(
               if ((current_iact_cycle_reg >> 1) != {15{1'b1}}) begin
                 iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
               end
-              iact_data_o   <= ram_data_o;
+              iact_data_o <= ram_data_o;
             end
             //Delay for one cycle
             //Check, wether amount of channels is odd
@@ -400,8 +399,8 @@ module iact_stream_constructor #(
               byte_var_pre_calc <= 0;
             end
             ram_wr_addr_reg <= (iact_router_counter * wght_size_reg) + {{(ADDRWIDTH-8){1'd0}},kernel_y_counter};
-            fsm_cycle    <= fsm_cycle + 1;
-            ram_wr_en    <= 0;
+            fsm_cycle       <= fsm_cycle + 1;
+            ram_wr_en       <= 0;
             if (fsm_cycle % (2 / WORDS_PER_CYCLE) == (2 / WORDS_PER_CYCLE) - 1) begin
               ram_wr_en <= 1;
             end
@@ -514,30 +513,28 @@ module iact_stream_constructor #(
       end
     end
 
-    RAM_SP #(
-        .DataWidth(WORD_BITWIDTH),
-        .AddrWidth(ADDRWIDTH),
-        .Pipelined(1)
-    ) iact_buffer_SP (
-        .clk_i   (clk_i),
-        .rd_en_i (ram_rd_en),
-        .wr_en_i (ram_wr_en),
-        .addr_i  (ram_rd_addr | ram_wr_addr),
-        .data_i  (ram_data_i),
-        .data_o  (ram_data_o)
-    );
-
+    for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin : BUFFER
+      wire [BITS_PER_ROUTER-1:0]ram_data_i_w;
+      wire [BITS_PER_ROUTER-1:0]ram_data_o_w;
+      RAM_SP #(
+          .DataWidth(BITS_PER_ROUTER),
+          .AddrWidth(ADDRWIDTH),
+          .Pipelined(1)
+      ) iact_buffer_SP (
+          .clk_i   (clk_i),
+          .rd_en_i (ram_rd_en),
+          .wr_en_i (ram_wr_en),
+          .addr_i  (ram_rd_addr | ram_wr_addr),
+          .data_i  (ram_data_i_w),
+          .data_o  (ram_data_o_w)
+      );
+    end
     genvar r_gen, w_gen, b_gen;
     for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin
+      assign ram_data_o[r_gen * BITS_PER_ROUTER+:BITS_PER_ROUTER]=BUFFER[r_gen].ram_data_o_w;
       for (w_gen = 0; w_gen < WORDS_PER_TRANS; w_gen = w_gen + 1) begin
-        for (b_gen = 0; b_gen < DATA_IACT_BITWIDTH; b_gen = b_gen + 1) begin
-          localparam index = w_gen * IACT_DATA_DATA + r_gen * WORDS_PER_TRANS * IACT_DATA_DATA + b_gen;
-          assign ram_data_i[index] = mem_data_payload_reg[r_gen][w_gen][b_gen];
-        end
-        for (b_gen = 0; b_gen < DATA_IACT_OVERHEAD; b_gen = b_gen + 1) begin
-          localparam index = r_gen * WORDS_PER_TRANS * IACT_DATA_DATA + w_gen * IACT_DATA_DATA + DATA_IACT_BITWIDTH + b_gen;
-          assign ram_data_i[index] = mem_data_overhead_reg[r_gen][w_gen][b_gen];
-        end
+        assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA +:DATA_IACT_BITWIDTH]                      = mem_data_payload_reg[r_gen][w_gen];
+        assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA + DATA_IACT_BITWIDTH +:DATA_IACT_OVERHEAD] = mem_data_overhead_reg[r_gen][w_gen];
       end
     end
     for (r_gen = 0; r_gen < RAM_CELLS; r_gen = r_gen + 1) begin

@@ -170,6 +170,9 @@ module PE #(
   reg                                   next_iact;
   reg                                   next_iact2;
   reg                                   computing;
+  reg                                   iact_set;
+  reg                                   wght_set;
+  wire                                  data_set;
   wire  [       TRANS_BITWIDTH_IACT-1:0] mux_iact_a_o_w;
   wire                                   mux_iact_b_o_w;
   wire                                  mux_iact_c_i_w;
@@ -298,17 +301,18 @@ module PE #(
   localparam [$clog2(16)-1:0] WAIT_TO_SEND_PSUM = 7;
   localparam [$clog2(16)-1:0] SEND_PSUM = 8;
 
+  assign data_set       = iact_set & wght_set;
   assign mux_iact_c_i_w = mux_iact_ready;
-  assign iact_part_1_w = mux_iact_a_o_w[7:0];
-  assign iact_part_2_w = mux_iact_a_o_w[15:8];
-  assign iact_part_3_w = mux_iact_a_o_w[23:16];
-  assign {iact_data_spad_oh, iact_data_spad_pay} = iact_data_SPad_data_r;
+  assign iact_part_1_w  = mux_iact_a_o_w[7:0];
+  assign iact_part_2_w  = mux_iact_a_o_w[15:8];
+  assign iact_part_3_w  = mux_iact_a_o_w[23:16];
+  assign {iact_data_spad_oh, iact_data_spad_pay}                                             = iact_data_SPad_data_r;
   assign {wght_data_spad_oh_2,wght_data_spad_pay_2,wght_data_spad_oh_1,wght_data_spad_pay_1} = wght_data_SPad_data_r;
   assign adder_3_summand_1 = SERIAL == 1 ? adder_1_o_w : 0;
   assign adder_3_summand_2 = SERIAL == 1 ? adder_2_o_w : 0;
   assign psum_data_o = SERIAL == 1 ? {{(TRANS_BITWIDTH_PSUM-DATA_PSUM_BITWIDTH){1'd0}},adder_3_o_w} : output_adder[TRANS_BITWIDTH_PSUM-1:0];
   assign output_adder = {adder_2_o_w, adder_1_o_w};
-  assign wght_addr_SPad_addr = wght_addr_use_vec ? wght_addr_vec : iact_data_spad_oh;
+  assign wght_addr_SPad_addr = wght_addr_use_vec ? wght_addr_vec : (iact_data_spad_oh == 0 ? 0 : (iact_data_spad_oh - 1));
   assign wght_data_SPad_addr = wght_data_use_vec ? wght_data_vec : wght_addr_SPad_data_r;
   assign mult_1_fac_1 = wght_data_spad_pay_1;
   assign mult_2_fac_1 = wght_data_spad_pay_2;
@@ -378,13 +382,13 @@ module PE #(
             current_state_stream <= THIRD_PARAMS;
             filters_reg          <= data_stream_i[8:4];
             channel_reg          <= data_stream_i[3:0];
-            iact_addr_max_reg    <= 5;
           end else begin
             current_state_stream <= FIRST_PARAMS;
           end
         end
         THIRD_PARAMS: begin
           if (enable_stream_i) begin
+            iact_addr_max_reg    <= data_stream_i[3:0];
             current_state_stream <= FOURTH_PARAMS;
           end else begin
             current_state_stream <= FIRST_PARAMS;
@@ -400,6 +404,26 @@ module PE #(
         default: begin
         end
       endcase
+    end
+  end
+
+  always @(posedge clk_i, negedge rst_ni) begin
+    // Reset
+    if (!rst_ni) begin
+      iact_set <= 0;
+      wght_set <= 0;
+    end else begin
+      if (enable_stream_i) begin
+        iact_set <= 0;
+        wght_set <= 0;
+      end else begin
+        if (mux_iact_b_o_w) begin
+          iact_set <= 1;
+        end
+        if (wght_enable_i) begin
+          wght_set <= 1;
+        end
+      end
     end
   end
 
@@ -498,25 +522,20 @@ module PE #(
           next_iact2             <= 0;
           iact_addr_SPad_addr    <= 0;
           iact_addr_SPad_en_r    <= 0;
-
           iact_data_SPad_addr    <= 0;
           iact_data_SPad_en_r    <= 0;
           iact_oh_delay_1        <= 0;
           iact_oh_delay_2        <= 0;
           wght_addr_SPad_en_r    <= 0;
-
           wght_addr_use_vec      <= 1;
           wght_data_use_vec      <= 1;
           wght_data_SPad_en_r    <= 0;
-
           psum_data_SPad_en_a_r  <= computing;
           psum_data_SPad_en_b_r  <= computing;
           psum_data_SPad_en_a_w  <= 0;
           psum_data_SPad_en_b_w  <= 0;
-
           computing              <= 0;
           values_valid           <= 0;
-
           psum_spad_addr_a_delay <= 0;
           psum_spad_addr_b_delay <= 1;
           psum_spad_addr_a_w     <= 0;
@@ -578,15 +597,13 @@ module PE #(
               used_psum_memory <= 0;
             end
           end
-          if (compute_i & ((second_spad_words_iact != 0) | (second_spad_words_wght != 0))) begin
+          if (data_set & compute_i & ((second_spad_words_iact != 0) & (second_spad_words_wght != 0))) begin
             //Start off
             current_state_computing <= LOADING_1;
             mux_iact_ready          <= 0;
             wght_ready_o            <= 0;
             psum_select             <= 0;
-
             iact_addr_SPad_en_r     <= 1;
-
             iact_data_SPad_addr     <= 0;
             iact_data_SPad_en_r     <= 1;
             psum_data_SPad_en_a_r   <= 0;
@@ -605,90 +622,77 @@ module PE #(
         LOADING_1: begin
           //Get first WGHT Addr Address
           current_state_computing <= LOADING_2;
+          wght_addr_use_vec       <= 0;
+          wght_addr_SPad_en_r     <= 1;
           iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
           if (iact_addr_max_reg != 0) begin
             iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
           end
-          wght_addr_SPad_en_r <= 1;
+          iact_oh_delay_1 <= iact_data_spad_oh;
         end
 
         LOADING_2: begin
           //Get first WGHT Data Address
           current_state_computing <= LOADING_3;
-          wght_addr_use_vec       <= 0;
-          if (iact_addr_SPad_data_r == 0) begin
-            if (iact_addr_SPad_addr == 4) begin
-              current_state_computing <= WAIT_TO_SEND_PSUM;
-              computing               <= 0;
-              psum_data_SPad_en_a_r   <= 0;
-              psum_data_SPad_en_b_r   <= 0;
-              psum_data_SPad_en_a_w   <= 1;
-              psum_data_SPad_en_b_w   <= 1;
-              values_valid            <= 0;
-            end else begin
-              current_state_computing <= LOADING_1;
-              if (iact_addr_max_reg != (iact_addr_SPad_addr + 1)) begin
-                iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
-              end
-              iact_addr_SPad_en_r <= 1;
-            end
-          end else begin
-            wght_data_SPad_en_r <= 1;
-            wght_addr_use_vec   <= 1;
-            iact_data_current_1 <= iact_data_spad_pay;
-            iact_data_SPad_addr <= iact_data_SPad_addr + 1;
-            iact_addr_current   <= iact_addr_SPad_data_r;
-            iact_addr_SPad_en_r <= 0;
-            if (iact_addr_max_reg != 0) begin
-              iact_addr_SPad_addr <= iact_addr_SPad_addr - 1;
-            end
+          wght_data_SPad_en_r <= 1;
+          wght_addr_use_vec   <= 1;
+          wght_addr_vec       <= wght_addr_SPad_addr + 1;
+          iact_data_current_1 <= iact_data_spad_pay;
+          iact_addr_current   <= iact_addr_SPad_data_r;
+          iact_addr_SPad_en_r <= 0;
+          iact_oh_delay_1     <= iact_data_spad_oh;
+          if (iact_addr_max_reg > iact_addr_SPad_addr + 2) begin
+            iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
+          end
+          if (iact_data_spad_oh == 0) begin
+            iact_data_SPad_addr <= 1;
+            wght_addr_vec       <= 0;
           end
         end
 
         LOADING_3: begin
+          //This state results into wght_data_start
           current_state_computing <= LOADING_4;
+          wght_addr_use_vec       <= 0;
           wght_data_use_vec       <= 0;
-          iact_data_SPad_addr <= iact_data_SPad_addr + 1;
-          wght_addr_use_vec <= 1;
-          if (wght_addr_vec == iact_data_spad_oh) begin
-            wght_addr_vec <= wght_addr_vec + 1;
-          end else begin
-            wght_addr_vec <= iact_data_spad_oh;
+          iact_data_current_1     <= iact_data_spad_pay;
+          iact_data_current_2     <= iact_data_current_1;
+          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
+          iact_addr_SPad_en_r     <= 0;
+          wght_data_start         <= wght_addr_SPad_data_r;
+          //Zero-Case
+          if (iact_oh_delay_1 == 0) begin
+            wght_data_start <= 0;
+            wght_data_end   <= wght_addr_SPad_data_r;
           end
-          iact_data_current_1 <= iact_data_spad_pay;
-          iact_data_current_2 <= iact_data_current_1;
-          wght_data_start     <= 0;
-          iact_addr_SPad_en_r <= 0;
         end
 
         LOADING_4: begin
+          //This state results into wght_data_end
           current_state_computing <= LOADING_5;
-          wght_data_end           <= wght_addr_SPad_data_r;
+          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
           wght_addr_use_vec       <= 1;
-          iact_data_current_1     <= iact_data_spad_pay;
-          iact_data_current_2     <= iact_data_current_1;
-          iact_data_current_3     <= iact_data_current_2;
           wght_data_use_vec       <= 1;
           wght_data_vec           <= wght_data_start;
-          if (iact_oh_delay_1 == iact_oh_delay_2 + 1) begin
-            wght_data_end       <= wght_addr_SPad_data_r;
-            wght_data_start_pre <= wght_addr_SPad_data_r;
-            wght_start_set      <= 1;
-          end else begin
-            wght_addr_vec <= wght_addr_vec + 1;
-          end
-          iact_addr_SPad_en_r <= 0;
+          wght_addr_vec           <= wght_addr_SPad_addr + 1;
+          iact_addr_SPad_en_r      <= 0;
           if (iact_addr_current == 1) begin
             if (iact_addr_max_reg != (iact_addr_SPad_addr + 1)) begin
               iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
             end
           end
+          //Zero-Case
+          if (iact_oh_delay_2 != 0) begin
+            wght_data_end <= wght_addr_SPad_data_r;
+          end
         end
 
         LOADING_5: begin
+          //This state results into wght_data_start_pre
           current_state_computing <= CALCULATING;
           wght_start_set          <= 1;
           computing               <= 1;
+          wght_addr_use_vec       <= 1;
           if (iact_addr_current == 1) begin
             next_iact2 <= 1;
           end
@@ -696,22 +700,17 @@ module PE #(
             values_valid <= 1;
           end
           wght_data_vec <= wght_data_vec + 1;
-          if (wght_start_set) begin
-            wght_data_end_pre <= wght_addr_SPad_data_r;
-            wght_end_set      <= 1;
-            if (iact_oh_delay_1 >= iact_oh_delay_2 + 1) begin
-              wght_addr_vec <= iact_oh_delay_1;
-            end
-          end else begin
-            wght_data_start_pre <= wght_addr_SPad_data_r;
-            fast_cycle          <= 1;
-            wght_addr_vec       <= iact_oh_delay_1;
-          end
+          wght_data_start_pre <= wght_addr_SPad_data_r;
+          fast_cycle          <= 1;
           iact_addr_count     <= 1;
           iact_addr_SPad_en_r <= 0;
           if ((iact_addr_SPad_data_r == 0) & (iact_addr_current == 0)) begin
             iact_addr_SPad_en_r <= 1;
           end
+          wght_addr_vec           <= iact_data_spad_oh - 1;
+          iact_data_current_1     <= iact_data_spad_pay;
+          iact_data_current_2     <= iact_data_current_1;
+          iact_data_current_3     <= iact_data_current_2;
         end
 
         CALCULATING: begin
@@ -831,9 +830,8 @@ module PE #(
                   wght_data_start_pre <= wght_addr_SPad_data_r;
                 end
               end else begin
-
                 if ((first_spad_words_wght - 1) > wght_addr_vec) begin
-                  wght_addr_vec <= iact_oh_delay_1;
+                  wght_addr_vec <= iact_oh_delay_1 + 1;
                 end
                 wght_start_set <= 0;
               end

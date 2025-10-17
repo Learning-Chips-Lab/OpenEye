@@ -452,8 +452,6 @@ localparam SEND_PSUM_TO_IACT = 6;
   reg                             single_iteration;
   reg                             single_iteration2;
   reg                             single_iteration3;
-  
-  
   reg                             sending_data;
   reg                             wght_sendable;
   reg [                     12:0] fsm_sending_cycle;
@@ -645,8 +643,8 @@ localparam SEND_PSUM_TO_IACT = 6;
                     fsm_iact_params <= 0;
                     fsm_row         <= 0;
                   end
-                  fsm_row_offset         <= 0;
-                  iact_converter_c       <= iact_converter_c + iact_channels_per_pe;
+                  fsm_row_offset   <= 0;
+                  iact_converter_c <= iact_converter_c + iact_channels_per_pe;
                 end
                 if (iact_converter_c + iact_channels_per_pe == iact_channels) begin
                   iact_converter_c <= 0;
@@ -828,6 +826,7 @@ localparam SEND_PSUM_TO_IACT = 6;
     end
   end
   
+  //Change here dataflow
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       //Reset Registers
@@ -914,7 +913,7 @@ localparam SEND_PSUM_TO_IACT = 6;
                 end
               end
               wght_sendable <= 1;
-              if (iact_channel_max_cycles == 1) begin
+              if ((iact_channel_max_cycles == 1) & (needed_wght_cycles_reg == 1)) begin
                 wght_sendable <= 0;
               end
               if (iact_channels_counter == iact_channel_max_cycles -1) begin
@@ -924,7 +923,6 @@ localparam SEND_PSUM_TO_IACT = 6;
                 if (iact_router_counter == needed_y_cls_reg - 1) begin
                   wght_buffer_SP_rd_addr <= wght_buffer_SP_rd_addr;
                   wght_buffer_SP_rd_addr_storage <= wght_buffer_SP_rd_addr;
-                  wght_sendable    <= 1;
                   if (iact_cycle_count == {{8 {1'd0}},needed_wght_cycles_reg} - 1) begin
                     wght_buffer_SP_rd_addr_storage <= 0;
                     wght_buffer_SP_rd_addr         <= 0;
@@ -2751,6 +2749,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
         .af_cluster_mode_i            (af_cluster_mode_reg),
         .pooling_cluster_mode_i       (4'd0),
         .kernel_per_pe_cluster_i      (kernel_per_pe_cluster_reg[$clog2(PE_ROWS)-1:0]),
+        .kernel_size_i                (kernel_size),
         .input_activations_i          (input_activations_reg),
         .stride_x_i                   (stride_x_reg),
         .stride_y_i                   (stride_y_reg),

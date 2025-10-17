@@ -81,6 +81,7 @@ module data_pipeline_wght #(
   reg  [                 DATA_WIDTH-1 : 0] payload_reg;
   reg  [                              3:0] cycle_max_reg;
   reg                                      compute_delay;
+  reg                                      compute_sent;
 
   assign second_spad_data_o = payload_reg;  // Assign data to the second SPAD output
 
@@ -102,10 +103,15 @@ module data_pipeline_wght #(
       overhead_reg        <= 0;
       overhead_delay_reg  <= 0;
       compute_delay       <= 0;
+      compute_sent        <= 0;
     end else begin
       first_spad_en_o   <= 0;
       first_spad_data_o <= 0;
       if (enable_i == 1) begin
+        compute_sent  <= 0;
+        if (compute_sent) begin
+          second_spad_words_o <= 0;
+        end
         cycle_counter <= cycle_counter + 1;
         if (cycle_counter == 0) begin
           cycle_counter <= 0;
@@ -113,7 +119,6 @@ module data_pipeline_wght #(
         first_spad_en_o     <= 1;
         second_spad_en_o    <= 1;
         second_spad_addr_o  <= address_temp_2[SECOND_SPAD_ADDR_BITWIDTH-1:0];
-        //second_spad_words_o <= ($clog2(SECOND_SPAD_ADDR+1))'(32'(second_spad_addr_o) + 2);
         second_spad_words_o <= second_spad_addr_o + 2;
         address_temp_2      <= address_temp_2 + 1;
         first_spad_data_o   <= overhead_reg + 1'd1;
@@ -121,7 +126,6 @@ module data_pipeline_wght #(
         overhead_delay_reg  <= overhead_reg;
 
         if (cycle_counter == 0) begin
-          //payload_reg       <= SECOND_PAYLOAD_WIDTH'(data_i);
           payload_reg       <= data_i;
           first_spad_data_o <= overhead_reg + 1;
         end
@@ -154,10 +158,10 @@ module data_pipeline_wght #(
         first_spad_data_o   <= 0;
         address_temp_2      <= 0;
         cycle_counter       <= 0;
-        second_spad_words_o <= 0;
         payload_reg         <= 0;
         overhead_reg        <= 0;
         overhead_reg        <= 0;
+        compute_sent        <= 1;
       end
       if (compute_delay) begin
         first_spad_en_o     <= 0;

@@ -163,6 +163,7 @@ module OpenEye_Parallel #(
     input      [                                          2:0] stride_x_i,
     input      [                                          2:0] stride_y_i,
     input      [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i,
+    input      [                                          3:0] kernel_size_i,
     input      [                             CLUSTERS*PES-1:0] compute_mask_i,
     input      [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i,
     input      [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_choose_i,
@@ -314,6 +315,7 @@ module OpenEye_Parallel #(
   localparam IDLE_TRANSMI = 0;
   localparam FIRST_PARAMS = 1;
   localparam SECOND_PARAMS = 2;
+  localparam THIRD_PARAMS = 3;
 
   reg [1:0] fsm_transmission_state;
 
@@ -375,7 +377,12 @@ module OpenEye_Parallel #(
         end
         SECOND_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{3{1'd0}},{filters_i_reg}, {iact_addr_len_i_reg}};
+          data_stream_reg        <= {{2{1'd0}},{filters_i_reg}, {iact_addr_len_i_reg}};
+          fsm_transmission_state <= THIRD_PARAMS;
+        end
+        THIRD_PARAMS: begin
+          enable_stream_reg      <= 1;
+          data_stream_reg        <= {{8{1'd0}},{kernel_size_i}};
           fsm_transmission_state <= IDLE_TRANSMI;
         end
         default: begin
