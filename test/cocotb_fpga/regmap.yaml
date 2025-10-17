@@ -33,7 +33,7 @@ registers:
   - {name: needed_x_cls_reg, width: 2}
   - {name: needed_y_cls_reg, width: 4}
   - {name: needed_iact_cycles_reg, width: 4}
-  - {name: wght_addr_len_reg, width: 4}
+  - {name: wght_addr_len_reg, width: 5}
   - {name: iact_addr_len_reg, width: 4}
   - {name: send_data_out, width: 1}
   
