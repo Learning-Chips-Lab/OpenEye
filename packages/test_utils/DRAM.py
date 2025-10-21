@@ -269,4 +269,3 @@ class DRAMContents(object):
             for c in range(layer_parameters[0].input_shape[3]):
                 # Generate random INT8 activation values (no sparsity for Dense)
                 self.fmap[0][c] = np.random.randint(-128, 127)
-                # Note: Sparsity pattern is disabled for Dense layers (code below is commented out)
