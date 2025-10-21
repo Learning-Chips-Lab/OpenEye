@@ -2,6 +2,44 @@
 # All rights reserved. © Fachhochschule Dortmund - University of Applied Sciences and Arts.
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
+
+"""Convolutional layer mapper for OpenEye accelerator.
+
+This module provides the ConvMapper class which handles the mapping and configuration
+of standard 2D convolutional layers to the OpenEye hardware architecture. It orchestrates
+input activation, weight, and partial sum stream mappers to generate optimized data
+layouts and router configurations for convolution operations.
+
+Key Features:
+    - Register-based configuration using pack_registers for hardware control
+    - PE allocation bitmap generation for selective PE activation
+    - Multi-dimensional router configuration (iact, wght, psum paths)
+    - Quantization and offset parameter packing
+    - Support for various kernel sizes, strides, and filter counts
+    - Serial (DMA) and parallel communication modes
+    - Layer fusion optimization with skip flags
+
+Architecture Integration:
+    ConvMapper coordinates three specialized stream mappers:
+    - ConvIactStreamMapper: Handles input activation data layout
+    - ConvWghtStreamMapper: Manages weight distribution patterns
+    - ConvPsumStreamMapper: Controls partial sum/bias initialization
+
+The mapper generates configuration data that controls:
+    - Which PEs are active for the computation
+    - How data is routed through the network-on-chip
+    - When to skip loading cached data (iact/wght/psum)
+    - Stride and kernel parameters for the convolution
+    - Memory addressing and transmission cycles
+
+Typical Usage:
+    >>> conv_mapper = ConvMapper(params, layer_params, layer_repetition,
+    ...                          dram_layer_content, sparse_iacts, sparse_wghts)
+    >>> working_params = conv_mapper.write_working_parameters(params, layer_params,
+    ...                                                        layer_repetition)
+    >>> stream_data = conv_mapper.make_stream()
+"""
+
 import math
 import logging
 import test_utils.stream_dicts as strdic
@@ -63,32 +101,42 @@ class ConvMapper(LayerMapper):
                   returns DMA words including register configuration, PE enable bitmap, and
                   router configurations. In parallel mode, returns indexed configuration values.
         """
+        # Initialize storage structure based on communication mode
         if (params.SERIAL):
             storage = [[] for b in range(len(strdic.stream_serial_dict))]
         else:
             storage = [[] for a in range(len(strdic.status_dict))]
 
+        # === SKIP FLAG DETERMINATION ===
+        # Determine if partial sums should be loaded from memory or reused
+        # Only load psums at the start of each iact transmission cycle
+        if ((layer_repetition % layer_params.iact_transmissions_pe) == 0):
+            layer_params.skipPsum = 0  # Load psums from memory
+        else:
+            layer_params.skipPsum = 1  # Reuse cached psums
 
-        if ((layer_repetition % layer_params.iact_transmissions_pe) == 0) :
-            layer_params.skipPsum = 0
-        else :
-            layer_params.skipPsum = 1
-        
+        # === PE ALLOCATION BITMAP GENERATION ===
+        # Create a bitmap indicating which PEs are active for this layer
         counter = 0
         computing_pes = 0
 
+        # Iterate through all PEs in the accelerator grid
         for x in range(params.Clusters_X):
             for y in range(params.Clusters_Y):
                 for pe_y in range(params.PEs_Y):
                     for pe_x in range(params.PEs_X):
+                        # Set bit if this PE is used for computation
                         if layer_params.computing_mx[x][y][pe_y][pe_x] == 1:
                             computing_pes |= (1 << counter)
                         counter += 1
+
+        # Convert bitmap to binary string (reversed for hardware consumption)
         total_bits = params.Clusters_X * params.Clusters_Y * params.PEs_Y * params.PEs_X
         bitstring = format(computing_pes, f"0{total_bits}b")[::-1]
-        #reg_defaults = {r['name']: 0 for r in unpack_registers([0]*TRANSMISSIONS).keys()}
-        #reg_defaults.update(values)
-        #words = pack_registers(reg_defaults)
+
+        # === REGISTER PACKING ===
+        # Pack all layer configuration parameters into hardware register format
+        # Uses pack_registers() utility from regmap_pack module
         words = pack_registers({
         "wght_cycles_reg": layer_params.needed_wght_transmissions,
         "stride_x_reg": layer_params.strideX,
@@ -128,7 +176,9 @@ class ConvMapper(LayerMapper):
         "send_data_out": layer_params.send_values_out
         })
 
+        # === SERIAL MODE: DMA TRANSMISSION ===
         if (params.SERIAL):
+            # Store packed register words as base of DMA transmission
             """dma_line = 0
             dma_storage = []
             # 1. transmission
@@ -180,16 +230,25 @@ class ConvMapper(LayerMapper):
             dma_line = dma_line + math.ceil(layer_params.different_kernels_per_calculation << 33)
             dma_storage.append(dma_line)
             dma_line = 0"""
+
+            # Use modern register packing approach (commented code above is legacy)
             dma_storage = words
+
+            # === PE ENABLE BITMAP TRANSMISSION ===
+            # Split PE bitmap into AXI-width segments and append to DMA stream
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
                 segment = bitstring[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI]
                 dma_storage.append(int(segment[::-1], 2))
-            
+
+            # === ROUTER CONFIGURATION TRANSMISSION ===
+            # Append router configurations for all three data paths
             dma_storage.extend(self.write_router_iact(params, layer_params))
             dma_storage.extend(self.write_router_wght(params, layer_params))
             dma_storage.extend(self.write_router_psum(params, layer_params))
-            
+
             storage = dma_storage
+
+        # === PARALLEL MODE: DIRECT PARAMETER ASSIGNMENT ===
         else:
             storage[strdic.status_dict["data_mode"]] = params.data_mode
             storage[strdic.status_dict["realfactor"]] = layer_params.realfactor
@@ -214,9 +273,11 @@ class ConvMapper(LayerMapper):
             storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
             storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
 
+            # Generate and store router configurations for all three data paths
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
             storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params, layer_params)
             storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
+
         return storage
 
     def write_quantize(self, params, layer_params, layer_repetition):
