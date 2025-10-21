@@ -53,9 +53,12 @@ class DenseMapper(LayerMapper):
     """
 
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts):
+        # Create specialized stream mappers for dense layer operations
         input_mapper = DenseIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0], sparse_iacts)
         weight_mapper = DenseWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1], sparse_wghts)
         bias_mapper = DensePsumStreamMapper(params, layer_params, layer_repetition, dram_layer_content[2])
+
+        # Initialize parent LayerMapper with the dense-specific mappers
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, input_mapper, weight_mapper, bias_mapper)
 
     def write_working_parameters(self, params, layer_params, layer_repetition):
@@ -79,89 +82,116 @@ class DenseMapper(LayerMapper):
                   returns DMA words including register configuration, PE enable bitmap, and
                   router configurations. In parallel mode, returns indexed configuration values.
         """
+        # Initialize storage structure based on communication mode (serial vs parallel)
         if (params.SERIAL):
+            # Serial mode: list indexed by stream_serial_dict
             storage = [[] for b in range(len(strdic.stream_serial_dict))]
         else:
+            # Parallel mode: list indexed by status_dict
             storage = [[] for b in range(len(strdic.status_dict))]
 
         needed_refreshes = 1
+
+        # Determine whether to skip partial sum (bias) loading based on layer repetition
+        # Skip if not at the start of a new input activation transmission cycle
         if ((layer_repetition % layer_params.needed_iact_transmissions) == 0) :
-            layer_params.skipPsum = 0
+            layer_params.skipPsum = 0  # Load biases at the start of new iact cycle
         else :
-            layer_params.skipPsum = 1
-        
+            layer_params.skipPsum = 1  # Skip bias loading for subsequent repetitions
+
         counter = 0
         computing_pes = 0
 
+        # === PE ALLOCATION BITMAP ===
+        # Create a bitmap indicating which PEs are active for computation
+        # Each bit represents one PE across all clusters (X, Y, PE_Y, PE_X)
         for x in range(params.Clusters_X):
             for y in range(params.Clusters_Y):
                 for pe_y in range(params.PEs_Y):
                     for pe_x in range(params.PEs_X):
+                        # Set bit if this PE is used for computation
                         if(layer_params.computing_mx[x][y][pe_y][pe_x]== 1):
                             computing_pes = computing_pes + 2**(counter)
                         counter = counter + 1
+
+        # Format the PE bitmap as a binary string (reversed for transmission)
         total_bits = params.Clusters_X * params.Clusters_Y * params.PEs_Y * params.PEs_X
         bitstring = format(computing_pes, f"0{total_bits}b")[::-1]
         if (params.SERIAL):
+            # === SERIAL MODE: DMA BITSTREAM GENERATION ===
+            # Pack all parameters into bit-packed DMA lines for serial transmission
             dma_line = 0
             dma_storage = []
-            # 1. transmission
-            dma_line = params.data_mode + ((layer_params.realfactor) << 1) 
-            dma_line = dma_line + (params.autofunction << 6)
-            dma_line = dma_line + (params.poolingmode << 7)
-            #dma_line = dma_line + ((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 8))
-            dma_line = dma_line + (layer_params.used_X_cluster << 16)
-            dma_line = dma_line + (layer_params.used_Y_cluster << 18)
-            dma_line = dma_line + (layer_params.needed_Iact_writes << 22)
-            dma_line = dma_line + (layer_params.used_psum_per_PE << 26)
-            dma_line = dma_line + (layer_params.used_iact_addr_per_PE << 32)
-            dma_line = dma_line + (layer_params.used_wght_addr_per_PE << 36)
-            dma_line = dma_line + (layer_params.used_iact_per_PE << 41)
-            dma_line = dma_line + (layer_params.send_values_out << 46)
-            #dma_line = dma_line + ((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 8))
+
+            # === DMA Line 1: Main configuration parameters ===
+            # Bit packing: combine multiple parameters into a single 64-bit word
+            dma_line = params.data_mode + ((layer_params.realfactor) << 1)      # bits 0-5: data mode and precision
+            dma_line = dma_line + (params.autofunction << 6)                    # bit 6: auto-function enable
+            dma_line = dma_line + (params.poolingmode << 7)                     # bit 7: pooling mode
+            # Note: bits 8-15 reserved for refresh count (commented out)
+            dma_line = dma_line + (layer_params.used_X_cluster << 16)           # bits 16-17: active X clusters
+            dma_line = dma_line + (layer_params.used_Y_cluster << 18)           # bits 18-21: active Y clusters
+            dma_line = dma_line + (layer_params.needed_Iact_writes << 22)       # bits 22-25: iact writes needed
+            dma_line = dma_line + (layer_params.used_psum_per_PE << 26)         # bits 26-31: psum values per PE
+            dma_line = dma_line + (layer_params.used_iact_addr_per_PE << 32)    # bits 32-35: iact addresses per PE
+            dma_line = dma_line + (layer_params.used_wght_addr_per_PE << 36)    # bits 36-40: weight addresses per PE
+            dma_line = dma_line + (layer_params.used_iact_per_PE << 41)         # bits 41-45: iact values per PE
+            dma_line = dma_line + (layer_params.send_values_out << 46)          # bits 46+: enable output transmission
             dma_storage.append(dma_line)
+
+            # === DMA Line 2: Stride, skip flags, and transmission parameters ===
             dma_line = 0
-            # 2. transmission
-            dma_line = dma_line + (layer_params.needed_wght_transmissions)
-            dma_line = dma_line + (layer_params.strideY << 10) #Also includes Stride X
-            dma_line = dma_line + (layer_params.skipIact << 14)
-            dma_line = dma_line + (layer_params.skipWght << 15)
-            dma_line = dma_line + (layer_params.skipPsum << 16)
-            dma_line = dma_line + (layer_params.psum_delay << 17)
-            dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21)
-            #dma_line = dma_line + (layer_params.kernel_size[1] << 25)
-            dma_line = dma_line + (layer_params.iact_x_lines << 29)
-            dma_line = dma_line + (math.ceil(layer_params.filters/16) << 37) #Calculate right at a later stage
-            #dma_line = dma_line + (math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 45)
+            dma_line = dma_line + (layer_params.needed_wght_transmissions)      # bits 0-9: weight transmissions needed
+            dma_line = dma_line + (layer_params.strideY << 10)                  # bits 10-13: stride Y (also includes X)
+            dma_line = dma_line + (layer_params.skipIact << 14)                 # bit 14: skip iact loading flag
+            dma_line = dma_line + (layer_params.skipWght << 15)                 # bit 15: skip weight loading flag
+            dma_line = dma_line + (layer_params.skipPsum << 16)                 # bit 16: skip psum/bias loading flag
+            dma_line = dma_line + (layer_params.psum_delay << 17)               # bits 17-20: psum accumulation delay
+            dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21)    # bits 21-24: kernels per PE cluster
+            # Note: bits 25-28 reserved for kernel size (commented out)
+            dma_line = dma_line + (layer_params.iact_x_lines << 29)             # bits 29-36: input feature map X lines
+            dma_line = dma_line + (math.ceil(layer_params.filters/16) << 37)    # bits 37+: filter count (16-aligned)
             dma_storage.append(dma_line)
-            dma_line = 0
-            # 3. transmission
-            dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.used_channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
+
+            # === DMA Line 3: Input dimensions and streaming parameters ===
+            # Using bitwise OR for clarity in this packed word
+            dma_line = (layer_params.needed_standing_cycles << 56) | \
+                       (layer_params.used_channels << 48) | \
+                       (layer_params.iact_size_y << 32) | \
+                       (layer_params.iact_size_x << 16) | \
+                       layer_params.iact_stream_cycles
             dma_storage.append(dma_line)
+
+            # === DMA Line 4: Layer control and storage selection ===
             dma_line = 0
-            # 4. transmission
-            dma_line = math.ceil(layer_params.diff_iact_layer)
-            dma_line = dma_line + math.ceil(layer_params.diff_iact_layer_next_layer << 8)
-            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_input << 16)
-            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_output << 17)
-            dma_line = dma_line + math.ceil(layer_params.fully_connected << 18)
-            dma_line = dma_line + math.ceil(layer_params.max_pooling << 19)
-            dma_line = dma_line + math.ceil(layer_params.store_in_psum << 20)
-            dma_line = dma_line + math.ceil(layer_params.output_cycles << 21)
-            dma_line = dma_line + math.ceil(layer_params.y_lines_per_calculation << 29)
-            dma_line = dma_line + math.ceil(layer_params.different_kernels_per_calculation << 33)
+            dma_line = math.ceil(layer_params.diff_iact_layer)                              # bits 0-7: iact layer difference
+            dma_line = dma_line + math.ceil(layer_params.diff_iact_layer_next_layer << 8)   # bits 8-15: next layer iact diff
+            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_input << 16)   # bit 16: input storage bank
+            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_output << 17)  # bit 17: output storage bank
+            dma_line = dma_line + math.ceil(layer_params.fully_connected << 18)             # bit 18: fully connected flag
+            dma_line = dma_line + math.ceil(layer_params.max_pooling << 19)                 # bit 19: max pooling flag
+            dma_line = dma_line + math.ceil(layer_params.store_in_psum << 20)               # bit 20: store in psum buffer
+            dma_line = dma_line + math.ceil(layer_params.output_cycles << 21)               # bits 21-28: output cycles
+            dma_line = dma_line + math.ceil(layer_params.y_lines_per_calculation << 29)     # bits 29-32: Y lines per calc
+            dma_line = dma_line + math.ceil(layer_params.different_kernels_per_calculation << 33)  # bits 33+: kernels per calc
             dma_storage.append(dma_line)
-            dma_line = 0
+
+            # === PE Enable Bitmap Transmission ===
+            # Split the PE bitmap into multiple DMA words (each DMA_Bit_AXI bits wide)
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
                 segment = bitstring[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI]
                 dma_storage.append(int(segment[::-1], 2))
-            
+
+            # === Router Configuration ===
+            # Append router configurations for input activations, weights, and partial sums
             dma_storage.extend(self.write_router_iact(params, layer_params))
             dma_storage.extend(self.write_router_wght(params, layer_params))
             dma_storage.extend(self.write_router_psum(params, layer_params))
             
             storage = dma_storage
         else:
+            # === PARALLEL MODE: DICTIONARY-BASED CONFIGURATION ===
+            # Store each parameter individually by name for parallel register access
             storage[strdic.status_dict["data_mode"]] = params.data_mode
             storage[strdic.status_dict["realfactor"]] = layer_params.realfactor
             storage[strdic.status_dict["autofunction"]] = params.autofunction
@@ -184,8 +214,9 @@ class DenseMapper(LayerMapper):
             storage[strdic.status_dict["skipPsum"]] = layer_params.skipPsum
             storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
             storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
+            # Router configurations as nested structures for parallel access
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
-            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params)
+            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params, layer_params)
             storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
         return storage
 
@@ -208,13 +239,18 @@ class DenseMapper(LayerMapper):
         """
         dma_line = 0
         dma_storage = []
+
+        # Pack quantization parameters: 2 parameter pairs per DMA word
+        # Each parameter is [scale_factor, zero_point] for quantization
         for f in range(math.ceil(16)):
             dma_line = 0
-            dma_line = dma_line + (layer_params.quantize[2*f][0] << 0)
-            dma_line = dma_line + (layer_params.quantize[2*f][1] << 25)
-            dma_line = dma_line + (layer_params.quantize[2*f+1][0] << 32)
-            dma_line = dma_line + (layer_params.quantize[2*f+1][1] << 57)
-            
+            # First quantization pair: scale and zero-point
+            dma_line = dma_line + (layer_params.quantize[2*f][0] << 0)      # bits 0-24: first scale factor
+            dma_line = dma_line + (layer_params.quantize[2*f][1] << 25)     # bits 25-31: first zero-point
+            # Second quantization pair: scale and zero-point
+            dma_line = dma_line + (layer_params.quantize[2*f+1][0] << 32)   # bits 32-56: second scale factor
+            dma_line = dma_line + (layer_params.quantize[2*f+1][1] << 57)   # bits 57-63: second zero-point
+
             dma_storage.append(dma_line)
         return dma_storage
     
@@ -237,16 +273,20 @@ class DenseMapper(LayerMapper):
         """
         dma_line = 0
         dma_storage = []
+
+        # Pack 32 offset values into 4 DMA words (8 values per word)
+        # Each offset value occupies 8 bits
         for f in range(math.ceil(32/8)):
             dma_line = 0
-            dma_line = dma_line + (layer_params.offset[8*f] << 0)
-            dma_line = dma_line + (layer_params.offset[8*f+1] << 8)
-            dma_line = dma_line + (layer_params.offset[8*f+2] << 16)
-            dma_line = dma_line + (layer_params.offset[8*f+3] << 24)
-            dma_line = dma_line + (layer_params.offset[8*f+4] << 32)
-            dma_line = dma_line + (layer_params.offset[8*f+5] << 40)
-            dma_line = dma_line + (layer_params.offset[8*f+6] << 48)
-            dma_line = dma_line + (layer_params.offset[8*f+7] << 56)
+            # Pack 8 consecutive offset values at 8-bit intervals
+            dma_line = dma_line + (layer_params.offset[8*f] << 0)       # bits 0-7: offset 0
+            dma_line = dma_line + (layer_params.offset[8*f+1] << 8)     # bits 8-15: offset 1
+            dma_line = dma_line + (layer_params.offset[8*f+2] << 16)    # bits 16-23: offset 2
+            dma_line = dma_line + (layer_params.offset[8*f+3] << 24)    # bits 24-31: offset 3
+            dma_line = dma_line + (layer_params.offset[8*f+4] << 32)    # bits 32-39: offset 4
+            dma_line = dma_line + (layer_params.offset[8*f+5] << 40)    # bits 40-47: offset 5
+            dma_line = dma_line + (layer_params.offset[8*f+6] << 48)    # bits 48-55: offset 6
+            dma_line = dma_line + (layer_params.offset[8*f+7] << 56)    # bits 56-63: offset 7
             dma_storage.append(dma_line)
         return dma_storage
     
@@ -271,28 +311,41 @@ class DenseMapper(LayerMapper):
             In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
         """
         line = 0
+        # Initialize storage based on mode
         if(params.SERIAL):
-            storage = []
+            storage = []  # Serial: list of packed DMA words
         else:
+            # Parallel: 3D array [cluster_x][cluster_y][router]
             storage = [[[[] for c in range(params.NUM_GLB_IACT)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
-        router_cycle = 0
+
+        router_cycle = 0  # Track position within current DMA word
+
+        # Iterate through all clusters and routers
         for cl_y in range(params.Clusters_Y):
             for cl_x in range(params.Clusters_X):
                 for router in range(params.NUM_GLB_IACT):
                     if(params.SERIAL):
+                        # For dense layers, broadcast to first 4 Y-clusters only
                         if (cl_y < 4) :
+                            # Routing value 1: broadcast input data to this cluster
                             line = line + (1 << (params.Iact_Router_Bits * router_cycle))
                     else:
+                        # Parallel mode: store routing value directly
                         storage[cl_x][cl_y][router] = 1
+
                     router_cycle = router_cycle + 1
+
+                    # Check if current DMA word is full
                     if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Iact_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
+
+        # Append any remaining partial DMA word
         if(params.SERIAL and (router_cycle != 0)):
             router_cycle = 0
             storage.append(line)
-        
+
         return storage
 
     def write_router_wght(self, params, layer_params):
@@ -314,24 +367,36 @@ class DenseMapper(LayerMapper):
             In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
         """
         line = 0
+        # Initialize storage based on mode
         if(params.SERIAL):
-            storage = []
+            storage = []  # Serial: list of packed DMA words
         else:
+            # Parallel: 3D array [cluster_x][cluster_y][router]
             storage = [[[[] for c in range(params.Wght_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
-        router_cycle = 0    
+
+        router_cycle = 0  # Track position within current DMA word
+
+        # Iterate through all clusters and routers
         for cl_x in range(params.Clusters_X):
-            for cl_y in range(params.Clusters_Y):   
+            for cl_y in range(params.Clusters_Y):
                 for router in range(params.Wght_Routers):
                     if(params.SERIAL):
+                        # Routing value 0: use local weight data (no routing/broadcast)
+                        # All clusters load their own weights for dense layers
                         line = line + (0 << (params.Wght_Router_Bits * router_cycle))
                     else:
+                        # Parallel mode: store routing value directly
                         storage[cl_x][cl_y][router] = 0
-                    
+
                     router_cycle = router_cycle + 1
+
+                    # Check if current DMA word is full
                     if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Wght_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
+
+        # Append any remaining partial DMA word
         if(params.SERIAL and (router_cycle != 0)):
             router_cycle = 0
             storage.append(line)
@@ -359,42 +424,57 @@ class DenseMapper(LayerMapper):
             In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
         """
         line = 0
+        # Initialize storage based on mode
         if(params.SERIAL):
-            storage = []
+            storage = []  # Serial: list of packed DMA words
         else:
+            # Parallel: 3D array [cluster_x][cluster_y][router]
             storage = [[[[] for c in range(params.Psum_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
-        router_cycle = 0          
+
+        router_cycle = 0  # Track position within current DMA word
+
+        # Iterate through all clusters and routers
         for cl_x in range(params.Clusters_X):
             for cl_y in range(params.Clusters_Y):
                 for router in range(params.Psum_Routers):
+                    # Determine routing mode based on PE usage pattern
                     if((layer_params.ceil_used_PE_per_clm == 1)):
+                        # Single PE per cluster: direct output (no accumulation chain)
                         if(params.SERIAL):
                             line = line + (4 << (params.Psum_Router_Bits * router_cycle))
                         else:
                             storage[cl_x][cl_y][router] = 4
                     else:
+                        # Multiple PEs per cluster: build accumulation chain along Y-axis
                         if((cl_y % layer_params.used_Y_cluster) == 0):
+                            # First cluster in Y-group: start of accumulation chain
                             if(params.SERIAL):
                                 line = line + (5 << (params.Psum_Router_Bits * router_cycle))
                             else:
                                 storage[cl_x][cl_y][router] = 5
                         else:
                             if(((cl_y + 1) %  layer_params.used_Y_cluster) == 0):
+                                # Last cluster in Y-group: final accumulation and output
                                 if(params.SERIAL):
                                     line = line + (3 << (params.Psum_Router_Bits * router_cycle))
                                 else:
                                     storage[cl_x][cl_y][router] = 3
                             else:
+                                # Middle cluster in Y-group: pass-through accumulation
                                 if(params.SERIAL):
                                     line = line + (2 << (params.Psum_Router_Bits * router_cycle))
                                 else:
                                     storage[cl_x][cl_y][router] = 2
+
                     router_cycle = router_cycle + 1
+
+                    # Check if current DMA word is full
                     if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Psum_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
-                        
+
+        # Append any remaining partial DMA word
         if(params.SERIAL and (router_cycle != 0)):
             router_cycle = 0
             storage.append(line)
@@ -420,16 +500,25 @@ class DenseMapper(LayerMapper):
             In serial mode: list of DMA words containing scaled bias values (currently zeros)
             In parallel mode: 2D list [cluster_x][data_index] of scaled bias values
         """
+        # Initialize storage structure
         storage, line = self.initialize_storage(params.SERIAL), 0
+
+        # Process partial sum (bias) data for each output neuron/filter
         for part_data_num in range(math.ceil(self.layer_params.used_psum_per_PE/2)):
             if(part_data_num < self.layer_params.used_psum_per_PE):
+                # Write bias value for each cluster X
                 for cl_x in range(self.params.Clusters_X):
                     if(self.params.SERIAL):
-                        line = line + (int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * 0))) << (params.PSUM_Bitwidth * cl_x))
+                        # Calculate scaled bias value (currently initialized to 0)
+                        # Scaling factor: 2^(IACT_Bitwidth + WGHT_Bitwidth - 1)
+                        scaled_bias = int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * 0)))
+                        line = line + (scaled_bias << (params.PSUM_Bitwidth * cl_x))
                         storage.append(line)
                         line = 0
                     else:
-                        storage[cl_x].append(int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * 0))))
+                        # Parallel mode: append directly to cluster-specific storage
+                        scaled_bias = int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * 0)))
+                        storage[cl_x].append(scaled_bias)
             else:
                 line = 0
         return storage
