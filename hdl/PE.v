@@ -707,23 +707,23 @@ module PE #(
           if ((iact_addr_SPad_data_r == 0) & (iact_addr_current == 0)) begin
             iact_addr_SPad_en_r <= 1;
           end
-          wght_addr_vec           <= iact_data_spad_oh - 1;
-          iact_data_current_1     <= iact_data_spad_pay;
-          iact_data_current_2     <= iact_data_current_1;
-          iact_data_current_3     <= iact_data_current_2;
+          wght_addr_vec       <= iact_data_spad_oh - 1;
+          iact_data_current_1 <= iact_data_spad_pay;
+          iact_data_current_2 <= iact_data_current_1;
+          iact_data_current_3 <= iact_data_current_2;
         end
 
         CALCULATING: begin
           if (data_mode_reg) begin
             //Defaulting Values
             wght_data_SPad_en_r <= 1;
-            wght_data_use_vec <= 1;
-            next_iact <= iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]];
-            values_valid <= next_iact;
-            computing <= 1;
-            adder_2_en <= 1;
-            use_psum_1 <= adder_1_en;
-            use_psum_2 <= 1;
+            wght_data_use_vec   <= 1;
+            next_iact           <= iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]];
+            values_valid        <= next_iact;
+            computing           <= 1;
+            adder_2_en          <= 1;
+            use_psum_1          <= adder_1_en;
+            use_psum_2          <= 1;
             psum_data_SPad_en_a_w <= 0;
             if (((input_activations_reg == 1) | ((wght_data_vec+2)=={{(4){1'd0}},input_activations_reg})) & adder_1_en) begin
               use_psum_1            <= 0;
@@ -868,7 +868,7 @@ module PE #(
               values_valid <= 0;
             end
             //Reuse Values of PSUM SPad
-            if (((iact_addr_count == iact_addr_current+1) | (iact_addr_count == 0)) & (next_iact)) begin
+            if (((iact_addr_count == iact_addr_current+1) | (iact_addr_count == 0) | (second_spad_words_iact == 1)) & (next_iact)) begin
               current_state_computing <= WAIT_TO_SEND_PSUM;
               wght_addr_vec           <= 0;
               wght_data_vec           <= 0;
@@ -932,7 +932,6 @@ module PE #(
                 use_psum_2 <= 0;
                 used_psum_memory[(psum_spad_addr_b_r)] <= 1;
               end
-
             end
             psum_spad_addr_a_delay <= psum_spad_addr_a_r;
             psum_spad_addr_b_delay <= psum_spad_addr_b_r;
