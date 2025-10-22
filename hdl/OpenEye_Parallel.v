@@ -7,26 +7,60 @@
 
 /// Module: OpenEye_Parallel
 ///
-/// The OpenEye_Parallel represents the most sophisticated module for the implementation of the
-/// OpenEye in the field of application-specific integrated circuits (ASIC). It incorporates a
-/// multitude of finite state machine (FSM) units, which are responsible for the initialization of
-/// the calculation process and the storage of the data within the global buffers. Upon completion
-/// of the calculation, the data is transferred through the PSUM ports.
+/// Overview:
+/// OpenEye_Parallel is the primary ASIC implementation module of the OpenEye accelerator
+/// architecture. It orchestrates parallel neural network computations through sophisticated
+/// state machines and manages data movement between processing elements, global buffers,
+/// and memory interfaces.
 ///
-/// The Status FSM is the principal component that oversees the data flow. In its default state,
-/// data can be written to the GLBs or the PEs. Upon receipt of the compute signal, both other FSMs
-/// commence transmitting data from the GLBs to the PEs.
+/// Architecture Components:
+/// 1. Control State Machines:
+///    - Status FSM: Master controller for overall dataflow
+///    - IACT FSM: Manages input activation data movement
+///    - PSUM FSM: Handles partial sum accumulation and results
 ///
-/// The IACT FSM accepts data from the input ports of the module and controls the transmission to
-/// the Iact GLBs. Upon receipt of the compute signal by the Status FSM, the IACT FSM initiates the
-/// transmission of the input activations. It then pauses until the SUM FSM commences the subsequent
-/// computation cycle.
+/// 2. Memory Organization:
+///    - Global Buffers (GLBs):
+///      * Input Activation (IACT) storage
+///      * Weight (WGHT) storage
+///      * Partial Sum (PSUM) storage
+///    - Processing Elements (PEs) Array
+///    - Configurable buffer depths and widths
 ///
-/// The PSUM FSM is responsible for accepting data from the input ports of the module and
-/// controlling the transmission to the PSUM GLBs. Upon receipt of the compute signal by the Status
-/// FSM, the PSUM FSM initiates the transmission of the bias. Once the bias has been sent, the FSM
-/// awaits the results, which are then sent back to the GLBs. Following this, the state machine
-/// initiates the next computation cycle.
+/// 3. Data Movement Controllers:
+///    - GLB to PE data transfer
+///    - Inter-PE communication
+///    - Result collection and routing
+///
+/// Operational Flow:
+/// 1. Initialization Phase:
+///    - Status FSM in IDLE state
+///    - GLBs and PEs accept configuration data
+///    - Router configurations established
+///
+/// 2. Computation Phase:
+///    - Status FSM triggers computation
+///    - IACT FSM streams activations to PEs
+///    - WGHT data distributed to compute units
+///    - PSUM FSM manages accumulation flow
+///
+/// 3. Result Collection:
+///    - Partial sums gathered and processed
+///    - Results routed back through GLBs
+///    - Next computation cycle preparation
+///
+/// Key Features:
+/// - Parallel computation support
+/// - Flexible memory hierarchy
+/// - Configurable processing elements
+/// - Advanced state machine control
+/// - Efficient data routing
+///
+/// Implementation Notes:
+/// - Optimized for ASIC deployment
+/// - Scalable architecture
+/// - Configurable parameters for different workloads
+/// - Sophisticated handshaking protocols
 ///
 /// Parameters:
 ///   IS_TOPLEVEL            - Decides, wether modul is topmodul or not

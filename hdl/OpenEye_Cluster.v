@@ -7,21 +7,52 @@
 
 /// Module: OpenEye_Cluster
 ///
-
-/// The OpenEye_Cluster contains the complete routing architecture, the required storage and the
-/// processing elements. Data is first stored in the GLB (IACT/PSUM) or directly in the PE
-/// (WGHT). After computation in the process elements, the bias is loaded from the GLBs and passed
-/// to the process elements. After this process the results are collected and the data is passed
-/// through the af_cluster and the bano_cluster. From there the results are written back
-/// into the PSUM GLB and are ready to be read.
+/// Overview:
+/// The OpenEye_Cluster is a fundamental processing unit in the accelerator architecture that 
+/// integrates computation, routing, and storage elements. It orchestrates the dataflow between
+/// different components to enable efficient neural network computations.
 ///
-/// 
-/// Router ports and handshake protocol:
-/// Several ports are used for connections - they contain the data, enable and ready signals.
-/// These ports are the connection to the other routers. They are divided into 3 categories and
-/// 3 bus types; IACT, WGHT and PSUM are the 3 categories, while the handshake protocol is done by
-/// the 3 busses. Data, Enable and Ready. When source and destination are ready, source enable
-/// starts the data communication
+/// Architecture Components:
+/// 1. Processing Elements (PE_cluster):
+///    - Multiple PEs arranged in a grid for parallel computation
+///    - Handles matrix multiplication and accumulation operations
+///
+/// 2. Global Buffer (GLB_cluster):
+///    - Manages three types of memory:
+///      * Input Activation (IACT) storage
+///      * Weight (WGHT) storage directly in PEs
+///      * Partial Sum (PSUM) storage for intermediate results
+///
+/// 3. Post-Processing Pipeline:
+///    - Batch Normalization (bano_cluster)
+///    - Delay handling (delay_cluster)
+///    - Activation Functions (af_cluster)
+///
+/// Dataflow:
+/// 1. Input Stage:
+///    - IACT data loaded into GLB buffers
+///    - Weights stored directly in PE memory
+///    - Initial PSUM values loaded if needed
+///
+/// 2. Computation Stage:
+///    - PEs perform multiply-accumulate operations
+///    - Partial results accumulated in internal registers
+///    - Bias values loaded from GLBs when needed
+///
+/// 3. Post-Processing Stage:
+///    - Results flow through batch normalization
+///    - Optional delay for timing adjustment
+///    - Activation functions applied
+///    - Final results written back to PSUM GLB
+///
+/// Router Architecture:
+/// - Three Categories: IACT, WGHT, PSUM
+/// - Handshake Protocol:
+///   * Data: Actual information transfer
+///   * Enable: Source indicates valid data
+///   * Ready: Destination indicates ability to accept data
+/// - Communication starts when both source and destination assert ready signals
+///   and source enables data transfer
 ///
 /// Parameters:
 ///   IS_TOPLEVEL            - Decides, wether modul is topmodul or not

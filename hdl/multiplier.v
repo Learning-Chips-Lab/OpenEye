@@ -7,21 +7,95 @@
 
 /// Module: multiplier
 ///
-/// Multiplier, that takes two factors and calculates its product. Can be enabled via the port
-/// `multiplier_en_i`. Fixed-Point Operations are enabled by using the port `fraction_bit_i`
+/// The Multiplier module implements a configurable arithmetic multiplier in the OpenEye
+/// architecture that supports both integer and fixed-point operations. This versatile
+/// module enables efficient computation of products with selectable precision and
+/// number representation formats.
+///
+/// Key Features:
+/// - Dual Operation Modes:
+///   * Integer multiplication
+///   * Fixed-point multiplication
+///
+/// - Configurable Precision:
+///   * Independent factor widths
+///   * Adjustable product width
+///   * Dynamic fraction bits
+///
+/// - Synchronous Operation:
+///   * Clock-synchronized computation
+///   * Reset capability
+///   * Enable control
+///
+/// - Data Handling:
+///   * Signed arithmetic
+///   * Overflow protection
+///   * Zero output when disabled
+///
+/// Operational Modes:
+/// 1. Integer Mode (DATATYPE = 0):
+///    - Direct multiplication
+///    - Full precision product
+///    - No fraction handling
+///
+/// 2. Fixed-Point Mode (DATATYPE = 1):
+///    - Fraction-aware multiplication
+///    - Dynamic point positioning
+///    - Automatic scaling
 ///
 /// Parameters:
-///    DATA_WIDTH_FAC1  - Bitwidth of first factor
-///    DATA_WIDTH_FAC2  - Bitwidth of second factor
-///    DATA_WIDTH_PROD  - Bitwidth of product
-///    Q_BITWIDTH       - Bitwidth of `fraction_bit_i`
+///    DATATYPE         - Operation Mode Selection
+///                      0: Integer arithmetic
+///                      1: Fixed-point arithmetic
+///
+///    DATA_WIDTH_FAC1  - First Factor Width
+///                      Bitwidth of first operand
+///                      Determines input precision
+///
+///    DATA_WIDTH_FAC2  - Second Factor Width
+///                      Bitwidth of second operand
+///                      May differ from first factor
+///
+///    DATA_WIDTH_PROD  - Product Width
+///                      Bitwidth of result
+///                      Must accommodate full range
+///
+///    Q_BITWIDTH       - Fraction Control Width
+///                      Bits for fraction position
+///                      log2 of max product width
 ///   
 /// Ports:
-///    multiplier_en_i - Enable Port, activates the multiplication operation
-///    factor_1        - Data input, first factor
-///    factor_2        - Data input, second factor
-///    product         - Data output, product
-///    fraction_bit_i  - Position of point, 0 means Integer Value
+/// Clock and Reset:
+///    clk_i           - System Clock Input
+///                      Positive edge triggered
+///                      Synchronizes operations
+///
+///    rst_ni          - Asynchronous Reset Input (active low)
+///                      Clears product register
+///                      Initializes state
+///
+/// Control Interface:
+///    multiplier_en_i - Operation Enable Input
+///                      1: Enable multiplication
+///                      0: Force zero output
+///
+///    fraction_bit_i  - Fraction Control [Q_BITWIDTH-1:0]
+///                      Specifies decimal point position
+///                      0: Integer operation
+///                      >0: Fixed-point scaling
+///
+/// Data Interface:
+///    factor_1        - First Operand [DATA_WIDTH_FAC1-1:0]
+///                      Signed multiplicand
+///                      First input factor
+///
+///    factor_2        - Second Operand [DATA_WIDTH_FAC2-1:0]
+///                      Signed multiplier
+///                      Second input factor
+///
+///    product         - Result Output [DATA_WIDTH_PROD-1:0]
+///                      Signed product
+///                      Scaled in fixed-point mode
 ///
 
 

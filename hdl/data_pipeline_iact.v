@@ -5,38 +5,77 @@
 
 `timescale 1ns / 1ps
 
-/// Module: data_pipeline
+/// Module: data_pipeline_iact
 ///
-/// The data_pipeline module manages the flow of data through a processing system.
-/// It handles the loading of addresses and data into two separate ScratchPad (SPAD) memories. 
-/// memories, transitioning between these states based on the FSM mode.
-/// The module is designed for sequential operations, processing data in cycles.
+/// The Input Activation Data Pipeline manages the flow of input activation data
+/// in the OpenEye neural network accelerator. It orchestrates data movement between
+/// two ScratchPad (SPAD) memories with different organizations and purposes.
+///
+/// Description:
+///   This module implements a sophisticated data pipeline for handling input activations,
+///   featuring dual scratch pad memories with different data organizations. It includes
+///   compression-like functionality by only storing non-zero values and their positions,
+///   optimizing memory usage for sparse neural networks.
+///
+/// Operation Phases:
+///   1. Data Reception:
+///      - Receives wide input data words
+///      - Processes data in configurable cycles based on SPAD parameters
+///   2. Data Processing:
+///      - Detects non-zero values
+///      - Manages transmission counters for data positioning
+///      - Handles overflow conditions
+///   3. Memory Management:
+///      - Controls dual SPAD interfaces
+///      - Maintains separate address spaces
+///      - Tracks valid data words
 ///
 /// Parameters:
-///    DATA_WIDTH:                 Bit-width of input data
-///    FIRST_SPAD_ADDR:            Number of addresses in the first SPAD
-///    FIRST_SPAD_DATA:            Amount of data stored in one address of the first SPAD
-///    SECOND_SPAD_ADDR:           Number of addresses in the second SPAD
-///    SECOND_SPAD_DATA:           Amount of data stored in one address of the second SPAD
-///    FIRST_SPAD_ADDR_BITWIDTH:   Bit-width required for addressing the first SPAD
-///    SECOND_SPAD_ADDR_BITWIDTH:  Bit-width required for addressing the second SPAD
-///    FIRST_SPAD_DATA_CYCLE:      Number of cycles required to load data into the first SPAD
-///    SECOND_SPAD_DATA_CYCLE:     Number of cycles required to load data into the second SPAD
+///   DATA_WIDTH                - Width of input data bus
+///   FIRST_SPAD_ADDR          - Address depth of first SPAD
+///   FIRST_SPAD_DATA          - Data width for first SPAD entries
+///   SECOND_SPAD_ADDR         - Address depth of second SPAD
+///   SECOND_SPAD_DATA         - Data width for second SPAD entries
+///   SECOND_PAYLOAD_WIDTH     - Width of actual payload in second SPAD
+///   FIRST_SPAD_ADDR_BITWIDTH - Address width for first SPAD (auto-calculated)
+///   SECOND_SPAD_ADDR_BITWIDTH- Address width for second SPAD (auto-calculated)
+///   FIRST_SPAD_DATA_CYCLE    - Data cycles for first SPAD (derived)
+///   SECOND_SPAD_DATA_CYCLE   - Data cycles for second SPAD (derived)
+///   SECOND_OVERHEAD_WIDTH    - Width of overhead data in second SPAD
 ///
 /// Ports:
-///    clk_i:                      Clock signal input
-///    rst_ni:                     Asynchronous reset input (active low)
-///    compute_i:                  Signal to reset addresses and state of the module
-///    data_i:                     Input data to be processed and stored
-///    enable_i:                   Enable signal for data processing
-///    first_spad_words_o:         Number of words stored in the first SPAD
-///    second_spad_words_o:        Number of words stored in the second SPAD
-///    first_spad_addr_o:          Address output for the first SPAD
-///    first_spad_data_o:          Data output from the first SPAD
-///    first_spad_en_o:            Enable signal for the first SPAD
-///    second_spad_addr_o:         Address output for the second SPAD
-///    second_spad_data_o:         Data output from the second SPAD
-///    second_spad_en_o:           Enable signal for the second SPAD
+///   Clock and Control:
+///     clk_i              - System clock input
+///     rst_ni            - Asynchronous reset (active low)
+///     compute_i         - Triggers computation/reset cycle
+///     enable_i          - Enables data processing
+///
+///   Data Interface:
+///     data_i[DATA_WIDTH-1:0] - Input data word
+///
+///   First SPAD Interface:
+///     first_spad_words_o     - Number of valid words in first SPAD
+///     first_spad_max_i       - Maximum address limit for first SPAD
+///     first_spad_addr_o      - Address output to first SPAD
+///     first_spad_data_o      - Data output to first SPAD
+///     first_spad_en_o        - First SPAD write enable
+///
+///   Second SPAD Interface:
+///     second_spad_words_o    - Number of valid words in second SPAD
+///     second_spad_addr_o     - Address output to second SPAD
+///     second_spad_data_o     - Data output to second SPAD
+///     second_spad_en_o       - Second SPAD write enable
+///
+/// Implementation Notes:
+///   - Uses dual-stage buffering for data processing
+///   - Implements sparse data optimization
+///   - Features automatic overflow protection
+///   - Supports variable data widths and organizations
+///   - Maintains word counts for both SPADs
+///   - Uses transmission counters for precise timing
+///   - Handles asynchronous reset conditions
+///   - Processes data only when enabled
+///   - Supports computation mode for pipeline flushing
 ///
 
 module data_pipeline_iact #(

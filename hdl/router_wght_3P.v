@@ -5,32 +5,91 @@
 
 `timescale 1ns / 1ps
 
-/// Module: router_wght
+/// Module: router_wght_3P
 ///
-/// Router_weights (router_wght) contains the necessary router for distributing the weights in the
-/// OpenEye. A source can be either a horizontal cluster or the external connection to the Wght
-/// ports. A destination can be either the horizontal cluster or the PE cluster.
-/// communication protocol is the same "hand-shake" method used in the Input Activation Router
-/// and the Partial Sum Router.
+/// The 3-Port Weight Router (router_wght_3P) is an enhanced version of the weight router
+/// that supports three-way weight distribution in the OpenEye architecture. It extends
+/// the basic weight router functionality to enable more complex weight sharing patterns
+/// and efficient weight distribution across multiple PE clusters.
+///
+/// Key Features:
+/// - Three-Port Architecture:
+///   * Port 0: Primary Weight GLB interface
+///   * Port 1: First horizontal routing path
+///   * Port 2: Second horizontal routing path
+///
+/// - Enhanced Weight Distribution:
+///   * Multi-directional weight broadcasting
+///   * Parallel weight streaming support
+///   * Configurable three-way routing paths
+///
+/// - Advanced Flow Control:
+///   * Three-way handshake protocol
+///   * Independent port backpressure
+///   * Synchronized multi-port transfers
+///
+/// Architectural Role:
+/// The router enables sophisticated weight distribution by:
+/// 1. Supporting complex weight sharing patterns
+/// 2. Enabling parallel weight distribution
+/// 3. Facilitating weight broadcast to multiple clusters
+/// 4. Providing flexible weight routing topologies
 ///
 /// Parameters:
-///    DATA_WIDTH             - WIDTH of data ports
+///    DATA_WIDTH          - Weight Data Path Width
+///                         Defines the precision of weight values
+///                         Typically 8-bit for standard neural networks
+///                         Configurable for different quantization schemes
 ///   
 /// Ports:
-///    router_mode_i          - Configurs the router. 1 means it accepts data from other router.
-///                             0 menans it accepts data from top modul
-///    ready_src_port_0       - Ready Port for the source Port 0 (Top Modul or GLB)
-///    data_src_port_0        - Data Port for the source Port 0 (Top Modul or GLB)
-///    enable_src_port_0      - Enable Port for the source Port 0 (Top Modul or GLB)
-///    ready_src_port_1       - Ready Port for the source Port 1 (Other router)
-///    data_src_port_1        - Data Port for the source Port 1 (Other router)
-///    enable_src_port_1      - Enable Port for the source Port 1 (Other router)
-///    ready_dst_port_0       - Ready Port for the destination Port 0 (Top Modul or GLB)
-///    data_dst_port_0        - Data Port for the destination Port 0 (Top Modul or GLB)
-///    enable_dst_port_0      - Enable Port for the destination Port 0 (Top Modul or GLB)
-///    ready_dst_port_1       - Ready Port for the destination Port 1 (Other router)
-///    data_dst_port_1        - Data Port for the destination Port 1 (Other router)
-///    enable_dst_port_1      - Enable Port for the destination Port 1 (Other router)
+/// Configuration Interface:
+///    router_mode_i [1:0] - Router Mode Control
+///                         00: Single cluster mode (GLB to PE only)
+///                         01: Primary horizontal broadcast
+///                         10: Secondary horizontal broadcast
+///                         11: Dual horizontal broadcast
+///
+/// Primary Interface (Port 0):
+///    ready_src_port_0   - GLB Source Ready Signal
+///                         Flow control for Weight GLB interface
+///    data_src_port_0    - GLB Source Data Bus [DATA_WIDTH-1:0]
+///                         Weight data from GLB
+///    enable_src_port_0  - GLB Source Valid Signal
+///                         Indicates valid weight data from GLB
+///    ready_dst_port_0   - PE Cluster Ready Input
+///                         Flow control from PE cluster
+///    data_dst_port_0    - PE Cluster Data [DATA_WIDTH-1:0]
+///                         Weight data to PE cluster
+///    enable_dst_port_0  - PE Cluster Valid
+///                         Valid signal to PE cluster
+///
+/// First Horizontal Interface (Port 1):
+///    ready_src_port_1   - First Horizontal Source Ready
+///                         Flow control from first adjacent router
+///    data_src_port_1    - First Horizontal Data Input [DATA_WIDTH-1:0]
+///                         Weight data from first adjacent router
+///    enable_src_port_1  - First Horizontal Source Valid
+///                         Valid data from first adjacent router
+///    ready_dst_port_1   - First Horizontal Destination Ready
+///                         Flow control to first adjacent router
+///    data_dst_port_1    - First Horizontal Data Output [DATA_WIDTH-1:0]
+///                         Weight data to first adjacent router
+///    enable_dst_port_1  - First Horizontal Destination Valid
+///                         Valid data to first adjacent router
+///
+/// Second Horizontal Interface (Port 2):
+///    ready_src_port_2   - Second Horizontal Source Ready
+///                         Flow control from second adjacent router
+///    data_src_port_2    - Second Horizontal Data Input [DATA_WIDTH-1:0]
+///                         Weight data from second adjacent router
+///    enable_src_port_2  - Second Horizontal Source Valid
+///                         Valid data from second adjacent router
+///    ready_dst_port_2   - Second Horizontal Destination Ready
+///                         Flow control to second adjacent router
+///    data_dst_port_2    - Second Horizontal Data Output [DATA_WIDTH-1:0]
+///                         Weight data to second adjacent router
+///    enable_dst_port_2  - Second Horizontal Destination Valid
+///                         Valid data to second adjacent router
 ///Fertig
 
 module router_wght_3P #(

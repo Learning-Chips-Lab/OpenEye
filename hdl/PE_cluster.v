@@ -7,56 +7,123 @@
 
 /// Module: PE_cluster
 ///
-/// OpenEye Processing Element (PE) Cluster. The PE cluster connects the GLB, router and data
-/// Multiplexer with the Processing Elements. Data is transferred using a hand-shake protocol.
-/// The Multiplexer and Demultiplexer are configured by 'iact_choose_i' and 'psum_choose_i'. 
+/// The PE_cluster module implements a configurable 2D array of Processing Elements (PEs) in the 
+/// OpenEye neural network accelerator. It orchestrates data movement and computation across a 
+/// grid of PEs while managing communication with global buffers and routing infrastructure.
+///
+/// Architecture Overview:
+/// - Array Organization:
+///   * 2D grid of Processing Elements (PEs) arranged in rows and columns
+///   * Configurable dimensions through PE_ROWS and PE_COLUMNS parameters
+///   * Hierarchical data distribution and collection network
+///
+/// - Data Flow Mechanisms:
+///   * Input Activation (IACT) Distribution:
+///     - Multiple global buffer interfaces (NUM_GLB_IACT)
+///     - Configurable routing through multiplexers
+///     - Individual PE selection capability
+///
+///   * Weight (WGHT) Distribution:
+///     - Row-wise weight distribution
+///     - Shared weights across columns
+///     - Synchronized weight updates
+///
+///   * Partial Sum (PSUM) Collection:
+///     - Column-wise accumulation path
+///     - Dual-mode routing (direct/router)
+///     - Configurable output selection
+///
+/// Key Features:
+/// - Flexible PE Array Configuration
+/// - Multiple Data Input Sources
+/// - Handshake-based Data Transfer
+/// - Configurable Routing Paths
+/// - Synchronized PE Control
+/// - Sparse Data Support
+/// - Parallel MAC Operations
+///
+/// Performance Optimizations:
+/// - Efficient Data Distribution
+/// - Parallel Processing
+/// - Flexible Routing
+/// - Pipeline Synchronization
+/// - Resource Sharing
 ///
 /// Parameters:
-///   IS_TOPLEVEL            - Decides, wether modul is topmodul or not
-///   PARALLEL_MACS          - Number of MAC operations that are performed in parallel
-///   TOP_CLUSTER            - Decides, wether this cluster is the topmost cluster
-///   DATA_IACT_BITWIDTH     - Width of input activation data
-///   DATA_WGHT_BITWIDTH     - Width of weight data
-///   DATA_PSUM_BITWIDTH     - Width of partial sum data, used in internal accumulator
-///   DATA_IACT_OVERHEAD     - Number of zeros that can be ignored in sparse input activation data
-///   DATA_WGHT_IGNORE_ZEROS - Number of zeros that can be ignored in sparse weight data
-///   TRANS_BITWIDTH_IACT    - Width of iact input port 
-///   TRANS_BITWIDTH_WGHT    - Width of weight input port
-///   TRANS_BITWIDTH_PSUM    - Width of partial sum input port
-///   NUM_GLB_IACT           - Number of input activation global buffers
-///   IACT_ADDR_WORDS        - Number of words in IACT ADDR SPAD
-///   IACT_DATA_WORDS        - Number of words in IACT DATA SPAD
-///   WGHT_ADDR_WORDS        - Number of words in WGHT ADDR SPAD
-///   WGHT_DATA_WORDS        - Number of words in WGHT DATA SPAD
-///   PSUM_WORDS             - Number of words in PSUM SPAD
-///   PE_ROWS                - Amount of rows of process elements
-///   PE_COLUMNS             - Amount of columns of process elements
-///   PES                    - Amount of process elements
+/// Configuration Parameters:
+///   IS_TOPLEVEL            - Boolean flag indicating if module is the top level
+///   SERIAL                 - Boolean flag enabling serial processing mode
+///   TOP_CLUSTER            - Boolean flag indicating topmost cluster in hierarchy
+///   PE_ROWS               - Number of processing element rows in the cluster
+///   PE_COLUMNS            - Number of processing element columns in the cluster
+///   PES                   - Total number of processing elements (PE_ROWS * PE_COLUMNS)
+///
+/// Processing Configuration:
+///   PARALLEL_MACS         - Number of parallel multiply-accumulate operations per PE
+///   NUM_GLB_IACT         - Number of input activation global buffer interfaces
+///
+/// Data Width Parameters:
+///   DATA_IACT_BITWIDTH    - Bit width of input activation values
+///   DATA_WGHT_BITWIDTH    - Bit width of weight values
+///   DATA_PSUM_BITWIDTH    - Bit width of partial sum accumulator
+///   TRANS_BITWIDTH_IACT   - Transfer width for input activation interface
+///   TRANS_BITWIDTH_WGHT   - Transfer width for weight interface
+///   TRANS_BITWIDTH_PSUM   - Transfer width for partial sum interface
+///
+/// Sparsity Parameters:
+///   DATA_IACT_OVERHEAD    - Bits for zero-skipping in input activations
+///   DATA_WGHT_IGNORE_ZEROS - Bits for zero-skipping in weights
+///
+/// Memory Parameters:
+///   IACT_ADDR_WORDS      - Input activation address scratchpad depth
+///   IACT_DATA_WORDS      - Input activation data scratchpad depth
+///   WGHT_ADDR_WORDS      - Weight address scratchpad depth
+///   WGHT_DATA_WORDS      - Weight data scratchpad depth
+///   PSUM_WORDS           - Partial sum scratchpad depth
 ///   
 /// Ports:
-///   iact_choose_i           - Specify the iact MUX and DEMUX for DATA, ENABLE, READY
-///   psum_choose_i           - Specify the psum MUX and DEMUX for DATA, ENABLE, READY
-///   compute_i               - Trigger computation
-///   pe_iact_data            - Input activation data (includes actual iact data + overhead for ignoring zeros + address)
-///   pe_iact_enable          - Enable input activation data transfer
-///   pe_iact_ready           - Ready signal for input activation data transfer
-///   pe_wght_data            - Weight data (includes actual weight data + overhead for ignoring zeros + address)
-///   pe_wght_enable          - Enable weight data transfer
-///   pe_wght_ready           - Ready signal for weight data transfer
-///   pe_psum_data_i          - Partial sum and bias input data
-///   pe_psum_enable_i        - Enable partial sum data input transfer
-///   pe_psum_ready_o         - Ready signal for partial sum data input transfer
-///   pe_psum_data_o          - Partial sum output data
-///   pe_psum_enable_o        - Enable partial sum data output transfer
-///   pe_psum_ready_i         - Ready signal for partial sum data output transfer
-///   pe_router_psum_data_i   - Partial sum and bias input data via PSUM Router
-///   pe_router_psum_enable_i - Enable partial sum data input transfer via PSUM Router
-///   pe_router_psum_ready_o  - Ready signal for partial sum data input transfer via PSUM Router
-///   pe_router_psum_data_o   - Partial sum output data via PSUM Router
-///   pe_router_psum_enable_o - Enable partial sum data output transfer via PSUM Router
-///   pe_router_psum_ready_i  - Ready signal for partial sum data output transfer via PSUM Router
-///   enable_stream_i         - Enable signal of data stream for parameters
-///   data_stream_i           - Data stream for parameters
+/// System Interface:
+///   clk_i                - System clock input
+///   rst_ni              - Asynchronous reset (active low)
+///   compute_i           - Computation trigger for each PE [PES-1:0]
+///   enable_stream_i     - Parameter stream enable
+///   data_stream_i       - Configuration parameter data [11:0]
+///
+/// Routing Control:
+///   iact_choose_i       - Input activation routing control
+///                        [($clog2(NUM_GLB_IACT+1)*PES)-1:0]
+///   psum_choose_i       - Partial sum routing control [PE_COLUMNS-1:0]
+///
+/// Input Activation Interface:
+///   pe_iact_data        - Input activation data bus
+///                        [(TRANS_BITWIDTH_IACT*NUM_GLB_IACT)-1:0]
+///   pe_iact_enable      - Input activation valid signals [NUM_GLB_IACT-1:0]
+///   pe_iact_ready       - Input activation ready signals [NUM_GLB_IACT-1:0]
+///
+/// Weight Interface:
+///   pe_wght_data        - Weight data bus [(TRANS_BITWIDTH_WGHT*PE_ROWS)-1:0]
+///   pe_wght_enable      - Weight valid signals [PE_ROWS-1:0]
+///   pe_wght_ready       - Weight ready signals [PE_ROWS-1:0]
+///
+/// Direct Partial Sum Interface:
+///   pe_psum_data_i      - Input partial sum bus
+///                        [(TRANS_BITWIDTH_PSUM*PE_COLUMNS)-1:0]
+///   pe_psum_enable_i    - Input partial sum valid signals [PE_COLUMNS-1:0]
+///   pe_psum_ready_i     - Input partial sum ready signals [PE_COLUMNS-1:0]
+///   pe_psum_data_o      - Output partial sum bus
+///                        [(TRANS_BITWIDTH_PSUM*PE_COLUMNS)-1:0]
+///   pe_psum_enable_o    - Output partial sum valid signals [PE_COLUMNS-1:0]
+///   pe_psum_ready_o     - Output partial sum ready signals [PE_COLUMNS-1:0]
+///
+/// Router Partial Sum Interface:
+///   pe_router_psum_data_i   - Router input partial sum bus
+///                            [(TRANS_BITWIDTH_PSUM*PE_COLUMNS)-1:0]
+///   pe_router_psum_enable_i - Router input valid signals [PE_COLUMNS-1:0]
+///   pe_router_psum_ready_i  - Router input ready signals [PE_COLUMNS-1:0]
+///   pe_router_psum_data_o   - Router output partial sum bus
+///                            [(TRANS_BITWIDTH_PSUM*PE_COLUMNS)-1:0]
+///   pe_router_psum_enable_o - Router output valid signals [PE_COLUMNS-1:0]
+///   pe_router_psum_ready_o  - Router output ready signals [PE_COLUMNS-1:0]
 ///
 
 module PE_cluster #(
@@ -297,4 +364,74 @@ module PE_cluster #(
 
   endgenerate
 
+  /// Implementation Notes:
+  /// Array Organization:
+  ///   - 2D grid arrangement of PEs using nested generate blocks
+  ///   - Row-wise weight distribution network
+  ///   - Column-wise partial sum accumulation paths
+  ///   - Flexible routing through multiplexers and demultiplexers
+  ///
+  /// Data Distribution:
+  ///   - Input Activations:
+  ///     * Multiple global buffer interfaces
+  ///     * Individual PE selection via iact_choose_i
+  ///     * Parallel distribution to all PEs
+  ///
+  ///   - Weights:
+  ///     * Row-wise distribution
+  ///     * Shared weights across columns
+  ///     * Synchronized weight updates
+  ///
+  ///   - Partial Sums:
+  ///     * Column-wise accumulation
+  ///     * Dual routing paths (direct/router)
+  ///     * Configurable output selection
+  ///
+  /// Control Logic:
+  ///   - Reset Synchronization:
+  ///     * Optional top-level reset handling
+  ///     * Clean reset distribution
+  ///
+  ///   - Handshake Protocol:
+  ///     * Ready signal aggregation
+  ///     * Enable signal distribution
+  ///     * Synchronized data transfer
+  ///
+  /// Routing Infrastructure:
+  ///   - Input Selection:
+  ///     * Multiplexers for input activation sources
+  ///     * Partial sum input path selection
+  ///
+  ///   - Output Control:
+  ///     * Demultiplexers for partial sum routing
+  ///     * Ready signal distribution
+  ///
+  /// Performance Features:
+  ///   - Parallel Processing:
+  ///     * Multiple PE operation
+  ///     * Concurrent data distribution
+  ///     * Synchronized computation
+  ///
+  ///   - Pipeline Management:
+  ///     * Data flow synchronization
+  ///     * Handshake coordination
+  ///     * Ready signal propagation
+  ///
+  /// Integration Considerations:
+  ///   - Scalability:
+  ///     * Configurable array dimensions
+  ///     * Adjustable data widths
+  ///     * Flexible routing options
+  ///
+  ///   - Debug Support:
+  ///     * Observable control signals
+  ///     * Traceable data paths
+  ///     * Status monitoring
+  ///
+  /// Testability Features:
+  ///   - Reset Verification
+  ///   - Data Path Validation
+  ///   - Control Signal Monitoring
+  ///   - Performance Measurement
+  ///
 endmodule

@@ -7,22 +7,86 @@
 
 /// Module: mux_iact
 ///
-/// mux_iact is a module that essentially works like a mux, but for three different data paths.
-/// Port A (`a_i` and `a_o`) contains data of a given width, while ports B and C contain control
-/// Signals
+/// The Input Activation Multiplexer (mux_iact) is a specialized multiplexing module in
+/// the OpenEye architecture designed for managing input activation data paths. It implements
+/// a configurable N-to-1 multiplexer with integrated control signal handling for input
+/// activation flow control.
+///
+/// Key Features:
+/// - Multi-Channel Design:
+///   * Configurable number of input paths
+///   * Packed array interfaces
+///   * Independent control signals
+///
+/// - Mixed Data Handling:
+///   * Wide data path for activations
+///   * Single-bit control signals
+///   * Broadcast capability
+///
+/// - Dynamic Selection:
+///   * Runtime path selection
+///   * Zero-state support
+///   * Control signal routing
+///
+/// Architectural Role:
+/// The mux_iact serves as:
+/// 1. Input activation router
+/// 2. Control signal distributor
+/// 3. Data path coordinator
+/// 4. Flow control manager
+///
+/// Operational Modes:
+/// 1. Normal Selection (sel_i < I_COUNT):
+///    - Routes selected activation path
+///    - Forwards corresponding control signals
+///    - Maintains flow control
+///
+/// 2. Zero State (sel_i = I_COUNT):
+///    - Outputs zero activation data
+///    - Clears control signals
+///    - Preserves broadcast capability
 ///
 /// Parameters:
-///    WIDTH    - Bitwidth of data port A
-///    I_COUNT  - Amount of different data paths
+///    WIDTH           - Activation Data Width
+///                     Width of each activation data path
+///                     Determines processing precision
+///
+///    I_COUNT        - Input Channel Count
+///                     Number of input activation paths
+///                     Defines multiplexing scale
 ///   
 /// Ports:
-///    a_i   - Data input A, packed array of 3
-///    b_i   - Data input B, packed array of 3
-///    c_o   - Data output C, packed array of 3
-///    sel_i - Port for selecting one port of packed array
-///    a_o   - Data input A
-///    b_o   - Data input B
-///    c_i   - Data output C
+/// Data Arrays:
+///    a_i            - Activation Input Array [WIDTH*I_COUNT-1:0]
+///                     Packed array of I_COUNT activation vectors
+///                     Each vector is WIDTH bits wide
+///
+///    b_i            - Control Input Array [I_COUNT-1:0]
+///                     Packed array of control signals
+///                     One bit per input channel
+///
+///    c_o            - Broadcast Output Array [I_COUNT-1:0]
+///                     Distributes c_i to all channels
+///                     Maintains synchronization
+///
+/// Control Interface:
+///    sel_i          - Path Selection [$clog2(I_COUNT+1)-1:0]
+///                     Selects active input channel
+///                     I_COUNT value triggers zero state
+///
+/// Selected Outputs:
+///    a_o            - Selected Activation [WIDTH-1:0]
+///                     Currently selected activation data
+///                     Zero when sel_i = I_COUNT
+///
+///    b_o            - Selected Control
+///                     Control signal for selected path
+///                     Zero when sel_i = I_COUNT
+///
+/// Broadcast Input:
+///    c_i            - Broadcast Control
+///                     Single-bit control input
+///                     Distributed to all channels via c_o
 ///
 
 module mux_iact #(

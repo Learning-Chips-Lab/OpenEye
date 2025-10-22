@@ -7,55 +7,110 @@
 
 /// Module: PE
 ///
-/// OpenEye Processing Element (PE). The PE can perform multiply-accumulate (MAC) operations
-/// on the input data. The PE can be configured to exploit sparsity in the input data
-/// by ignoring zeros in the input data. The PE can also be configured to perform fixed-point
-/// arithmetic. 
+/// The PE (Processing Element) is a fundamental computational unit in the OpenEye neural network
+/// accelerator. It is designed to efficiently perform multiply-accumulate (MAC) operations for 
+/// neural network inference, with specific optimizations for handling sparse data patterns and
+/// configurable fixed-point arithmetic.
 ///
-/// In order to operate, the Iact and Wght SPad memory must first be filled. After the memory has
-/// been filled and a compute signal has been received, the internal FSM starts to prepare the
-/// computation by reading the Iact SPads for its input data. By reading the address overhead of the
-/// data SPad, the required data of the weight SPad memory is read and both values are sent to the
-/// multiplier submodule. After multiplication, the corresponding Psum SPad is read and added. The
-/// result is written back to the Psum SPad. 
+/// Architecture:
+/// - Memory Hierarchy: Uses a combination of scratch pads (SPads) for input activations (Iact),
+///   weights (Wght), and partial sums (Psum) to maximize data reuse and minimize memory access.
+/// - Sparsity Exploitation: Implements zero-skipping logic for both input activations and weights
+///   to avoid unnecessary computations on zero values.
+/// - Parallel Processing: Supports parallel MAC operations through dual multipliers and adders.
+/// - Flexible Precision: Configurable fixed-point arithmetic to balance accuracy and efficiency.
+/// - Data Flow Control: Uses a sophisticated FSM to coordinate data movement and computation.
+///
+/// Operational Flow:
+/// 1. Memory Loading Phase:
+///    - Input activations and weights are loaded into respective SPad memories
+///    - Memory addressing structures are initialized for sparse data processing
+///
+/// 2. Computation Phase:
+///    - FSM initiates computation upon receiving compute signal
+///    - Reads input activations from Iact SPad
+///    - Uses activation data to index into weight SPad memory
+///    - Routes data pairs to multiplier units
+///    - Reads corresponding partial sums for accumulation
+///    - Writes results back to Psum SPad
+///
+/// 3. Output Phase:
+///    - Accumulates results across multiple operations
+///    - Manages partial sum routing and accumulation
+///    - Coordinates output streaming of completed results
+///
+/// Key Features:
+/// - Zero-skipping optimization for sparse data
+/// - Parallel MAC operations for improved throughput
+/// - Configurable fixed-point arithmetic
+/// - Dual-ported memory architecture for efficient data access
+/// - Flexible routing for input activations and partial sums
+/// - State machine controlled operation for precise timing
+///
+/// Performance Optimizations:
+/// - Efficient memory hierarchy to minimize data movement
+/// - Parallel processing units for increased throughput
+/// - Sparsity exploitation to skip unnecessary computations
+/// - Pipelined operation for sustained performance
 ///
 /// Parameters:
-///    IS_TOPLEVEL             - Decides, wether modul is topmodul or not
-///    CREATE_VCD              - Decides, wether a vcd-file should be created
-///    PE_X                    - X Position of PE in cluster
-///    PE_Y                    - Y Position of PE in cluster
-///    PARALLEL_MACS           - Number of MAC operations that are performed in parallel
-///    DATA_IACT_BITWIDTH      - Width of input activation data
-///    DATA_WGHT_BITWIDTH      - Width of weight data
-///    DATA_PSUM_BITWIDTH      - Width of partial sum data, used in internal accumulator
-///    DATA_IACT_OVERHEAD      - Number of zeros that can be ignored in sparse input activation data
-///    DATA_WGHT_IGNORE_ZEROS  - Number of zeros that can be ignored in sparse weight data
-///    IACT_DATA_ADDR          - Number of input activation data words in SPad
-///    IACT_ADDR_ADDR          - Number of input activation adresses in SPad
-///    WGHT_DATA_ADDR          - Number of weight data words in SPad
-///    WGHT_ADDR_ADDR          - Number of weight adresses in SPad
-///    PSUM_ADDR               - Number of partial sum data words in SPad
-///    TRANS_BITWIDTH_IACT     - Width of iact input port 
-///    TRANS_BITWIDTH_WGHT     - Width of weight input port
-///    NUM_GLB_IACT            - Number of input activation global buffers
+/// Configuration Parameters:
+///    IS_TOPLEVEL             - Boolean flag to indicate if this module is the top level
+///    SERIAL                  - Boolean flag to enable serial processing mode
+///    CREATE_VCD              - Boolean flag to enable VCD file creation for simulation
+///    PE_X                    - X coordinate position of PE in the processing array cluster
+///    PE_Y                    - Y coordinate position of PE in the processing array cluster
+///    PARALLEL_MACS           - Number of multiply-accumulate operations executed in parallel
+///
+/// Data Width Parameters:
+///    DATA_IACT_BITWIDTH      - Bit width of input activation values
+///    DATA_WGHT_BITWIDTH      - Bit width of weight values
+///    DATA_PSUM_BITWIDTH      - Bit width of partial sum accumulator
+///
+/// Sparsity Parameters:
+///    DATA_IACT_OVERHEAD      - Bits reserved for zero-skipping in input activations
+///    DATA_WGHT_IGNORE_ZEROS  - Bits reserved for zero-skipping in weights
+///
+/// Memory Organization Parameters:
+///    IACT_DATA_ADDR          - Depth of input activation data scratch pad memory
+///    IACT_ADDR_ADDR          - Depth of input activation address scratch pad memory
+///    WGHT_DATA_ADDR          - Depth of weight data scratch pad memory
+///    WGHT_ADDR_ADDR          - Depth of weight address scratch pad memory
+///    PSUM_ADDR               - Depth of partial sum scratch pad memory
+///
+/// Interface Parameters:
+///    TRANS_BITWIDTH_IACT     - Bit width of input activation interface bus
+///    TRANS_BITWIDTH_WGHT     - Bit width of weight interface bus
+///    NUM_GLB_IACT            - Number of global input activation buffer interfaces
 ///   
 /// Ports:
-///    iact_select_i          - Select routing of input mux (see mux_iact), i.e. which input activation data is used)
-///    iact_data_i            - Input activation data (includes actual iact data + overhead for ignoring zeros + address)
-///    iact_enable_i          - Enable input activation data transfer
-///    iact_ready_o           - Ready signal for input activation data transfer
-///    wght_data_i            - Weight data (includes actual weight data + overhead for ignoring zeros + address)
-///    wght_enable_i          - Enable weight data transfer
-///    wght_ready_o           - Ready signal for weight data transfer
-///    psum_data_i            - Partial sum and bias input data
-///    psum_enable_i          - Enable partial sum data input transfer
-///    psum_ready_o           - Ready signal for partial sum data input transfer
-///    psum_data_o            - Partial sum output data
-///    psum_enable_o          - Enable partial sum data output transfer
-///    psum_ready_i           - Ready signal for partial sum data output transfer
-///    compute_i              - Trigger computation
-///    enable_stream_i        - Enable signal of data stream for parameters
-///    data_stream_i          - Data stream for parameters
+/// Clock and Reset:
+///    clk_i                   - System clock input
+///    rst_ni                  - Active-low asynchronous reset
+///
+/// Input Activation Interface:
+///    iact_select_i          - Input activation source selection control
+///    iact_data_i            - Input activation data bus [includes value, sparsity bits, address]
+///    iact_enable_i          - Input activation data valid signal
+///    iact_ready_o           - Input activation interface ready signal
+///
+/// Weight Interface:
+///    wght_data_i            - Weight data bus [includes value, sparsity bits, address]
+///    wght_enable_i          - Weight data valid signal
+///    wght_ready_o           - Weight interface ready signal
+///
+/// Partial Sum Interface:
+///    psum_data_i            - Partial sum input data bus
+///    psum_enable_i          - Partial sum input valid signal
+///    psum_ready_o           - Partial sum input interface ready signal
+///    psum_data_o            - Partial sum output data bus
+///    psum_enable_o          - Partial sum output valid signal
+///    psum_ready_i           - Partial sum output interface ready signal
+///
+/// Control Interface:
+///    compute_i              - Computation start trigger signal
+///    enable_stream_i        - Parameter stream enable signal
+///    data_stream_i          - Configuration parameter data stream
 ///
 
 module PE #(
