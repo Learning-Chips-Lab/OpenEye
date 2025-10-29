@@ -400,12 +400,10 @@ module PE #(
                                 wght_data_spad_oh_1 + wght_data_spad_oh_2 + psum_spad_addr_b_mem;
   assign psum_data_SPad_en_a_w_i = !psum_data_SPad_en_a_w ? 0 :
                                       !psum_data_SPad_en_a_r ? 1 :
-                                       (psum_spad_addr_a_w == psum_spad_addr_a_r) ?  0 :
-                                       (psum_spad_addr_a_w != psum_spad_addr_b_r) ?  1 : 0;
+                                       (psum_spad_addr_a_w != psum_spad_addr_a_r) ?  1 : 0;
   assign psum_data_SPad_en_b_w_i = !psum_data_SPad_en_b_w ? 0 :
                                       !psum_data_SPad_en_b_r ? 1 :
-                                       (psum_spad_addr_b_w == psum_spad_addr_b_r) ?  0 :
-                                       (psum_spad_addr_b_w != psum_spad_addr_a_r) ?  1 : 0;
+                                       (psum_spad_addr_b_w != psum_spad_addr_b_r) ?  1 : 0;
   assign psum_ready_o = psum_ready_i & psum_select;
 
   // FSM to control the operation of PE
@@ -919,6 +917,7 @@ module PE #(
                 iact_addr_current <= iact_addr_SPad_data_r;
               end
             end
+            values_valid <= 1;
             if (wght_data_end <= wght_data_vec) begin
               values_valid <= 0;
             end

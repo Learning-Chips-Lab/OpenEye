@@ -332,6 +332,7 @@ class WghtStreamMapper(object):
                         # Load weight from DRAM: dram[channel][filter][kernel_row][kernel_x]
                         spad_storage[words_in_storage][spad_val_number][0] = dram[channel][filters][kernel_row][kernel_x]
                         spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
+                        overhead_counter = 0
 
                         # Move to next filter
                         filters = filters + 1
@@ -340,7 +341,6 @@ class WghtStreamMapper(object):
                         if((filters == (start_current_repetition + filters_per_calculation))):
                             filters = start_current_repetition
                             kernel_x = kernel_x + 1
-                            overhead_counter = 0
 
                         # Wrap to next channel when kernel width exhausted
                         if(kernel_x == layer_params.kernel_size[0]):
@@ -660,21 +660,26 @@ class ConvWghtStreamMapper(WghtStreamMapper):
 
         # Populate SPAD with weights
         filters = start_current_repetition
+        spad_position = 0
         for words_in_storage in range(amount_of_words):
             # Calculate kernel row based on cluster Y and router assignment
             kernel_row = ((cl_y % (layer_params.used_Y_cluster)) * params.PEs_Y + (router%layer_params.kernel_size[0]))
-
             for spad_val_number in range(params.PARALLEL_MACS):
                 # Check if still within valid channel range
                 if(channel != 1 + int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)):
                     try:
                         # Load weight from DRAM: dram[channel][filter][kernel_row][kernel_x]
-                        spad_storage[words_in_storage][spad_val_number][0] = dram[channel][filters][kernel_row][kernel_x]
+                        spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][0] = dram[channel][filters][kernel_row][kernel_x]
+                        if (spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][0] == 0):
+                            overhead_counter = overhead_counter + 1
+                        else:
+                            spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][1] = overhead_counter
+                            spad_position = spad_position + 1
+                            overhead_counter = 0
                     except:
                         # Out of bounds, use zero
-                        spad_storage[words_in_storage][spad_val_number][0] = 0
-
-                    spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
+                        spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][0] = 0
+                        spad_position = spad_position + 1
 
                     # Advance to next filter (with stride for different kernels)
                     filters = filters + layer_params.different_kernels_per_calculation
@@ -683,7 +688,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                     if((filters == (start_current_repetition + filters_per_calculation))):
                         filters = start_current_repetition
                         channel = channel + 1
-                        overhead_counter = 0
+                        spad_position = spad_position + (spad_position%params.PARALLEL_MACS)
 
                     # Wrap to next kernel X when channels exhausted
                     if(channel == layer_params.used_channels + channel_offset):
@@ -694,6 +699,8 @@ class ConvWghtStreamMapper(WghtStreamMapper):
             if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
 
+        if ((cl_x == 0) & (cl_y == 0) & (router == 1)) :
+            print(spad_storage)
         return spad_storage
         
     def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
@@ -716,7 +723,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         params = self.params
         spad_storage = [0 for _ in range(params.Wghts_Addr_per_PE)]
         temp_value = 0
-
+        data_spad_position = 0
         # Generate address pointers based on Conv2D access stride
         for words_in_storage in range(math.ceil(params.Wghts_Addr_per_PE)):
             # Generate all addresses or all but last depending on configuration
@@ -726,7 +733,8 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                     int(words_in_storage * math.ceil(layer_params.used_wght_per_PE/2/int(layer_params.used_iact_per_PE)))
             else:
                 break
-
+        if ((cl_x == 0) & (cl_y == 0) & (router == 1)) :
+            print(spad_storage)
         return spad_storage
 
 

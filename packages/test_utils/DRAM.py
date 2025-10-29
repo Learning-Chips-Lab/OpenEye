@@ -50,7 +50,7 @@ class DRAMContents(object):
 
     """
 
-    def __init__(self, model, layer_parameters) -> None:
+    def __init__(self, model, layer_parameters, seed: int | None = None) -> None:
         """Initialize DRAM storage structures for all layers in the model.
 
         Creates appropriately shaped data structures for feature maps, weights, and
@@ -64,8 +64,15 @@ class DRAMContents(object):
                 - output_shape: Output tensor dimensions
                 - kernel_size: Convolution kernel dimensions (if applicable)
                 - filters: Number of output filters (if applicable)
+            seed (int | None): Optional RNG seed for deterministic initialization of any
+                random values (weights for Dense layers and input activations). If None,
+                randomness is not seeded.
 
         """
+        # Set RNG seed if provided for reproducibility
+        if seed is not None:
+            np.random.seed(seed)
+
         # Initialize empty lists to hold data structures for each layer
         dram_fmap = []      # Feature maps (activations)
         dram_weights = []   # Weight tensors
@@ -155,7 +162,7 @@ class DRAMContents(object):
         self.weights = dram_weights
         self.bias = dram_bias
 
-    def write_initial_data_to_dram(self, model, layer_parameters, sparse_iacts, sparse_wghts):
+    def write_initial_data_to_dram(self, model, layer_parameters, sparse_iacts, sparse_wghts, seed: int | None = None):
         """Populate DRAM with initial weights, biases, and input feature maps from the model.
 
         This method loads the trained model parameters into the DRAM simulation storage.
@@ -169,6 +176,8 @@ class DRAMContents(object):
                                  elements at positions where (c+x+y) % 2 == 0.
             sparse_wghts (bool): If True, creates sparse weights by zeroing elements
                                  based on positional indices.
+            seed (int | None): Optional RNG seed to make random initialization deterministic.
+                If provided, it overrides any seed set in the constructor for this method call.
 
         Note:
             - Weights are quantized by multiplying by 127 and flooring to nearest integer
@@ -176,6 +185,9 @@ class DRAMContents(object):
             - Sparse patterns use modulo arithmetic on spatial/channel indices
 
         """
+        # Optionally set RNG seed for deterministic behavior of this method
+        if seed is not None:
+            np.random.seed(seed)
         # === WEIGHT LOADING ===
         # Load and quantize weights from the trained model for each layer
         for l in range(len(layer_parameters)):
@@ -206,6 +218,12 @@ class DRAMContents(object):
                                     # Replace zeros with random -1 or 1
                                     if (self.weights[l][c][f][x][y] == 0):
                                         self.weights[l][c][f][x][y] = int(np.random.choice([-1, 1]))
+
+                self.weights[0][0][6][1][1] = 0
+                self.weights[0][0][5][1][1] = 0
+                self.weights[0][0][7][1][1] = 0
+
+                self.weights[0][1][0][1][1] = 0
             elif "Dense" in str(layer_parameters[l].layer_name):
                 # Load Dense (fully connected) layer weights
                 # Note: Uses random weights instead of model weights
@@ -269,4 +287,3 @@ class DRAMContents(object):
             for c in range(layer_parameters[0].input_shape[3]):
                 # Generate random INT8 activation values (no sparsity for Dense)
                 self.fmap[0][c] = np.random.randint(-128, 127)
-                # Note: Sparsity pattern is disabled for Dense layers (code below is commented out)
