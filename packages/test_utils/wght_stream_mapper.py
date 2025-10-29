@@ -699,8 +699,6 @@ class ConvWghtStreamMapper(WghtStreamMapper):
             if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
 
-        if ((cl_x == 0) & (cl_y == 0) & (router == 1)) :
-            print(spad_storage)
         return spad_storage
         
     def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
