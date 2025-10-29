@@ -3,6 +3,28 @@
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
+"""TFLite model converter and interface for OpenEye neural network accelerator.
+
+This module provides functionality to convert TensorFlow Lite models to a format
+compatible with the OpenEye neural network accelerator. It includes:
+
+- Classes for representing different neural network layer types
+- Model conversion from TFLite format
+- Quantization parameter handling
+- Support for common layer types (Conv2D, Dense, MaxPooling)
+- Utilities for model inspection and manipulation
+
+Key Classes:
+- TFLite_layer: Base class for all layer types
+- TFLite_conv2d: Convolutional layer representation  
+- TFLite_max_pooling2d: Max pooling layer representation
+- TFLite_dense: Fully connected layer representation
+- TFLite_model: Container class for the complete model
+
+The module supports both direct TFLite model loading and creation of 
+predefined model architectures like MobileNet and ResNet.
+"""
+
 import math
 import tensorflow as tf
 import numpy as np
@@ -12,7 +34,29 @@ import tarfile
 import requests
 
 class TFLite_layer(object):
+    """Base class for TensorFlow Lite layers in OpenEye.
+
+    This class serves as the foundation for all layer types supported by
+    the OpenEye accelerator. It provides common attributes and interfaces
+    for layer representation.
+
+    Attributes:
+        name (str): Name/type of the layer
+        idx_in (int): Input tensor index in TFLite model
+        idx_out (int): Output tensor index in TFLite model
+        input_shape (tuple): Shape of input tensor
+        output_shape (tuple): Shape of output tensor
+    """
     def __init__(self, name, idx_in, idx_out, input_shape, output_shape):
+        """Initialize a TFLite layer.
+
+        Args:
+            name: Identifier/type of the layer
+            idx_in: Input tensor index
+            idx_out: Output tensor index
+            input_shape: Shape of input tensor
+            output_shape: Shape of output tensor
+        """
         self.name = name
         self.idx_in = idx_in
         self.idx_out = idx_out
@@ -29,11 +73,47 @@ class TFLite_layer(object):
         return tf.TensorSpec(shape=tuple(self.output_shape))
 
 class TFLite_conv2d(TFLite_layer):
+    """2D Convolutional layer implementation for TFLite models.
+
+    This class represents a 2D convolutional layer with support for:
+    - Weight and bias parameters
+    - ReLU activation
+    - Batch normalization
+    - Quantization parameters
+    - Configurable stride and kernel size
+
+    Attributes:
+        weights (list): List containing weights and bias tensors
+        store_in_psum (int): Flag for partial sum storage
+        skip_psum (int): Flag for skipping partial sum computation
+        filters (int): Number of output filters
+        kernel_size (tuple): Size of convolution kernel (height, width)
+        kernel (ndarray): Convolution kernel weights
+        relu (bool): Whether ReLU activation is applied
+        batchnorm (bool): Whether batch normalization is applied
+        strides (tuple): Convolution stride in (height, width)
+        quantization_factor (float): Scale factor for quantization
+        zero_point (int): Zero point for quantization
+    """
     weights = []
     store_in_psum = 0
     skip_psum = 0
 
     def __init__(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu=False, bn=False):
+        """Initialize a 2D convolutional layer.
+
+        Args:
+            idx_in (int): Input tensor index
+            idx_out (int): Output tensor index
+            input_shape (tuple): Shape of input tensor
+            output_shape (tuple): Shape of output tensor
+            weights (ndarray): Convolution kernel weights
+            bias (ndarray): Bias terms
+            qf (float): Quantization scale factor
+            zp (int): Quantization zero point
+            relu (bool, optional): Apply ReLU activation. Defaults to False
+            bn (bool, optional): Apply batch normalization. Defaults to False
+        """
         super().__init__('conv2d', idx_in, idx_out, input_shape, output_shape)
         
         self.weights = [weights, bias]
@@ -51,14 +131,54 @@ class TFLite_conv2d(TFLite_layer):
         self.zero_point = zp
 
 class TFLite_max_pooling2d(TFLite_layer):
+    """2D Max Pooling layer implementation for TFLite models.
+
+    This class represents a 2D max pooling layer that downsamples the input
+    by taking the maximum value in sliding windows.
+
+    The layer maintains the dimensionality reduction information through its
+    input and output shapes but doesn't require weights or additional parameters.
+    """
     def __init__(self, idx_in, idx_out, input_shape, output_shape):
+        """Initialize a 2D max pooling layer.
+
+        Args:
+            idx_in (int): Input tensor index
+            idx_out (int): Output tensor index
+            input_shape (tuple): Shape of input tensor
+            output_shape (tuple): Shape of output tensor
+        """
         super().__init__('max_pooling2d', idx_in, idx_out, input_shape, output_shape)
 
 class TFLite_dense(TFLite_layer):
+    """Dense (fully connected) layer implementation for TFLite models.
+
+    This class represents a dense layer that performs a matrix multiplication
+    with learnable weights and biases. It supports quantization for efficient
+    computation on hardware.
+
+    Attributes:
+        weights (list): List containing weight matrix and bias vector
+        qf (None): Default quantization factor
+        quantization_factor (float): Scale factor for quantization
+        zero_point (int): Zero point for quantization
+    """
     weights = []
     qf = None
 
     def __init__(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp):
+        """Initialize a dense layer.
+
+        Args:
+            idx_in (int): Input tensor index
+            idx_out (int): Output tensor index
+            input_shape (tuple): Shape of input tensor
+            output_shape (tuple): Shape of output tensor
+            weights (ndarray): Weight matrix
+            bias (ndarray): Bias vector
+            qf (float): Quantization scale factor
+            zp (int): Quantization zero point
+        """
         super().__init__('dense', idx_in, idx_out, input_shape, output_shape)
 
         self.weights = [weights, bias]
@@ -68,23 +188,88 @@ class TFLite_dense(TFLite_layer):
         self.zero_point = zp
 
 class TFLite_model(object):
+    """Container class for TensorFlow Lite models in OpenEye.
+
+    This class manages a collection of neural network layers and provides
+    methods to add different types of layers. It serves as the high-level
+    representation of a complete neural network model.
+
+    Attributes:
+        layers (list): List of layer objects in the model
+    """
     layers = []
+    
     def __init__(self):
+        """Initialize an empty TFLite model."""
         pass
 
     def add_conv2d(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu=None, bn=None):
+        """Add a 2D convolutional layer to the model.
+
+        Args:
+            idx_in (int): Input tensor index
+            idx_out (int): Output tensor index
+            input_shape (tuple): Shape of input tensor
+            output_shape (tuple): Shape of output tensor
+            weights (ndarray): Convolution kernel weights
+            bias (ndarray): Bias terms
+            qf (float): Quantization scale factor
+            zp (int): Quantization zero point
+            relu (bool, optional): Apply ReLU activation
+            bn (bool, optional): Apply batch normalization
+        """
         layer = TFLite_conv2d(idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu, bn)
         self.layers.append(layer)
 
     def add_max_pooling2d(self, idx_in, idx_out, input_shape, output_shape):
+        """Add a 2D max pooling layer to the model.
+
+        Args:
+            idx_in (int): Input tensor index
+            idx_out (int): Output tensor index
+            input_shape (tuple): Shape of input tensor
+            output_shape (tuple): Shape of output tensor
+        """
         layer = TFLite_max_pooling2d(idx_in, idx_out, input_shape, output_shape)
         self.layers.append(layer)
 
     def add_dense(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp):
+        """Add a dense (fully connected) layer to the model.
+
+        Args:
+            idx_in (int): Input tensor index
+            idx_out (int): Output tensor index
+            input_shape (tuple): Shape of input tensor
+            output_shape (tuple): Shape of output tensor
+            weights (ndarray): Weight matrix
+            bias (ndarray): Bias vector
+            qf (float): Quantization scale factor
+            zp (int): Quantization zero point
+        """
         layer = TFLite_dense(idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp)
         self.layers.append(layer)
 
 def quantize_scale(scale):
+    """Calculate quantization parameters for a given scale factor.
+
+    This function converts a floating-point scale factor into fixed-point
+    representation suitable for hardware implementation. It decomposes the
+    scale into a multiplier and shift value.
+
+    Args:
+        scale (float): Scale factor to quantize
+
+    Returns:
+        tuple: (q, shift) where:
+            - q (int): Fixed-point multiplier
+            - shift (int): Required bit shift
+
+    Implementation Details:
+        - Uses frexp to decompose float into mantissa and exponent
+        - Handles special case of zero scale
+        - Ensures no overflow in fixed-point representation
+        - Adjusts for maximum precision while avoiding overflow
+    """
     if scale == 0:
         return 0, 0
 
@@ -99,6 +284,38 @@ def quantize_scale(scale):
     return q, shift
 
 def create_model_from_tflite(use_random=False, tflite_model_path=None, model_name='resnet'):
+    """Create an OpenEye model from a TensorFlow Lite model.
+
+    This function takes a TFLite model file or a predefined architecture name
+    and creates an OpenEye-compatible model representation. It supports both
+    custom models and standard architectures like ResNet and MobileNet.
+
+    Args:
+        use_random (bool, optional): Use random weights instead of pretrained.
+            Defaults to False.
+        tflite_model_path (str, optional): Path to TFLite model file.
+            If None, uses predefined architecture. Defaults to None.
+        model_name (str, optional): Name of predefined architecture to use
+            when tflite_model_path is None. Defaults to 'resnet'.
+
+    Returns:
+        TFLite_model: OpenEye model representation
+
+    Features:
+        - Direct TFLite model loading
+        - Predefined architecture support (ResNet, MobileNet)
+        - Weight quantization handling
+        - Layer type conversion
+        - Tensor shape tracking
+        - Optional random weight initialization
+        
+    Supported Layer Types:
+        - Conv2D
+        - MaxPooling2D
+        - Dense (Fully Connected)
+        - Add, Multiply operations
+        - Batch Normalization
+    """
     #tflite model needed for bias and weights
     script_dir = Path(__file__).resolve().parent.parent / 'cocotb_fpga'
 

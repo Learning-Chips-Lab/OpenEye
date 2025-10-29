@@ -7,18 +7,63 @@
 
 /// Module: RST_SYNC
 ///
-/// This module synchronizes an asynchronous reset signal
-/// Use this module instead of implementing synchronization directly
-/// because we might want to map this to an integrated cell in the
-/// physical flow.
+/// The Reset Synchronizer (RST_SYNC) is a critical module in the OpenEye architecture
+/// that ensures reliable reset signal propagation across clock domains. It prevents
+/// metastability issues by properly synchronizing asynchronous reset signals to the
+/// target clock domain.
+///
+/// Key Features:
+/// - Metastability Prevention:
+///   * Multi-stage synchronization chain
+///   * Configurable number of synchronizer stages
+///   * Clean reset signal generation
+///
+/// - Implementation Flexibility:
+///   * Synthesizable RTL description
+///   * Technology mapping support
+///   * Optional transparent mode
+///
+/// - Design Considerations:
+///   * Active-low reset signals
+///   * Asynchronous assertion
+///   * Synchronous deassertion
+///
+/// Architectural Role:
+/// The RST_SYNC module provides:
+/// 1. Safe clock domain crossing for reset signals
+/// 2. Consistent reset timing across the system
+/// 3. Reliable system initialization
+/// 4. Protection against reset glitches
+///
+/// Implementation Notes:
+/// - Use this module for all reset synchronization needs
+/// - Avoid direct reset synchronization elsewhere
+/// - Module may be mapped to dedicated hardware cells
+/// - Transparent mode available via OPENEYE_RST_SYNC_TRANSPARENT
 ///
 /// Parameters:
-///     NumStages: Number of stages in the synchronizer. Default is 2.
-///
+///    NumStages         - Synchronizer Configuration
+///                        Number of synchronizer flip-flop stages
+///                        Default: 2 stages (recommended minimum)
+///                        Larger values increase reliability but add latency
+///   
 /// Ports:
-///     clk_i: Clock input
-///     rst_ni: Asynchronous reset input
-///     rst_no: Synchronized reset output
+/// Clock Interface:
+///    clk_i            - System Clock Input
+///                       Target clock domain
+///                       Positive edge triggered
+///                       Synchronizer reference clock
+///
+/// Reset Interface:
+///    rst_ni           - Asynchronous Reset Input (active low)
+///                       External reset signal
+///                       Can be asynchronous to clk_i
+///                       Immediate assertion
+///
+///    rst_no           - Synchronized Reset Output (active low)
+///                       Clean, synchronized reset
+///                       Synchronous to clk_i
+///                       Safe for use in target domain
 ///
 
 module RST_SYNC #(

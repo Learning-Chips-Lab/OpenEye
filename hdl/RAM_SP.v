@@ -7,23 +7,74 @@
 
 /// Module: RAM_SP
 ///
-/// (R)andom(A)ccess(M)emory_(S)ingle(P)ort is a wrapper module to provide a unified
-/// interface for a single port RAM that hides the underlying implementation details.
-/// This will get directly or indirectly mapped to an actual RAM macro in the physical flow.
+/// The RAM_SP (Random Access Memory Single Port) module provides a unified, technology-independent
+/// interface for single-port memory implementations in the OpenEye neural network accelerator.
+/// It serves as an abstraction layer that can be mapped to different physical memory macros
+/// while maintaining consistent behavior and interface conventions.
+///
+/// Architecture Overview:
+/// - Single-Port Memory:
+///   * Combined read/write port with shared address bus
+///   * Mutually exclusive read/write operations
+///   * Configurable data and address widths
+///
+/// - Implementation Flexibility:
+///   * Generic RTL implementation by default
+///   * Conditional inclusion of technology-specific macros
+///   * Support for pipelined operation
+///   * Configurable memory organization
+///
+/// Key Features:
+/// - Synchronous Operation:
+///   * Clock-synchronized read/write access
+///   * No asynchronous reset (intentional design choice)
+///   * Undefined initial state management
+///
+/// - Access Control:
+///   * Independent read/write enables
+///   * Power-saving inactive state
+///   * Write priority arbitration
+///
+/// - Configuration Options:
+///   * Adjustable memory depth
+///   * Variable data width
+///   * Optional output pipelining
+///   * Implementation hints for synthesis
 ///
 /// Parameters:
-///    AddrWidth             - Amount of storageable data words in clog2
-///    DataWidth             - Length of data words
-///    Pipelined             - Enable pipelining
-///    Implementation         - Select the implementation of the RAM
+/// Memory Organization:
+///    AddrWidth        - Address bus width (log2 of memory depth)
+///                       Determines the number of addressable locations
+///    DataWidth        - Data bus width in bits
+///                       Defines the size of each memory word
+///
+/// Performance Options:
+///    Pipelined        - Enable registered outputs for improved timing
+///                       0: Combinational read path
+///                       1: Registered read path
+///
+/// Implementation Control:
+///    Implementation   - Synthesis directive for physical implementation
+///                       Used to guide technology mapping
 ///
 /// Ports:
-///    clk_i             - Clock input
-///    rd_en_i           - Read enable port
-///    wr_en_i           - Write enable port
-///    addr_i            - Address port
-///    data_i            - Data port in
-///    data_o            - Data port out
+/// Clock Interface:
+///    clk_i           - System clock input
+///                      All operations are synchronized to rising edge
+///
+/// Control Interface:
+///    rd_en_i         - Read enable (active high)
+///                      Must be deasserted during writes
+///    wr_en_i         - Write enable (active high)
+///                      Takes precedence over reads
+///
+/// Data Interface:
+///    addr_i          - Address input [AddrWidth-1:0]
+///                      Shared for both reads and writes
+///    data_i          - Write data input [DataWidth-1:0]
+///                      Data to be written when wr_en_i is active
+///    data_o          - Read data output [DataWidth-1:0]
+///                      Valid when rd_en_i was active in previous cycle
 ///
 
 module RAM_SP 
@@ -93,4 +144,69 @@ module RAM_SP
     endgenerate
 `endif
 
+    /// Implementation Notes:
+    /// Memory Architecture:
+    ///   - Single-Port Design:
+    ///     * One shared port for both read and write operations
+    ///     * Common address bus for both operations
+    ///     * Mutually exclusive access control
+    ///
+    ///   - Signal Mapping:
+    ///     * Internal clock (clk) directly maps to system clock
+    ///     * Chip enable (cen) derived from read/write enables
+    ///     * Read/write control (rdwen) prioritizes writes
+    ///     * Direct address and data path mapping
+    ///
+    /// Access Protocol:
+    ///   - Write Operation:
+    ///     * Assert wr_en_i
+    ///     * Present valid addr_i and data_i
+    ///     * Data captured on rising clock edge
+    ///     * Previous data at addr_i is overwritten
+    ///
+    ///   - Read Operation:
+    ///     * Assert rd_en_i
+    ///     * Present valid addr_i
+    ///     * Data appears on data_o
+    ///     * Timing depends on Pipelined parameter
+    ///
+    /// Technology Mapping:
+    ///   - Conditional Implementation:
+    ///     * OPENEYE_RAM_SPECIFIC macro controls mapping
+    ///     * Default to generic RTL implementation
+    ///     * Support for technology-specific variants
+    ///
+    ///   - Generic Implementation:
+    ///     * Behavioral memory model
+    ///     * Synthesizable RTL description
+    ///     * Standard cell mapping support
+    ///
+    /// Performance Considerations:
+    ///   - Clock Domain:
+    ///     * Single clock domain operation
+    ///     * No clock gating implemented
+    ///     * Simple timing closure
+    ///
+    ///   - Access Timing:
+    ///     * Write: One cycle latency
+    ///     * Read: One/Two cycle latency (based on Pipelined)
+    ///     * No concurrent read/write support
+    ///
+    /// Power Management:
+    ///   - Active Control:
+    ///     * Memory active when rd_en_i or wr_en_i asserted
+    ///     * Inactive state when both deasserted
+    ///     * Chip enable used for power control
+    ///
+    /// Integration Guidelines:
+    ///   - Reset Handling:
+    ///     * No reset input provided
+    ///     * Initial memory contents undefined
+    ///     * System must handle initialization
+    ///
+    ///   - Technology Mapping:
+    ///     * Implementation parameter guides synthesis
+    ///     * Vendor-specific mapping possible
+    ///     * Memory compiler integration ready
+    ///
 endmodule

@@ -7,52 +7,144 @@
 
 /// Module: router_iact
 ///
-/// Typically it connects one source to up to four destinations. A source can be either another
-/// cluster horizontal/vertical to the current cluster or an Iact GLB. A destination can also be
-/// another cluster horizontal/vertical to the current cluster or the process element cluster in the 
-/// current cluster. Its basic communication protocol is the same "hand-shake" method used in the
-/// used in the weight router and the partial sum router. It typically connects one source to up to
-/// four destinations. 
+/// The Input Activation Router (router_iact) is a key component in the OpenEye neural network 
+/// accelerator's data distribution network. It implements a configurable routing fabric that 
+/// manages the movement of input activation data between clusters, global buffers (GLBs), and 
+/// processing elements (PEs).
+///
+/// Architecture Overview:
+/// - Routing Topology:
+///   * 5-Port Router Design:
+///     - Center Port (C): Connects to PE cluster or GLB
+///     - North Port (N): Links to upper cluster
+///     - East/West Port (E/W): Links to adjacent cluster
+///     - South Port (S): Links to lower cluster
+///
+/// - Communication Protocol:
+///   * Handshake-based Flow Control:
+///     - Ready/Enable signaling
+///     - Back-pressure support
+///     - Deadlock prevention
+///
+/// - Routing Configuration:
+///   * Source Selection:
+///     - GLB input (Center)
+///     - North cluster
+///     - East/West cluster
+///     - South cluster
+///
+///   * Destination Control:
+///     - PE cluster routing
+///     - Inter-cluster forwarding
+///     - Multi-cast capability
+///
+/// Key Features:
+/// - Flexible Data Movement:
+///   * One-to-Many Distribution
+///   * Configurable Paths
+///   * Priority-based Routing
+///   * Flow Control Support
+///
+/// - Network Integration:
+///   * Cluster-level Connectivity
+///   * GLB Data Distribution
+///   * PE Array Interface
+///   * Mesh Network Support
+///
+/// Performance Features:
+/// - Low-latency Routing
+/// - Configurable Bandwidth
+/// - Back-pressure Handling
+/// - Deadlock Avoidance
 ///
 /// Parameters:
-///    LEFT_CLUSTER         - Indicates, if cluster is on the left side
-///    DATA_WIDTH           - WIDTH of data ports
+/// Configuration:
+///    LEFT_CLUSTER        - Network Position Parameter
+///                         0: Right side cluster position
+///                         1: Left side cluster position
+///                         Affects East/West routing logic
+///
+///    DATA_WIDTH         - Data Path Configuration
+///                         Specifies width of all data ports
+///                         Determines activation data precision
 ///   
 /// Ports:
-///    router_mode_i        - Configurs the router.
-///                           MSB Describes source, LSB describes destination
-///                           MSB '00' means it accepts data from the GLB "Center"
-///                           MSB '01' means it accepts data from top cluster "North"
-///                           MSB '10' means it accepts data from opposite cluster "West/East"
-///                           MSB '11' means it accepts data from bottom cluster "South"
-///                           LSB 'XXX1' sends data to PE cluster "Center"
-///                           LSB 'XXX1' sends data to top cluster "North"
-///                           LSB 'XXX1' sends data to opposite cluster "West/East"
-///                           LSB 'XXX1' sends data to bottom cluster "South"
-///    ready_src_port_0     - Ready Port for the source Port 0 (Top Modul or GLB, "Center")
-///    data_src_port_0      - Data Port for the source Port 0 (Top Modul or GLB, "Center")
-///    enable_src_port_0    - Enable Port for the source Port 0 (Top Modul or GLB, "Center")
-///    ready_src_port_1     - Ready Port for the source Port 1 (Router above, "North")
-///    data_src_port_1      - Data Port for the source Port 1 (Router above, "North")
-///    enable_src_port_1    - Enable Port for the source Port 1 (Router above, "North")
-///    ready_src_port_2     - Ready Port for the source Port 2 (Router opposite, "West/East")
-///    data_src_port_2      - Data Port for the source Port 2 (Router opposite, "West/East")
-///    enable_src_port_2    - Enable Port for the source Port 2 (Router opposite, "West/East")
-///    ready_src_port_3     - Ready Port for the source Port 3 (Router below, "South")
-///    data_src_port_3      - Data Port for the source Port 3 (Router below, "South")
-///    enable_src_port_3    - Enable Port for the source Port 3 (Router below, "South")
-///    ready_dst_port_0     - Ready Port for the destination Port 0 (PE Cluster, "Center")
-///    data_dst_port_0      - Data Port for the destination Port 0 (PE Cluster, "Center")
-///    enable_dst_port_0    - Enable Port for the destination Port 0 (PE Cluster, "Center")
-///    ready_dst_port_1     - Ready Port for the destination Port 1 (Router above, "North")
-///    data_dst_port_1      - Data Port for the destination Port 1 (Router above, "North")
-///    enable_dst_port_1    - Enable Port for the destination Port 1 (Router above, "North")
-///    ready_dst_port_2     - Ready Port for the destination Port 2 (Router opposite, "West/East")
-///    data_dst_port_2      - Data Port for the destination Port 2 (Router opposite, "West/East")
-///    enable_dst_port_2    - Enable Port for the destination Port 2 (Router opposite, "West/East")
-///    ready_dst_port_3     - Ready Port for the destination Port 3 (Router below, "South")
-///    data_dst_port_3      - Data Port for the destination Port 3 (Router below, "South")
-///    enable_dst_port_3    - Enable Port for the destination Port 3 (Router below, "South")
+/// Control Interface:
+///    router_mode_i [5:0] - Router Configuration Control
+///                         [5:4] Source Port Selection:
+///                           00: GLB/Center input
+///                           01: North cluster input
+///                           10: East/West cluster input
+///                           11: South cluster input
+///                         [3:0] Destination Enable:
+///                           Bit 0: Enable Center/PE routing
+///                           Bit 1: Enable North routing
+///                           Bit 2: Enable East/West routing
+///                           Bit 3: Enable South routing
+///
+/// Center (Port 0) Interface:
+///    ready_src_port_0   - GLB/PE Ready Input (active high)
+///                         Indicates source can accept back-pressure
+///    data_src_port_0    - GLB/PE Data Input [DATA_WIDTH-1:0]
+///                         Carries activation data from GLB
+///    enable_src_port_0  - GLB/PE Valid Input (active high)
+///                         Indicates valid data from GLB
+///
+/// North (Port 1) Interface:
+///    ready_src_port_1   - North Ready Input
+///                         Flow control from north cluster
+///    data_src_port_1    - North Data Input [DATA_WIDTH-1:0]
+///                         Data from north cluster
+///    enable_src_port_1  - North Valid Input
+///                         Valid signal from north cluster
+///
+/// East/West (Port 2) Interface:
+///    ready_src_port_2   - East/West Ready Input
+///                         Flow control from adjacent cluster
+///    data_src_port_2    - East/West Data Input [DATA_WIDTH-1:0]
+///                         Data from adjacent cluster
+///    enable_src_port_2  - East/West Valid Input
+///                         Valid signal from adjacent cluster
+///
+/// South (Port 3) Interface:
+///    ready_src_port_3   - South Ready Input
+///                         Flow control from south cluster
+///    data_src_port_3    - South Data Input [DATA_WIDTH-1:0]
+///                         Data from south cluster
+///    enable_src_port_3  - South Valid Input
+///                         Valid signal from south cluster
+///
+/// PE Cluster Output Interface:
+///    ready_dst_port_0   - PE Ready Input
+///                         Flow control from PE cluster
+///    data_dst_port_0    - PE Data Output [DATA_WIDTH-1:0]
+///                         Data to PE cluster
+///    enable_dst_port_0  - PE Valid Output
+///                         Valid signal to PE cluster
+///
+/// North Output Interface:
+///    ready_dst_port_1   - North Ready Input
+///                         Flow control from north output
+///    data_dst_port_1    - North Data Output [DATA_WIDTH-1:0]
+///                         Data to north cluster
+///    enable_dst_port_1  - North Valid Output
+///                         Valid signal to north cluster
+///
+/// East/West Output Interface:
+///    ready_dst_port_2   - East/West Ready Input
+///                         Flow control from adjacent output
+///    data_dst_port_2    - East/West Data Output [DATA_WIDTH-1:0]
+///                         Data to adjacent cluster
+///    enable_dst_port_2  - East/West Valid Output
+///                         Valid signal to adjacent cluster
+///
+/// South Output Interface:
+///    ready_dst_port_3   - South Ready Input
+///                         Flow control from south output
+///    data_dst_port_3    - South Data Output [DATA_WIDTH-1:0]
+///                         Data to south cluster
+///    enable_dst_port_3  - South Valid Output
+///                         Valid signal to south cluster
 
 module router_iact #(
     parameter         LEFT_CLUSTER = 0,

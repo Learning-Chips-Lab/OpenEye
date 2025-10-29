@@ -7,41 +7,94 @@
 
 /// Module: router_psum
 ///
-/// Router_partial_sum (router_psum) contains the necessary router to distribute the weights in the
-/// the OpenEye. A source can be either the top of the PE cluster, the cluster above the
-/// current cluster or the PSUM GLB. The target can be either the lower end of the PE cluster,
-/// the cluster below it, or the PSUM GLB. Its basic communication protocol is the same "hand-shake"
-/// method method used by the Input Activation Router and the Weight Router.
+/// The Partial Sum Router (router_psum) is a critical component in the OpenEye architecture
+/// responsible for managing the flow of partial sum data between Processing Element (PE) 
+/// clusters and the Global Buffer (GLB). This router implements a flexible routing topology
+/// that supports various accumulation patterns needed for neural network computations.
+///
+/// Key Features:
+/// - Three-Port Router Architecture:
+///   * Port 0: GLB Interface (bidirectional for partial sum storage/retrieval)
+///   * Port 1: Inter-cluster Connection (vertical routing between clusters)
+///   * Port 2: PE Cluster Interface (partial sum input/output)
+///
+/// - Configurable Routing Modes:
+///   * Single Cluster Mode: Direct PE-GLB communication
+///   * Loop Configuration: Supports chained partial sum accumulation
+///   * Multi-cluster Accumulation: Enables vertical partial sum aggregation
+///
+/// - Handshake-based Flow Control:
+///   * Ready/Enable Protocol: Matches PE cluster and GLB interfaces
+///   * Backpressure Support: Prevents data overflow
+///   * Synchronization: Ensures reliable data transfer
+///
+/// Architectural Role:
+/// The router facilitates efficient partial sum accumulation patterns by:
+/// 1. Collecting partial sums from PE clusters
+/// 2. Supporting vertical accumulation across multiple clusters
+/// 3. Managing data flow to/from the Partial Sum GLB
+/// 4. Enabling flexible accumulation schemes for different layer types
 ///
 /// Parameters:
-///    DATA_WIDTH             - WIDTH of data ports
+///    DATA_WIDTH          - Partial Sum Data Path Width
+///                         Determines precision of partial sum values
+///                         Typically wider than activation/weight paths
+///                         to accommodate accumulation growth
 ///   
 /// Ports:
-///    router_mode_i          - Configurs the router. MSB 1 means it accepts and gets data from the
-///                             GLB. MSB 0 menans it accepts and sends data to GLB.
-///                             LSB '00' indicates single Cluster w/o connection to other clusters
-///                             LSB '01' indicates topmost Cluster of a loop
-///                             LSB '10' indicates middle-part Cluster of a loop
-///                             LSB '11' indicates bottommost Cluster of a loop
-///                             '100' and '000' result in same configuration
-///    ready_src_port_0       - Ready Port for the source Port 0 (Top Modul or GLB)
-///    data_src_port_0        - Data Port for the source Port 0 (Top Modul or GLB)
-///    enable_src_port_0      - Enable Port for the source Port 0 (Top Modul or GLB)
-///    ready_src_port_1       - Ready Port for the source Port 1 (Other router)
-///    data_src_port_1        - Data Port for the source Port 1 (Other router)
-///    enable_src_port_1      - Enable Port for the source Port 1 (Other router)
-///    ready_src_port_2       - Ready Port for the source Port 2 (PE Cluster)
-///    data_src_port_2        - Data Port for the source Port 2 (PE Cluster)
-///    enable_src_port_2      - Enable Port for the source Port 2 (PE Cluster)
-///    ready_dst_port_0       - Ready Port for the destination Port 0 (Top Modul or GLB)
-///    data_dst_port_0        - Data Port for the destination Port 0 (Top Modul or GLB)
-///    enable_dst_port_0      - Enable Port for the destination Port 0 (Top Modul or GLB)
-///    ready_dst_port_1       - Ready Port for the destination Port 1 (Other router)
-///    data_dst_port_1        - Data Port for the destination Port 1 (Other router)
-///    enable_dst_port_1      - Enable Port for the destination Port 1 (Other router)
-///    ready_dst_port_2       - Ready Port for the destination Port 2 (PE Cluster)
-///    data_dst_port_2        - Data Port for the destination Port 2 (PE Cluster)
-///    enable_dst_port_2      - Enable Port for the destination Port 2 (PE Cluster)
+/// Configuration Interface:
+///    router_mode_i [2:0] - Router Configuration Control
+///                         [2] GLB Direction Control:
+///                           1: Accept data from GLB
+///                           0: Send data to GLB
+///                         [1:0] Cluster Position Configuration:
+///                           00: Single Cluster Mode (no inter-cluster connection)
+///                           01: Topmost Cluster in accumulation loop
+///                           10: Middle Cluster in accumulation loop
+///                           11: Bottom Cluster in accumulation loop
+///                         Note: Mode '100' functions same as '000'
+///
+/// GLB Interface (Port 0):
+///    ready_src_port_0   - GLB Source Ready Signal
+///                         Indicates GLB can provide data
+///    data_src_port_0    - GLB Source Data Bus [DATA_WIDTH-1:0]
+///                         Partial sum data from GLB
+///    enable_src_port_0  - GLB Source Valid Signal
+///                         Marks valid data from GLB
+///    ready_dst_port_0   - GLB Destination Ready Input
+///                         Indicates GLB can accept data
+///    data_dst_port_0    - GLB Destination Data [DATA_WIDTH-1:0]
+///                         Partial sum data to GLB
+///    enable_dst_port_0  - GLB Destination Valid
+///                         Marks valid data to GLB
+///
+/// Inter-cluster Interface (Port 1):
+///    ready_src_port_1   - Cluster Source Ready Signal
+///                         Flow control from adjacent cluster
+///    data_src_port_1    - Cluster Source Data [DATA_WIDTH-1:0]
+///                         Partial sums from adjacent cluster
+///    enable_src_port_1  - Cluster Source Valid Signal
+///                         Valid data from adjacent cluster
+///    ready_dst_port_1   - Cluster Destination Ready
+///                         Flow control to adjacent cluster
+///    data_dst_port_1    - Cluster Destination Data [DATA_WIDTH-1:0]
+///                         Partial sums to adjacent cluster
+///    enable_dst_port_1  - Cluster Destination Valid
+///                         Valid data to adjacent cluster
+///
+/// PE Cluster Interface (Port 2):
+///    ready_src_port_2   - PE Source Ready Signal
+///                         Flow control from PE cluster
+///    data_src_port_2    - PE Source Data Bus [DATA_WIDTH-1:0]
+///                         Partial sums from PE cluster
+///    enable_src_port_2  - PE Source Valid Signal
+///                         Valid data from PE cluster
+///    ready_dst_port_2   - PE Destination Ready
+///                         Flow control to PE cluster
+///    data_dst_port_2    - PE Destination Data [DATA_WIDTH-1:0]
+///                         Partial sums to PE cluster
+///    enable_dst_port_2  - PE Destination Valid
+///                         Valid data to PE cluster
 
 module router_psum #(
     parameter integer DATA_WIDTH = 20

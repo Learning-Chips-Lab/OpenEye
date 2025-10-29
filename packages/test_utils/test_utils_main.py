@@ -3,6 +3,30 @@
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
+"""Main test utilities for the OpenEye neural network accelerator.
+
+This module provides high-level test utilities and orchestration for testing
+the OpenEye neural network accelerator implementation. It includes functionality for:
+
+- Stream generation and mapping for different layer types
+- Reference data generation and validation
+- Multi-process computation and comparison
+- File I/O for test data and results
+- DRAM state management and verification
+
+The module supports testing of:
+- Convolutional layers (standard and depthwise)
+- Dense (fully connected) layers
+- Pooling layers
+- Batch normalization operations
+
+Key features:
+- Parallel processing for computationally intensive operations
+- Detailed logging and debugging capabilities
+- Comprehensive result validation
+- Support for both serial and parallel hardware configurations
+"""
+
 import os
 import logging
 import math
@@ -19,8 +43,18 @@ import multiprocessing as mp
 logger = logging.getLogger("cocotb")
 
 def get_verilog_sources(hdl_dir):
-
-    verilog_sources =[]
+    """Gather all Verilog source files from a directory tree.
+    
+    This function recursively walks through the HDL directory to find all Verilog
+    source files needed for simulation and synthesis.
+    
+    Args:
+        hdl_dir: Root directory containing Verilog source files
+        
+    Returns:
+        list: List of absolute paths to all Verilog source files
+    """
+    verilog_sources = []
     for root, _, files in os.walk(hdl_dir):
         for f in files:
             full_path = os.path.join(root, f)
@@ -29,6 +63,30 @@ def get_verilog_sources(hdl_dir):
     return verilog_sources
 
 def write_stream_layer_mp(params, layer_params, dram_layer_content, return_dict, layer_repetition, sparse_iacts, sparse_wghts):
+    """Generate test data streams for a layer in a multiprocessing context.
+    
+    This function creates appropriate data streams for testing different types of
+    neural network layers. It selects the correct stream generator based on the
+    layer type and handles both dense and sparse data formats.
+    
+    Args:
+        params: Global OpenEye configuration parameters
+        layer_params: Layer-specific parameters and configuration
+        dram_layer_content: Layer data content from DRAM
+        return_dict: Multiprocessing dictionary for returning results
+        layer_repetition: Current repetition count for layer processing
+        sparse_iacts: Sparsity information for input activations
+        sparse_wghts: Sparsity information for weights
+    
+    The function supports multiple layer types:
+    - Depthwise convolution layers
+    - Standard convolution layers
+    - Dense (fully connected) layers
+    - Pooling layers
+    
+    Each layer type uses a specialized mapper class to generate appropriate
+    test streams that match the hardware's expected data format and timing.
+    """
     if "Depthwise" in str(layer_params.layer_name):
         LayerStreamGenerator = DWMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
@@ -44,35 +102,81 @@ def write_stream_layer_mp(params, layer_params, dram_layer_content, return_dict,
     return_dict[layer_repetition] = LayerStreamGenerator.get_stream()
 
 def write_stream(params, layer_params, dram_layer_content, sparse_iacts, sparse_wghts):
+    """Generate test data streams in parallel for all layer repetitions.
+    
+    This function orchestrates parallel generation of test data streams for neural
+    network layer testing. It uses Python's multiprocessing to parallelize the
+    stream generation across multiple processes.
+    
+    Args:
+        params: Global OpenEye configuration parameters
+        layer_params: Layer-specific parameters and configuration
+        dram_layer_content: Layer data content from DRAM
+        sparse_iacts: Sparsity information for input activations
+        sparse_wghts: Sparsity information for weights
+    
+    Returns:
+        dict: Dictionary containing generated streams for each layer repetition
+    
+    Implementation Details:
+        - Creates a multiprocessing manager for shared memory
+        - Spawns parallel processes for each layer repetition
+        - Collects results through a shared dictionary
+        - Ensures all processes complete before returning
+        - Handles both dense and sparse data formats
+    """
     manager = mp.Manager()
     return_dict = manager.dict()
     jobs = []
 
     for layer_repetition in range(layer_params.needed_total_transmissions):
-        p = mp.Process(target = write_stream_layer_mp, args = (params, layer_params, dram_layer_content, return_dict, layer_repetition, sparse_iacts, sparse_wghts))
+        p = mp.Process(target=write_stream_layer_mp, 
+                      args=(params, layer_params, dram_layer_content, 
+                            return_dict, layer_repetition, 
+                            sparse_iacts, sparse_wghts))
         p.start()
         jobs.append(p)
 
     for proc in range(len(jobs)):
         jobs[proc].join()
-    #assert False
+        
     return return_dict
 
-#Reference
+# Reference Generation
 
 def make_ref(params, layer_params, layer_number, dram, calculated_results):
+    """Generate reference data files for layer verification.
     
-    #Write wght File
+    This function creates a complete set of reference files needed to verify
+    the correct operation of a neural network layer in hardware. It generates
+    files for weights, input activations, and expected outputs.
+    
+    Args:
+        params: Global OpenEye configuration parameters
+        layer_params: Layer-specific parameters and configuration
+        layer_number: Current layer index in the network
+        dram: Memory object containing layer data
+        calculated_results: Pre-calculated expected results
+        
+    The function creates three types of reference files:
+    1. Weight files: Layer weight parameters
+    2. Input activation files: Layer input data
+    3. Partial sum files: Expected output results
+    
+    All files are organized by layer number and stored in a demo directory
+    structure for test verification.
+    """
+    # Write weight files
     write_weight_file(layer_params, layer_number, dram)
     logger.info("All weight-files written")
 
-    #Write iact File
+    # Write input activation files
     write_iact_file(layer_params, layer_number, dram)
     logger.info("All iact-files written")
 
     logger.info("All results calculated")
 
-    #Write psum File
+    # Write partial sum (output) files
     write_psum_file(layer_params, layer_number, dram, calculated_results)
     logger.info("All psum-files written")
     
@@ -190,7 +294,27 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
     return output_order
 
 def write_weight_file(layer_params, layer_number, dram):
-
+    """Write weight reference data to files for each layer type.
+    
+    This function handles the writing of weight data to reference files,
+    with different formats depending on the layer type. It supports dense,
+    convolutional, and depthwise convolutional layers.
+    
+    Args:
+        layer_params: Layer-specific parameters and configuration
+        layer_number: Current layer index in the network
+        dram: Memory object containing weight data
+        
+    File Organization:
+    - Dense layers: Single file with 2D weight matrix
+    - Depthwise Conv: One file per input channel
+    - Standard Conv: One file per input channel and filter combination
+    
+    File Format:
+    - CSV format with semicolon separators
+    - Right-justified numeric values
+    - Each row represents a slice of the weight tensor
+    """
     if "Dense" in str(layer_params.layer_name):
         wght_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_0.csv')
         for c in range(layer_params.input_shape[3]):
@@ -589,6 +713,30 @@ def calculate_conv_results_mp(f, layer_number, layer_params, serial, dram, calcu
         return_dict[f] = calculated_results
 
 def compare_dram_with_ref(layer_params, ref_output, dram):
+    """Compare hardware output in DRAM with reference data.
+    
+    This function verifies that the hardware's output matches the expected
+    reference results, handling different layer types appropriately.
+    
+    Args:
+        layer_params: Layer-specific parameters and configuration
+        ref_output: Reference output data to compare against
+        dram: Memory object containing hardware output
+        
+    Returns:
+        bool: True if hardware output matches reference, False otherwise
+        
+    Implementation Details:
+        - Handles different layer types (Conv, Dense, Pooling)
+        - Uses parallel processing for convolutional layer verification
+        - Provides detailed error logging for mismatches
+        - Performs element-wise comparison with exact matching
+        
+    Error Reporting:
+    - Logs precise location of mismatches (layer, position)
+    - Shows both expected and actual values
+    - Maintains processing even after finding errors
+    """
     logger.info("Results are checked.")
 
     if "Conv" in str(layer_params.layer_name):
@@ -627,6 +775,24 @@ def compare_dram_with_ref(layer_params, ref_output, dram):
     return True
 
 def compare_dram_with_ref_mp(f, ref_output, dram, return_dict):
+    """Compare a single feature map's DRAM output with reference data.
+    
+    Helper function for parallel verification of convolutional layer outputs.
+    Compares one feature map's worth of data, checking for exact matches
+    at each spatial position.
+    
+    Args:
+        f: Feature map index being compared
+        ref_output: Reference data for this feature map
+        dram: DRAM data for this feature map
+        return_dict: Multiprocessing dictionary to store results
+        
+    Implementation:
+        - Compares each spatial position (x,y) within the feature map
+        - Sets return_dict[f] = True initially
+        - Sets to False and returns early if any mismatch is found
+        - Provides detailed error logging of mismatches
+    """
     return_dict[f] = True
     for x in range(len(ref_output)):
         for y in range(len(ref_output[x])):
@@ -638,6 +804,33 @@ def compare_dram_with_ref_mp(f, ref_output, dram, return_dict):
                 return
           
 def fill_dram_with_ref(ref_output, dram, layer_params):
+    """Fill DRAM with reference output data for testing.
+    
+    This function copies reference output data into a DRAM object for
+    testing and verification purposes. Handles different layer types
+    with appropriate data organization.
+    
+    Args:
+        ref_output: Reference data to copy into DRAM
+        dram: Target DRAM object to fill with data
+        layer_params: Layer parameters specifying the data format
+        
+    Returns:
+        dram: DRAM object filled with reference data
+        
+    Implementation:
+    - For convolutional layers:
+        - 3D data organization (features x width x height)
+        - Nested iteration for complete data copy
+    - For pooling layers:
+        - Direct feature map assignment
+        - 1D data organization
+        
+    Error Handling:
+    - Supports both serial and parallel architectures
+    - Maintains data precision and format
+    - Preserves layer-specific data organization
+    """
     logger.info("Results are transmitted.")
     if "Conv" in str(layer_params.layer_name):
         for f in range(len(ref_output)):    

@@ -7,10 +7,48 @@
 
 /// Module: OpenEye_FPGA
 ///
-/// The OpenEye_FPGA is used for implementation, that are limited in their ports. One example is
-/// the use of an FPGA. It uses OpenEye_Parallel.v as a submodul and communicates via handshake
-/// protocol. As delay of data can occur, the varlenFIFO will buffer the output data.
-/// 
+/// Overview:
+/// The OpenEye_FPGA module adapts the OpenEye accelerator architecture for FPGA implementation,
+/// addressing the port limitations typical in FPGA platforms. It encapsulates the OpenEye_Parallel
+/// module and manages data flow through DMA interfaces with buffering capabilities.
+///
+/// Key Features:
+/// 1. FPGA-Optimized Interface:
+///    - Implements DMA-based data transfer
+///    - Handles port limitations through efficient buffering
+///    - Uses handshake protocol for reliable data transfer
+///
+/// 2. Data Management:
+///    - Variable-length FIFO buffering for output data
+///    - Handles timing variations and data delays
+///    - Manages data synchronization between host and accelerator
+///
+/// 3. Memory Organization:
+///    - Global Buffer (GLB) management for activations, weights, and partial sums
+///    - Configurable memory depths and widths
+///    - Efficient data routing between memory and processing elements
+///
+/// 4. Processing Control:
+///    - Configurable processing parameters
+///    - Multiple operation modes support
+///    - Flexible computation scheduling
+///
+/// Operation Modes:
+/// 1. Data Loading:
+///    - DMA transfers for input activations and weights
+///    - Buffering in respective memory banks
+///    - Handshake-based transfer control
+///
+/// 2. Computation:
+///    - Orchestrates data movement to processing elements
+///    - Manages computation timing and synchronization
+///    - Handles partial results accumulation
+///
+/// 3. Result Collection:
+///    - Buffers computed results
+///    - Manages output data transfer
+///    - Implements flow control for host interface
+///
 ///
 /// Parameters:
 ///   IS_TOPLEVEL            - Decides, wether modul is topmodul or not

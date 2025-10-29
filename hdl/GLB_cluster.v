@@ -7,57 +7,94 @@
 
 /// Module: GLB_cluster
 ///
-/// The GLB_Cluster (GLobal_Buffer_Cluster) contains the memory for the partial sums / biases and
-/// input activations. With the router Cluster to configure the accessibility between other clusters
-/// and the process element arrays. can be configured. The data to be computed is stored in the RAMs
-/// (SinglePort) and is iterated through the over. Weights are pushed directly to the process elements.
+/// Global Buffer Cluster for the OpenEye neural network accelerator.
+/// Manages hierarchical memory organization for input activations,
+/// weights, and partial sums with configurable routing capabilities.
 ///
+/// Description:
+///   This module implements a sophisticated memory hierarchy combining
+///   multiple single-port RAM blocks with routing logic. It handles three
+///   types of data (input activations, weights, partial sums) with
+///   separate buffer spaces and access patterns optimized for neural
+///   network computation.
+///
+/// Memory Organization:
+///   - Input Activation GLBs:
+///     * Configurable number of banks
+///     * Single-port RAM implementation
+///     * Supports both read and write modes
+///
+///   - Weight Handling:
+///     * Direct weight forwarding
+///     * No local storage (weights pushed to PEs)
+///     * Configurable data width
+///
+///   - Partial Sum GLBs:
+///     * Multiple bank organization
+///     * Bidirectional data flow
+///     * Accumulation support
+///
+/// Operation Modes:
+///   1. Serial Mode (SERIAL=1):
+///      - Direct path between external and router interfaces
+///      - Simplified control logic
+///      - Reduced hardware complexity
+///
+///   2. Parallel Mode (SERIAL=0):
+///      - Independent bank operation
+///      - Concurrent access support
+///      - Enhanced throughput
 ///
 /// Parameters:
-///    DATA_IACT_BITWIDTH         - Width of input activation data word
-///    DATA_WGHT_BITWIDTH         - Width of weight data word
-///    DATA_PSUM_BITWIDTH         - Width of partial sum data word
-///    TRANS_BITWIDTH_IACT        - Width of iact input port and RAM
-///    TRANS_BITWIDTH_WGHT        - Width of weight input port
-///    TRANS_BITWIDTH_PSUM        - Width of partial sum input port and RAM
-///    NUM_GLB_IACT               - Number of input activation global buffers
-///    NUM_GLB_WGHT               - Number of rows of PEs in cluster (No WGHT GLBs)
-///    NUM_GLB_PSUM               - Number of partial sum global buffers
-///    IACT_MEM_ADDR_WORDS        - Number of words in IACT GLB
-///    PSUM_MEM_ADDR_WORDS        - Number of words in PSUM GLB
-///    IACT_MEM_ADDR_BITS         - Width of words in IACT GLB
-///    PSUM_MEM_ADDR_BITS         - Width of words in PSUM GLB
-/// 
-/// Ports:
-///    data_write_enable_i        - Wether data should be read or written to RAMs. 1 is WR, 0 is RD
+///   Configuration:
+///     SERIAL                 - Operation mode selection (0: parallel, 1: serial)
+///     PARALLEL_MACS         - Number of parallel MAC operations
 ///
-///    ext_mem_iact_addr_i        - Set addr port for IACT GLB
-///    ext_mem_iact_data_i        - Data from top modul, IACT
-///    ext_mem_iact_enable_i      - Enable from top modul, IACT
-///    ext_mem_iact_ready_o       - Ready to top modul, IACT
-///    ext_mem_wght_data_i        - Data from top modul, WGHT
-///    ext_mem_wght_enable_i      - Enable from top modul, WGHT
-///    ext_mem_wght_ready_o       - Ready to top modul, WGHT
-///    ext_mem_psum_addr_i        - Set addr port for PSUM GLB
-///    ext_mem_psum_data_i        - Data from top modul, PSUM
-///    ext_mem_psum_enable_i      - Enable from top modul, PSUM
-///    ext_mem_psum_ready_o       - Ready to top modul, PSUM
-///    ext_mem_psum_data_o        - Data to top modul, PSUM
-///    ext_mem_psum_enable_o      - Enable to top modul, PSUM
-///    ext_mem_psum_ready_i       - Ready from top modul, PSUM
+///   Data Widths:
+///     DATA_IACT_BITWIDTH    - Input activation data width
+///     DATA_WGHT_BITWIDTH    - Weight data width
+///     DATA_PSUM_BITWIDTH    - Partial sum data width
+///     TRANS_BITWIDTH_*      - Transfer widths for each data type
 ///
-///    router_cluster_iact_data_o   - Data connection from IACT Cluster
-///    router_cluster_iact_enable_o - Enable connection from IACT Cluster
-///    router_cluster_iact_ready_i  - Ready connection to IACT Cluster
-///    router_cluster_wght_data_o   - Data connection from WGHT Cluster
-///    router_cluster_wght_enable_o - Enable connection from WGHT Cluster
-///    router_cluster_wght_ready_i  - Ready connection to WGHT Cluster
-///    router_cluster_psum_data_o   - Data connection from PSUM Cluster
-///    router_cluster_psum_enable_o - Enable connection from PSUM Cluster
-///    router_cluster_psum_ready_i  - Ready connection to PSUM Cluster
-///    router_cluster_psum_data_i   - Data connection to PSUM Cluster
-///    router_cluster_psum_enable_i - Enable connection to PSUM Cluster
-///    router_cluster_psum_ready_o  - Ready connection from PSUM Cluster
+///   Memory Organization:
+///     NUM_GLB_IACT          - Input activation buffer count
+///     NUM_GLB_WGHT          - PE rows (weight routing)
+///     NUM_GLB_PSUM          - Partial sum buffer count
+///     *_MEM_ADDR_WORDS      - Memory depth configurations
+///     *_MEM_ADDR_BITS       - Address width parameters
+///
+/// Interfaces:
+///   Clock and Control:
+///     clk_i                    - System clock
+///     rst_ni                   - Asynchronous reset (active low)
+///     data_write_enable_*_i    - Memory access mode control
+///
+///   External Memory Interface:
+///     Input Activations:
+///       ext_mem_iact_*         - IACT data, address, control signals
+///     Weights:
+///       ext_mem_wght_*         - Weight data and control signals
+///     Partial Sums:
+///       ext_mem_psum_*         - PSUM data, address, control signals
+///
+///   Router Cluster Interface:
+///     Input Activations:
+///       router_cluster_iact_*  - IACT routing signals
+///     Weights:
+///       router_cluster_wght_*  - Weight routing signals
+///     Partial Sums:
+///       router_cluster_psum_*  - PSUM routing signals (bidirectional)
+///
+/// Implementation Notes:
+///   - Uses RAM_SP modules for memory implementation
+///   - Implements handshaking protocol for all interfaces
+///   - Supports configurable data widths and memory depths
+///   - Features pipeline registers for timing optimization
+///   - Handles asynchronous reset conditions
+///   - Manages multiple clock domain interactions
+///   - Provides flexible routing configurations
+///   - Implements efficient bank arbitration
+///   - Supports multiple access patterns
 ///
 
 module GLB_cluster #(

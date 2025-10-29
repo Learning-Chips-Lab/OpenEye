@@ -7,22 +7,105 @@
 
 /// Module: varlenFIFO
 ///
-/// VariableLengthFirstInFirstOut (varlenFIFO) is a FIFO memory that can store data in 
-/// words of different lengths. varlenFIFO contains a memory that can be accessed by read and write.
-/// These operations can even happen simultaneously. It then creates memory via pointers.
+/// The Variable-Length FIFO (varlenFIFO) implements a configurable First-In-First-Out
+/// buffer in the OpenEye architecture that supports variable-length data streams. This
+/// module provides synchronized data buffering with stream control capabilities and
+/// concurrent read/write operations.
+///
+/// Key Features:
+/// - Flexible Data Handling:
+///   * Configurable data width
+///   * Variable stream lengths
+///   * Parameterized buffer depth
+///
+/// - Advanced Buffer Control:
+///   * Concurrent read/write support
+///   * Stream reset capability
+///   * Full/empty status signals
+///
+/// - Memory Management:
+///   * Pointer-based addressing
+///   * Circular buffer operation
+///   * Automatic wraparound
+///
+/// - Stream Processing:
+///   * Stream boundary detection
+///   * Dynamic buffer reset
+///   * Continuous operation support
+///
+/// Architectural Role:
+/// The varlenFIFO serves as:
+/// 1. Data stream buffer
+/// 2. Rate matching interface
+/// 3. Stream synchronization point
+/// 4. Temporary data storage
+///
+/// Operational Modes:
+/// 1. Normal Operation:
+///    - Independent read/write
+///    - Status tracking
+///    - Flow control
+///
+/// 2. Concurrent Access:
+///    - Simultaneous read/write
+///    - Consistent count maintenance
+///    - Status preservation
+///
+/// 3. Stream Reset:
+///    - Complete buffer clear
+///    - Pointer reinitialization
+///    - Status reset
 ///
 /// Parameters:
-///    DEPTH                  - Amount of storageable data words
-///    DATA_WIDTH             - Length of data words
+///    DATA_WIDTH        - Data Path Configuration
+///                        Width of each data word
+///                        Defines storage granularity
+///
+///    DEPTH            - Buffer Organization
+///                        Number of entries in FIFO
+///                        Maximum storage capacity
+///                        Must be power of 2
 ///   
 /// Ports:
-///    wr_en                  - Write Enable Port
-///    rd_en                  - Read Enable Port
-///    new_stream_i           - Port for resetting pointers and therefore deleting storage
-///    data_i                 - Data Port In
-///    data_o                 - Data Port Out
-///    empty                  - Port for signaling, that storage is empty
-///    full                   - Port for signaling, that storage is full
+/// Clock and Reset:
+///    clk_i            - System Clock Input
+///                       Positive edge triggered
+///                       Synchronizes all operations
+///
+///    rst_ni           - Asynchronous Reset Input (active low)
+///                       Resets all internal state
+///                       Clears memory contents
+///
+/// Control Interface:
+///    wr_en            - Write Enable Input (active high)
+///                       Controls write operations
+///                       Ignored when buffer full
+///
+///    rd_en            - Read Enable Input (active high)
+///                       Controls read operations
+///                       Ignored when buffer empty
+///
+///    new_stream_i     - Stream Reset Input (active high)
+///                       Resets internal pointers
+///                       Prepares for new data stream
+///
+/// Data Interface:
+///    data_i           - Write Data Input [DATA_WIDTH-1:0]
+///                       Data to be written
+///                       Sampled when wr_en is high
+///
+///    data_o           - Read Data Output [DATA_WIDTH-1:0]
+///                       Data being read
+///                       Valid when not empty
+///
+/// Status Interface:
+///    empty            - Empty Status Output
+///                       1: Buffer is empty
+///                       0: Data available
+///
+///    full             - Full Status Output
+///                       1: Buffer is full
+///                       0: Space available
 ///
 
 module varlenFIFO #(

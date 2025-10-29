@@ -3,6 +3,21 @@
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
+"""RTL test utilities for the OpenEye project.
+
+This module provides utility functions for testing RTL designs using cocotb.
+It includes functions for:
+- Setting input signals with proper timing
+- Resetting DUT signals
+- Writing input activations, weights and biases
+- Comparing output streams
+- Managing DMA transfers
+- Supporting various neural network layer types (Conv, Dense, Pooling)
+
+The module is designed to work with the OpenEye neural network accelerator
+architecture and supports both parallel and serial modes of operation.
+"""
+
 import os
 import logging
 import math
@@ -14,9 +29,25 @@ import test_utils.stream_dicts as strdic
 logger = logging.getLogger("cocotb")
 
 
-async def set_input(port_timings, signal, new_value, multiple_dim = False, array_index = [], array_max_index = []):
-    # input delay of 100 ps relative to rising edge
-    # this is the value used for the implementation constraints of OpenEye
+async def set_input(port_timings, signal, new_value, multiple_dim=False, array_index=[], array_max_index=[]):
+    """Set an input signal value with proper timing.
+    
+    This function sets a value on an input signal of the DUT, respecting timing constraints
+    defined in the OpenEye implementation. It supports both scalar and multi-dimensional
+    signals (arrays).
+    
+    Args:
+        port_timings: Object containing timing parameters (clk_delay_in, clk_delay_unit_in)
+        signal: The signal to set (cocotb signal object)
+        new_value: The value to set on the signal
+        multiple_dim: Boolean indicating if the signal is multi-dimensional
+        array_index: List of indices for accessing multi-dimensional signals
+        array_max_index: List of maximum indices for each dimension
+    
+    Note:
+        The input delay is 100 ps relative to the rising edge, which matches
+        the implementation constraints of OpenEye.
+    """
     await Timer(port_timings.clk_delay_in, units=port_timings.clk_delay_unit_in)
     if(multiple_dim):
         if(cocotb.SIM_NAME == "Icarus Verilog"):
@@ -188,6 +219,28 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
         
 def compare_iact_storage(ptp, dut, iact_ref, oep):
+    """Compare input activation storage contents with reference values.
+    
+    This function verifies that the input activation data stored in the DUT's buffers
+    matches the expected reference values. It handles the complex memory layout and
+    data organization of the OpenEye accelerator's input activation storage.
+    
+    Args:
+        ptp: Port timing parameters
+        dut: Device under test (OpenEye accelerator instance)
+        iact_ref: Reference input activation data to compare against
+        oep: OpenEye parameters containing architecture configuration
+        
+    Returns:
+        bool: True if comparison passes, False if any mismatch is found
+        
+    Technical Details:
+        - Handles multi-dimensional activation data layout
+        - Manages word and buffer addressing in hardware
+        - Performs proper data alignment and comparison
+        - Provides detailed logging of any mismatches
+        - Accounts for data organization across multiple buffers
+    """
     logger.info("Iact storages are checked.")
     i,c,x,y = 0,0,0,0
     word, word_reset, buffer, buffer_reset = 0,0,0,0
@@ -222,16 +275,26 @@ def compare_iact_storage(ptp, dut, iact_ref, oep):
     return True
 
 async def write_iact(ptp, dut, stream, oep, lp):
-    """ Write the input activations to the DUT.
+    """Write the input activations to the DUT.
     
-    This function writes the input activations to the DUT. It is called by the testbench.
+    This function writes the input activations to the OpenEye accelerator through its
+    input ports. It handles the timing and protocol requirements for transferring 
+    activation data to the hardware.
     
     Args:
-        dut: The DUT. 
-        stream: The stream that is sent to the DUT.
-        layer_repetition: The index of the part of a layer, if it is too large to be processed at once.
-        oep: The OpenEye parameters.
-        lp: The layer parameters.
+        ptp: Port timing parameters containing clock and signal timing information
+        dut: The device under test (OpenEye accelerator instance)
+        stream: The activation data stream to be sent to the DUT
+        oep: OpenEye parameters containing architecture configuration 
+        lp: Layer parameters containing neural network layer configuration
+        
+    Implementation Details:
+        - Waits for iact_ready_o signal before sending data
+        - Handles data transmission across multiple clusters and routers
+        - Sets enable signals appropriately for the data transfer
+        - Manages the timing of data and enable signals
+        - Supports sparsity in activation data
+        - Automatically handles signal reset after transmission
     """
     iact_enable_signal = 0
     iact_transmission = 0
@@ -258,16 +321,30 @@ async def write_iact(ptp, dut, stream, oep, lp):
         cocotb.start_soon(set_input(ptp,(dut.iact_enable_i), 0))
 
 async def write_wght(ptp, dut, stream, oep, lp):
-    """ Write the weights to the DUT.
+    """Write the weights to the DUT.
     
-    This function writes the weights to the DUT. It is called by the testbench.
+    This function handles the transmission of weight data to the OpenEye accelerator.
+    It manages the protocol for sending weight data across multiple clusters and routers,
+    ensuring proper timing and synchronization.
     
     Args:
-        dut: The DUT.
-        stream: The stream that is sent to the DUT.
-        layer_repetition: The index of the part of a layer, if it is too large to be processed at once.
-        oep: The OpenEye parameters.
-        lp: The layer parameters.
+        ptp: Port timing parameters containing clock and signal timing information
+        dut: The device under test (OpenEye accelerator instance)
+        stream: The weight data stream to be sent to the DUT
+        oep: OpenEye parameters containing architecture configuration (clusters, routers, etc.)
+        lp: Layer parameters containing neural network layer configuration
+        
+    Implementation Details:
+        - Checks wght_ready_o signal from all clusters before transmission
+        - Manages weight data distribution across multiple clusters
+        - Handles weight streaming protocol with proper enable signals
+        - Supports parallel transmission to multiple processing elements
+        - Automatically handles signal reset after transmission
+        - Respects timing requirements for stable weight loading
+    
+    Note:
+        The function skips transmission if lp.skipWght is set to 1, which is useful
+        for layers that reuse previously loaded weights.
     """
     wght_enable_signal = 0
     wght_transmission = 0
@@ -296,19 +373,31 @@ async def write_wght(ptp, dut, stream, oep, lp):
         cocotb.start_soon(set_input(ptp,(dut.wght_enable_i), 0))
 
 async def write_bias(ptp, dut, stream, oep, lp):
-    """ Write the bias to the DUT.
-
-    This function writes the bias to the DUT. It is called by the testbench.
-    The bias is written to the partial sum GLBs. Therefore, the partial sum
-    ports are used here.
-
+    """Write bias values to the DUT using partial sum Global Local Buffers (GLBs).
+    
+    This function handles the transmission of bias data to the OpenEye accelerator
+    through the partial sum ports. The bias values are stored in partial sum GLBs
+    to be added during computation.
+    
     Args:
-        dut: The DUT.
-        stream: The stream that is sent to the DUT.
-        layer_repetition: The index of the part of a layer, if it is too large to be processed at once.
-        oep: The OpenEye parameters.
-        lp: The layer parameters.
-
+        ptp: Port timing parameters containing clock and signal timing information
+        dut: The device under test (OpenEye accelerator instance)
+        stream: The bias data stream to be sent to the DUT
+        oep: OpenEye parameters containing architecture configuration
+        lp: Layer parameters containing neural network layer configuration
+        
+    Implementation Details:
+        - Uses partial sum (psum) ports for bias transmission
+        - Enables all psum ports across clusters simultaneously
+        - Handles data distribution across multiple clusters and routers
+        - Manages timing and synchronization of data transfer
+        - Automatically handles signal reset after transmission
+    
+    Technical Notes:
+        - Bias values are written to partial sum GLBs
+        - Uses the same data path as partial sums for efficiency
+        - Supports parallel loading across multiple processing elements
+        - Maintains proper synchronization with computation units
     """
     psum_transmission = 0
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
@@ -326,13 +415,35 @@ async def write_bias(ptp, dut, stream, oep, lp):
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
 
 async def await_enable_signal(ptp, dut):
+    """Wait for DMA enable signal from the device.
+    
+    This function waits for the DMA enable signal to be asserted by the DUT,
+    indicating that it is ready to begin a DMA transfer operation.
+    
+    Args:
+        ptp: Port timing parameters
+        dut: Device under test (OpenEye accelerator instance)
+    """
     cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
     while (dut.enable_dma_o.value != 1):
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     pass
 
 async def await_ready_signal(ptp, dut):
-
+    """Wait for ready signal from the device.
+    
+    This function implements a waiting period followed by monitoring of the
+    DMA ready signal from the DUT. It ensures proper synchronization for
+    data transfer operations.
+    
+    Args:
+        ptp: Port timing parameters
+        dut: Device under test (OpenEye accelerator instance)
+        
+    Note:
+        Includes a fixed 3-cycle delay before checking ready signal to allow
+        for internal state stabilization.
+    """
     await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
     await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
@@ -341,19 +452,42 @@ async def await_ready_signal(ptp, dut):
     pass
 
 async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order):
-    """ Await the output stream and compare it to the reference output.
+    """Compare convolutional layer output stream with expected results.
 
-    This function awaits the output stream and compares it to the reference output.
+    The debug logging functionality is controlled by login_level to manage file I/O:
+    - When login_level is sufficient, the function creates and writes to debug log files
+    - Files are properly closed when the function finishes
+    - Basic logging through logger remains active regardless of login_level
+    
+    This function monitors and validates the output stream from a convolutional layer
+    in the OpenEye accelerator. It handles the complex data organization of 
+    convolution outputs across multiple processing elements and clusters.
     
     Args:
-        dut: The DUT.
-        layer_number: The index of the layer.
-        layer_repetition: The index of the part of a layer, if it is too large to be processed at once.
-        layer_parameters: The layer parameters.
-        oep: The OpenEye parameters.
-        les: The layer execution state.
-        dram: The storage used.
-        login_level: What kind of logs should be outputed
+        ptp: Port timing parameters
+        dut: Device under test (OpenEye accelerator instance)
+        layer_number: Index of the current layer in the network
+        layer_repetition: Counter for processing subdivided layers
+        layer_parameters: Configuration parameters for the current layer
+        oep: OpenEye architecture parameters
+        les: Layer execution state tracking object
+        dram: Memory object for storing computation results
+        login_level: Logging verbosity control
+        output_order: Mapping of output data organization
+    
+    Technical Details:
+        - Handles both serial and parallel operation modes
+        - Manages output data collection from multiple clusters
+        - Tracks partial sum accumulation
+        - Supports debug logging of intermediate results
+        - Handles data reordering based on cluster organization
+        - Supports various data quantization modes
+        - Maintains state across multiple execution cycles
+    
+    Note:
+        Debug logging creates detailed output files when login_level is sufficient:
+        - output.txt: Raw output stream data
+        - storage_input.txt: Detailed state tracking information
     """
 
     if(logging.DEBUG >= login_level):
@@ -491,18 +625,37 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
     pass
 
 async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order):
-    """ Await the output stream and compare it to the reference output.
-
-    This function awaits the output stream and compares it to the reference output.
+    """Compare depthwise convolution layer output stream with expected results.
+    
+    This function monitors and validates the output stream from a depthwise convolution
+    layer in the OpenEye accelerator. It handles the specific data organization and
+    computation patterns used in depthwise convolutions.
     
     Args:
-        dut: The DUT.
-        layer_number: The index of the layer.
-        model: The model.
-        layer_repetition: The index of the part of a layer, if it is too large to be processed at once.
-        layer_parameters: The layer parameters.
-        oep: The OpenEye parameters.
-        les: The layer execution state.
+        ptp: Port timing parameters
+        dut: Device under test (OpenEye accelerator instance)
+        layer_number: Index of the current layer in the network
+        model: Neural network model configuration
+        layer_repetition: Counter for processing subdivided layers
+        layer_parameters: Configuration parameters for the current layer
+        oep: OpenEye architecture parameters
+        les: Layer execution state tracking object
+        dram: Memory object for storing computation results
+        login_level: Logging verbosity control
+        output_order: Mapping of output data organization
+    
+    Technical Details:
+        - Specialized for depthwise convolution output patterns
+        - Handles channel-wise computation results
+        - Manages output collection from multiple PE clusters
+        - Supports debugging through detailed logging
+        - Maintains proper data organization per channel
+        - Handles timing and synchronization specific to depthwise operations
+    
+    Note:
+        Debug logging (when login_level is sufficient) creates:
+        - output.txt: Raw depthwise convolution output data
+        - storage_input.txt: State tracking and debugging information
     """
     if(logging.DEBUG >= login_level):
         filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt'
@@ -675,7 +828,26 @@ async def compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer
     pass
 
 async def send_enable_conv(ptp, dut, layer_params, layer_repetition, oep):
-
+    """Send enable signals for convolution layer operation.
+    
+    This function manages the enable signal timing for convolutional layer
+    processing in the OpenEye accelerator. It controls when processing elements
+    start their computations and handles synchronization across clusters.
+    
+    Args:
+        ptp: Port timing parameters
+        dut: Device under test (OpenEye accelerator instance)
+        layer_params: Configuration parameters for the current layer
+        layer_repetition: Counter for processing subdivided layers
+        oep: OpenEye architecture parameters
+        
+    Implementation Details:
+        - Enables all partial sum GLBs simultaneously
+        - Calculates appropriate timing based on computation mode
+        - Supports different cluster computation patterns
+        - Handles proper synchronization of enable signals
+        - Manages timing for multiple processing cycles
+    """
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
 
 

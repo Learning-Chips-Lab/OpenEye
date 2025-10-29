@@ -5,38 +5,82 @@
 
 `timescale 1ns / 1ps
 
-/// Module: data_pipeline
+/// Module: data_pipeline_wght
 ///
-/// The data_pipeline module manages the flow of data through a processing system.
-/// It handles the loading of addresses and data into two separate ScratchPad (SPAD) memories. 
-/// memories, transitioning between these states based on the FSM mode.
-/// The module is designed for sequential operations, processing data in cycles.
+/// Weight Data Pipeline for the OpenEye neural network accelerator.
+/// Manages the flow of weight data through a dual scratchpad memory system,
+/// optimizing data organization for neural network weight distribution.
+///
+/// Description:
+///   This specialized pipeline handles weight data distribution in the OpenEye
+///   accelerator. It features a dual-SPAD architecture optimized for weight
+///   storage and distribution patterns common in neural network operations.
+///   The module supports configurable data widths and memory organizations
+///   to accommodate different neural network architectures.
+///
+/// Operation Modes:
+///   1. Data Loading:
+///      - Receives weight data in configurable width chunks
+///      - Manages data distribution across dual SPADs
+///      - Handles address generation and data formatting
+///
+///   2. Compute Mode:
+///      - Coordinates weight distribution during computation
+///      - Manages SPAD address spaces efficiently
+///      - Handles pipeline flushing and state resets
+///
+///   3. Data Organization:
+///      - Primary SPAD: Stores weight metadata and addressing
+///      - Secondary SPAD: Contains actual weight values
+///      - Supports configurable data widths and organizations
 ///
 /// Parameters:
-///    DATA_WIDTH:                 Bit-width of input data
-///    FIRST_SPAD_ADDR:            Number of addresses in the first SPAD
-///    FIRST_SPAD_DATA:            Amount of data stored in one address of the first SPAD
-///    SECOND_SPAD_ADDR:           Number of addresses in the second SPAD
-///    SECOND_SPAD_DATA:           Amount of data stored in one address of the second SPAD
-///    FIRST_SPAD_ADDR_BITWIDTH:   Bit-width required for addressing the first SPAD
-///    SECOND_SPAD_ADDR_BITWIDTH:  Bit-width required for addressing the second SPAD
-///    FIRST_SPAD_DATA_CYCLE:      Number of cycles required to load data into the first SPAD
-///    SECOND_SPAD_DATA_CYCLE:     Number of cycles required to load data into the second SPAD
+///   DATA_WIDTH                - Width of input data bus
+///   FIRST_SPAD_ADDR          - Address depth of first SPAD
+///   FIRST_SPAD_DATA          - Data width per entry in first SPAD
+///   SECOND_SPAD_ADDR         - Address depth of second SPAD
+///   SECOND_SPAD_DATA         - Data width per entry in second SPAD
+///   SECOND_PAYLOAD_WIDTH     - Actual weight data width in second SPAD
+///   FIRST_SPAD_ADDR_BITWIDTH - Address bits for first SPAD (auto-calculated)
+///   SECOND_SPAD_ADDR_BITWIDTH- Address bits for second SPAD (auto-calculated)
+///   FIRST_SPAD_DATA_CYCLE    - Data cycles for first SPAD (derived)
+///   SECOND_SPAD_DATA_CYCLE   - Data cycles for second SPAD (derived)
+///   SECOND_OVERHEAD_WIDTH    - Overhead data width in second SPAD
 ///
 /// Ports:
-///    clk_i:                      Clock signal input
-///    rst_ni:                     Asynchronous reset input (active low)
-///    compute_i:                  Signal to reset addresses and state of the module
-///    data_i:                     Input data to be processed and stored
-///    enable_i:                   Enable signal for data processing
-///    first_spad_words_o:         Number of words stored in the first SPAD
-///    second_spad_words_o:        Number of words stored in the second SPAD
-///    first_spad_addr_o:          Address output for the first SPAD
-///    first_spad_data_o:          Data output from the first SPAD
-///    first_spad_en_o:            Enable signal for the first SPAD
-///    second_spad_addr_o:         Address output for the second SPAD
-///    second_spad_data_o:         Data output from the second SPAD
-///    second_spad_en_o:           Enable signal for the second SPAD
+///   Clock and Control:
+///     clk_i              - System clock
+///     rst_ni            - Asynchronous reset (active low)
+///     compute_i         - Triggers compute mode/reset
+///     enable_i          - Enables data processing
+///
+///   Data Interface:
+///     data_i[DATA_WIDTH-1:0] - Input weight data
+///
+///   First SPAD (Metadata) Interface:
+///     first_spad_words_o     - Valid word count in first SPAD
+///     first_spad_max_i       - Maximum address limit
+///     first_spad_addr_o      - Current address
+///     first_spad_data_o      - Metadata output
+///     first_spad_en_o        - Write enable
+///
+///   Second SPAD (Weight Data) Interface:
+///     second_spad_words_o    - Valid word count
+///     second_spad_addr_o     - Current address
+///     second_spad_data_o     - Weight data output
+///     second_spad_en_o       - Write enable
+///
+/// Implementation Notes:
+///   - Features efficient weight data organization
+///   - Supports variable precision weights
+///   - Includes metadata management
+///   - Handles pipeline stalling and flushing
+///   - Provides address space management
+///   - Implements cycle-accurate timing control
+///   - Manages synchronization between SPADs
+///   - Supports dynamic data flow control
+///   - Handles boundary conditions and overflows
+///   - Implements efficient reset mechanisms
 ///
 
 module data_pipeline_wght #(

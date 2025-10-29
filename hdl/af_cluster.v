@@ -7,22 +7,45 @@
 
 /// Module: af_cluster
 ///
-/// The (a)ctivation(f)unction_cluster is a modul for creating the neccessary non-linear function.
-/// Currently there is only ReLU implemented, which can be activated by setting mode_i to 1.
-/// The ready and data signal gets passed on.
+/// The Activation Function Cluster implements configurable non-linear activation functions
+/// for the OpenEye neural network accelerator. It supports multiple operation modes including
+/// pass-through, ReLU (Rectified Linear Unit), and LeakyReLU with configurable slope.
+///
+/// Description:
+///   This module processes input data through selectable activation functions, supporting
+///   both serial and parallel operation modes. It features parameterized bit widths and
+///   configurable LeakyReLU parameters for flexible neural network implementations.
+///
+/// Operation Modes (mode_i):
+///   0: Pass-through - Data passes unchanged
+///   1: ReLU - max(0, x)
+///   2: LeakyReLU - max(0.1x, x)
+///   3: Zero - Output is forced to 0
 ///
 /// Parameters:
-///    DATA_BITWIDTH - Bitwidth of data words
-///    MODES      - Amount of MODES in this module, currently 2 (ReLU and nothing)
-///   
+///   ADVANCED_WIDTH  - Extended precision for LeakyReLU calculations (default: 64)
+///   SERIAL         - Operation mode selection (1: serial, 0: parallel)
+///   PARALLEL_MACS  - Number of parallel MAC units (default: 2)
+///   DATA_BITWIDTH  - Width of input/output data words
+///   MODES         - Number of supported activation modes (default: 4)
+///   DIVISOR       - LeakyReLU slope divisor parameter (default: 35)
+///   DIVIDEND      - LeakyReLU slope dividend parameter (default: 3435973837)
+///
 /// Ports:
-///    mode_i     - Mode, that chooses operation.
-///    enable_i   - Enable Port, just gets delayed to output
-///    enable_o   - Output for Enable signal, signals valid data
-///    ready_i    - Ready signal, just gets delayed to output
-///    ready_o    - Output for ready signal
-///    data_i     - Data Port In, consists of two data packages
-///    data_o     - Data Port Out, consists of two data packages
+///   mode_i[MODE_BITS-1:0] - Activation function selection
+///   enable_i              - Input data valid signal
+///   enable_o             - Output data valid signal (delayed enable_i)
+///   ready_i              - Upstream ready signal
+///   ready_o             - Downstream ready signal (mirrors ready_i)
+///   data_i[DATA_BITWIDTH-1:0] - Input data vector
+///   data_o[DATA_BITWIDTH-1:0] - Output data vector
+///
+/// Implementation Notes:
+///   - Supports both serial and parallel data processing
+///   - LeakyReLU uses fixed-point multiplication for slope calculation
+///   - All operations are combinatorial with registered handshaking signals
+///   - Data width is configurable through parameters
+///   - Sign bit handling varies by activation function
 ///
 
 module af_cluster #(

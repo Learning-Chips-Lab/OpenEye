@@ -1,7 +1,68 @@
 `timescale 1ns / 1ps
 
+/// Module: iact_stream_constructor
+///
+/// The Input Activation Stream Constructor (iact_stream_constructor) is a sophisticated
+/// module in the OpenEye architecture responsible for organizing and streaming input
+/// activation data to processing elements. It handles complex data formatting,
+/// buffering, and distribution patterns required for efficient neural network processing.
+///
+/// Key Features:
+/// - Stream Organization:
+///   * Configurable data formatting
+///   * Multi-channel support
+///   * Variable batch processing
+///
+/// - Memory Management:
+///   * RAM-based buffering
+///   * Flexible addressing
+///   * Dynamic data loading
+///
+/// - Processing Support:
+///   * PE cluster distribution
+///   * Channel interleaving
+///   * Padding management
+///
+/// - Control Mechanisms:
+///   * Stream synchronization
+///   * Flow control
+///   * Configuration interface
+///
+/// Operational Modes:
+/// 1. Configuration Mode:
+///    - Parameter setup
+///    - Stream initialization
+///    - Memory organization
+///
+/// 2. Storage Mode:
+///    - Data buffering
+///    - Address management
+///    - Write operations
+///
+/// 3. Streaming Mode:
+///    - Data distribution
+///    - Channel routing
+///    - PE synchronization
+///
+/// Architecture Integration:
+/// The module serves as:
+/// 1. Input activation formatter
+/// 2. Data distribution controller
+/// 3. PE cluster interface
+/// 4. Memory buffer manager
+///
 module iact_stream_constructor #(
-    // TODO wght_size changeable
+    parameter  CALC_DATA_WIDTH     = 32,   // Calculation precision
+    parameter  CLUSTER_ROWS        = 8,    // Number of PE cluster rows
+    parameter  NUM_GLB_IACT        = 3,    // Global buffer interfaces
+    parameter  PE_X                = 4,    // PE array width
+    parameter  PE_Y                = 3,    // PE array height
+    parameter  DATA_IACT_BITWIDTH  = 8,    // Activation data width
+    parameter  DATA_IACT_OVERHEAD  = 4,    // Control overhead bits
+    parameter  RAM_CELLS           = 32,   // Buffer depth
+    parameter  RAM_CELLS_WORDWIDTH = 64,   // Buffer word width
+    parameter  WORD_BITWIDTH       = 72,   // Total word width
+    parameter  ADDRWIDTH           = 13,   // Address width
     parameter  CALC_DATA_WIDTH     = 32,
     parameter  CLUSTER_ROWS        = 8,
     parameter  NUM_GLB_IACT        = 3,
