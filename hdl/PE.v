@@ -862,6 +862,7 @@ module PE #(
                 iact_addr_current <= iact_addr_SPad_data_r;
               end
             end
+            values_valid <= 1;
             if (wght_data_end <= wght_data_vec) begin
               values_valid <= 0;
             end
