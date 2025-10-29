@@ -7,7 +7,7 @@ cocotb_test
 
 
 # dependencies to build the documentation
-sphinx-build
+sphinx
 myst_parser
 autoapi
 sphinx_rtd_theme
