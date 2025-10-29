@@ -63,17 +63,6 @@ module iact_stream_constructor #(
     parameter  RAM_CELLS_WORDWIDTH = 64,   // Buffer word width
     parameter  WORD_BITWIDTH       = 72,   // Total word width
     parameter  ADDRWIDTH           = 13,   // Address width
-    parameter  CALC_DATA_WIDTH     = 32,
-    parameter  CLUSTER_ROWS        = 8,
-    parameter  NUM_GLB_IACT        = 3,
-    parameter  PE_X                = 4,
-    parameter  PE_Y                = 3,
-    parameter  DATA_IACT_BITWIDTH  = 8,
-    parameter  DATA_IACT_OVERHEAD  = 4,
-    parameter  RAM_CELLS           = 32,
-    parameter  RAM_CELLS_WORDWIDTH = 64,
-    parameter  WORD_BITWIDTH       = 72,
-    parameter  ADDRWIDTH           = 13,
     localparam PES                 = PE_X * PE_Y,
     localparam IACT_WORDS_IN_RAM   = RAM_CELLS_WORDWIDTH / DATA_IACT_BITWIDTH,
     localparam IACT_DATA_DATA      = DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD,
