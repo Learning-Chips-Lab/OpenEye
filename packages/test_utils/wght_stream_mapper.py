@@ -731,8 +731,6 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                     int(words_in_storage * math.ceil(layer_params.used_wght_per_PE/2/int(layer_params.used_iact_per_PE)))
             else:
                 break
-        if ((cl_x == 0) & (cl_y == 0) & (router == 1)) :
-            print(spad_storage)
         return spad_storage
 
 
