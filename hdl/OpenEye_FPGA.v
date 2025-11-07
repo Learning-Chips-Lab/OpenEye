@@ -1157,7 +1157,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
       write_dma_en                          <= 0;
       write_dma_addr                        <= ~0;
       dma_data_i                            <= 0;
-      past_padding                              <= 0;
+      past_padding                          <= 0;
       // Pooling
       for (a = 0; a < 32; a = a + 1) begin
         pooling_regs[a] <= 0;
@@ -1384,8 +1384,8 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
                 wght_buffer_SP_wr_addr <= wght_buffer_SP_wr_addr + 1;
                 wght_cnt               <= ({7'd0,wght_cycles_reg} * ({7'd0,input_activations_reg} * ({7'd0,filters_reg} / PARALLEL_MACS[12:0]))) - 1;
                 if(fsm_cycle == (wght_cycles_reg * (input_activations_reg * ({26'd0,filters_reg} / PARALLEL_MACS))) - 1)begin
-                  wght_cnt  <= (input_activations_reg * ({7'd0,filters_reg} / PARALLEL_MACS[12:0]));
-                  fsm_cycle <= 0;
+                  wght_cnt       <= (input_activations_reg * ({7'd0,filters_reg} / PARALLEL_MACS[12:0]));
+                  fsm_cycle      <= 0;
                   fsm_last_state <= GET_WGHT;
                   if (!skipPsum_reg) begin
                     fsm_current_state <= GET_BIAS;
