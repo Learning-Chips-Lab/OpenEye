@@ -178,7 +178,7 @@ module data_pipeline_iact #(
 
         if (((cycle_counter == 0) & (data_i[SECOND_PAYLOAD_WIDTH-1:0] != 0)) | ((cycle_counter != 0) & (current_data != 0))) begin
           first_spad_en_o     <= 1;
-          second_spad_words_o <= second_spad_addr_o + 1;
+          second_spad_words_o <= second_spad_words_o + 1;
           first_spad_data_o   <= overhead_reg + 1'd1;
           overhead_reg        <= overhead_reg + 1;
           second_spad_en_o    <= 1;
