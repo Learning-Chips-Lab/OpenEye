@@ -130,7 +130,7 @@ async def single_layer_test(dut):
     ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
     
     # Create a test model    
-    gtu.select_gpu(1)
+    gtu.select_gpu(0)
 
     #Here If-Condition test, wether use model or single Layer
     if(use_random):
