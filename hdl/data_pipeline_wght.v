@@ -117,7 +117,7 @@ module data_pipeline_wght #(
     output reg                                    second_spad_en_o
 );
 
-  reg  [            FIRST_SPAD_DATA-1 : 0] data_storage_1;  // Temporary storage for data
+  reg  signed [            FIRST_SPAD_DATA : 0] data_storage;  // Temporary storage for data
   reg  [            FIRST_SPAD_DATA-1 : 0] temp_acc_overhead;  // Temporary storage for data
   reg  [     $clog2(SECOND_SPAD_ADDR) : 0] address_temp_2;  // Temporary address storage
   reg  [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;   // Cycle counter for data loading
@@ -132,12 +132,12 @@ module data_pipeline_wght #(
   wire [                              3:0] overhead_w;
   wire signed [                       7:0] next_channel_counter;
   reg [                               7:0] overhead_pos;
-  wire [                              3:0] upcoming_overhead_in_new_cycle;
+  wire signed [                              3:0] upcoming_overhead_in_new_cycle;
   wire [                              1:0] missingvalue;
 
   assign missingvalue = (overhead_pos + input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH] < first_spad_max_i*2) ? 2 : 1;
   assign upcoming_overhead_in_new_cycle = overhead_pos + overhead_w + temp_acc_overhead + missingvalue - (first_spad_max_i*2);
-  assign next_channel_counter = first_spad_data_o + ((temp_acc_overhead + overhead_w)/2) - data_storage_1 - first_spad_max_i;
+  assign next_channel_counter = first_spad_data_o + ((temp_acc_overhead + overhead_w)/2) - data_storage - first_spad_max_i;
   genvar w_gen;
   for (w_gen = 0; w_gen < 2; w_gen = w_gen + 1) begin
     assign input_words_w[w_gen] = data_i[(12*w_gen)+:12];
@@ -157,7 +157,7 @@ module data_pipeline_wght #(
       first_spad_en_o     <= 0;
       second_spad_addr_o  <= 0;
       second_spad_en_o    <= 0;
-      data_storage_1      <= 0;
+      data_storage      <= 0;
       temp_acc_overhead   <= 0;
       address_temp_2      <= 0;
       cycle_counter       <= 0;
@@ -198,15 +198,19 @@ module data_pipeline_wght #(
           cycle_counter  <= 0;
         end
         if (next_channel_counter >=  0) begin
-          data_storage_1    <= first_spad_data_o;
-          temp_acc_overhead <= 0;
-          first_spad_addr_o <= first_spad_addr_o + 1;
-          payload_reg       <= {data_i[23:12],upcoming_overhead_in_new_cycle[3:0],data_i[7:0]};
+          data_storage    <= first_spad_data_o;
           overhead_pos      <= 0;
+          if (data_storage >= 0) begin
+            temp_acc_overhead <= 0;
+            first_spad_addr_o <= first_spad_addr_o + 1;
+            payload_reg       <= {data_i[23:12],upcoming_overhead_in_new_cycle[3:0],data_i[7:0]};
+          end
         end
       end else begin
         second_spad_en_o   <= 0;
         second_spad_addr_o <= 0;
+        data_storage     <= -first_spad_max_i;
+        overhead_pos       <= (first_spad_max_i - 1) * 2;
         if (second_spad_addr_o != 0) begin
           first_spad_words_o <= first_spad_addr_o + 1;
         end
@@ -221,7 +225,7 @@ module data_pipeline_wght #(
           first_spad_addr_o <= 0;
         end
         second_spad_en_o    <= 0;
-        data_storage_1      <= 0;
+        data_storage      <= 0;
         first_spad_data_o   <= 0;
         address_temp_2      <= 0;
         cycle_counter       <= 0;
