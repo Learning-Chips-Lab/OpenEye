@@ -653,6 +653,7 @@ class LayerParameters(object):
             self.used_channels = 1 << (self.used_channels.bit_length() - 1)  # Round down to 2^n
             if (self.used_channels == 0) :
                 assert False
+        self.used_channels = min(self.input_shape[3],self.used_channels)
 
     def calculate_needed_refreshes_mx(self, params):
         """Generate a matrix of refresh cycle counts for each transmission iteration.
@@ -1013,6 +1014,7 @@ class LayerParameters(object):
 
         # Calculate channel iteration metrics
         self.diff_iact_layer = math.ceil(self.input_shape[3]/self.used_channels)
+        print(self.diff_iact_layer)
         if (layer_number != max_layers - 1) :
             # Store next layer's channel requirements for inter-layer optimization
             self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
