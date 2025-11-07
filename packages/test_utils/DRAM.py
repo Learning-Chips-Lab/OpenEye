@@ -218,12 +218,6 @@ class DRAMContents(object):
                                     # Replace zeros with random -1 or 1
                                     if (self.weights[l][c][f][x][y] == 0):
                                         self.weights[l][c][f][x][y] = int(np.random.choice([-1, 1]))
-
-                self.weights[0][0][6][1][1] = 0
-                self.weights[0][0][5][1][1] = 0
-                self.weights[0][0][7][1][1] = 0
-
-                self.weights[0][1][0][1][1] = 0
             elif "Dense" in str(layer_parameters[l].layer_name):
                 # Load Dense (fully connected) layer weights
                 # Note: Uses random weights instead of model weights
