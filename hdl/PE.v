@@ -678,10 +678,8 @@ module PE #(
           wght_addr_use_vec       <= 0;
           wght_addr_SPad_en_r     <= 1;
           iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          if (iact_addr_max_reg != 0) begin
-            iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
-          end
-          iact_oh_delay_1 <= iact_data_spad_oh;
+          iact_addr_SPad_addr     <= iact_addr_max_reg - 1;
+          iact_oh_delay_1         <= iact_data_spad_oh;
         end
 
         LOADING_2: begin
@@ -694,9 +692,6 @@ module PE #(
           iact_addr_current   <= iact_addr_SPad_data_r;
           iact_addr_SPad_en_r <= 0;
           iact_oh_delay_1     <= iact_data_spad_oh;
-          if (iact_addr_max_reg > iact_addr_SPad_addr + 2) begin
-            iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
-          end
           if (iact_data_spad_oh == 0) begin
             iact_data_SPad_addr <= 1;
             wght_addr_vec       <= 0;
@@ -729,11 +724,6 @@ module PE #(
           wght_data_vec           <= wght_data_start;
           wght_addr_vec           <= wght_addr_SPad_addr + 1;
           iact_addr_SPad_en_r      <= 0;
-          if (iact_addr_current == 1) begin
-            if (iact_addr_max_reg != (iact_addr_SPad_addr + 1)) begin
-              iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
-            end
-          end
           //Zero-Case
           if (iact_oh_delay_2 != 0) begin
             wght_data_end <= wght_addr_SPad_data_r;
@@ -764,6 +754,7 @@ module PE #(
           iact_data_current_1 <= iact_data_spad_pay;
           iact_data_current_2 <= iact_data_current_1;
           iact_data_current_3 <= iact_data_current_2;
+          iact_addr_current   <= 0;
         end
 
         CALCULATING: begin
@@ -895,12 +886,6 @@ module PE #(
               iact_data_SPad_addr <= iact_data_SPad_addr + 1;
               next_iact           <= 1;
               iact_addr_count     <= iact_addr_count + 1;
-              if (((iact_addr_count + 1) >= iact_addr_current) & ((iact_addr_SPad_addr) < first_spad_words_iact)) begin
-                if (iact_addr_max_reg != (iact_addr_SPad_addr + 1)) begin
-                  iact_addr_SPad_addr <= iact_addr_SPad_addr + 1;
-                end
-                iact_addr_SPad_en_r <= 1;
-              end
             end
 
             if (next_iact) begin
@@ -910,19 +895,15 @@ module PE #(
               iact_data_current_3  <= iact_data_current_2;
               psum_spad_addr_a_mem <= 0;
               psum_spad_addr_b_mem <= 1;
+              iact_addr_current    <= iact_addr_current + 1;
             end
             // Check valid values
-            if (next_iact2) begin
-              if (iact_addr_current <= iact_addr_SPad_data_r) begin
-                iact_addr_current <= iact_addr_SPad_data_r;
-              end
-            end
             values_valid <= 1;
             if (wght_data_end <= wght_data_vec) begin
               values_valid <= 0;
             end
             //Reuse Values of PSUM SPad
-            if (((iact_addr_count == iact_addr_current+1) | (iact_addr_count == 0) | (second_spad_words_iact == 1)) & (next_iact)) begin
+            if (((iact_addr_SPad_data_r == iact_addr_current+1) | (iact_addr_count == 0)) & (next_iact)) begin
               current_state_computing <= WAIT_TO_SEND_PSUM;
               wght_addr_vec           <= 0;
               wght_data_vec           <= 0;

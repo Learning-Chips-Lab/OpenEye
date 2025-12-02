@@ -121,9 +121,9 @@ module data_pipeline_iact #(
   reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_reg;
   reg                                      enable_delay_reg;
   reg  [       SECOND_PAYLOAD_WIDTH-1 : 0] payload_reg;
-  reg  [                              3:0] cycle_max_reg;
   wire [                 DATA_WIDTH-1 : 0] current_data;
   reg                                      compute_sent;
+  reg                                      uneven_ending;
 
   assign current_data = data_storage_2 >> SECOND_SPAD_DATA;
   assign second_spad_data_o = {
@@ -146,20 +146,18 @@ module data_pipeline_iact #(
       payload_reg                <= 0;
       overhead_reg               <= 0;
       enable_delay_reg           <= 0;
-      cycle_max_reg              <= 0;
       transmission_counter       <= 0;
       transmission_counter_delay <= 0;
       compute_sent               <= 0;
+      uneven_ending              <= 0;
     end else begin
       first_spad_en_o   <= 0;
       second_spad_en_o  <= 0;
-      cycle_max_reg     <= first_spad_max_i/2;
-      if (first_spad_max_i >= 2) begin
-        cycle_max_reg   <= 1;
-      end
       enable_delay_reg <= enable_i;
       if (enable_i == 1) begin
-        compute_sent  <= 0;
+        first_spad_en_o <= 1;
+        compute_sent    <= 0;
+        uneven_ending   <= 0;
         if (compute_sent) begin
           second_spad_words_o <= 0;
         end
@@ -170,14 +168,13 @@ module data_pipeline_iact #(
           data_storage_1    <= data_storage_1 + first_spad_max_i;
           first_spad_addr_o <= first_spad_addr_o + 1;
         end
-        if (cycle_counter == cycle_max_reg) begin
+        if (cycle_counter == SECOND_SPAD_DATA_CYCLE - 1) begin
           cycle_counter <= 0;
         end
         second_spad_addr_o  <= address_temp_2[SECOND_SPAD_ADDR_BITWIDTH-1:0];
         data_storage_2      <= current_data;
 
         if (((cycle_counter == 0) & (data_i[SECOND_PAYLOAD_WIDTH-1:0] != 0)) | ((cycle_counter != 0) & (current_data != 0))) begin
-          first_spad_en_o     <= 1;
           second_spad_words_o <= second_spad_words_o + 1;
           first_spad_data_o   <= overhead_reg + 1'd1;
           overhead_reg        <= overhead_reg + 1;
@@ -195,6 +192,14 @@ module data_pipeline_iact #(
         if ((cycle_counter != 0) & (current_data != 0)) begin
           payload_reg         <= current_data[SECOND_PAYLOAD_WIDTH-1 : 0];
         end
+        if (uneven_ending) begin
+          second_spad_words_o <= second_spad_words_o + 1;
+          payload_reg         <= data_i[SECOND_SPAD_DATA + SECOND_PAYLOAD_WIDTH-1 : SECOND_SPAD_DATA];
+          second_spad_en_o    <= 1;
+          address_temp_2      <= address_temp_2 + 1;
+          overhead_reg        <= overhead_reg + 1;
+          first_spad_data_o   <= overhead_reg + 1'd1;
+        end 
 
       end else begin
         if (enable_delay_reg == 1) begin
@@ -209,14 +214,18 @@ module data_pipeline_iact #(
         data_storage_2             <= 0;
         first_spad_data_o          <= 0;
         address_temp_2             <= 0;
-        cycle_counter              <= 0;
         first_spad_addr_o          <= 0;
         payload_reg                <= 0;
         overhead_reg               <= 0;
         transmission_counter       <= 0;
         transmission_counter_delay <= 0;
         second_spad_addr_o         <= 0;
+        second_spad_words_o        <= 0;
         compute_sent               <= 1;
+        if (cycle_counter != 0) begin
+          cycle_counter <= cycle_counter;
+          uneven_ending <= 1;
+        end
       end
     end
   end
