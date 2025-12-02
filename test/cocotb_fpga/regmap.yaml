@@ -36,6 +36,9 @@ registers:
   - {name: wght_addr_len_reg, width: 5}
   - {name: iact_addr_len_reg, width: 4}
   - {name: send_data_out, width: 1}
+  - {name: needed_iact_buffer_words_reg, width: 13}
+  - {name: add_up_reg, width: 2}
+  
   
   
   
