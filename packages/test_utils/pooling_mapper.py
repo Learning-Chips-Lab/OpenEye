@@ -29,7 +29,6 @@ import logging
 import test_utils.stream_dicts as strdic
 from test_utils.layer_mapper import LayerMapper
 
-
 logger = logging.getLogger("cocotb")
 
 class PoolingMapper(LayerMapper):
