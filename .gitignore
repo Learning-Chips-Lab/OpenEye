@@ -27,6 +27,8 @@ test/simulation
 **/dma_stream*.txt
 **/parameters.vh
 *.npz
+*.vh
+**regmap_pack.py
 
 # ignore the generated documentation files
 doc/build/*
