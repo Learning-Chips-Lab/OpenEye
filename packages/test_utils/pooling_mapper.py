@@ -28,7 +28,7 @@ import math
 import logging
 import test_utils.stream_dicts as strdic
 from test_utils.layer_mapper import LayerMapper
-from regmap_pack import pack_registers, unpack_registers, TRANSMISSIONS, DMA_BITWIDTH, REGISTERS
+
 
 logger = logging.getLogger("cocotb")
 
@@ -118,6 +118,7 @@ class PoolingMapper(LayerMapper):
         # === REGISTER PACKING ===
         # Pack all layer configuration parameters into hardware register format
         # Uses pack_registers() utility from regmap_pack module
+        from regmap_pack import pack_registers
         words = pack_registers({
         "wght_cycles_reg": layer_params.needed_wght_transmissions,
         "stride_x_reg": layer_params.strideX,

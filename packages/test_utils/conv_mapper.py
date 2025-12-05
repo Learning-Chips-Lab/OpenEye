@@ -47,7 +47,6 @@ from test_utils.layer_mapper import LayerMapper
 from test_utils.iact_stream_mapper import ConvIactStreamMapper
 from test_utils.wght_stream_mapper import ConvWghtStreamMapper
 from test_utils.psum_stream_mapper import ConvPsumStreamMapper
-from regmap_pack import pack_registers, unpack_registers, TRANSMISSIONS, DMA_BITWIDTH, REGISTERS
 
 logger = logging.getLogger("cocotb")
 
@@ -137,6 +136,7 @@ class ConvMapper(LayerMapper):
         # === REGISTER PACKING ===
         # Pack all layer configuration parameters into hardware register format
         # Uses pack_registers() utility from regmap_pack module
+        from regmap_pack import pack_registers
         words = pack_registers({
         "wght_cycles_reg": layer_params.needed_wght_transmissions,
         "stride_x_reg": layer_params.strideX,

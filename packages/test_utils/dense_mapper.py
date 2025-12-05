@@ -22,7 +22,6 @@ from test_utils.layer_mapper import LayerMapper
 from test_utils.iact_stream_mapper import DenseIactStreamMapper
 from test_utils.wght_stream_mapper import DenseWghtStreamMapper
 from test_utils.psum_stream_mapper import DensePsumStreamMapper
-from regmap_pack import pack_registers, unpack_registers, TRANSMISSIONS, DMA_BITWIDTH, REGISTERS
 
 logger = logging.getLogger("cocotb")
 
@@ -126,6 +125,7 @@ class DenseMapper(LayerMapper):
         # === REGISTER PACKING ===
         # Pack all layer configuration parameters into hardware register format
         # Uses pack_registers() utility from regmap_pack module
+            from regmap_pack import pack_registers
             words = pack_registers({
             "wght_cycles_reg": layer_params.needed_wght_transmissions,
             "stride_x_reg": layer_params.strideX,
@@ -138,7 +138,7 @@ class DenseMapper(LayerMapper):
             "kernel_size": 1,
             "x_lines_reg": layer_params.iact_x_lines,
             "needed_wght_cycles_reg": 0,
-            "needed_cycles_reg": 0,
+            "needed_cycles_reg": layer_params.needed_refreshes_mx[layer_repetition][0],
             "iact_converter_buffer_addr_max_cycles": 2,
             "iact_channels_per_pe": layer_params.used_channels,
             "iact_size_y": layer_params.iact_size_y,
