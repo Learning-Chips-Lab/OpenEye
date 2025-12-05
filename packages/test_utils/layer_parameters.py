@@ -181,90 +181,92 @@ class LayerParameters(object):
         self.layer_name = ""
 
         # === PE Allocation Parameters ===
-        self.used_PEs_X = 1                # PEs used in X dimension
-        self.used_PEs_Y = 0                # PEs used in Y dimension
-        self.used_X_cluster = 1            # Clusters used in X dimension
-        self.used_Y_cluster = 1            # Clusters used in Y dimension
-        self.Used_refreshes = 0            # Total execution cycles needed
-        self.current_input_X = 0           # Current input X position
-        self.current_input_Y = 0           # Current input Y position
-        self.padding = "same"              # Padding mode for convolution
-        self.needed_refreshes_mx = []      # Refresh pattern matrix
-        self.calc_X = 0                    # Output positions in X
-        self.calc_Y = 0                    # Output positions in Y
-        self.total_computations = 0        # Total MAC operations
+        self.used_PEs_X = 1                    # PEs used in X dimension
+        self.used_PEs_Y = 0                    # PEs used in Y dimension
+        self.used_X_cluster = 1                # Clusters used in X dimension
+        self.used_Y_cluster = 1                # Clusters used in Y dimension
+        self.Used_refreshes = 0                # Total execution cycles needed
+        self.current_input_X = 0               # Current input X position
+        self.current_input_Y = 0               # Current input Y position
+        self.padding = "same"                  # Padding mode for convolution
+        self.needed_refreshes_mx = []          # Refresh pattern matrix
+        self.calc_X = 0                        # Output positions in X
+        self.calc_Y = 0                        # Output positions in Y
+        self.total_computations = 0            # Total MAC operations
 
         # === Memory Usage per PE ===
-        self.used_iact_per_PE = []         # Activations per PE
-        self.used_wght_per_PE = []         # Weights per PE
-        self.used_psum_per_PE = []         # Partial sums per PE
-        self.diff_iact_layer = []          # Channel difference metrics
-        self.diff_iact_layer_next_layer = 0  # Next layer's channel metrics
-        self.ceil_used_PE_per_clm = 0      # Ceiling of PEs per column
+        self.used_iact_per_PE = []             # Activations per PE
+        self.used_wght_per_PE = []             # Weights per PE
+        self.used_psum_per_PE = []             # Partial sums per PE
+        self.diff_iact_layer = []              # Channel difference metrics
+        self.diff_iact_layer_next_layer = 0    # Next layer's channel metrics
+        self.ceil_used_PE_per_clm = 0          # Ceiling of PEs per column
 
         # === Data Transmission Parameters ===
-        self.needed_Iact_writes = 0        # Number of activation write cycles
+        self.needed_Iact_writes = 0            # Number of activation write cycles
+        self.needed_iact_buffer_words = 0      # Amount of words per convolution in iact buffer
 
         # === Miscellaneous Calculation Parameters ===
-        self.current_highest_number = 0    # Internal calculation tracker
-        self.realfactor = 0                # Real number scaling factor
-        self.used_iact_addr_per_PE = 2     # Activation address entries per PE
-        self.used_wght_addr_per_PE = 5     # Weight address entries per PE
-        self.iact_addr_len = 1             # Length of activation address field
-        self.iact_data_len = 3             # Length of activation data field
-        self.choose_iact_storage_input = 0   # Input storage location selector
-        self.choose_iact_storage_output = 0  # Output storage location selector
+        self.current_highest_number = 0        # Internal calculation tracker
+        self.realfactor = 0                    # Real number scaling factor
+        self.used_iact_addr_per_PE = 2         # Activation address entries per PE
+        self.used_wght_addr_per_PE = 5         # Weight address entries per PE
+        self.iact_addr_len = 1                 # Length of activation address field
+        self.iact_data_len = 3                 # Length of activation data field
+        self.choose_iact_storage_input = 0     # Input storage location selector
+        self.choose_iact_storage_output = 0    # Output storage location selector
 
         # === Convolution Parameters ===
-        self.strideX = 1                   # Stride in X dimension
-        self.strideY = 1                   # Stride in Y dimension
-        self.add_up = 1                    # Padding adjustment for alignment
-        self.complete_iacts_in_design = 0  # Flag for complete activation availability
-        self.max_pooling = 0               # Pooling layer flag
-        self.output_cycles = 0             # Output generation cycles
+        self.strideX = 1                       # Stride in X dimension
+        self.strideY = 1                       # Stride in Y dimension
+        self.add_up = 0                        # Padding adjustment for alignment
+        self.complete_iacts_in_design = 0      # Flag for complete activation availability
+        self.max_pooling = 0                   # Pooling layer flag
+        self.output_cycles = 0                 # Output generation cycles
 
         # === Layer Shape Information ===
-        self.filters = 1                   # Number of output filters
-        self.input_shape = []              # Input tensor shape
-        self.kernel_shape = []             # Weight tensor shape
-        self.output_shape = []             # Output tensor shape
-        self.kernel_size = []              # Convolution kernel dimensions
-        self.kernel_per_pe_cluster = 1     # Kernels per PE cluster
-        self.used_channels = 1             # Channels processed per iteration
-        self.channel_repetition = 4        # Channel processing repetition factor
-        self.single_cluster_computation = 0  # Cluster computation mode
-        self.iact_size_x = 0               # Input activation width
-        self.iact_size_y = 0               # Input activation height
+        self.filters = 1                       # Number of output filters
+        self.input_shape = []                  # Input tensor shape
+        self.kernel_shape = []                 # Weight tensor shape
+        self.output_shape = []                 # Output tensor shape
+        self.kernel_size = []                  # Convolution kernel dimensions
+        self.kernel_per_pe_cluster = 1         # Kernels per PE cluster
+        self.used_channels = 1                 # Channels processed per iteration
+        self.channel_repetition = 4            # Channel processing repetition factor
+        self.single_cluster_computation = 0    # Cluster computation mode
+        self.iact_size_x = 0                   # Input activation width
+        self.iact_size_y = 0                   # Input activation height
 
         # === Transmission Count Defaults ===
-        self.iact_transmissions_pe = 1     # Activation transmissions (PE level)
-        self.wght_transmissions_pe = 1     # Weight transmissions (PE level)
-        self.psum_transmissions_pe = 1     # Partial sum transmissions (PE level)
-        self.all_transmissions_of_pe = 1   # Product of PE transmissions
-        self.iact_transmissions_glb = 1    # Activation transmissions (GLB level)
-        self.wght_transmissions_glb = 1    # Weight transmissions (GLB level)
-        self.psum_transmissions_glb = 1    # Partial sum transmissions (GLB level)
-        self.used_iact_per_PE = 1          # Activations stored per PE
-        self.used_wght_per_PE = 1          # Weights stored per PE
-        self.used_psum_per_PE = 1          # Partial sums stored per PE
-        self.needed_wght_transmissions = 1  # Total weight transmissions
-        self.needed_total_transmissions = 1  # Total all transmissions
-        self.psum_delay = 0                # Partial sum delay cycles
-        self.fully_connected = 0           # Dense layer flag
-        self.store_in_psum = 0             # Store in psum memory flag
+        self.iact_transmissions_pe = 1         # Activation transmissions (PE level)
+        self.wght_transmissions_pe = 1         # Weight transmissions (PE level)
+        self.psum_transmissions_pe = 1         # Partial sum transmissions (PE level)
+        self.all_transmissions_of_pe = 1       # Product of PE transmissions
+        self.iact_transmissions_glb = 1        # Activation transmissions (GLB level)
+        self.wght_transmissions_glb = 1        # Weight transmissions (GLB level)
+        self.psum_transmissions_glb = 1        # Partial sum transmissions (GLB level)
+        self.used_iact_per_PE = 1              # Activations stored per PE
+        self.used_wght_per_PE = 1              # Weights stored per PE
+        self.used_psum_per_PE = 1              # Partial sums stored per PE
+        self.psum_storage_cycles = 1
+        self.needed_wght_transmissions = 1     # Total weight transmissions
+        self.needed_total_transmissions = 1    # Total all transmissions
+        self.psum_delay = 0                    # Partial sum delay cycles
+        self.fully_connected = 0               # Dense layer flag
+        self.store_in_psum = 0                 # Store in psum memory flag
 
         # === Control Flags ===
-        self.send_values_out = 1           # Send outputs to DRAM
-        self.skipIact = 0                  # Skip activation loading flag
-        self.skipWght = 0                  # Skip weight loading flag
-        self.skipPsum = 0                  # Skip psum loading flag
-        self.iact_stream_cycles = 1        # Activation streaming cycles
+        self.send_values_out = 1               # Send outputs to DRAM
+        self.skipIact = 0                      # Skip activation loading flag
+        self.skipWght = 0                      # Skip weight loading flag
+        self.skipPsum = 0                      # Skip psum loading flag
+        self.iact_stream_cycles = 1            # Activation streaming cycles
 
         # === Computing Matrix and Mode ===
-        self.computing_mx = 0              # 4D matrix of active PEs
-        self.data_mode = 0                 # Data processing mode
-        self.y_lines_per_calculation = 1   # Y lines per computation cycle
-        self.different_kernels_per_calculation = 1  # Kernels per cycle
+        self.computing_mx = 0                  # 4D matrix of active PEs
+        self.data_mode = 0                     # Data processing mode
+        self.y_lines_per_calculation = 1       # Y lines per computation cycle
+        self.different_kernels_per_calculation = 1 # Kernels per cycle
 
         # === FPGA-Specific Parameters ===
         self.needed_standing_cycles = 0    # FPGA standing/idle cycles
@@ -830,7 +832,6 @@ class LayerParameters(object):
                 wght_factor = math.ceil((self.filters*self.used_iact_per_PE)/160)
             else:
                 wght_factor = math.ceil((self.filters*self.used_iact_per_PE)/params.Wghts_per_PE)
-
             # Calculate weights and psums per PE based on computation mode
             match self.single_cluster_computation:
                 case 1:
@@ -941,17 +942,6 @@ class LayerParameters(object):
             Standing cycles account for pipeline fill time and setup overhead.
             X-lines buffering is sized to hold the sliding window for convolution.
         """
-        # Calculate standing cycles based on cluster utilization
-        self.needed_standing_cycles = math.ceil(params.Clusters/math.floor((params.Clusters*params.PEs_X)/self.iact_size_x))
-
-        if (self.iact_size_x == (params.Clusters*params.PEs_X)) :
-            # Perfect alignment: input width matches PE array width
-            self.iact_x_lines = self.kernel_size[1] + self.iact_size_y - 1
-            self.needed_standing_cycles = ((self.used_channels + 1) // 2) * self.needed_Iact_writes
-        else :
-            # Misalignment: need minimum standing cycles
-            self.needed_standing_cycles = max(self.needed_standing_cycles,4)  # Minimum 4 cycles
-
         # Set X-line buffer size for sliding window (kernel height + input height - 1)
         self.iact_x_lines = self.kernel_size[1] + self.iact_size_y - 1
         # Update standing cycles based on channel packing
@@ -1014,7 +1004,6 @@ class LayerParameters(object):
 
         # Calculate channel iteration metrics
         self.diff_iact_layer = math.ceil(self.input_shape[3]/self.used_channels)
-        print(self.diff_iact_layer)
         if (layer_number != max_layers - 1) :
             # Store next layer's channel requirements for inter-layer optimization
             self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
@@ -1070,6 +1059,7 @@ class LayerParameters(object):
         self.psum_storage_cycles = self.diff_iact_layer * self.used_Y_cluster
         if (self.choose_iact_storage_output) :
             self.psum_storage_cycles = self.diff_iact_layer
+        self.needed_iact_buffer_words = self.needed_Iact_writes*math.ceil((self.used_channels*(self.kernel_size[0]+self.iact_size_y-1)/2))
 
         # === Phase 9: Finalize calculations ===
         self.calculate_needed_refreshes_mx(params)
@@ -1270,6 +1260,7 @@ class LayerParameters(object):
         self.diff_iact_layer = 1
         self.output_cycles = 1
         self.y_lines_per_calculation = 1
+        self.kernel_size = [0]
         if (layer_number == max_layers - 1) :
             self.send_values_out = 1
         else:
@@ -1400,6 +1391,7 @@ class LayerParameters(object):
         else:
             self.used_channels = 4
         self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
+        self.needed_standing_cycles = math.ceil((((self.iact_size_x*self.iact_size_y*self.diff_iact_layer)/32)/2)/2)
         return
 
     def print_layer_parameters(self, debug_file):

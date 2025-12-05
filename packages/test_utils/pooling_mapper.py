@@ -28,6 +28,7 @@ import math
 import logging
 import test_utils.stream_dicts as strdic
 from test_utils.layer_mapper import LayerMapper
+from regmap_pack import pack_registers, unpack_registers, TRANSMISSIONS, DMA_BITWIDTH, REGISTERS
 
 logger = logging.getLogger("cocotb")
 
@@ -91,117 +92,100 @@ class PoolingMapper(LayerMapper):
         """
         # Initialize storage structure based on communication mode
         if (params.SERIAL):
-            # Serial mode: list for DMA bitstream transmission
             storage = [[] for b in range(len(strdic.stream_serial_dict))]
         else:
-            # Parallel mode: list indexed by status_dict keys
-            storage = [[] for b in range(len(strdic.status_dict))]
+            storage = [[] for a in range(len(strdic.status_dict))]
 
-        # Number of refresh cycles needed for pooling operation
-        needed_refreshes = 1
-
+        # === PE ALLOCATION BITMAP GENERATION ===
+        # Create a bitmap indicating which PEs are active for this layer
         counter = 0
         computing_pes = 0
 
-        # === PE ALLOCATION BITMAP ===
-        # Create a bitmap indicating which PEs are active for pooling computation
-        # Each bit represents one PE across all clusters and PE arrays
+        # Iterate through all PEs in the accelerator grid
         for x in range(params.Clusters_X):
             for y in range(params.Clusters_Y):
                 for pe_y in range(params.PEs_Y):
                     for pe_x in range(params.PEs_X):
                         # Set bit if this PE is used for computation
-                        if(layer_params.computing_mx[x][y][pe_y][pe_x]== 1):
-                            computing_pes = computing_pes + 2**(counter)
-                        counter = counter + 1
+                        if layer_params.computing_mx[x][y][pe_y][pe_x] == 1:
+                            computing_pes |= (1 << counter)
+                        counter += 1
 
-        # Convert PE bitmap to binary string representation
+        # Convert bitmap to binary string (reversed for hardware consumption)
         total_bits = params.Clusters_X * params.Clusters_Y * params.PEs_Y * params.PEs_X
-        bitstring = format(computing_pes, f"0{total_bits}b")[::-1]  # Reverse for correct bit order
+        bitstring = format(computing_pes, f"0{total_bits}b")[::-1]
+
+        # === REGISTER PACKING ===
+        # Pack all layer configuration parameters into hardware register format
+        # Uses pack_registers() utility from regmap_pack module
+        words = pack_registers({
+        "wght_cycles_reg": layer_params.needed_wght_transmissions,
+        "stride_x_reg": layer_params.strideX,
+        "stride_y_reg": layer_params.strideY,
+        "skipIact_reg": layer_params.skipIact,
+        "skipWght_reg": layer_params.skipWght,
+        "skipPsum_reg": layer_params.skipPsum,
+        "psum_delay_reg": layer_params.psum_delay,
+        "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
+        "kernel_size": 2,#layer_params.kernel_size[1]
+        "x_lines_reg": layer_params.iact_x_lines,
+        "needed_wght_cycles_reg": math.ceil(layer_params.filters/(layer_params.used_psum_per_PE * layer_params.different_kernels_per_calculation)),
+        "needed_cycles_reg": layer_params.needed_standing_cycles,
+        "iact_converter_buffer_addr_max_cycles": layer_params.needed_standing_cycles,
+        "iact_channels_per_pe": layer_params.used_channels,
+        "iact_size_y": layer_params.iact_size_y,
+        "iact_size_x":layer_params.iact_size_x,
+        "iact_needed_cycles": layer_params.iact_stream_cycles,
+        "kernels_per_calc": layer_params.different_kernels_per_calculation,
+        "y_lines_per_calc": layer_params.y_lines_per_calculation,
+        "output_cycles": layer_params.output_cycles, 
+        "store_in_psum": layer_params.store_in_psum,
+        "max_pooling": layer_params.max_pooling,
+        "fully_connected_layer": layer_params.fully_connected,
+        "choose_iact_buffer_output": layer_params.choose_iact_storage_output,
+        "choose_iact_buffer_input": layer_params.choose_iact_storage_input,
+        "iact_channels_per_pe_next_layer": layer_params.diff_iact_layer_next_layer,
+        "needed_psum_storage_cycles_reg": 0,#layer_params.psum_storage_cycles
+        "iact_channel_max_cycles": layer_params.diff_iact_layer,
+        "input_activations_reg": layer_params.used_iact_per_PE,
+        "filters_reg": layer_params.used_psum_per_PE,
+        "needed_x_cls_reg": layer_params.used_X_cluster,
+        "needed_y_cls_reg": layer_params.used_Y_cluster,
+        "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
+        "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
+        "iact_addr_len_reg": layer_params.used_iact_addr_per_PE,
+        "send_data_out": layer_params.send_values_out,
+        "needed_iact_buffer_words_reg": layer_params.needed_iact_buffer_words,
+        "add_up_reg":layer_params.add_up
+        })
+
+        # === SERIAL MODE: DMA TRANSMISSION ===
         if (params.SERIAL):
-            # === SERIAL MODE: DMA BITSTREAM GENERATION ===
-            # Pack all parameters into bit-packed DMA lines for serial transmission
-            dma_line = 0
-            dma_storage = []
+            # Use modern register packing approach (commented code above is legacy)
+            dma_storage = words
 
-            # === DMA Transmission 1: Main Configuration Parameters ===
-            # Bit packing: combine multiple parameters into a single 64-bit integer
-            dma_line = params.data_mode + ((layer_params.realfactor) << 1)   # bits 0-5: data mode and real factor
-            dma_line = dma_line + (params.autofunction << 6)                 # bit 6: autofunction enable
-            dma_line = dma_line + (params.poolingmode << 7)                  # bit 7: pooling mode (max/avg)
-            # Note: refresh calculation commented out for pooling
-            #dma_line = dma_line + ((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 8))
-            dma_line = dma_line + (layer_params.used_X_cluster << 16)        # bits 16-17: X clusters used
-            dma_line = dma_line + (layer_params.used_Y_cluster << 18)        # bits 18-21: Y clusters used
-            dma_line = dma_line + (layer_params.needed_Iact_writes << 22)    # bits 22-25: input activation writes
-            dma_line = dma_line + (layer_params.used_psum_per_PE << 26)      # bits 26-31: partial sums per PE
-            dma_line = dma_line + (layer_params.used_iact_addr_per_PE << 32) # bits 32-35: input addresses per PE
-            dma_line = dma_line + (layer_params.used_wght_addr_per_PE << 36) # bits 36-40: weight addresses per PE (unused for pooling)
-            dma_line = dma_line + (layer_params.used_iact_per_PE << 41)      # bits 41-45: input activations per PE
-            dma_line = dma_line + (layer_params.send_values_out << 46)       # bit 46+: output control
-            dma_storage.append(dma_line)
-            dma_line = 0
-
-            # === DMA Transmission 2: Stride and Control Flags ===
-            dma_line = dma_line + (layer_params.needed_wght_transmissions)   # bits 0-9: weight transmissions (0 for pooling)
-            dma_line = dma_line + (layer_params.strideY << 10)               # bits 10-13: stride Y (also includes stride X)
-            dma_line = dma_line + (layer_params.skipIact << 14)              # bit 14: skip input activation loading
-            dma_line = dma_line + (layer_params.skipWght << 15)              # bit 15: skip weight loading (always set for pooling)
-            dma_line = dma_line + (layer_params.skipPsum << 16)              # bit 16: skip partial sum loading
-            dma_line = dma_line + (layer_params.psum_delay << 17)            # bits 17-20: partial sum delay
-            dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21) # bits 21-24: kernels per PE cluster
-            #dma_line = dma_line + (layer_params.kernel_size[1] << 25)       # Optional: kernel size Y
-            dma_line = dma_line + (1 << 29)                                  # bits 29-36: fixed values
-            dma_line = dma_line + (1 << 37)
-            #dma_line = dma_line + (math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 45)
-            dma_storage.append(dma_line)
-            dma_line = 0
-
-            # === DMA Transmission 3: Input Feature Map Dimensions ===
-            # Use bitwise OR for clearer bit field assignment
-            dma_line = (layer_params.needed_standing_cycles << 56) | \
-                       (layer_params.used_channels << 48) | \
-                       (layer_params.iact_size_y << 32) | \
-                       (layer_params.iact_size_x << 16) | \
-                       layer_params.iact_stream_cycles
-            dma_storage.append(dma_line)
-            dma_line = 0
-
-            # === DMA Transmission 4: Layer Configuration Flags ===
-            dma_line = math.ceil(layer_params.diff_iact_layer)                              # bits 0-7: input activation layer difference
-            dma_line = dma_line + math.ceil(layer_params.diff_iact_layer_next_layer << 8)   # bits 8-15: next layer difference
-            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_input << 16)   # bit 16: input storage selection
-            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_output << 17)  # bit 17: output storage selection
-            dma_line = dma_line + math.ceil(layer_params.fully_connected << 18)             # bit 18: fully connected flag
-            dma_line = dma_line + math.ceil(layer_params.max_pooling << 19)                 # bit 19: max pooling flag
-            dma_line = dma_line + math.ceil(layer_params.store_in_psum << 20)               # bit 20: store in partial sum
-            dma_line = dma_line + math.ceil(layer_params.output_cycles << 21)               # bits 21-28: output cycles
-            dma_line = dma_line + math.ceil(layer_params.y_lines_per_calculation << 29)     # bits 29-32: Y lines per calculation
-            dma_line = dma_line + math.ceil(layer_params.different_kernels_per_calculation << 33)  # bits 33+: kernels per calc
-            dma_storage.append(dma_line)
-            dma_line = 0
-
-            # === DMA Transmissions 5+: PE Usage Bitmap ===
-            # Split the PE bitmap into segments that fit in DMA_Bit_AXI width
+            # === PE ENABLE BITMAP TRANSMISSION ===
+            # Split PE bitmap into AXI-width segments and append to DMA stream
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
                 segment = bitstring[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI]
-                dma_storage.append(int(segment[::-1], 2))  # Reverse segment for correct bit order
+                dma_storage.append(int(segment[::-1], 2))
 
-            # === Router Configurations ===
-            # Append router configurations for all data paths
-            dma_storage.extend(self.write_router_iact(params, layer_params))  # Input activation routers
-            dma_storage.extend(self.write_router_wght(params, layer_params))  # Weight routers (all zeros for pooling)
-            dma_storage.extend(self.write_router_psum(params, layer_params))  # Partial sum routers
+            # === ROUTER CONFIGURATION TRANSMISSION ===
+            # Append router configurations for all three data paths
+            dma_storage.extend(self.write_router_iact(params, layer_params))
+            dma_storage.extend(self.write_router_wght(params, layer_params))
+            dma_storage.extend(self.write_router_psum(params, layer_params))
+            
             storage = dma_storage
+
+        # === PARALLEL MODE: DIRECT PARAMETER ASSIGNMENT ===
         else:
-            # === PARALLEL MODE: DIRECT PARAMETER ASSIGNMENT ===
-            # Store each parameter separately in a dictionary-style structure
             storage[strdic.status_dict["data_mode"]] = params.data_mode
             storage[strdic.status_dict["realfactor"]] = layer_params.realfactor
             storage[strdic.status_dict["autofunction"]] = params.autofunction
-            storage[strdic.status_dict["poolingmode"]] = params.poolingmode        # Max or average pooling
+            storage[strdic.status_dict["poolingmode"]] = params.poolingmode
             storage[strdic.status_dict["psum_delay"]] = layer_params.psum_delay
-            storage[strdic.status_dict["needed_refreshes"]] = needed_refreshes
+            storage[strdic.status_dict["needed_refreshes"]] = layer_params.needed_refreshes_mx[layer_repetition][0]
             storage[strdic.status_dict["used_X_cluster"]] = layer_params.used_X_cluster
             storage[strdic.status_dict["used_Y_cluster"]] = layer_params.used_Y_cluster
             storage[strdic.status_dict["needed_Iact_writes"]] = layer_params.needed_Iact_writes
@@ -216,16 +200,15 @@ class PoolingMapper(LayerMapper):
             storage[strdic.status_dict["skipIact"]] = layer_params.skipIact
             storage[strdic.status_dict["skipWght"]] = layer_params.skipWght
             storage[strdic.status_dict["skipPsum"]] = layer_params.skipPsum
-            storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)          # Convert binary PE bitmap to integer
+            storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
             storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
 
-            # Generate and store router configurations for all data paths
+            # Generate and store router configurations for all three data paths
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
-            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params)
+            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params, layer_params)
             storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
 
         return storage
-
     def write_quantize(self, params, layer_params, layer_repetition):
         """Generate quantization parameters for pooling layer outputs.
 

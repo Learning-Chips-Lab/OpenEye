@@ -250,7 +250,6 @@ def compare_iact_storage(ptp, dut, iact_ref, oep):
     for c in range(len(iact_ref)):
         for y in range(len(iact_ref[c])):
             for x in range(len(iact_ref[c][y])):
-                #print("Channel: " + str(c) + " X: " + str(x) + " Y: " + str(y) + " buffer: " + str(buffer) + " word: " + str(word) + " i: " + str(i))
                 if(iact_ref[c][y][x] != dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[56 - (i * 8):63 - (i * 8)].signed_integer):
                     logger.error("Error found in Iact storage; Channel: " + str(c) + " X: " + str(x) + " Y: " + str(y) + " buffer: " + str(buffer) + " word: " + str(word) + " i: " + str(i))
                     logger.error("Ref-Value: " + str(iact_ref[c][y][x]) + " DUT-Value: " + str(dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[56 - (i * 8):63 - (i * 8)].signed_integer))
@@ -265,11 +264,16 @@ def compare_iact_storage(ptp, dut, iact_ref, oep):
         if ((c%4 == 3)):
             buffer_reset = buffer
             word_reset = word
-            i = 0
+            if ((len(iact_ref[c] * len(iact_ref[c][y]))) %2 == 1):
+                i = i - 3
+            else :
+                i = 0
         else:
+            i = i + 1
+            if ((len(iact_ref[c] * len(iact_ref[c][y]))) %2 == 1):
+                i = (i + 4) % 8
             buffer = buffer_reset
             word = word_reset
-            i = i + 1
     if error_found:
         return True
     return True

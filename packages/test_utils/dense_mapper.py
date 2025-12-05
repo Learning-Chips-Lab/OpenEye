@@ -22,6 +22,7 @@ from test_utils.layer_mapper import LayerMapper
 from test_utils.iact_stream_mapper import DenseIactStreamMapper
 from test_utils.wght_stream_mapper import DenseWghtStreamMapper
 from test_utils.psum_stream_mapper import DensePsumStreamMapper
+from regmap_pack import pack_registers, unpack_registers, TRANSMISSIONS, DMA_BITWIDTH, REGISTERS
 
 logger = logging.getLogger("cocotb")
 
@@ -122,7 +123,50 @@ class DenseMapper(LayerMapper):
             # Pack all parameters into bit-packed DMA lines for serial transmission
             dma_line = 0
             dma_storage = []
-
+        # === REGISTER PACKING ===
+        # Pack all layer configuration parameters into hardware register format
+        # Uses pack_registers() utility from regmap_pack module
+            words = pack_registers({
+            "wght_cycles_reg": layer_params.needed_wght_transmissions,
+            "stride_x_reg": layer_params.strideX,
+            "stride_y_reg": layer_params.strideY,
+            "skipIact_reg": layer_params.skipIact,
+            "skipWght_reg": layer_params.skipWght,
+            "skipPsum_reg": layer_params.skipPsum,
+            "psum_delay_reg": layer_params.psum_delay,
+            "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
+            "kernel_size": 1,
+            "x_lines_reg": layer_params.iact_x_lines,
+            "needed_wght_cycles_reg": 0,
+            "needed_cycles_reg": 0,
+            "iact_converter_buffer_addr_max_cycles": 2,
+            "iact_channels_per_pe": layer_params.used_channels,
+            "iact_size_y": layer_params.iact_size_y,
+            "iact_size_x":layer_params.iact_size_x,
+            "iact_needed_cycles": layer_params.iact_stream_cycles,
+            "kernels_per_calc": layer_params.different_kernels_per_calculation,
+            "y_lines_per_calc": layer_params.y_lines_per_calculation,
+            "output_cycles": layer_params.output_cycles, 
+            "store_in_psum": layer_params.store_in_psum,
+            "max_pooling": layer_params.max_pooling,
+            "fully_connected_layer": layer_params.fully_connected,
+            "choose_iact_buffer_output": layer_params.choose_iact_storage_output,
+            "choose_iact_buffer_input": layer_params.choose_iact_storage_input,
+            "iact_channels_per_pe_next_layer": layer_params.diff_iact_layer_next_layer,
+            "needed_psum_storage_cycles_reg": layer_params.psum_storage_cycles,
+            "iact_channel_max_cycles": 1,
+            "input_activations_reg": layer_params.used_iact_per_PE,
+            "filters_reg": layer_params.used_psum_per_PE,
+            "needed_x_cls_reg": layer_params.used_X_cluster,
+            "needed_y_cls_reg": 1,
+            "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
+            "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
+            "iact_addr_len_reg": layer_params.used_iact_addr_per_PE,
+            "send_data_out": layer_params.send_values_out,
+            "needed_iact_buffer_words_reg": layer_params.needed_iact_buffer_words,
+            "add_up_reg":layer_params.add_up
+            })
+            """
             # === DMA Line 1: Main configuration parameters ===
             # Bit packing: combine multiple parameters into a single 64-bit word
             dma_line = params.data_mode + ((layer_params.realfactor) << 1)      # bits 0-5: data mode and precision
@@ -174,21 +218,28 @@ class DenseMapper(LayerMapper):
             dma_line = dma_line + math.ceil(layer_params.output_cycles << 21)               # bits 21-28: output cycles
             dma_line = dma_line + math.ceil(layer_params.y_lines_per_calculation << 29)     # bits 29-32: Y lines per calc
             dma_line = dma_line + math.ceil(layer_params.different_kernels_per_calculation << 33)  # bits 33+: kernels per calc
-            dma_storage.append(dma_line)
+            dma_storage.append(dma_line)"""
 
-            # === PE Enable Bitmap Transmission ===
-            # Split the PE bitmap into multiple DMA words (each DMA_Bit_AXI bits wide)
+        # === SERIAL MODE: DMA TRANSMISSION ===
+        if (params.SERIAL):
+            # Use modern register packing approach (commented code above is legacy)
+            dma_storage = words
+
+            # === PE ENABLE BITMAP TRANSMISSION ===
+            # Split PE bitmap into AXI-width segments and append to DMA stream
             for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
                 segment = bitstring[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI]
                 dma_storage.append(int(segment[::-1], 2))
 
-            # === Router Configuration ===
-            # Append router configurations for input activations, weights, and partial sums
+            # === ROUTER CONFIGURATION TRANSMISSION ===
+            # Append router configurations for all three data paths
             dma_storage.extend(self.write_router_iact(params, layer_params))
             dma_storage.extend(self.write_router_wght(params, layer_params))
             dma_storage.extend(self.write_router_psum(params, layer_params))
-            
+
             storage = dma_storage
+
+        # === PARALLEL MODE: DIRECT PARAMETER ASSIGNMENT ===
         else:
             # === PARALLEL MODE: DICTIONARY-BASED CONFIGURATION ===
             # Store each parameter individually by name for parallel register access
@@ -289,7 +340,37 @@ class DenseMapper(LayerMapper):
             dma_line = dma_line + (layer_params.offset[8*f+7] << 56)    # bits 56-63: offset 7
             dma_storage.append(dma_line)
         return dma_storage
-    
+        
+    def write_offset(self, params, layer_params, layer_repetition):
+        """Generate offset parameters for the layer.
+
+        Packs 32 offset values into DMA transmission format. Each DMA line contains
+        8 offset values packed at 8-bit intervals.
+
+        Args:
+            params: Hardware configuration parameters
+            layer_params: Layer-specific parameters containing offset values
+            layer_repetition: Current repetition index for the layer
+
+        Returns:
+            list: 4 DMA words containing packed offset parameters, where each word
+                  contains 8 consecutive offset values at 8-bit intervals.
+        """
+        dma_line = 0
+        dma_storage = []
+        for f in range(math.ceil(32/8)):
+            dma_line = 0
+            dma_line = dma_line + (layer_params.offset[8*f] << 0)
+            dma_line = dma_line + (layer_params.offset[8*f+1] << 8)
+            dma_line = dma_line + (layer_params.offset[8*f+2] << 16)
+            dma_line = dma_line + (layer_params.offset[8*f+3] << 24)
+            dma_line = dma_line + (layer_params.offset[8*f+4] << 32)
+            dma_line = dma_line + (layer_params.offset[8*f+5] << 40)
+            dma_line = dma_line + (layer_params.offset[8*f+6] << 48)
+            dma_line = dma_line + (layer_params.offset[8*f+7] << 56)
+            dma_storage.append(dma_line)
+        return dma_storage
+
     def write_router_iact(self, params, layer_params):
         """Configure input activation (iact) router settings for dense layer.
 

@@ -1293,10 +1293,6 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
                   fsm_cycle         <= 0;
                   write_dma_addr    <= ~0;
                   if (fully_connected_layer) begin
-                    //iact_channel_max_cycles               <= 1;
-                    //kernel_size                           <= 1;
-                    //iact_converter_buffer_addr_max_cycles <= 2;
-                    //needed_y_cls_reg                      <= 1;
                     padding_reg                           <= 0;
                   end
                 end
@@ -1416,8 +1412,10 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
         GET_BIAS: begin
           ready_dma_o         <= 1;
           wght_buffer_SP_en_w <= 0;
+          /*
           if (((psum_cnt != 0) & !fully_connected_layer) |
-            (fully_connected_layer & (fsm_psum_cycle == filters_reg - 1) & (fsm_x_cl_psum == (CLUSTER_COLUMNS - 1)))) begin
+            (fully_connected_layer & (fsm_psum_cycle == filters_reg - 1) & (fsm_x_cl_psum == (CLUSTER_COLUMNS - 1)))) begin*/
+          if (psum_cnt != 0) begin
             fsm_last_state         <= GET_BIAS;
             fsm_current_state      <= GET_QUANTIZE;
             wght_buffer_SP_wr_addr <= 0;
@@ -2241,7 +2239,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
                       end
                     end
                     if (((fsm_psum_cycle == (needed_wght_cycles_reg * filters_reg * iact_size_y) - 1) & (!fully_connected_layer))
-                      | (fully_connected_layer & (fsm_psum_cycle == 10 - 1))) begin
+                      | (fully_connected_layer & (fsm_psum_cycle == filters_reg - 1))) begin
                       fsm_psum_cycle <= 0;
                       psum_cnt       <= psum_buffer_SP_addr[11:0] + 1;
                     end

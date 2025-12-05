@@ -173,64 +173,13 @@ class ConvMapper(LayerMapper):
         "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
         "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
         "iact_addr_len_reg": layer_params.used_iact_addr_per_PE,
-        "send_data_out": layer_params.send_values_out
+        "send_data_out": layer_params.send_values_out,
+        "needed_iact_buffer_words_reg": layer_params.needed_iact_buffer_words,
+        "add_up_reg":layer_params.add_up
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===
         if (params.SERIAL):
-            # Store packed register words as base of DMA transmission
-            """dma_line = 0
-            dma_storage = []
-            # 1. transmission
-            dma_line = params.data_mode
-            dma_line = dma_line + ((layer_params.realfactor) << 1) 
-            dma_line = dma_line + (params.autofunction << 6)
-            dma_line = dma_line + (params.poolingmode << 7)
-            #dma_line = dma_line + ((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 8))
-            dma_line = dma_line + (layer_params.used_X_cluster << 16)
-            dma_line = dma_line + (layer_params.used_Y_cluster << 18)
-            dma_line = dma_line + (layer_params.needed_Iact_writes << 22)
-            dma_line = dma_line + (layer_params.used_psum_per_PE << 26)
-            dma_line = dma_line + (layer_params.used_iact_addr_per_PE << 32)
-            dma_line = dma_line + (layer_params.used_wght_addr_per_PE << 36)
-            dma_line = dma_line + (layer_params.used_iact_per_PE << 41)
-            dma_line = dma_line + (layer_params.send_values_out << 46)
-            dma_line = dma_line + (layer_params.add_up << 47)
-            #dma_line = dma_line + ((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 8))
-            dma_storage.append(dma_line)
-            dma_line = 0
-            # 2. transmission
-            dma_line = dma_line + (layer_params.needed_wght_transmissions)
-            dma_line = dma_line + (layer_params.strideY << 10) #Also includes Stride X
-            dma_line = dma_line + (layer_params.skipIact << 14)
-            dma_line = dma_line + (layer_params.skipWght << 15)
-            dma_line = dma_line + (layer_params.skipPsum << 16)
-            dma_line = dma_line + (layer_params.psum_delay << 17)
-            dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21)
-            dma_line = dma_line + (layer_params.kernel_size[1] << 25)
-            dma_line = dma_line + (layer_params.iact_x_lines << 29)
-            dma_line = dma_line + (math.ceil(layer_params.filters/(layer_params.used_psum_per_PE * layer_params.different_kernels_per_calculation)) << 37)
-            dma_line = dma_line + (math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer) << 45)
-            dma_storage.append(dma_line)
-            dma_line = 0
-            # 3. transmission
-            dma_line = (layer_params.needed_standing_cycles << 56) | (layer_params.used_channels << 48) | (layer_params.iact_size_y << 32) |(layer_params.iact_size_x << 16) | layer_params.iact_stream_cycles
-            dma_storage.append(dma_line)
-            dma_line = 0
-            # 4. transmission
-            dma_line = math.ceil(layer_params.diff_iact_layer)
-            dma_line = dma_line + math.ceil(layer_params.diff_iact_layer_next_layer << 8)
-            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_input << 16)
-            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_output << 17)
-            dma_line = dma_line + math.ceil(layer_params.fully_connected << 18)
-            dma_line = dma_line + math.ceil(layer_params.max_pooling << 19)
-            dma_line = dma_line + math.ceil(layer_params.store_in_psum << 20)
-            dma_line = dma_line + math.ceil(layer_params.output_cycles << 21)
-            dma_line = dma_line + math.ceil(layer_params.y_lines_per_calculation << 29)
-            dma_line = dma_line + math.ceil(layer_params.different_kernels_per_calculation << 33)
-            dma_storage.append(dma_line)
-            dma_line = 0"""
-
             # Use modern register packing approach (commented code above is legacy)
             dma_storage = words
 

@@ -268,9 +268,7 @@ class WghtStreamMapper(object):
         data_spad = self.write_wght_data_storage(cl_x, cl_y, router)
 
         # Generate address pointers based on data organization
-        addr_spad = self.write_wght_addr_storage(cl_x, cl_y, router, data_spad)
-
-        return [addr_spad, data_spad]
+        return data_spad
 
     def write_wght_data_storage(self, cl_x, cl_y, router):
         """Populate weight data SPAD from DRAM for a specific PE.
@@ -533,10 +531,10 @@ class WghtStreamMapper(object):
                     spad_word = data_in_trans + data_per_trans * spad_data_trans
 
                     # Convert weight value to two's complement representation
-                    value = gtu.to_twos_complement(spad[1][spad_data_trans][data_in_trans][0], params.WGHT_Bitwidth)
+                    value = gtu.to_twos_complement(spad[spad_data_trans][data_in_trans][0], params.WGHT_Bitwidth)
 
                     # Convert overhead/sparsity field to two's complement
-                    overhead = gtu.to_twos_complement(spad[1][spad_data_trans][data_in_trans][1], params.WGHT_WOH_Bitwidth - params.WGHT_Bitwidth)
+                    overhead = gtu.to_twos_complement(spad[spad_data_trans][data_in_trans][1], params.WGHT_WOH_Bitwidth - params.WGHT_Bitwidth)
 
                     # Combine overhead and value: [overhead_bits][value_bits]
                     value = (overhead * (2**params.WGHT_Bitwidth)) + value
@@ -828,8 +826,6 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                 for router in range(params.Wght_Routers):
                     current_spad = spad_storage[cl_x][cl_y][router]
 
-                    # Create address stream first
-                    stream[cl_x][cl_y][router] = self.create_pe_addr_wght_stream(current_spad)
                     # Append data stream
                     stream[cl_x][cl_y][router].extend(self.create_pe_data_wght_stream(current_spad))
 

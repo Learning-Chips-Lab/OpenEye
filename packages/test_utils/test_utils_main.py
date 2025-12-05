@@ -481,9 +481,17 @@ def collect_results(layer_number, layer_params, dram, serial):
         calculated_results = return_dict
 
     elif "Pooling" in str(layer_params.layer_name):
-        calculated_results = [0 for i in range(layer_params.output_shape[3])]
+        calculated_results = [[[0 for i in range(layer_params.output_shape[2])] for j in range(layer_params.output_shape[1])]for k in range(layer_params.output_shape[3])]
         for f in range(layer_params.output_shape[3]):
-            calculated_results[f] = int(np.max(dram.fmap[layer_number][f]))
+            for i in range(layer_params.output_shape[2]):
+                for j in range(layer_params.output_shape[1]):
+                    block = [
+                        dram.fmap[layer_number][f][2*j][2*i],
+                        dram.fmap[layer_number][f][2*j][2*i+1],
+                        dram.fmap[layer_number][f][2*j+1][2*i],
+                        dram.fmap[layer_number][f][2*j+1][2*i+1]
+                    ]
+                    calculated_results[f][j][i] = int(max(block))
     return calculated_results
 
 def calculate_dense_results_mp(x, layer_params, layer_number, dram, calculated_results,return_dict):
@@ -542,15 +550,6 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                         else :
                             kernel_counter = kernel_counter + 1
                             filter = filter + 1
-                if (position == layer_params.used_Y_cluster - 1) :
-                    position = 0
-                    #x_cor = x_cor - ((params.Clusters_X * params.Clusters_Y * params.Psum_Routers)//layer_params.used_Y_cluster)
-
-                    les.x_start = les.x_start + (params.Clusters_X * params.Psum_Routers)
-                    x_cor = les.x_start
-                else:
-                    position = position + 1
-                    x_cor = x_cor - (params.Clusters_X * params.Psum_Routers) + ((params.Clusters_X * params.Clusters_Y * params.Psum_Routers)//layer_params.used_Y_cluster) 
             x_cor = 0
             les.x_start = 0
             y_cor = les.y_start
@@ -838,6 +837,8 @@ def fill_dram_with_ref(ref_output, dram, layer_params):
                 for y in range(len(ref_output[f][x])):
                     dram[f][x][y] = ref_output[f][x][y]
     elif "Pooling" in str(layer_params.layer_name):
-        for f in range(len(ref_output)):
-            dram[f] = ref_output[f]
+        for f in range(len(ref_output)):    
+            for x in range(len(ref_output[f])):
+                for y in range(len(ref_output[f][x])):
+                    dram[f][x][y] = ref_output[f][x][y]
     return dram       
