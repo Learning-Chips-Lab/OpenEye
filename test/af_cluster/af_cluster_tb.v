@@ -137,7 +137,5 @@ module af_cluster_tb();
 
     $display("Computation was right? Answer:  ", computation_was_right);
 
-
     end
-
 endmodule

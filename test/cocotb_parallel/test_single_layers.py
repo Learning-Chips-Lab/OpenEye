@@ -15,7 +15,7 @@ sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
 
-import parallel_test_utils as ptu
+import test.test_utils.test_utils_main as ptu
 import test_utils.vh_file_creator as vh_file_creator
 
 
@@ -50,11 +50,11 @@ USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL, CLUSTER_ROW
     dut = 'OpenEye_Parallel'
     module = 'OpenEye_Parallel_tb'
     toplevel = dut
-    verilog_sources = ptu.get_verilog_sources(hdl_dir, serial = False)
+    verilog_sources = ptu.get_verilog_sources(hdl_dir)
     target_dir = os.path.join(tests_dir, '.temp')
     #target_dir = os.path.join(tests_dir, '.temp/test_' + str(datetime.now().isoformat())) 
     os.makedirs(target_dir, exist_ok=True)
-    vh_file_creator.create_vh_file(target_dir,hdl_dir + "/", toplevel = "OpenEye_Parallel")
+    vh_file_creator.create_vh_file_from_envvars(target_dir,hdl_dir + "/", toplevel = "OpenEye_Parallel")
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],
         verilog_sources=verilog_sources,
@@ -96,7 +96,7 @@ def test_single_pool_layer(STRIDE,KERNEL_SIZE,INPUT_SIZE,INPUT_CHANNELS):
     verilog_sources = ptu.get_verilog_sources(hdl_dir)
     current_time = str(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     target_dir = os.path.join(tests_dir, '.temp_' + current_time) 
-    vh_file_creator.create_vh_file(file_path_vh = target_dir, file_path_hdl = os.getcwd() + "/../../../hdl/")
+    vh_file_creator.create_vh_file_from_envvars(file_path_vh = target_dir, file_path_hdl = os.getcwd() + "/../../../hdl/")
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],
         verilog_sources=verilog_sources,

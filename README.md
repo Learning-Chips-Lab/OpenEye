@@ -23,7 +23,9 @@ You can find the documentation regarding general properties, design decisions as
 
 The requirements for the pytests can be installed using the [requirements.txt](requirements.txt).
 
-The simulation can be done with either Icarus Verilog or Verilator. In order to get Verilator to work, we had to patch `include/verilatedos.h`:
+The simulation can be done with either `Icarus Verilog` or `Verilator` (version >= 5.020). 
+
+For older versions of `Verilator` to work properly, you have to patch `include/verilatedos.h`:
 ```diff
 #ifndef VL_VALUE_STRING_MAX_WORDS
 -    #define VL_VALUE_STRING_MAX_WORDS 64  ///< Max size in words of String conversion operation

@@ -1,3 +1,16 @@
-cocotb
-pytest
 tensorflow
+
+# dependencies to run the tests
+pytest
+cocotb
+cocotb_test
+
+
+# dependencies to build the documentation
+sphinx
+myst_parser
+autoapi
+sphinx_rtd_theme
+sphinx-autoapi
+sphinxcontrib_hdl_diagrams
+sphinx_verilog_domain

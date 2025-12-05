@@ -26,7 +26,7 @@ import sys
 directory = (os.path.abspath(os.path.join(os.getcwd(), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 
-import parallel_test_utils as test_utils
+import test.test_utils.test_utils_main as test_utils_main
 
 #As ref:
 #clk_cycle = 10; clk_cycle_unit = "ns"
@@ -47,7 +47,7 @@ def MNIST_test(DNN):
     dut = 'OpenEye_Parallel'
     module = 'MNIST_tb'
     toplevel = dut
-    verilog_sources = test_utils.get_verilog_sources(hdl_dir)
+    verilog_sources = test_utils_main.get_verilog_sources(hdl_dir)
 
     target_dir = os.path.join(tests_dir, '.temp') 
 

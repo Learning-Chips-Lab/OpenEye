@@ -15,14 +15,20 @@ cmds.f
 *tflite_net
 openeye_env/*
 env/*
-
+*.ys
+*.json
 !requirements.txt
+netlist.v
+test/simulation
 
 **/.temp
 **/.work/
 **/.simvision
 **/dma_stream*.txt
 **/parameters.vh
+*.npz
+*.vh
+**regmap_pack.py
 
 # ignore the generated documentation files
 doc/build/*
@@ -35,3 +41,10 @@ doc/source/verilog/*
 *.tflite
 *.onnx
 *.h5
+*.log
+*.pth
+
+# generated header files
+dma_stream.h
+dma_stream_out.h
+doc/demo_notebooks/data/*

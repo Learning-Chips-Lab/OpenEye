@@ -6,11 +6,10 @@ import sys
 import os
 directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
-import time
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
-import cocotb_parallel.parallel_test_utils as ptu
+import test.test_utils.test_utils_main as ptu
 import test_utils.rtl_test_utils as rtl_test_utils
 import test_utils.timing_parameters as tp
 import test_utils.generic_test_utils as gtu
@@ -119,7 +118,7 @@ async def single_layer_test(dut):
         logger.debug("No sparsety for wghts set")
     
     layer_es = les.LayerExecutionState()
-    serial = 0
+    serial = False
     clk_cycle = int(os.environ["CLOCK_LEN"])
     clk_cycle_unit = os.environ["CLOCK_UNIT"]
 
@@ -163,13 +162,14 @@ async def single_layer_test(dut):
     time_printer.timestamp("All signals resetted. ", logger)
 
     # Process the layers of the model one after another
+    max_layers = len(model.layers)
     for layer_number, layer in enumerate(model.layers):
         if("Pooling" in str(layer)):
             slo.pool(dram, layer, layer_number)
         elif("Flat" in str(layer)):
             slo.flat(dram, layer, layer_number)
         else:
-            layer_parameters = lp.LayerParameters(layer, openeye_parameter)
+            layer_parameters = lp.LayerParameters(layer, openeye_parameter, layer_number, max_layers)
             time_printer.timestamp("Layer parameters created. ", logger)
             calculated_results = ptu.collect_results(layer, layer_number, layer_parameters, dram, openeye_parameter.SERIAL)
             output_order = ptu.make_ref(openeye_parameter, layer_parameters, layer, layer_number, dram, calculated_results)

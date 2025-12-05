@@ -26,13 +26,12 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/multiplier.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/mux2.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/demux2.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/mux_iact.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_DP_RW.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_DP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_SP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RST_SYNC.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_DP_RW.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_DP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_SP.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_RW_generic.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_SP_generic.v)
 
 
@@ -72,13 +71,13 @@ export USE_RANDOM_VALUES=1
 export DATA_IACT_BITWIDTH=8
 export DATA_PSUM_BITWIDTH=20
 export DATA_WGHT_BITWIDTH=8
-export DATA_IACT_IGNORE_ZEROS=4
+export DATA_IACT_OVERHEAD    =4
 export DATA_WGHT_IGNORE_ZEROS=4
 
 #Datawidth for Transportation of Data
 export TRANS_BITWIDTH_IACT=24
 export TRANS_BITWIDTH_WGHT=24
-export TRANS_BITWIDTH_PSUM=40
+export TRANS_BITWIDTH_PSUM=20
 
 #Set Number of Router Clusters per Instance
 export NUM_GLB_IACT=3

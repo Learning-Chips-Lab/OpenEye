@@ -11,7 +11,7 @@ sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
-import cocotb_parallel.parallel_test_utils as ptu
+import test.test_utils.test_utils_main as ptu
 import test_utils.rtl_test_utils as rtl_test_utils
 import test_utils.timing_parameters as tp
 import test_utils.generic_test_utils as gtu
