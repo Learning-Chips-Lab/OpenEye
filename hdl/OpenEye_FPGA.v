@@ -543,7 +543,7 @@ localparam SEND_PSUM_TO_IACT = 6;
           end
         end
       end
-      if ((RECEIVE_PSUMS_TO_IACT == fsm_current_state) | (WAIT_FOR_RESULTS == fsm_current_state)) begin
+      if ((RECEIVE_PSUMS_TO_IACT == fsm_current_state) | (fsm_current_state == WAIT_FOR_RESULTS)) begin
         if (single_iteration) begin
           single_iteration2 <= 1;
         end
@@ -833,7 +833,7 @@ localparam SEND_PSUM_TO_IACT = 6;
           end
         end
       end
-      if (GET_ROUTER_CONFIG == fsm_current_state) begin
+      if (fsm_current_state == GET_ROUTER_CONFIG) begin
         conv_array_reg <= start_param_array;
         //conv_array_reg <= (1 << (CLUSTER_COLUMNS*CLUSTER_ROWS)) - 1;
         if (fully_connected_layer) begin
@@ -2260,6 +2260,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
             fsm_psum_cycle         <= 0;
           end
         end
+        
         WAIT_TO_SEND_READY_SIGNAL : begin
           results_ready = 0;
           if ((wght_enable_i_reg == 0) & (iact_enable_i_oep_w == 0)) begin
