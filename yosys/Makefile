@@ -1,6 +1,7 @@
 SRC_DIRS := ../hdl/
-TOP_MODULE := OpenEye_FPGA
+TOP_MODULE := PE
 VERILOG_SRCS := $(shell find $(SRC_DIRS) -name "*.v" | sort)
+TARGET_FPGA := CCGM1A1
 
 TIMESTAMP := $(shell date +"%Y%m%d_%H%M%S")
 TRIAL_DIR := runs/trial_$(TIMESTAMP)
@@ -25,9 +26,6 @@ HIER_STAT_TXT := $(TRIAL_DIR)/hierarchy_stat.txt
 
 all: synth pnr hier_stat
 
-# -------------------------
-# 1. Synthese mit Yosys
-# -------------------------
 synth: $(GEN_SYNTH_SCRIPT)
 	@mkdir -p $(TRIAL_DIR)
 	@echo "Starting Yosys synthesis..."
@@ -45,6 +43,7 @@ $(GEN_SYNTH_SCRIPT):
 	@echo "write_json $(DESIGN_JSON)" >> $(GEN_SYNTH_SCRIPT)
 	@echo "synth_gatemate \\" >> $(GEN_SYNTH_SCRIPT)
 	@echo "    -top $(TOP_MODULE) \\" >> $(GEN_SYNTH_SCRIPT)
+	@echo "    -noflatten \\" >> $(GEN_SYNTH_SCRIPT)
 	@echo "    -luttree \\" >> $(GEN_SYNTH_SCRIPT)
 	@echo "    -nomx8 \\" >> $(GEN_SYNTH_SCRIPT)
 	@echo "    -nomult" >> $(GEN_SYNTH_SCRIPT)
@@ -56,9 +55,6 @@ $(GEN_SYNTH_SCRIPT):
 	@echo "stat" >> $(TRIAL_DIR)/stat.ys
 	@echo "show -format svg -prefix $(TRIAL_DIR)/circuit" >> $(TRIAL_DIR)/stat.ys
 
-# -------------------------
-# 2. Place & Route mit nextpnr
-# -------------------------
 pnr: $(OUT_JSON)
 	@if [ ! -f $(CCF_FILE) ]; then \
 		echo "No $(CCF_FILE) found — creating empty one."; \
@@ -66,25 +62,21 @@ pnr: $(OUT_JSON)
 	fi
 	@echo "Starting place and route with nextpnr-himbaechel..."
 	nextpnr-himbaechel \
-		--device=CCGM1A2 \
+		--device=$(TARGET_FPGA) \
 		--json $(OUT_JSON) \
-		-o ccf=$(CCF_FILE) \
+		-o ccf=$(CCF_FILE) \				
 		-o out=$(PNR_OUT_TXT) \
 		--router router2 \
+		--write util_report.json \
 		--vopt allow-unconstrained > $(PNR_LOG) 2>&1
 	@echo "NextPNR log saved to $(PNR_LOG)"
 	@echo "Implementation output: $(PNR_OUT_TXT)"
 
-# -------------------------
-# 3. Hierarchische Ressourcenanalyse
-# -------------------------
 hier_stat: $(DESIGN_JSON)
 	@echo "Generating hierarchical resource analysis..."
 	@python3 scripts/hier_stat.py $(DESIGN_JSON) $(TOP_MODULE) > $(HIER_STAT_TXT)
 	@echo "Hierarchy stats written to $(HIER_STAT_TXT)"
 
-# -------------------------
-# 4. Cleanup
-# -------------------------
+
 clean:
 	rm -rf runs
