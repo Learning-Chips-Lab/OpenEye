@@ -1303,6 +1303,9 @@ class LayerParameters(object):
         
         self.psum_transmissions_pe = math.ceil(self.output_shape[1]/(self.used_psum_per_PE * params.Clusters_X * params.Clusters_Y))
         self.psum_transmissions_glb = 1
+        self.needed_refreshes_mx = [[1 for _ in range(3)] for _ in range(self.needed_total_transmissions)]
+        for layer_repetition in range(self.needed_total_transmissions):
+            self.needed_refreshes_mx[layer_repetition][0] = 1
 
         self.iact_transmissions_pe = math.ceil(self.input_shape[1]/(self.used_iact_per_PE * params.PEs_Y))
         self.iact_transmissions_glb = 1
