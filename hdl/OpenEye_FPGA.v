@@ -315,7 +315,7 @@ module OpenEye_FPGA #(
   wire send_data_out;
   wire [1:0] add_up_reg;
   reg [7:0] iact_x_with_add_up;
-  reg [16:0] fsm_psum_limt;
+  reg [16:0] fsm_psum_limit;
   reg early_stream_start;
 
   // Register for the Buffer
@@ -1149,7 +1149,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
       select_ram_counter                    <= 0;
       ram_counter_storage                   <= 0;
       iact_x_with_add_up                    <= 0;
-      fsm_psum_limt                         <= 0;
+      fsm_psum_limit                         <= 0;
       //new iact regs
       iact_converter_max_cycles             <= 0;
       min_standing_cycles                   <= 0;
@@ -1317,7 +1317,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
             if(fsm_cycle == FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS + FSM_CEIL_PSUM_RTR_CCLS - 1) begin
-              fsm_psum_limt <= ((iact_x_with_add_up * kernels_per_calc)/8) * needed_wght_cycles_reg * filters_reg * iact_size_y;
+              fsm_psum_limit <= ((iact_x_with_add_up * kernels_per_calc)/8) * needed_wght_cycles_reg * filters_reg * iact_size_y;
               fsm_cycle             <= 0;
               fsm_last_state        <= GET_ROUTER_CONFIG;
               status_reg_enable_reg <= 0;
@@ -2438,8 +2438,10 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
         PSUM_SEND_RESULTS: begin
           psum_buffer_SP_en_r <= 0;
           if (ready_dma_i == 1) begin
-            enable_dma_o <= 1;
-            data_dma_o <= psum_buffer_SP_data_r[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*PARALLEL_MACS*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM * PARALLEL_MACS];
+            if ((!fully_connected_layer) | (fsm_psum_cycle > 1)) begin
+              enable_dma_o <= 1;
+            end
+            data_dma_o   <= psum_buffer_SP_data_r[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*PARALLEL_MACS*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM * PARALLEL_MACS];
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
@@ -2464,7 +2466,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
                 if ((fsm_y_cl_psum == CLUSTER_ROWS - 1) | fully_connected_layer) begin
                   fsm_y_cl_psum <= 0;
                   fsm_psum_cycle <= fsm_psum_cycle + 1;
-                  if (fsm_psum_cycle == needed_wght_cycles_reg * filters_reg * output_cycles - 1) begin
+                  if (fsm_psum_cycle == (fully_connected_layer*2) + (needed_wght_cycles_reg * filters_reg * output_cycles)- 1) begin
                     fsm_psum_cycle      <= 0;
                     psum_buffer_SP_addr <= 0;
                     psum_buffer_SP_en_r <= 0;
@@ -2537,7 +2539,7 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
             end
           end
           fsm_psum_cycle <= fsm_psum_cycle + 1;
-          if (fsm_psum_cycle == fsm_psum_limt) begin
+          if (fsm_psum_cycle == fsm_psum_limit) begin
             fsm_psum_cycle              <= 0;
             fsm_psum_last_state         <= PSUM_SEND_RESULTS;
             fsm_psum_current_state      <= PSUM_IDLE;
