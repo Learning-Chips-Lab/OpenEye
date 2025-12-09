@@ -1700,8 +1700,12 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
                       if (((a >= (select_ram_counter%RAM_CELLS)) & (a < (select_ram_counter%RAM_CELLS) + iact_channels_per_pe_next_layer)) |
                       (((a >= (select_ram_counter)%RAM_CELLS) | (a < (select_ram_counter + iact_channels_per_pe_next_layer)%RAM_CELLS)) & ((select_ram_counter%RAM_CELLS) >= RAM_CELLS - 4 + 1))) begin
 
-                        if ((word == (iact_channels_per_pe_next_layer + {{24{1'd0}},iact_channels_counter})) | (word == {{24{1'd0}},iact_channels_counter})) begin
-                          buffer_SP_data_w_reg[a][8*word+:8] <= quantized_value_reg[((word / 4) + ((a-ram_counter_storage) * 2) - overhang_discrepancy)%8];
+                        if ((word == (iact_channels_per_pe_next_layer + {{24{1'd0}},iact_channels_counter})) | (word == {{24{1'd0}},iact_channels_counter})
+                          & !((a == buffer_SP_addr_lower_limit) & (limit_increase_reg) & word <= 3)
+                        ) begin
+
+                          buffer_SP_data_w_reg[a][8*word+:8] <= quantized_value_reg[((word / 4) + limit_increase_reg + ((a-ram_counter_storage) * 2) - overhang_discrepancy)%8];
+                        
                         end
                         if (select_ram_counter - ram_counter_storage + iact_channels_per_pe_next_layer == (iact_size_x/2)) begin
                           overhang_discrepancy <= 0;
