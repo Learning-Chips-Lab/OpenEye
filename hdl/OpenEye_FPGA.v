@@ -1647,9 +1647,10 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
                   select_ram_counter <= select_ram_counter + iact_channels_per_pe_next_layer - (iact_x_with_add_up/2);
                   iact_channels_counter <= iact_channels_counter + 1;
                   if (iact_channels_counter == {4'd0,iact_channels_per_pe_next_layer} - 1) begin
-                    iact_channels_counter <= 0;
-                    ram_counter_storage   <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up_reg/2)) % RAM_CELLS;
-                    select_ram_counter    <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up_reg/2)) % RAM_CELLS;
+                    iact_channels_counter      <= 0;
+                    ram_counter_storage        <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up_reg/2) - limit_increase_reg) % RAM_CELLS;
+                    select_ram_counter         <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up_reg/2) - limit_increase_reg) % RAM_CELLS;
+                    buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + (iact_size_x/2) + limit_increase_reg) % RAM_CELLS;
                     for (a = 0; a < RAM_CELLS; a=a+1) begin
                       if (buffer_SP_addr_upper_limit == buffer_SP_addr_lower_limit) begin
                         buffer_SP_en_w_reg[a] <= 1;
@@ -1664,9 +1665,17 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
                           end
                         end
                       end
+                      if (iact_size_x % 2) begin
+                        if ((a == (buffer_SP_addr_upper_limit - 1)%RAM_CELLS) & !limit_increase_reg) begin
+                            buffer_SP_en_w_reg[a] <= 0;
                     end
+                        limit_increase_reg         <= (limit_increase_reg + 1)%2;
                     buffer_SP_addr_lower_limit <= buffer_SP_addr_upper_limit;
-                    buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + (iact_size_x/2)) % RAM_CELLS;
+                        if (!limit_increase_reg) begin
+                          buffer_SP_addr_lower_limit <= (buffer_SP_addr_upper_limit - 1)%RAM_CELLS;
+                        end
+                      end
+                    end
                   end
                 end
                 for (a = 0; a < RAM_CELLS; a=a+1) begin
