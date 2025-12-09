@@ -1602,9 +1602,10 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
               select_ram_offset          <= 0;
               ram_counter_storage        <= 0;
               select_ram_counter         <= 0;
-              buffer_SP_addr_upper_limit <= (CLUSTER_ROWS * (iact_channels_per_pe_next_layer/kernels_per_calc))%RAM_CELLS;
-              buffer_SP_addr_upper_limit <= (4*iact_size_x/PE_COLUMNS/CLUSTER_COLUMNS)%RAM_CELLS;
+              buffer_SP_addr_upper_limit <= (CLUSTER_ROWS * (iact_size_x+1)/2/PE_COLUMNS/CLUSTER_COLUMNS)%RAM_CELLS;
               buffer_SP_addr_lower_limit <= 0;
+              limit_increase_reg         <= 0;
+
               for (a = 0; a < RAM_CELLS; a=a+1) begin
                 buffer_SP_data_w_reg[a] <= 0;
               end
