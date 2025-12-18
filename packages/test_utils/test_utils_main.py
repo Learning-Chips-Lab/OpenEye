@@ -58,7 +58,8 @@ def get_verilog_sources(hdl_dir):
     for root, _, files in os.walk(hdl_dir):
         for f in files:
             full_path = os.path.join(root, f)
-            verilog_sources.append(full_path)
+            if full_path.endswith('.v') or full_path.endswith('.sv'):
+                verilog_sources.append(full_path)
 
     return verilog_sources
 
