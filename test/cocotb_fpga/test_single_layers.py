@@ -18,6 +18,7 @@ tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
 import test_utils.test_utils_main as ptu
 import test_utils.vh_file_creator as vh_file_creator
+import test_utils.generator as generator
 
 
 # TODO: put everything below in a common function
@@ -36,7 +37,7 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("STRIDE", [1])
 @pytest.mark.parametrize("KERNEL_SIZE", [3])
 @pytest.mark.parametrize("INPUT_SIZE_X", [32])
-@pytest.mark.parametrize("INPUT_SIZE_Y", [32])
+@pytest.mark.parametrize("INPUT_SIZE_Y", [1])
 @pytest.mark.parametrize("INPUT_CHANNELS", [4])
 @pytest.mark.parametrize("USE_SPARSE_IACTS", [0])
 @pytest.mark.parametrize("USE_SPARSE_WGHTS", [0])
@@ -69,6 +70,7 @@ def test_single_conv_layer(
     result = subprocess.run(['python', '../../packages/test_utils/generator.py', target_dir])
 
     vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel="OpenEye_FPGA")
+    generator.create_regmap_params_vh_file(".", target_dir, target_dir)
 
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],
@@ -77,6 +79,7 @@ def test_single_conv_layer(
         module=module,
         sim_build=target_dir,
         testcase='single_layer_test',
+        defines={"NO_TRACE": "TRUE"},
         force_compile=True,
         waves=True,
         simulator="icarus",

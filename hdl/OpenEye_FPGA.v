@@ -254,20 +254,22 @@ module OpenEye_FPGA #(
     end
   end
 
-`ifdef COCOTB_SIM
- initial begin
-   string fst_path;
-   // Read the path from the command line argument
-   if ($value$plusargs("FST_PATH=%s", fst_path)) begin
-     $dumpfile(fst_path);
-     $dumpvars(0, OpenEye_FPGA);
-   end else begin
-     // Fallback for when the argument is not provided
-     $dumpfile("OpenEye_FPGA.fst");
-     $dumpvars(0, OpenEye_FPGA);
-   end
- end
+
+`ifndef NO_TRACE
+  initial begin
+    string fst_path;
+    // Read the path from the command line argument
+    if ($value$plusargs("FST_PATH=%s", fst_path)) begin
+      $dumpfile(fst_path);
+      $dumpvars(0, OpenEye_FPGA);
+    end else begin
+      // Fallback for when the argument is not provided
+      $dumpfile("OpenEye_FPGA.fst");
+      $dumpvars(0, OpenEye_FPGA);
+    end
+  end
 `endif
+
 
   //Register, that occupy hyperparameters
   reg data_mode_reg;
