@@ -19,8 +19,8 @@ from pathlib import Path
 import os
 import sys
 from typing import Optional, Union
-import test_utils.open_eye_parameters as oep
-import test_utils.generic_test_utils as gtu
+import open_eye.open_eye_parameters as oep
+import open_eye.generic_test_utils as gtu
 
 directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])

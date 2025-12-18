@@ -24,7 +24,7 @@ import math
 import cocotb
 import numpy as np
 from cocotb.triggers import Timer
-import test_utils.stream_dicts as strdic
+import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 

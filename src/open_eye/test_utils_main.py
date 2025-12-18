@@ -32,12 +32,12 @@ import logging
 import math
 import numpy as np
 
-from test_utils.pooling_mapper import PoolingMapper
-from test_utils.dense_mapper import DenseMapper
-from test_utils.conv_mapper import ConvMapper
-from test_utils.dw_mapper import DWMapper
-import test_utils.generic_test_utils as gtu
-import test_utils.layer_execution_state as les
+from open_eye.pooling_mapper import PoolingMapper
+from open_eye.dense_mapper import DenseMapper
+from open_eye.conv_mapper import ConvMapper
+from open_eye.dw_mapper import DWMapper
+import open_eye.generic_test_utils as gtu
+import open_eye.layer_execution_state as les
 import multiprocessing as mp
 
 logger = logging.getLogger("cocotb")

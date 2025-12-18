@@ -34,7 +34,7 @@ Typical Usage:
 """
 
 import os
-import test_utils.generic_test_utils as generic_test_utils
+import open_eye.generic_test_utils as generic_test_utils
 
 
 class OpenEyeParameters(object):

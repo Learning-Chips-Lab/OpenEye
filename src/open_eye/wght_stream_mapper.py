@@ -45,8 +45,8 @@ Typical Usage:
 import numpy as np
 import math
 import logging
-import test_utils.generic_test_utils as gtu
-import test_utils.stream_dicts as strdic
+import open_eye.generic_test_utils as gtu
+import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 

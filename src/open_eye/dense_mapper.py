@@ -17,11 +17,11 @@ cluster array.
 
 import math
 import logging
-import test_utils.stream_dicts as strdic
-from test_utils.layer_mapper import LayerMapper
-from test_utils.iact_stream_mapper import DenseIactStreamMapper
-from test_utils.wght_stream_mapper import DenseWghtStreamMapper
-from test_utils.psum_stream_mapper import DensePsumStreamMapper
+import open_eye.stream_dicts as strdic
+from open_eye.layer_mapper import LayerMapper
+from open_eye.iact_stream_mapper import DenseIactStreamMapper
+from open_eye.wght_stream_mapper import DenseWghtStreamMapper
+from open_eye.psum_stream_mapper import DensePsumStreamMapper
 
 logger = logging.getLogger("cocotb")
 
