@@ -44,7 +44,8 @@ doc/source/verilog/*
 *.log
 *.pth
 
-# generated header files
+# generated header and source files
 dma_stream.h
 dma_stream_out.h
 doc/demo_notebooks/data/*
+dma_storage.v
