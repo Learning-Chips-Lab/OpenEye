@@ -7,7 +7,7 @@ import sys
 import os
 import cocotb
 from cocotb.clock import Clock
-import test_utils.test_utils_main as ptu
+import test_utils.test_utils_main as tum
 import test_utils.rtl_test_utils as rtl_test_utils
 import test_utils.timing_parameters as tp
 import test_utils.generic_test_utils as gtu
@@ -169,13 +169,13 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     for layer_number, layer in enumerate(model.layers):
         # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
         time_printer.timestamp("Layer parameters created. ", logger)
-        calculated_results = ptu.collect_results(layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
-        output_order = ptu.make_ref(openeye_parameter, layer_parameters[layer_number], layer_number, dram, calculated_results)
+        calculated_results = tum.collect_results(layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
+        output_order = tum.make_ref(openeye_parameter, layer_parameters[layer_number], layer_number, dram, calculated_results)
         if(logging.DEBUG >= log_level):
             time_printer.timestamp("Reference data created. ", logger)
         dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
         time_printer.timestamp("Start creating stream. " , logger)
-        stream = ptu.write_stream(openeye_parameter, layer_parameters[layer_number], dram_layer_content, sparse_iacts, sparse_wghts)
+        stream = tum.write_stream(openeye_parameter, layer_parameters[layer_number], dram_layer_content, sparse_iacts, sparse_wghts)
         time_printer.timestamp("Streams set. " , logger)
         for _ in range(1):
             for layer_repetition in range(layer_parameters[layer_number].needed_total_transmissions):
@@ -197,17 +197,17 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                         if(logging.DEBUG >= log_level):
                             assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                                     'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
-                        assert ptu.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
+                        assert tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
                     else :
                         await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
                         time_printer.timestamp("Ready signal detected. Start new stream " , logger)
-                        dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number])
+                        dram.fmap[1 + layer_number] = tum.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number])
                     if (layer_parameters[layer_number].layer_name != "Pooling") :
                         slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
                     if (layer_number != max_layers - 1) :
                         assert rtl_test_utils.compare_iact_storage(ptp, dut, dram.fmap[1 + layer_number], openeye_parameter)
                 else :
-                    dram.fmap[1 + layer_number] = ptu.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number])
+                    dram.fmap[1 + layer_number] = tum.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number])
                     if (layer_parameters[layer_number].layer_name != "Pooling") :
                         slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
 
