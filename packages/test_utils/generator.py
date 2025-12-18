@@ -165,13 +165,19 @@ if __name__ == "__main__":
 
     # second argument: output path (optional)
     try:
-        output_path = sys.argv[2]
+        output_pathvh = sys.argv[2]
     except:
-        output_path = path
+        output_pathvh = path
+
+    # second argument: output path (optional)
+    try:
+        output_pathv = sys.argv[3]
+    except:
+        output_pathv = path
     
 
     # ------------------------------------------------------------
     # Create regmap_params.vh file
     # ------------------------------------------------------------
-    create_regmap_params_vh_file(path + "/" + "regmap.yaml", output_path + "/" + "regmap_params.vh")
+    create_regmap_params_vh_file(path, output_pathvh, output_pathv)
 
