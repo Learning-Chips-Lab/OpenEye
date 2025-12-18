@@ -764,6 +764,7 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
 
     f = 0
     dut._log.info("Output Stream started")
+    cluster_offset = math.ceil(layer_parameters.used_psum_per_PE)
     while (dut.enable_dma_o.value == 1):
 
         if(logging.DEBUG >= login_level):
@@ -776,10 +777,10 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
                 dram.fmap[layer_number + 1][f] = dram.fmap[layer_number + 1][f] - 2**20
         except:
             pass
-        if (f <= 9) :
-            f = f + 10
+        if (f < cluster_offset) :
+            f = f + cluster_offset
         else :
-            f = f - 9
+            f = f - cluster_offset + 1
 
         await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
 

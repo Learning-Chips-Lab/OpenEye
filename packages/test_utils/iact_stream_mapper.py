@@ -825,14 +825,15 @@ class DenseIactStreamMapper(IactStreamMapper):
                 bitwidth = self.params.IACT_Bitwidth
                 dma_bitwidth = self.params.DMA_Bit_AXI
                 values_per_word = dma_bitwidth // bitwidth
-                for i in range(0, len(self.dram_fmap), values_per_word):
+                for i in range(0, self.params.Clusters_Y*self.params.NUM_GLB_IACT*self.layer_params.used_iact_per_PE, values_per_word):
                     word = 0
                     for j in range(values_per_word):
                         if i + j < len(self.dram_fmap):
                             val_twos = gtu.to_twos_complement(self.dram_fmap[i + j], bitwidth)
                             word |= val_twos << (j * bitwidth)
                     iact_stream.append(word)
-            return iact_stream
+        return iact_stream
+
     def write_iact_data_glb(self, cl_x, cl_y, router):
         """Generate GLB activation data for Dense layers.
 

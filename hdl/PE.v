@@ -410,7 +410,7 @@ module PE #(
   always @(posedge clk_i, negedge rst_ni) begin
     // Reset
     if (!rst_ni) begin
-      data_mode_reg         <= 0;
+      //data_mode_reg         <= 0;
       stride_reg            <= 0;
       fraction_bit_reg      <= 0;
       current_state_stream  <= 0;
@@ -424,7 +424,7 @@ module PE #(
         FIRST_PARAMS: begin
           if (enable_stream_i) begin
             current_state_stream  <= SECOND_PARAMS;
-            data_mode_reg         <= data_stream_i[0];
+            //data_mode_reg         <= data_stream_i[0];
             stride_reg            <= data_stream_i[3:1];
             wght_addr_max_reg     <= data_stream_i[7:4];
             input_activations_reg <= 4;
@@ -611,7 +611,7 @@ module PE #(
           end else begin
             used_psum_memory <= 0;
           end
-          if (data_mode_reg) begin
+          /*if (data_mode_reg) begin
             psum_select <= 0;
             adder_1_en  <= 0;
             adder_2_en  <= 0;
@@ -635,7 +635,7 @@ module PE #(
                 end
               end
             end
-          end
+          end*/
           if (psum_enable_i) begin
             current_state_computing <= SEND_PSUM;
             adder_1_en              <= 1;
@@ -668,6 +668,9 @@ module PE #(
               used_psum_memory_2 <= 0;
             end else begin
               used_psum_memory <= 0;
+            end
+            if (first_spad_iact_en_w & second_spad_iact_en_w & (second_spad_iact_en_w == 15)) begin
+              //iact_addr_max_reg <= 16;
             end
           end
         end
@@ -758,7 +761,7 @@ module PE #(
         end
 
         CALCULATING: begin
-          if (data_mode_reg) begin
+          /*if (data_mode_reg) begin
             //Defaulting Values
             wght_data_SPad_en_r <= 1;
             wght_data_use_vec   <= 1;
@@ -808,7 +811,7 @@ module PE #(
               computing               <= 0;
               use_psum_1              <= 0;
             end
-          end else begin
+          end else begin*/
             //Defaulting Values
             iact_addr_SPad_en_r   <= 0;
             iact_data_SPad_en_r   <= !mux_iact_ready;
@@ -972,7 +975,7 @@ module PE #(
             psum_spad_addr_b_delay <= psum_spad_addr_b_r;
             psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
             psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
-          end
+          //end
         end
 
         WAIT_TO_SEND_PSUM: begin

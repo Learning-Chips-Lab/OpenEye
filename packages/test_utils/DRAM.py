@@ -269,6 +269,7 @@ class DRAMContents(object):
                     for y in range(layer_parameters[0].input_shape[2]):
                         # Generate random INT8 activation values
                         self.fmap[0][c][x][y] = np.random.randint(-128, 127)
+                        self.fmap[0][c][x][y] = np.random.randint(-32, 31)
                         # Apply sparsity pattern if requested: zero elements where sum is even
                         if (sparse_iacts & (((c+x+y) % 2) == 0)):
                             self.fmap[0][c][x][y] = 0
