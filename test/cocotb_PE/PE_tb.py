@@ -15,8 +15,8 @@ from cocotb.triggers import FallingEdge, RisingEdge, Timer
 
 directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
-import test_utils.timing_parameters as timing_parameters
-import test_utils.rtl_test_utils as rtl_test_utils
+import open_eye.timing_parameters as timing_parameters
+import open_eye.rtl_test_utils as rtl_test_utils
 
 clk_cycle = int(os.environ["CLOCK_LEN"])
 clk_cycle_unit = os.environ["CLOCK_UNIT"]

@@ -7,18 +7,18 @@ import sys
 import os
 import cocotb
 from cocotb.clock import Clock
-import test_utils.test_utils_main as tum
-import test_utils.rtl_test_utils as rtl_test_utils
-import test_utils.timing_parameters as tp
-import test_utils.generic_test_utils as gtu
-import test_utils.DRAM as DRAM
-import test_utils.time_stamper as time_stamper
-import test_utils.open_eye_parameters as oep
-import test_utils.layer_parameters as lp
-import test_utils.simple_layer_operations as slo
-import test_utils.layer_execution_state as les
-import test_utils.data_create as data_create
-import test_utils.tflite2model as tflite2model
+import open_eye.test_utils_main as tum
+import open_eye.rtl_test_utils as rtl_test_utils
+import open_eye.timing_parameters as tp
+import open_eye.generic_test_utils as gtu
+import open_eye.DRAM as DRAM
+import open_eye.time_stamper as time_stamper
+import open_eye.open_eye_parameters as oep
+import open_eye.layer_parameters as lp
+import open_eye.simple_layer_operations as slo
+import open_eye.layer_execution_state as les
+import open_eye.data_create as data_create
+import open_eye.tflite2model as tflite2model
 
 os.environ["CLOCK_LEN"] = "10"
 os.environ["CLOCK_UNIT"] = "ns"
