@@ -6,3 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "open_eye"
 version = "1.0"
 authors = [{ name="Denis Lebold", email="denis.lebold@uni-due.de" }]
+
+[tool.setuptools]
+packages = ["open_eye"]
+package-dir = {"" = "."}
