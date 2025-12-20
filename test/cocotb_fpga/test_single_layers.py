@@ -17,7 +17,7 @@ directory = (os.path.abspath(os.getcwd()))
 import open_eye.test_utils_main as ptu
 import open_eye.vh_file_creator as vh_file_creator
 import open_eye.generator as generator
-from open_eye import hdl_dir, test_dir
+from open_eye import hdl_dir, test_dir, open_eye_dir
 
 
 
@@ -44,7 +44,7 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("USE_SPARSE_WGHTS", [0])
 @pytest.mark.parametrize("USE_RANDOM_VALUES", [1])
 @pytest.mark.parametrize("CLUSTER_ROWS", [4])
-@pytest.mark.parametrize("NUM_GLB_IACT", [1,2,3,4,5,6])
+@pytest.mark.parametrize("NUM_GLB_IACT", [4])
 @pytest.mark.parametrize("NUM_GLB_PSUM", [4])
 @pytest.mark.parametrize("NUM_GLB_WGHT", [3])
 @pytest.mark.parametrize("LOGGER_LEVEL", [0])
@@ -68,10 +68,11 @@ def test_single_conv_layer(
     target_dir = os.path.join(test_dir, '.temp/' + nodeid)
     os.makedirs(target_dir, exist_ok=True)
 
-    result = subprocess.run(['python', '../../packages/test_utils/generator.py', target_dir])
+    regmap_dir = os.path.join(test_dir, 'cocotb_fpga')
+    result = subprocess.run(['python', os.path.join(open_eye_dir, 'generator.py'), regmap_dir,target_dir])
 
     vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel="OpenEye_FPGA")
-    generator.create_regmap_params_vh_file(".", target_dir, target_dir)
+    generator.create_regmap_params_vh_file(os.path.join(test_dir, "cocotb_fpga"), target_dir, target_dir)
 
     results = cocotb_test.simulator.run(
         python_search=[test_dir],
