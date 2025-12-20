@@ -28,7 +28,7 @@ clk_delay_out = int(os.environ["CLOCK_DELAY_OUTPUT"])
 clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]
 
 async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array, hyperparameter_list):
-    cocotb.start_soon(Clock(dut.clk_i, 10, units=clk_cycle_unit).start())
+    cocotb.start_soon(Clock(dut.clk_i, 10, unit=clk_cycle_unit).start())
     dut._log.info("Clock is %s " + clk_cycle_unit, clk_cycle)
     await cocotb.start_soon(reset_all_signals(ptp, dut))
     send_iact_thread = cocotb.start_soon(send_iact(ptp, dut, iacts_array, hyperparameter_list))
@@ -38,25 +38,25 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array, hyperparamet
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, 1))
     #dut.compute_i.value = 1
 
-    await Timer(clk_cycle, units=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit)
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, 0))
     #dut.compute_i.value = 0
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.psum_ready_i, 1))
 
     await RisingEdge(dut.psum_ready_o)
-    await Timer(clk_cycle, units=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit)
 
     cocotb.start_soon(send_bias(ptp, dut, psum_array))
 
     await RisingEdge(dut.psum_enable_o)
 
-    await Timer(clk_cycle, units=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit)
 
     cocotb.start_soon(get_psum(dut, iacts_array, wghts_array, psum_array))
 
     await FallingEdge(dut.psum_enable_o)
     for x in range(100):
-        await Timer(clk_cycle, units=clk_cycle_unit)
+        await Timer(clk_cycle, unit=clk_cycle_unit)
 
     assert dut.compute_i.value == 0, "rst_ni is not 0!"
 
@@ -118,7 +118,7 @@ async def send_iact(ptp, dut, data_array, hyperparameter_list):
         False,
     )
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.iact_enable_i[0], 0))
-    await Timer(clk_cycle, units=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit)
 
 async def get_psum(dut, iacts_array, wghts_array, psum_array):
     control = np.zeros(64, dtype=int)
@@ -170,7 +170,7 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
         )
 
         current_control = current_control + 1
-        await Timer(clk_cycle, units=clk_cycle_unit)
+        await Timer(clk_cycle, unit=clk_cycle_unit)
 
 async def send_wght(ptp, dut, data_array, hyperparameter_list):
     spad_data = generate_spad(
@@ -211,7 +211,7 @@ async def send_wght(ptp, dut, data_array, hyperparameter_list):
         False,
     )
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.wght_enable_i, 0))
-    await Timer(clk_cycle, units=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit)
 
 async def send_bias(ptp, dut, data_array):
     spad_data = generate_spad(
@@ -235,30 +235,27 @@ async def send_bias(ptp, dut, data_array):
         False,
     )
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.psum_enable_i, 0))
-    await Timer(clk_cycle, units=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit)
 
 async def reset_all_signals(ptp, dut):
+    # Reset all inputs
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.rst_ni), 0))
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_mode_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.clk_i), 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.iact_select_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.iact_data_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.iact_enable_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.wght_data_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.wght_enable_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.psum_data_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.psum_enable_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.psum_ready_i), 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.compute_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.enable_stream_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), 0))
 
-    for glb_iact in range(dut.NUM_GLB_IACT.value):
-        cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.iact_data_i[glb_iact], 0))
-        cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.iact_enable_i[glb_iact], 0))
-
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.wght_data_i, 0))
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.wght_enable_i, 0))
-
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.psum_data_i, 0))
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.psum_enable_i, 0))
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.psum_ready_i, 0))
-
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.fraction_bit_i, 0))
-
-    await Timer(clk_cycle, units=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.rst_ni, 1))
-    await Timer(clk_cycle, units=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit)
 
 async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits, parallel):
     words_per_transmit = 0
@@ -285,7 +282,7 @@ async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits,
                 sending_data = sending_data
         cocotb.start_soon(rtl_test_utils.set_input(ptp, (data_signal), sending_data))
         sending_data = 0
-        await Timer(clk_cycle, units=clk_cycle_unit)
+        await Timer(clk_cycle, unit=clk_cycle_unit)
     cocotb.start_soon(rtl_test_utils.set_input(ptp, data_signal, 0))
 
 def generate_spad(
