@@ -198,61 +198,267 @@
 /// Parameters:
 /// Configuration Parameters:
 ///    IS_TOPLEVEL             - Boolean flag to indicate if this module is the top level
+///                              0: PE is instantiated within a larger array (default behavior)
+///                              1: PE is top-level module (enables additional debug features)
 ///    SERIAL                  - Boolean flag to enable serial processing mode
+///                              0: Parallel mode - dual MACs operate simultaneously (default)
+///                              1: Serial mode - single MAC, time-multiplexed operation
+///                              Serial mode reduces area at the cost of 2× latency
 ///    CREATE_VCD              - Boolean flag to enable VCD file creation for simulation
+///                              0: No waveform dump (faster simulation)
+///                              1: Generate PE.vcd for debugging (CocoTB testbenches)
 ///    PE_X                    - X coordinate position of PE in the processing array cluster
+///                              Range: 0 to array_width-1
+///                              Used for neighbor identification and routing decisions
 ///    PE_Y                    - Y coordinate position of PE in the processing array cluster
+///                              Range: 0 to array_height-1
+///                              Determines data flow direction in systolic array
 ///    PARALLEL_MACS           - Number of multiply-accumulate operations executed in parallel
+///                              Typical values: 1 (serial), 2 (default dual-MAC), 4 (quad-MAC)
+///                              Affects throughput (ops/cycle) and area (multiplier count)
+///                              Must match WGHT_DATA_DATA packing format
 ///
 /// Data Width Parameters:
-///    DATA_IACT_BITWIDTH      - Bit width of input activation values
-///    DATA_WGHT_BITWIDTH      - Bit width of weight values
+///    DATA_IACT_BITWIDTH      - Bit width of input activation values (payload only)
+///                              Typical: 8 (INT8), 16 (FP16/INT16), 4 (INT4 quantization)
+///                              Does NOT include overhead bits for sparsity metadata
+///    DATA_WGHT_BITWIDTH      - Bit width of weight values (payload only)
+///                              Typical: 8 (INT8 quantized), 16 (higher precision)
+///                              Should match iact bitwidth for balanced precision
 ///    DATA_PSUM_BITWIDTH      - Bit width of partial sum accumulator
+///                              Default: 20 bits to prevent overflow during accumulation
+///                              Must be >= (IACT_BITWIDTH + WGHT_BITWIDTH + log2(max_accumulations))
+///                              Wider psums trade area for numerical accuracy
 ///
 /// Sparsity Parameters:
-///    DATA_IACT_OVERHEAD      - Bits reserved for zero-skipping in input activations
-///    DATA_WGHT_IGNORE_ZEROS  - Bits reserved for zero-skipping in weights
+///    DATA_IACT_OVERHEAD      - Bits reserved for zero-skipping metadata in input activations
+///                              Default: 4 bits (can encode gaps of 0-15 zeros)
+///                              Total iact word width = DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD
+///                              Larger overhead supports sparser activations but increases memory
+///    DATA_WGHT_IGNORE_ZEROS  - Bits reserved for zero-skipping metadata in weights
+///                              Default: 4 bits per weight (encodes position within sparse structure)
+///                              Used as offset into psum SPad: psum_addr = base + ignore_zeros
+///                              Allows efficient indexing of non-zero weight positions
 ///
 /// Memory Organization Parameters:
 ///    IACT_DATA_ADDR          - Depth of input activation data scratch pad memory
+///                              Default: 16 entries (stores non-zero activation values)
+///                              Size should match maximum activations per PE per layer
+///                              Each entry: (DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD) bits wide
 ///    IACT_ADDR_ADDR          - Depth of input activation address scratch pad memory
+///                              Default: 9 entries (stores indices of non-zero activations)
+///                              Smaller than IACT_DATA_ADDR due to compression
+///                              Each entry: $clog2(IACT_DATA_ADDR) bits wide
 ///    WGHT_DATA_ADDR          - Depth of weight data scratch pad memory
+///                              Default: 96 entries (stores weight values for filter kernel)
+///                              Must accommodate all weights for assigned filters
+///                              Each entry: (DATA_WGHT_BITWIDTH + DATA_WGHT_IGNORE_ZEROS) * PARALLEL_MACS bits
 ///    WGHT_ADDR_ADDR          - Depth of weight address scratch pad memory
+///                              Default: 16 entries (stores base addresses for weight lookup)
+///                              Indirection layer for sparse weight access
+///                              Each entry: $clog2(WGHT_DATA_ADDR) bits wide
 ///    PSUM_ADDR               - Depth of partial sum scratch pad memory
+///                              Default: 32 entries (accumulates intermediate results)
+///                              Dual-ported for simultaneous read-modify-write
+///                              Each entry: DATA_PSUM_BITWIDTH bits wide
+///                              Size determines maximum output feature map size per PE
 ///
 /// Interface Parameters:
 ///    TRANS_BITWIDTH_IACT     - Bit width of input activation interface bus
+///                              Default: 24 bits (flexible packing)
+///                              Can carry: 3×8-bit data OR 2×12-bit data OR 6×4-bit addresses
+///                              Wider bus amortizes transfer overhead
 ///    TRANS_BITWIDTH_WGHT     - Bit width of weight interface bus
+///                              Default: 24 bits (flexible packing)
+///                              Can carry: 3×8-bit weights OR 2×12-bit weights OR 3×8-bit addresses
+///                              Should match GLB interface width for efficient streaming
 ///    NUM_GLB_IACT            - Number of global input activation buffer interfaces
-///   
+///                              Default: 3 (multicast from 3 separate GLB banks)
+///                              Allows PE to select from multiple activation sources
+///                              iact_select_i chooses active source (0 to NUM_GLB_IACT-1)
+///
 /// Ports:
 /// Clock and Reset:
-///    clk_i                   - System clock input
+///    clk_i                   - System clock input (positive edge triggered)
+///                              All registers update on rising edge of clk_i
+///                              Typical frequency: 100-500 MHz depending on target technology
 ///    rst_ni                  - Active-low asynchronous reset
+///                              Assert low to reset all state machines and registers to initial state
+///                              Clears all SPad contents, resets FSMs to IDLE
 ///
 /// Input Activation Interface:
 ///    iact_select_i          - Input activation source selection control
+///                              Width: $clog2(NUM_GLB_IACT+1) bits
+///                              Range: 0 to NUM_GLB_IACT (0 disables, 1-NUM_GLB_IACT selects source)
+///                              Determines which GLB iact interface is active
+///                              Used for multicast routing in systolic array
 ///    iact_data_i            - Input activation data bus [includes value, sparsity bits, address]
-///    iact_enable_i          - Input activation data valid signal
-///    iact_ready_o           - Input activation interface ready signal
+///                              Width: TRANS_BITWIDTH_IACT * NUM_GLB_IACT bits (concatenated sources)
+///                              Format: Packed data or addresses depending on load phase
+///                              Selected by iact_select_i, routed through internal multiplexer
+///    iact_enable_i          - Input activation data valid signal (per-source)
+///                              Width: NUM_GLB_IACT bits (one per GLB source)
+///                              High indicates valid data on corresponding iact_data_i slice
+///                              Part of valid-ready handshake protocol
+///    iact_ready_o           - Input activation interface ready signal (per-source)
+///                              Width: NUM_GLB_IACT bits (one per GLB source)
+///                              High indicates PE can accept new iact data
+///                              Deasserts when iact SPads are full or during computation
 ///
 /// Weight Interface:
 ///    wght_data_i            - Weight data bus [includes value, sparsity bits, address]
+///                              Width: TRANS_BITWIDTH_WGHT bits
+///                              Format: Packed weight data or addresses for SPad loading
+///                              Feeds data_pipeline_wght module for unpacking and storage
 ///    wght_enable_i          - Weight data valid signal
+///                              High indicates valid data present on wght_data_i
+///                              Transfer occurs when both wght_enable_i and wght_ready_o are high
 ///    wght_ready_o           - Weight interface ready signal
+///                              High indicates PE can accept new weight data
+///                              Controlled by FSM: high during IDLE, low during computation
 ///
 /// Partial Sum Interface:
-///    psum_data_i            - Partial sum input data bus
+///    psum_data_i            - Partial sum input data bus (from upstream PE)
+///                              Width: TRANS_BITWIDTH_PSUM bits
+///                              = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER
+///                              Carries accumulated partial sums from previous PE in systolic chain
+///                              Can be added to local MAC results during accumulation
 ///    psum_enable_i          - Partial sum input valid signal
+///                              High indicates valid psum data from upstream PE
+///                              Used during output phase to stream results out
+///                              When high, PE reads from psum SPad and sends to output
 ///    psum_ready_o           - Partial sum input interface ready signal
-///    psum_data_o            - Partial sum output data bus
+///                              High indicates PE is ready to accept incoming partial sums
+///                              Gated by internal psum_select signal
+///                              Part of backpressure mechanism in systolic array
+///    psum_data_o            - Partial sum output data bus (to downstream PE)
+///                              Width: TRANS_BITWIDTH_PSUM bits
+///                              Streams accumulated results to next PE or output buffer
+///                              Data comes from psum SPad during SEND_PSUM state
 ///    psum_enable_o          - Partial sum output valid signal
+///                              High indicates valid psum data being sent downstream
+///                              Asserted during SEND_PSUM state
+///                              Part of valid-ready handshake with next PE
 ///    psum_ready_i           - Partial sum output interface ready signal
+///                              High indicates downstream PE/buffer can accept psum data
+///                              Transfer occurs when both psum_enable_o and psum_ready_i are high
+///                              Backpressure: PE stalls if downstream not ready
 ///
 /// Control Interface:
 ///    compute_i              - Computation start trigger signal
+///                              Single-cycle pulse to initiate MAC computation
+///                              Transitions FSM from IDLE → LOADING_1
+///                              Only valid when iact_set and wght_set flags are both high
+///                              Typically asserted by global controller after data loading
 ///    enable_stream_i        - Parameter stream enable signal
+///                              Each pulse advances configuration FSM and latches parameter
+///                              Used during initialization to configure PE operation
+///                              Sequence: FIRST_PARAMS → SECOND_PARAMS → THIRD_PARAMS
 ///    data_stream_i          - Configuration parameter data stream
+///                              Width: 12 bits
+///                              Carries runtime configuration: stride, filters, channels, etc.
+///                              Format varies by config FSM state (see configuration phase above)
+///
+/// FSM State Transitions and Descriptions:
+///
+/// Configuration Streaming FSM (current_state_stream):
+///    State 0: FIRST_PARAMS  - Receives stride[3:1], wght_addr_max[7:4]
+///                             Waits for enable_stream_i pulse
+///                             Next: SECOND_PARAMS
+///    State 1: SECOND_PARAMS - Receives filters[8:4], channels[3:0]
+///                             Next: THIRD_PARAMS (if enable_stream_i)
+///                             Timeout: FIRST_PARAMS (if not enabled within window)
+///    State 2: THIRD_PARAMS  - Receives iact_addr_max configuration
+///                             Next: FOURTH_PARAMS
+///    State 3: FOURTH_PARAMS - Final configuration state (reserved for future expansion)
+///                             Next: Returns to FIRST_PARAMS for reconfiguration
+///
+/// Main Computation FSM (current_state_computing):
+///    State 0: IDLE          - Initial state after reset or completion
+///                             Waiting for data loading to complete (iact_set && wght_set)
+///                             Ready signals high (iact_ready_o, wght_ready_o = 1)
+///                             All SPad addresses reset to 0
+///                             Transitions: compute_i pulse → LOADING_1
+///                                         psum_enable_i high → WAIT_TO_SEND_PSUM (bypass mode)
+///
+///    State 1: LOADING_1     - Pipeline fill cycle 1
+///                             Initialize SPad read addresses (iact_addr, wght_addr = 0)
+///                             Assert SPad read enables (iact_data_SPad_en_r = 1)
+///                             Purpose: Start memory read operations
+///                             Duration: 1 cycle
+///                             Transitions: Unconditional → LOADING_2
+///
+///    State 2: LOADING_2     - Pipeline fill cycle 2
+///                             SPad data appears on outputs (1 cycle read latency)
+///                             Load first iact value into pipeline (iact_data_current_1)
+///                             Begin weight address computation
+///                             Duration: 1 cycle
+///                             Transitions: Unconditional → LOADING_3
+///
+///    State 3: LOADING_3     - Pipeline fill cycle 3
+///                             Iact propagates through pipeline (→ iact_data_current_2)
+///                             Weight data ready from SPad
+///                             Setup multiplier inputs (mult_1_fac_1, mult_1_fac_2)
+///                             Duration: 1 cycle
+///                             Transitions: Unconditional → LOADING_4
+///
+///    State 4: LOADING_4     - Pipeline fill cycle 4
+///                             Iact reaches multipliers (→ iact_data_current_3)
+///                             Multiplier results computed (combinational)
+///                             Read existing partial sums from psum SPad
+///                             Check used_psum_memory bitmap for initialization
+///                             Duration: 1 cycle
+///                             Transitions: Unconditional → LOADING_5
+///
+///    State 5: LOADING_5     - Pipeline fill cycle 5
+///                             Multiplier outputs valid (mult_1_o_w, mult_2_o_w)
+///                             Adder inputs setup: psum + MAC result
+///                             Prepare writeback addresses (psum_spad_addr_a_w, _b_w)
+///                             Hazard detection: Check for read-after-write conflicts
+///                             Duration: 1 cycle
+///                             Transitions: Unconditional → CALCULATING
+///
+///    State 6: CALCULATING   - Main computation loop (steady state)
+///                             Concurrent operations each cycle:
+///                               1. Write: Previous cycle's results → psum SPad
+///                               2. Read: Next iact from iact_data_SPad
+///                               3. Compute: Current iact × weights (dual MACs)
+///                               4. Accumulate: MAC results + existing psums
+///                               5. Increment: iact_addr_current pointer
+///                             Pipeline operation: 5 operations in flight simultaneously
+///                             Zero-skipping: Uses iact/wght overhead to skip zeros
+///                             Duration: Variable (until all iacts processed)
+///                             Exit condition: iact_addr_current == iact_addr_max_reg
+///                             Transitions: All iacts done → WAIT_TO_SEND_PSUM
+///
+///    State 7: WAIT_TO_SEND_PSUM - Computation complete, waiting for output request
+///                             All MAC results written to psum SPad
+///                             Disable iact/wght SPad reads (computation finished)
+///                             Setup psum SPad for sequential readout
+///                             Reset psum address pointers to 0
+///                             Waiting for external signal (psum_enable_i)
+///                             Duration: Variable (waits for psum_enable_i)
+///                             Transitions: psum_enable_i high → SEND_PSUM
+///
+///    State 8: SEND_PSUM     - Streaming partial sum results out
+///                             Sequential read from psum SPad (addr 0 → PSUM_ADDR-1)
+///                             Valid-ready handshake: psum_enable_o + psum_ready_i
+///                             Increment psum address each successful transfer
+///                             Data flows to downstream PE via psum_data_o
+///                             Backpressure: Stalls if psum_ready_i low
+///                             Duration: Variable (until all psums sent or psum_enable_i deasserts)
+///                             Transitions: psum_enable_i low → IDLE (restart for next layer)
+///
+/// Pipeline Hazards and Bypass Logic:
+///    Read-After-Write (RAW): When psum_spad read address == recent write address
+///       Detection: Compare psum_spad_addr_a_r with psum_spad_addr_a_delay
+///       Resolution: Set reuse_psum_spad_a flag, forward reused_data_a instead of SPad output
+///       Mechanism: Bypass freshly computed psum from adder output to adder input
+///    Adder-to-Adder Forwarding: Chain multiple accumulations
+///       reuse_adder_data_a2a: Adder 1 output → Adder 1 input (serial mode)
+///       reuse_adder_data_a2b: Adder 1 output → Adder 2 input (parallel mode)
+///       reuse_adder_data_b2a: Adder 2 output → Adder 1 input (cross-lane)
+///       reuse_adder_data_b2b: Adder 2 output → Adder 2 input (serial mode)
 ///
 
 module PE #(
