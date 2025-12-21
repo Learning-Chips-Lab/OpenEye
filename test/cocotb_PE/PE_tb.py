@@ -180,9 +180,9 @@ async def send_iact(ptp, dut, data_array, hyperparameter_list):
     # SISD mode (True) = one value per word, ignore_zeros (True) = compress zeros
     spad_data = generate_spad(
         data_array,
-        dut.IACT_ADDR_ADDR.value,
-        dut.IACT_DATA_ADDR.value,
-        dut.DATA_IACT_BITWIDTH.value,
+        int(dut.IACT_ADDR_ADDR.value),  # Convert LogicArray to int
+        int(dut.IACT_DATA_ADDR.value),  # Convert LogicArray to int
+        int(dut.DATA_IACT_BITWIDTH.value),  # Convert LogicArray to int
         True,  # SISD mode
         0,
         True,  # Ignore zeros
@@ -202,7 +202,8 @@ async def send_iact(ptp, dut, data_array, hyperparameter_list):
     dut._log.info("IACT DATA is %s", spad_data[1])
 
     # Enable input activation interface
-    cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.iact_enable_i[0], 1))
+    # Note: iact_enable_i is a packed array, set bit 0 by setting the whole signal to 1
+    cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.iact_enable_i, 1))
 
     # Send address array first
     await send_to_spad(
@@ -210,8 +211,8 @@ async def send_iact(ptp, dut, data_array, hyperparameter_list):
         spad_data[0],
         dut.iact_data_i,
         1 + hyperparameter_list[1],  # TODO: Make variable
-        dut.TRANS_BITWIDTH_IACT.value,
-        dut.IACT_ADDR_DATA.value,
+        int(dut.TRANS_BITWIDTH_IACT.value),  # Convert LogicArray to int
+        int(dut.IACT_ADDR_DATA.value),  # Convert LogicArray to int
         False,  # Sequential mode
     )
 
@@ -221,13 +222,13 @@ async def send_iact(ptp, dut, data_array, hyperparameter_list):
         spad_data[1],
         dut.iact_data_i,
         hyperparameter_list[1]*hyperparameter_list[0],  # Total elements
-        dut.TRANS_BITWIDTH_IACT.value,
-        dut.IACT_DATA_DATA.value,
+        int(dut.TRANS_BITWIDTH_IACT.value),  # Convert LogicArray to int
+        int(dut.IACT_DATA_DATA.value),  # Convert LogicArray to int
         False,  # Sequential mode
     )
 
     # Disable input activation interface
-    cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.iact_enable_i[0], 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.iact_enable_i, 0))
     await Timer(clk_cycle, unit=clk_cycle_unit)
 
 async def get_psum(dut, iacts_array, wghts_array, psum_array):
@@ -333,11 +334,11 @@ async def send_wght(ptp, dut, data_array, hyperparameter_list):
     # Generate SPAD format with packed mode (False = 2 values per word)
     spad_data = generate_spad(
         data_array,
-        dut.WGHT_ADDR_ADDR.value,
-        dut.WGHT_DATA_ADDR.value,
-        dut.DATA_WGHT_BITWIDTH.value,
+        int(dut.WGHT_ADDR_ADDR.value),  # Convert LogicArray to int
+        int(dut.WGHT_DATA_ADDR.value),  # Convert LogicArray to int
+        int(dut.DATA_WGHT_BITWIDTH.value),  # Convert LogicArray to int
         False,  # Packed mode (not SISD)
-        dut.DATA_WGHT_BITWIDTH.value + dut.DATA_WGHT_IGNORE_ZEROS.value,
+        int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value),  # Convert to int
         True,  # Ignore zeros
     )
 
@@ -361,8 +362,8 @@ async def send_wght(ptp, dut, data_array, hyperparameter_list):
         spad_data[0],
         dut.wght_data_i,
         hyperparameter_list[0] * hyperparameter_list[1] + 2,  # TODO: Make variable
-        dut.TRANS_BITWIDTH_WGHT.value,
-        dut.WGHT_ADDR_DATA.value,
+        int(dut.TRANS_BITWIDTH_WGHT.value),  # Convert LogicArray to int
+        int(dut.WGHT_ADDR_DATA.value),  # Convert LogicArray to int
         False,  # Sequential mode
     )
 
@@ -371,9 +372,9 @@ async def send_wght(ptp, dut, data_array, hyperparameter_list):
         ptp,
         spad_data[1],
         dut.wght_data_i,
-        dut.WGHT_DATA_ADDR.value,
-        dut.TRANS_BITWIDTH_WGHT.value,
-        dut.WGHT_DATA_DATA.value,
+        int(dut.WGHT_DATA_ADDR.value),  # Convert LogicArray to int
+        int(dut.TRANS_BITWIDTH_WGHT.value),  # Convert LogicArray to int
+        int(dut.WGHT_DATA_DATA.value),  # Convert LogicArray to int
         False,  # Sequential mode
     )
 
@@ -401,11 +402,11 @@ async def send_bias(ptp, dut, data_array):
     # Generate SPAD data without zero-skipping
     spad_data = generate_spad(
         data_array,
-        dut.PSUM_ADDR.value,
-        dut.PSUM_ADDR.value,
-        dut.DATA_PSUM_BITWIDTH.value,
+        int(dut.PSUM_ADDR.value),  # Convert LogicArray to int
+        int(dut.PSUM_ADDR.value),  # Convert LogicArray to int
+        int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
         False,  # Packed mode
-        dut.DATA_PSUM_BITWIDTH.value,
+        int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
         False,  # Don't ignore zeros
     )
     dut._log.info("PSUM is %s", spad_data[1])
@@ -418,9 +419,9 @@ async def send_bias(ptp, dut, data_array):
         ptp,
         spad_data[1],
         dut.psum_data_i,
-        dut.PSUM_ADDR.value,
-        dut.TRANS_BITWIDTH_PSUM.value,
-        dut.DATA_PSUM_BITWIDTH.value * 2,
+        int(dut.PSUM_ADDR.value),  # Convert LogicArray to int
+        int(dut.TRANS_BITWIDTH_PSUM.value),  # Convert LogicArray to int
+        int(dut.DATA_PSUM_BITWIDTH.value) * 2,  # Convert LogicArray to int
         False,  # Sequential mode
     )
 
