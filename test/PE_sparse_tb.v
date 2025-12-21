@@ -6,7 +6,7 @@
 `timescale 1ns / 1ps
 
 ////////////////////////////////////////////////////////////////////////////////
-// Module: PE_tb
+// Module: PE_sparse_tb
 //
 // Testbench for the Processing Element (PE) module in the OpenEye accelerator.
 // This testbench performs a complete 1D convolution operation with:
@@ -26,7 +26,7 @@
 // on Mobile Devices" (Chen et al., arXiv:1807.07928v2)
 ////////////////////////////////////////////////////////////////////////////////
 
-module PE_tb;
+module PE_sparse_tb;
 
   // ============================================================================
   // Parameters - Match PE default configuration
@@ -190,8 +190,8 @@ module PE_tb;
 
   initial begin
     if (CREATE_VCD) begin
-      $dumpfile("PE_tb.vcd");
-      $dumpvars(0, PE_tb);
+      $dumpfile("PE_sparse_tb.vcd");
+      $dumpvars(0, PE_sparse_tb);
     end
   end
 
@@ -578,7 +578,7 @@ module PE_tb;
   // ============================================================================
 
   initial begin
-    #(CLK_PERIOD * 5000);  // 5000 cycle timeout
+    #(CLK_PERIOD * 100);  // 100 cycle timeout
     $display("");
     $display("================================================================================");
     $display("ERROR: Simulation timeout after %0d cycles!", cycle_count);
