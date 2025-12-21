@@ -48,7 +48,7 @@ async def set_input(port_timings, signal, new_value, multiple_dim=False, array_i
         The input delay is 100 ps relative to the rising edge, which matches
         the implementation constraints of OpenEye.
     """
-    await Timer(port_timings.clk_delay_in, units=port_timings.clk_delay_unit_in)
+    await Timer(port_timings.clk_delay_in, unit=port_timings.clk_delay_unit_in)
     if(multiple_dim):
         if(cocotb.SIM_NAME == "Icarus Verilog"):
             array_max_index = list(reversed(array_max_index))
@@ -154,9 +154,9 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
         cocotb.start_soon(set_input(ptp,(dut.stride_x_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["strideX"]]))
         cocotb.start_soon(set_input(ptp,(dut.stride_y_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["strideY"]]))
         cocotb.start_soon(set_input(ptp,(dut.kernel_per_pe_cluster_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["kernel_per_pe_cluster"]]))
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.compute_mask_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["usePEs"]]))
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         # Set the router mode for the input activations
         router_mode_port = 0
         for cl_x in range(oep.Clusters_X):
@@ -191,30 +191,30 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
         cocotb.start_soon(set_input(ptp,(dut.router_mode_psum_i), router_mode_port))
         router_mode_port = 0
         # Wait until the status register and the router mode are set
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 0))
     else:
 
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 1))
         for data_word in range(len(stream[strdic.stream_parallel_dict["status"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["status"]][data_word]))
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         for data_word in range(len(stream[strdic.stream_parallel_dict["iact"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["iact"]][data_word]))
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         for data_word in range(len(stream[strdic.stream_parallel_dict["wght"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["wght"]][data_word]))
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         for data_word in range(len(stream[strdic.stream_parallel_dict["psum"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["psum"]][data_word]))
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         for data_word in range(len(stream[strdic.stream_parallel_dict["quantize"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["quantize"]][data_word]))
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         for data_word in range(len(stream[strdic.stream_parallel_dict["offset"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["offset"]][data_word]))
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
         
@@ -304,7 +304,7 @@ async def write_iact(ptp, dut, stream, oep, lp):
     iact_transmission = 0
     if(lp.skipIact != 1):
         while (dut.iact_ready_o.value == 0): #TODO: ADAPT for Sparsetiy
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         for position in range(len(stream[0][0][0])):
             iact_enable_signal = 0
             for x_cluster in range(oep.Clusters_X):
@@ -320,7 +320,7 @@ async def write_iact(ptp, dut, stream, oep, lp):
             cocotb.start_soon(set_input(ptp,(dut.iact_data_i), iact_transmission))
             iact_transmission = 0
             cocotb.start_soon(set_input(ptp,(dut.iact_enable_i), iact_enable_signal))
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.iact_data_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.iact_enable_i), 0))
 
@@ -354,7 +354,7 @@ async def write_wght(ptp, dut, stream, oep, lp):
     wght_transmission = 0
     if(lp.skipWght != 1):
         while (dut.wght_ready_o.value != ((2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_WGHT))-1)):
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
         cocotb.start_soon(set_input(ptp,(dut.wght_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_WGHT))-1))
         for position in range(len(stream[0][0][0])):
@@ -372,7 +372,7 @@ async def write_wght(ptp, dut, stream, oep, lp):
             cocotb.start_soon(set_input(ptp,(dut.wght_data_i), wght_transmission))
             wght_transmission = 0
             cocotb.start_soon(set_input(ptp,(dut.wght_enable_i), wght_enable_signal))
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.wght_data_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.wght_enable_i), 0))
 
@@ -414,7 +414,7 @@ async def write_bias(ptp, dut, stream, oep, lp):
                     << ((router + y_cluster * oep.NUM_GLB_PSUM + x_cluster * oep.NUM_GLB_PSUM * oep.Clusters_Y) * oep.PSUM_Trans_Bitwidth))
         cocotb.start_soon(set_input(ptp,(dut.psum_data_i), psum_transmission))
         psum_transmission = 0
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     cocotb.start_soon(set_input(ptp,(dut.psum_data_i), 0))
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
 
@@ -430,7 +430,7 @@ async def await_enable_signal(ptp, dut):
     """
     cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
     while (dut.enable_dma_o.value != 1):
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     pass
 
 async def await_ready_signal(ptp, dut):
@@ -448,11 +448,11 @@ async def await_ready_signal(ptp, dut):
         Includes a fixed 3-cycle delay before checking ready signal to allow
         for internal state stabilization.
     """
-    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
-    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
-    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     while (dut.ready_dma_o.value != 1):
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     pass
 
 async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order):
@@ -515,7 +515,7 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
         if ((layer_repetition % layer_parameters.iact_transmissions_pe) == (layer_parameters.iact_transmissions_pe - 1)):
             cocotb.start_soon(send_enable_conv(ptp, dut, layer_parameters, layer_repetition, oep))
             while (dut.psum_enable_o.value == 0):
-                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
             dut._log.info("Output Stream started")
             assert dut.psum_enable_o.value != 0, "psum is not 1!"
             while (dut.psum_enable_o.value != 0):
@@ -548,13 +548,13 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                                             dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**20
                                     except:
                                         pass
-                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
         dut._log.info("Output Stream finished")
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 1))
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     else:
         cluster_order = []
         for b in range(0,oep.Clusters_Y,layer_parameters.used_Y_cluster):
@@ -610,7 +610,7 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
             if (current_cycle == transmissions_per_cycle):
                 current_cycle = 0
 
-            await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
 
@@ -672,7 +672,7 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
         storage_file.write(" f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
     cocotb.start_soon(send_enable_dw(ptp, dut, layer_parameters, layer_repetition, oep))
     while (dut.psum_enable_o.value == 0):
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     dut._log.info("Output Stream started")
     assert dut.psum_enable_o.value != 0, "psum is not 1!"
     while (dut.psum_enable_o.value != 0):
@@ -703,15 +703,15 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
                             except:
                                 pass
 
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     #if (math.floor(((1+layer_repetition)/layer_parameters.psum_transmissions_pe)) > math.floor((layer_repetition/layer_parameters.psum_transmissions_pe))):
     les.current_position = 0
-    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
     dut._log.info("Output Stream finished")
-    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 1))
-    await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     
     if(math.floor(layer_repetition%(layer_parameters.iact_transmissions_pe*layer_parameters.needed_wght_transmissions)) == \
         (layer_parameters.iact_transmissions_pe*layer_parameters.needed_wght_transmissions-1)):
@@ -782,7 +782,7 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         else :
             f = f - cluster_offset + 1
 
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
     cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
     
@@ -820,7 +820,7 @@ async def compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer
     dut._log.info("Output Stream started")
     while (dut.enable_dma_o.value == 1):
 
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
     cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
     
@@ -860,14 +860,14 @@ async def send_enable_conv(ptp, dut, layer_params, layer_repetition, oep):
     match layer_params.single_cluster_computation:
         case 1:
             for _ in range(int((math.ceil((layer_params.filters*layer_params.output_shape[1]*layer_params.output_shape[2])/2/(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))))):
-                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         case 2:
             for _ in range(int((math.ceil((layer_params.filters*layer_params.output_shape[1]*layer_params.output_shape[2])/(2*oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))))):
-                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         case _:
             for _ in range(int((math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/2)*\
                                 math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.used_Y_cluster)))):
-                await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
 
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
@@ -876,11 +876,11 @@ async def send_enable_dw(ptp, dut, layer_params, layer_repetition, oep):
 
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
     for _ in range(int((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.used_Y_cluster/2)))):
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
 
 async def send_enable_dense(ptp, dut, layer_params, layer_repetition, oep):
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
     for _ in range(math.ceil(layer_params.used_psum_per_PE/2)):
-        await Timer(ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
