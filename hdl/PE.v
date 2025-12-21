@@ -8,50 +8,192 @@
 /// Module: PE
 ///
 /// The PE (Processing Element) is a fundamental computational unit in the OpenEye neural network
-/// accelerator. It is designed to efficiently perform multiply-accumulate (MAC) operations for 
+/// accelerator. It is designed to efficiently perform multiply-accumulate (MAC) operations for
 /// neural network inference, with specific optimizations for handling sparse data patterns and
 /// configurable fixed-point arithmetic.
+///
+/// Systolic Array Context:
+/// The PE is designed to be instantiated in a 2D systolic array architecture where multiple PEs
+/// work cooperatively to accelerate neural network inference. Key aspects of PE interconnection:
+///
+/// - Array Topology: PEs are organized in an X-Y grid (coordinates specified by PE_X, PE_Y)
+/// - Data Flow Patterns:
+///   * Input Activations: Can be sourced from multiple global buffers (NUM_GLB_IACT) or from
+///     neighboring PEs. The iact_select_i signal determines which source is active.
+///   * Weights: Flow through the array in a stationary or streaming pattern depending on the
+///     dataflow configuration (weight-stationary, output-stationary, or row-stationary).
+///   * Partial Sums: Flow between PEs in a systolic manner. Each PE receives partial sums from
+///     its predecessor (psum_data_i), accumulates them with local MAC results, and forwards
+///     them to the next PE (psum_data_o).
+///
+/// - Inter-PE Communication:
+///   * Handshake Protocol: Uses valid-ready signaling for flow control (enable/ready pairs)
+///   * Backpressure: PEs can stall the pipeline when downstream is not ready
+///   * Broadcast: Input activations can be broadcast across multiple PEs simultaneously
+///   * Multicast: Weights can be shared across PEs in the same column/row
 ///
 /// Architecture:
 /// - Memory Hierarchy: Uses a combination of scratch pads (SPads) for input activations (Iact),
 ///   weights (Wght), and partial sums (Psum) to maximize data reuse and minimize memory access.
+///   * Iact SPad: Two-level structure with address SPad (indirect addressing) and data SPad
+///   * Wght SPad: Two-level structure with address SPad and data SPad for sparse storage
+///   * Psum SPad: Dual-ported memory allowing simultaneous read-accumulate-write operations
+///
 /// - Sparsity Exploitation: Implements zero-skipping logic for both input activations and weights
 ///   to avoid unnecessary computations on zero values.
+///   * Compressed Sparse Format: Data is stored with overhead bits indicating zero positions
+///   * Dynamic Indexing: Uses sparsity metadata to skip over zeros during MAC operations
+///   * Zero Detection: Hardware detects and skips multiplications involving zero operands
+///
 /// - Parallel Processing: Supports parallel MAC operations through dual multipliers and adders.
+///   * Configurable Parallelism: PARALLEL_MACS parameter controls number of simultaneous MACs
+///   * Dual Datapath: Two independent multiply-accumulate units operating concurrently
+///   * Serial Fallback: Can operate in serial mode (SERIAL parameter) for area optimization
+///
 /// - Flexible Precision: Configurable fixed-point arithmetic to balance accuracy and efficiency.
+///   * Separate Bitwidths: Independent control of iact, weight, and psum precision
+///   * Fractional Bits: Configurable fraction_bit_reg for fixed-point representation
+///   * Accumulator Width: Wider psum bitwidth (default 20-bit) prevents overflow
+///
 /// - Data Flow Control: Uses a sophisticated FSM to coordinate data movement and computation.
 ///
 /// Operational Flow:
-/// 1. Memory Loading Phase:
-///    - Input activations and weights are loaded into respective SPad memories
+/// 1. Configuration Phase:
+///    - Parameter streaming: Receives stride, filter count, channel count via data_stream_i
+///    - FSM states: FIRST_PARAMS -> SECOND_PARAMS -> THIRD_PARAMS -> FOURTH_PARAMS
+///    - Configures operational parameters: stride_reg, filters_reg, channel_reg, iact_addr_max_reg
+///
+/// 2. Memory Loading Phase:
+///    - Input activations and weights are loaded into respective SPad memories via data pipelines
 ///    - Memory addressing structures are initialized for sparse data processing
+///    - Handshaking: Uses enable/ready signals to coordinate with external memory controllers
+///    - Dual-buffer Loading: Separate pipelines for address and data SPads allow parallel loading
 ///
-/// 2. Computation Phase:
-///    - FSM initiates computation upon receiving compute signal
-///    - Reads input activations from Iact SPad
-///    - Uses activation data to index into weight SPad memory
-///    - Routes data pairs to multiplier units
-///    - Reads corresponding partial sums for accumulation
-///    - Writes results back to Psum SPad
+/// 3. Computation Phase (Detailed State Machine):
+///    - IDLE: Waiting for compute_i trigger signal, all memories loaded and ready
+///    - LOADING_1-5: Five-stage pipeline fill sequence
+///      * LOADING_1: Initialize SPad addresses, assert read enables
+///      * LOADING_2: First data becomes available from SPads
+///      * LOADING_3: Setup multiplier inputs, prepare adder pipeline
+///      * LOADING_4: Multiplier results available, read existing partial sums
+///      * LOADING_5: Adders ready, prepare write-back to psum SPad
+///    - CALCULATING: Main computation loop
+///      * Reads next iact from Iact SPad (uses iact_addr_SPad_addr as pointer)
+///      * Uses iact overhead bits to determine weight address range
+///      * Fetches corresponding weights from Wght SPad (indexed by sparsity metadata)
+///      * Reads existing partial sums from Psum SPad (dual-port simultaneous access)
+///      * Multiplies: iact × weight in parallel multipliers
+///      * Accumulates: MAC result + existing psum in parallel adders
+///      * Writes back: Updated psums to Psum SPad (with hazard detection)
+///      * Increments: iact_addr_current pointer, repeats until iact_addr_max_reg reached
+///    - WAIT_TO_SEND_PSUM: Computation complete, waiting for psum_enable_i to stream results
+///    - SEND_PSUM: Streaming accumulated partial sums to next PE or output
+///      * Sequential readout of Psum SPad contents
+///      * Valid-ready handshaking with downstream PE
+///      * Returns to IDLE when psum_enable_i deasserts
 ///
-/// 3. Output Phase:
+/// 4. Output Phase:
 ///    - Accumulates results across multiple operations
 ///    - Manages partial sum routing and accumulation
 ///    - Coordinates output streaming of completed results
+///    - Psum forwarding: Results flow to next PE in systolic chain
+///
+/// Sparse Data Handling (Detailed Example):
+/// The PE uses a compressed sparse format to skip zero values efficiently:
+///
+/// Example: Computing Y = A × W where A = [0, 3, 0, 0, 5, 0, 2] and W is a sparse weight matrix
+///
+/// 1. Sparse Encoding:
+///    - Iact Data SPad stores: [3, 5, 2] (non-zero values only)
+///    - Iact Addr SPad stores: [1, 4, 6] (positions of non-zeros)
+///    - Iact Overhead: [2, 3, 1] (gaps between non-zeros: 1→4 gap=3, 4→6 gap=2, start gap=2)
+///
+/// 2. Weight Indexing:
+///    - Wght Addr SPad: Contains base addresses for each iact index
+///    - Wght Data SPad: Contains packed weights with ignore_zeros metadata
+///    - For iact[1]=3: reads weights from W[1,:] using base_addr + sparsity offset
+///    - For iact[4]=5: reads weights from W[4,:] using base_addr + sparsity offset
+///
+/// 3. Zero-Skipping Execution:
+///    Cycle 1: Read iact_addr=1, fetch iact_data=3
+///            Use overhead=2 to skip first 2 weight positions
+///            MAC: 3 × W[1,2], 3 × W[1,3] (parallel MACs)
+///    Cycle 2: Read iact_addr=4, fetch iact_data=5
+///            Use overhead=3 to advance weight pointer
+///            MAC: 5 × W[4,5], 5 × W[4,6] (parallel MACs)
+///    Cycle 3: Read iact_addr=6, fetch iact_data=2
+///            Use overhead=1 to advance weight pointer
+///            MAC: 2 × W[6,7], 2 × W[6,8] (parallel MACs)
+///
+/// 4. Partial Sum Accumulation:
+///    - First cycle: psum_spad reads return 0 (first use), MAC results written to psum[0:1]
+///    - Later cycles: psum_spad reads return previous accumulations, add to new MACs
+///    - Hazard detection: reuse_psum_spad_a/b flags handle read-after-write on same address
+///
+/// Interface Timing Diagrams and Protocols:
+///
+/// Input Activation Interface (AXI-Stream-like):
+///    clk     : __|‾‾|__|‾‾|__|‾‾|__|‾‾|__|‾‾|__|‾‾|__
+///    iact_data_i  : ====< D0 >===< D1 >===< D2 >===
+///    iact_enable_i: ________|‾‾‾‾‾‾‾‾|___|‾‾‾‾‾‾‾‾|___
+///    iact_ready_o : ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾|_________|‾‾
+///    - Valid-ready handshake: Transfer occurs when both enable and ready are high
+///    - Backpressure: ready_o deasserts when SPad is full
+///    - Multi-source: iact_select_i chooses from NUM_GLB_IACT input sources
+///
+/// Weight Interface:
+///    clk     : __|‾‾|__|‾‾|__|‾‾|__|‾‾|__|‾‾|__
+///    wght_data_i  : ====< W0 >===< W1 >===< W2 >===
+///    wght_enable_i: ________|‾‾‾‾‾‾‾‾|___|‾‾‾‾‾‾‾‾|___
+///    wght_ready_o : ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾|_________|‾‾
+///    - Similar handshaking to iact interface
+///    - Weights loaded during idle/configuration phase
+///    - Can be broadcast to multiple PEs in weight-stationary dataflow
+///
+/// Partial Sum Interface (Systolic Data Flow):
+///    clk     : __|‾‾|__|‾‾|__|‾‾|__|‾‾|__|‾‾|__
+///    psum_data_i  : ====< P0 >===< P1 >===< P2 >===  (from previous PE)
+///    psum_enable_i: ________|‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾|___
+///    psum_ready_o : ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+///    psum_data_o  : =========< Q0 >===< Q1 >===  (to next PE)
+///    psum_enable_o: ______________|‾‾‾‾‾‾‾‾‾‾‾‾|___
+///    psum_ready_i : ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+///    - Bidirectional: Receives psums from upstream, sends to downstream
+///    - Systolic flow: Data ripples through PE array in pipelined fashion
+///    - Internal accumulation: Incoming psums added to local MAC results
+///
+/// Control Interface:
+///    clk     : __|‾‾|__|‾‾|__|‾‾|__|‾‾|__|‾‾|__|‾‾|__|‾‾|__
+///    compute_i    : ____________|‾‾‾|_________________________
+///    (PE transitions from IDLE → LOADING_1 → ... → CALCULATING)
+///    - Single-cycle pulse triggers computation start
+///    - Must assert only when iact_set and wght_set flags are both high
+///
+/// Configuration Streaming:
+///    clk     : __|‾‾|__|‾‾|__|‾‾|__|‾‾|__
+///    enable_stream_i: __|‾‾‾|___|‾‾‾|___|‾‾‾|___
+///    data_stream_i: ==< PARAM1 >< PARAM2 >< PARAM3 >=
+///    (FSM: FIRST_PARAMS → SECOND_PARAMS → THIRD_PARAMS)
+///    - Sequential parameter streaming
+///    - Each enable pulse advances FSM and latches 12-bit parameter
 ///
 /// Key Features:
-/// - Zero-skipping optimization for sparse data
-/// - Parallel MAC operations for improved throughput
-/// - Configurable fixed-point arithmetic
-/// - Dual-ported memory architecture for efficient data access
-/// - Flexible routing for input activations and partial sums
+/// - Zero-skipping optimization for sparse data (up to 10× speedup on 90% sparse data)
+/// - Parallel MAC operations for improved throughput (2× with PARALLEL_MACS=2)
+/// - Configurable fixed-point arithmetic (8/16-bit activations, 8/16-bit weights, 20-bit psums)
+/// - Dual-ported memory architecture for efficient data access (simultaneous read/write)
+/// - Flexible routing for input activations and partial sums (systolic and broadcast modes)
 /// - State machine controlled operation for precise timing
+/// - Read-after-write hazard detection with data forwarding (reuse_psum_spad_a/b logic)
+/// - Pipeline depth: 5 cycles from data load to MAC result writeback
 ///
 /// Performance Optimizations:
-/// - Efficient memory hierarchy to minimize data movement
-/// - Parallel processing units for increased throughput
-/// - Sparsity exploitation to skip unnecessary computations
-/// - Pipelined operation for sustained performance
+/// - Efficient memory hierarchy to minimize data movement (on-chip SPads vs. DRAM access)
+/// - Parallel processing units for increased throughput (dual MACs achieve 2 ops/cycle)
+/// - Sparsity exploitation to skip unnecessary computations (zero detection in hardware)
+/// - Pipelined operation for sustained performance (overlapped SPad access and computation)
+/// - Data reuse: Weights and activations stay in local SPads across multiple MAC operations
+/// - Bypass network: Forwards freshly computed psums to avoid SPad read latency
 ///
 /// Parameters:
 /// Configuration Parameters:
