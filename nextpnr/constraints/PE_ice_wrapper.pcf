@@ -1,0 +1,44 @@
+# This file is part of the OpenEye project.
+# All rights reserved. © Fachhochschule Dortmund - University of Applied Sciences and Arts.
+# SPDX-License-Identifier: SHL-2.1
+# For more details, see the LICENSE file in the root directory of this project.
+
+# Physical Constraints File (PCF) for PE_ice_wrapper
+# This file maps the PE_ice_wrapper module ports to physical pins on the iCE40 FPGA
+# Pin assignments should be adjusted based on your specific iCE40 board
+
+# Clock input
+set_io clk_i 21
+
+# Reset input (active-high)
+set_io rst_i 22
+
+# 8-bit data input
+set_io data_i[0] 1
+set_io data_i[1] 2
+set_io data_i[2] 3
+set_io data_i[3] 4
+set_io data_i[4] 7
+set_io data_i[5] 8
+set_io data_i[6] 9
+set_io data_i[7] 10
+
+# 8-bit control input
+set_io control_i[0] 11
+set_io control_i[1] 12
+set_io control_i[2] 13
+set_io control_i[3] 14
+set_io control_i[4] 15
+set_io control_i[5] 16
+set_io control_i[6] 17
+set_io control_i[7] 18
+
+# 8-bit data output
+set_io data_o[0] 28
+set_io data_o[1] 29
+set_io data_o[2] 31
+set_io data_o[3] 32
+set_io data_o[4] 33
+set_io data_o[5] 34
+set_io data_o[6] 37
+set_io data_o[7] 38
