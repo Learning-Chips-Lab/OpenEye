@@ -36,7 +36,7 @@ module PE_dense_tb;
   // ============================================================================
 
   parameter IS_TOPLEVEL = 1;
-  parameter SERIAL      = 0;
+  parameter SERIAL      = 1;
   parameter CREATE_VCD  = 1;  // Enable VCD generation for waveform viewing
 
   parameter PE_X = 0;
