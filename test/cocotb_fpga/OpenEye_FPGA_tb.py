@@ -150,7 +150,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
 
     if (only_files == 0) :
         # Start the clock
-        clk = Clock(dut.clk_i, ptp.clk_cycle, units=ptp.clk_cycle_unit)
+        clk = Clock(dut.clk_i, ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         cocotb.start_soon(clk.start())
         dut._log.info("Clock is %s " + ptp.clk_cycle_unit, ptp.clk_cycle)
         # reset the DUT
