@@ -76,6 +76,8 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array, hyperparamet
 
     # Reset all input signals to initial state
     await cocotb.start_soon(reset_all_signals(ptp, dut))
+    # Reset all input signals to initial state
+    await cocotb.start_soon(send_data_params(ptp, dut))
 
     # Load input activations and weights in parallel (independent operations)
     send_iact_thread = cocotb.start_soon(send_iact(ptp, dut, iacts_array, hyperparameter_list))
@@ -110,7 +112,7 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array, hyperparamet
     await FallingEdge(dut.psum_enable_o)
 
     # Additional settling time
-    for x in range(100):
+    for _ in range(100):
         await Timer(clk_cycle, unit=clk_cycle_unit)
 
     # Final sanity check
@@ -135,8 +137,8 @@ async def start_test_pe(dut):
     """
     # Configure test dimensions
     iactsize_x = 3   # Number of input activation values (spatial dimension)
-    iactsize_y = 1   # Number of input channels
-    wghtsize_x = 1   # Number of output filters
+    iactsize_y = 4   # Number of input channels
+    wghtsize_x = 8  # Number of output filters
     wghtsize_y = iactsize_x * iactsize_y  # Weights match input dimensions
     sparse_iact = 0  # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
     sparse_wght = 0  # Weight sparsity: 0 = no sparsity, 1 = fully sparse
@@ -148,8 +150,6 @@ async def start_test_pe(dut):
     ptp = timing_parameters.PortTimingParameters()
     ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
 
-    print("clk_cycle: ")
-    print(clk_cycle)
 
     # Generate test input data (activations, weights, partial sums)
     (iacts, wghts, psums) = create_iact_wght_psum_arrays(
@@ -189,37 +189,21 @@ async def send_iact(ptp, dut, data_array, hyperparameter_list):
     )
 
     # Adjust data array addresses: add offset from previous element's upper bits
-    for x in range(len(spad_data[1])):
-        if((spad_data[1][x] != 0)):
-            spad_data[1][x] = spad_data[1][x] + int(math.floor(spad_data[1][x-1] / 256) * 256)
+    for x in range(len(spad_data)):
+        if((spad_data[x] != 0)):
+            spad_data[x] = spad_data[x] + int(math.floor(spad_data[x-1] / 256) * 256)
 
-    # Add position-based offset to each data element
-    for x in range(len(spad_data[1])):
-        if((spad_data[1][x] != 0)):
-            spad_data[1][x] = spad_data[1][x] + x * 256
-
-    dut._log.info("IACT ADDR is %s", spad_data[0])
-    dut._log.info("IACT DATA is %s", spad_data[1])
+    dut._log.info("IACT DATA is %s", spad_data)
 
     # Enable input activation interface
     # Note: iact_enable_i is a packed array, set bit 0 by setting the whole signal to 1
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.iact_enable_i, 1))
 
-    # Send address array first
-    await send_to_spad(
-        ptp,
-        spad_data[0],
-        dut.iact_data_i,
-        1 + hyperparameter_list[1],  # TODO: Make variable
-        int(dut.TRANS_BITWIDTH_IACT.value),  # Convert LogicArray to int
-        int(dut.IACT_ADDR_DATA.value),  # Convert LogicArray to int
-        False,  # Sequential mode
-    )
 
     # Send data array second
     await send_to_spad(
         ptp,
-        spad_data[1],
+        spad_data,
         dut.iact_data_i,
         hyperparameter_list[1]*hyperparameter_list[0],  # Total elements
         int(dut.TRANS_BITWIDTH_IACT.value),  # Convert LogicArray to int
@@ -246,13 +230,13 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
 
     Algorithm:
         Golden model computes: result[filter] = bias[filter] + sum(iact[i] * weight[filter][i])
-        Then validates each output from adder_1 and adder_2 against expected values.
+        Then validates each output from psum_out against expected values.
 
     Raises:
         AssertionError: If any computed partial sum doesn't match the golden model
     """
     # Create golden model array (up to 64 output values)
-    control = np.zeros(64, dtype=int)
+    control = np.zeros(32, dtype=int)
 
     iact = iacts_array
     wght = wghts_array
@@ -268,7 +252,7 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
     # Initialize golden model with bias values
     for psum_x in range(len(bias)):
         control[psum_x] = bias[psum_x]
-
+        
     # Compute expected MAC (Multiply-ACcumulate) results
     # For each input activation value, multiply with corresponding weights and accumulate
     current_iact = 0
@@ -285,31 +269,24 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
     # Validate hardware outputs against golden model
     current_control = 0
 
+    for output_word in range(len(control)):
+        if (output_word < 4):
+            control[output_word] = control[2*output_word] + (control[1+(2*output_word)] << 20)
+        else:
+            control[output_word] = 0
+
     # Check outputs while PE is producing results (psum_enable_o is high)
     while dut.psum_enable_o.value == 1:
         # Validate adder_1 output
-        assert dut.adder_1.sum_o.value.integer == control[current_control], (
+        assert dut.psum_data_o.value.to_unsigned() == control[current_control], (
             "PSUM("
-            + str(dut.adder_1.sum_o.value.integer)
+            + str(dut.psum_data_o.value.to_unsigned())
             + ") is not equal to control("
             + str(control[current_control])
             + "), "
             + str(current_control + 1)
             + ". PSUM Value"
         )
-        current_control = current_control + 1
-
-        # Validate adder_2 output (PE has two parallel adders)
-        assert dut.adder_2.sum_o.value.integer == control[current_control], (
-            "PSUM("
-            + str(dut.adder_2.sum_o.value.integer)
-            + ") is not equal to control("
-            + str(control[current_control])
-            + "), "
-            + str(current_control + 1)
-            + ". PSUM Value"
-        )
-
         current_control = current_control + 1
         await Timer(clk_cycle, unit=clk_cycle_unit)
 
@@ -331,6 +308,7 @@ async def send_wght(ptp, dut, data_array, hyperparameter_list):
         - Packed mode (2 values per word) with zero-skipping
         - Address array is shifted to align with hardware expectations
     """
+    
     # Generate SPAD format with packed mode (False = 2 values per word)
     spad_data = generate_spad(
         data_array,
@@ -339,38 +317,18 @@ async def send_wght(ptp, dut, data_array, hyperparameter_list):
         int(dut.DATA_WGHT_BITWIDTH.value),  # Convert LogicArray to int
         False,  # Packed mode (not SISD)
         int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value),  # Convert to int
-        True,  # Ignore zeros
+        False  # Ignore zeros
     )
 
-    # Shift address array: each element takes the previous element's value
-    # First element becomes 0
-    for x in reversed(range(len(spad_data[0]))):
-        if(x == 0):
-            spad_data[0][x] = 0
-        else:
-            spad_data[0][x] = spad_data[0][x - 1]
-
-    dut._log.info("WGHT ADDR is %s", spad_data[0])
-    dut._log.info("WGHT DATA is %s", spad_data[1])
+    dut._log.info("WGHT DATA is %s", spad_data)
 
     # Enable weight interface
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.wght_enable_i, 1))
 
-    # Send address array first
-    await send_to_spad(
-        ptp,
-        spad_data[0],
-        dut.wght_data_i,
-        hyperparameter_list[0] * hyperparameter_list[1] + 2,  # TODO: Make variable
-        int(dut.TRANS_BITWIDTH_WGHT.value),  # Convert LogicArray to int
-        int(dut.WGHT_ADDR_DATA.value),  # Convert LogicArray to int
-        False,  # Sequential mode
-    )
-
     # Send data array second
     await send_to_spad(
         ptp,
-        spad_data[1],
+        spad_data,
         dut.wght_data_i,
         int(dut.WGHT_DATA_ADDR.value),  # Convert LogicArray to int
         int(dut.TRANS_BITWIDTH_WGHT.value),  # Convert LogicArray to int
@@ -402,14 +360,14 @@ async def send_bias(ptp, dut, data_array):
     # Generate SPAD data without zero-skipping
     spad_data = generate_spad(
         data_array,
-        int(dut.PSUM_ADDR.value),  # Convert LogicArray to int
-        int(dut.PSUM_ADDR.value),  # Convert LogicArray to int
+        int(dut.PSUM_ADDR.value),           # Convert LogicArray to int
+        int(dut.PSUM_ADDR.value),           # Convert LogicArray to int
         int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
-        False,  # Packed mode
+        False,                              # Packed mode
         int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
-        False,  # Don't ignore zeros
+        False                               # Don't ignore zeros
     )
-    dut._log.info("PSUM is %s", spad_data[1])
+    dut._log.info("PSUM is %s", spad_data)
 
     # Enable partial sum interface
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.psum_enable_i, 1))
@@ -417,7 +375,7 @@ async def send_bias(ptp, dut, data_array):
     # Send data directly (only data array, no address array)
     await send_to_spad(
         ptp,
-        spad_data[1],
+        spad_data,
         dut.psum_data_i,
         int(dut.PSUM_ADDR.value),  # Convert LogicArray to int
         int(dut.TRANS_BITWIDTH_PSUM.value),  # Convert LogicArray to int
@@ -427,6 +385,34 @@ async def send_bias(ptp, dut, data_array):
 
     # Disable partial sum interface
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.psum_enable_i, 0))
+    await Timer(clk_cycle, unit=clk_cycle_unit)
+
+    
+
+async def send_data_params(ptp, dut):
+    # List all needed parameters
+    stride_reg = 1
+    wght_addr_max_reg = 14
+    filters_reg_i =  8
+    channel_reg_i =  4
+    iact_addr_max_i =  3
+
+    data_reg_i =  0
+    # Enable the params reading
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.enable_stream_i), 1))
+
+    data_reg_i =  (wght_addr_max_reg << 4) + (stride_reg << 1)
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
+    await Timer(clk_cycle, unit=clk_cycle_unit)
+    data_reg_i =  (filters_reg_i << 4) + (channel_reg_i << 0)
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
+    await Timer(clk_cycle, unit=clk_cycle_unit)
+    data_reg_i =  (iact_addr_max_i << 0)
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
+    await Timer(clk_cycle, unit=clk_cycle_unit)
+
+    # Disable the params reading
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.enable_stream_i), 0))
     await Timer(clk_cycle, unit=clk_cycle_unit)
 
 async def reset_all_signals(ptp, dut):
@@ -447,8 +433,8 @@ async def reset_all_signals(ptp, dut):
         4. Wait 1 clock cycle for reset to propagate
     """
     # Assert reset and zero all inputs
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.rst_ni), 0))  # Active low reset
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.clk_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.rst_ni), 0))  # Active low reset
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.iact_select_i), 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.iact_data_i), 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.iact_enable_i), 0))
@@ -582,7 +568,6 @@ def generate_spad(
         data = [data]
 
     # Initialize SPAD arrays
-    addr_spad_data = np.zeros(addr_spad_words)
     data_spad_data = np.zeros(data_spad_words)
     current_count = 0  # Count of non-zero elements processed
     overhead = 0  # Count of consecutive zeros skipped
@@ -613,18 +598,14 @@ def generate_spad(
                 overhead = overhead + 1
 
         # Store cumulative count for this row in address array
-        if sisd:
-            addr_spad_data[y] = current_count
-        else:
-            # In packed mode, address counts pairs of values
-            addr_spad_data[y] = int(math.ceil(current_count / 2))
+        if not sisd:
             # If odd number of values, advance to next word
             if current_count % 2 == 1:
                 current_count = current_count + 1
 
         overhead = 0  # Reset overhead counter for next row
 
-    spad_data = (addr_spad_data, data_spad_data)
+    spad_data = data_spad_data
     return spad_data
 
 def create_iact_wght_psum_arrays(

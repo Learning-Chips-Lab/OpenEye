@@ -733,12 +733,18 @@ module PE #(
   wire [      2*DATA_PSUM_BITWIDTH-1:0] output_adder;          // Combined output from both adders
 
   // ============================================================================
-  // VCD Waveform Dump Configuration (for CocoTB simulation)
+  // FST Waveform Dump Configuration (for CocoTB simulation)
   // ============================================================================
-`ifdef COCOTB_SIM
+`ifndef NO_TRACE
   initial begin
-    if (CREATE_VCD == 1) begin
-      $dumpfile("sim_build/PE.vcd");
+    string fst_path;
+    // Read the path from the command line argument
+    if ($value$plusargs("FST_PATH=%s", fst_path)) begin
+      $dumpfile(fst_path);
+      $dumpvars(0, PE);
+    end else begin
+      // Fallback for when the argument is not provided
+      $dumpfile("PE.fst");
       $dumpvars(0, PE);
     end
   end
