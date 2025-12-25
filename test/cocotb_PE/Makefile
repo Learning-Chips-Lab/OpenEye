@@ -42,6 +42,12 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 
 export LOGGER_LEVEL=0    #Enables Logger Debug Mode
 
+export IACTSIZE_X=6
+export IACTSIZE_Y=2
+export WGHTSIZE_X=4
+export SPARSE_IACT=0
+export SPARSE_WGHT=0
+
 export
 run:
 	make -f $(shell cocotb-config --makefiles)/Makefile.sim

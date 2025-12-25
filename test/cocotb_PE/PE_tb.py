@@ -44,7 +44,59 @@ clk_delay_unit_in = os.environ["CLOCK_DELAY_UNIT_INPUT"]  # Input delay unit
 clk_delay_out = int(os.environ["CLOCK_DELAY_OUTPUT"])  # Output delay
 clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]  # Output delay unit
 
-async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array, hyperparameter_list):
+
+# Dimensions for PE initiliazed as globals
+iactsize_x = 0  # Number of input activation values (spatial dimension)
+iactsize_y = 0  # Number of input channels
+sparse_iact = 0 # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
+wghtsize_x = 0  # Number of output filters
+wghtsize_y = 0  # Weights match input dimensions
+sparse_wght = 0 # Weight sparsity: 0 = no sparsity, 1 = fully sparse
+
+@cocotb.test()
+async def start_test_pe(dut):
+    """
+    Main cocotb test entry point for PE verification.
+
+    Configures test parameters, generates test data, and launches the main test
+    sequence. This is the function that cocotb calls when running the test.
+
+    Args:
+        dut: Device Under Test (PE module instance from cocotb)
+
+    Test Configuration:
+        - 3 input activation values (dimensions)
+        - 1 channel
+        - 1 output filter
+        - No sparsity (all values are non-zero)
+    """
+    # Configure test dimensions
+    global iactsize_x   # Number of input activation values (spatial dimension)
+    global iactsize_y   # Number of input channels
+    global sparse_iact  # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
+    global wghtsize_x   # Number of output filters
+    global wghtsize_y   # Weights match input dimensions
+    global sparse_wght  # Weight sparsity: 0 = no sparsity, 1 = fully sparse
+
+    iactsize_x = int(os.environ["IACTSIZE_X"])
+    iactsize_y = int(os.environ["IACTSIZE_Y"])
+    wghtsize_x = int(os.environ["WGHTSIZE_X"])
+    sparse_iact = int(os.environ["SPARSE_IACT"])
+    sparse_wght = int(os.environ["SPARSE_WGHT"])
+    wghtsize_y = iactsize_x * iactsize_y
+
+    # Initialize timing parameters from environment variables
+    ptp = timing_parameters.PortTimingParameters()
+    ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
+
+
+    # Generate test input data (activations, weights, partial sums)
+    (iacts, wghts, psums) = create_iact_wght_psum_arrays(dut)
+
+    # Launch main test sequence
+    await cocotb.start_soon(test_hdls(ptp, dut, iacts, wghts, psums))
+
+async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
     """
     Main test orchestration function for the PE module.
 
@@ -58,8 +110,6 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array, hyperparamet
         iacts_array: Input activation test data (numpy array)
         wghts_array: Weight test data (numpy array)
         psum_array: Partial sum/bias initial values (numpy array)
-        hyperparameter_list: Test configuration [iactsize_x, iactsize_y, sparse_iact,
-                                                 wghtsize_x, wghtsize_y, sparse_wght]
 
     Test Flow:
         1. Start clock generation
@@ -80,8 +130,8 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array, hyperparamet
     await cocotb.start_soon(send_data_params(ptp, dut))
 
     # Load input activations and weights in parallel (independent operations)
-    send_iact_thread = cocotb.start_soon(send_iact(ptp, dut, iacts_array, hyperparameter_list))
-    send_wght_thread = cocotb.start_soon(send_wght(ptp, dut, wghts_array, hyperparameter_list))
+    send_iact_thread = cocotb.start_soon(send_iact(ptp, dut, iacts_array))
+    send_wght_thread = cocotb.start_soon(send_wght(ptp, dut, wghts_array))
 
     # Wait for both data loading operations to complete
     await Combine(send_iact_thread, send_wght_thread)
@@ -118,48 +168,7 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array, hyperparamet
     # Final sanity check
     assert dut.compute_i.value == 0, "rst_ni is not 0!"
 
-@cocotb.test()
-async def start_test_pe(dut):
-    """
-    Main cocotb test entry point for PE verification.
-
-    Configures test parameters, generates test data, and launches the main test
-    sequence. This is the function that cocotb calls when running the test.
-
-    Args:
-        dut: Device Under Test (PE module instance from cocotb)
-
-    Test Configuration:
-        - 3 input activation values (dimensions)
-        - 1 channel
-        - 1 output filter
-        - No sparsity (all values are non-zero)
-    """
-    # Configure test dimensions
-    iactsize_x = 3   # Number of input activation values (spatial dimension)
-    iactsize_y = 4   # Number of input channels
-    wghtsize_x = 8  # Number of output filters
-    wghtsize_y = iactsize_x * iactsize_y  # Weights match input dimensions
-    sparse_iact = 0  # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
-    sparse_wght = 0  # Weight sparsity: 0 = no sparsity, 1 = fully sparse
-
-    # Pack hyperparameters into list for easy passing
-    hyperparameter_list = [iactsize_x, iactsize_y, sparse_iact, wghtsize_x, wghtsize_y, sparse_wght]
-
-    # Initialize timing parameters from environment variables
-    ptp = timing_parameters.PortTimingParameters()
-    ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
-
-
-    # Generate test input data (activations, weights, partial sums)
-    (iacts, wghts, psums) = create_iact_wght_psum_arrays(
-        dut, hyperparameter_list
-    )
-
-    # Launch main test sequence
-    await cocotb.start_soon(test_hdls(ptp, dut, iacts, wghts, psums, hyperparameter_list))
-
-async def send_iact(ptp, dut, data_array, hyperparameter_list):
+async def send_iact(ptp, dut, data_array):
     """
     Formats and sends input activation data to the IACT scratchpad memory.
 
@@ -170,7 +179,6 @@ async def send_iact(ptp, dut, data_array, hyperparameter_list):
         ptp: Port timing parameters for signal timing
         dut: Device Under Test
         data_array: Input activation data (numpy array)
-        hyperparameter_list: [iactsize_x, iactsize_y, sparse_iact, ...]
 
     SPAD Format:
         - Address array: Cumulative count of non-zero elements per row
@@ -205,7 +213,7 @@ async def send_iact(ptp, dut, data_array, hyperparameter_list):
         ptp,
         spad_data,
         dut.iact_data_i,
-        hyperparameter_list[1]*hyperparameter_list[0],  # Total elements
+        iactsize_y*iactsize_x,  # Total elements
         int(dut.TRANS_BITWIDTH_IACT.value),  # Convert LogicArray to int
         int(dut.IACT_DATA_DATA.value),  # Convert LogicArray to int
         False,  # Sequential mode
@@ -268,9 +276,8 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
 
     # Validate hardware outputs against golden model
     current_control = 0
-
     for output_word in range(len(control)):
-        if (output_word < 4):
+        if (output_word < math.ceil(wghtsize_x/2)):
             control[output_word] = control[2*output_word] + (control[1+(2*output_word)] << 20)
         else:
             control[output_word] = 0
@@ -290,7 +297,7 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
         current_control = current_control + 1
         await Timer(clk_cycle, unit=clk_cycle_unit)
 
-async def send_wght(ptp, dut, data_array, hyperparameter_list):
+async def send_wght(ptp, dut, data_array):
     """
     Formats and sends weight data to the WGHT scratchpad memory.
 
@@ -301,8 +308,6 @@ async def send_wght(ptp, dut, data_array, hyperparameter_list):
         ptp: Port timing parameters for signal timing
         dut: Device Under Test
         data_array: Weight data (numpy array)
-        hyperparameter_list: [iactsize_x, iactsize_y, sparse_iact,
-                              wghtsize_x, wghtsize_y, sparse_wght]
 
     SPAD Format:
         - Packed mode (2 values per word) with zero-skipping
@@ -392,10 +397,10 @@ async def send_bias(ptp, dut, data_array):
 async def send_data_params(ptp, dut):
     # List all needed parameters
     stride_reg = 1
-    wght_addr_max_reg = 14
-    filters_reg_i =  8
-    channel_reg_i =  4
-    iact_addr_max_i =  3
+    wght_addr_max_reg = (iactsize_x * iactsize_y) + 2
+    filters_reg_i = wghtsize_x
+    channel_reg_i = iactsize_y
+    iact_addr_max_i = iactsize_x
 
     data_reg_i =  0
     # Enable the params reading
@@ -608,9 +613,7 @@ def generate_spad(
     spad_data = data_spad_data
     return spad_data
 
-def create_iact_wght_psum_arrays(
-    dut, hyperparameter_list
-):
+def create_iact_wght_psum_arrays(dut):
     """
     Generates test input data with configurable dimensions and sparsity.
 
@@ -619,13 +622,6 @@ def create_iact_wght_psum_arrays(
 
     Args:
         dut: Device Under Test (not used, kept for compatibility)
-        hyperparameter_list: Configuration list containing:
-            [0] iactsize_x: Number of activation values per channel
-            [1] iactsize_y: Number of input channels
-            [2] sparse_iact: Activation sparsity ratio (0.0 to 1.0)
-            [3] wghtsize_x: Number of output filters
-            [4] wghtsize_y: Number of weights per filter (should equal iactsize_x * iactsize_y)
-            [5] sparse_wght: Weight sparsity ratio (0.0 to 1.0)
 
     Returns:
         Tuple of (iacts, wghts, psums):
@@ -639,45 +635,44 @@ def create_iact_wght_psum_arrays(
         - This allows testing zero-skipping compression logic
 
     Example:
-        hyperparameter_list = [3, 1, 0.0, 1, 3, 0.0]
         Returns:
             - iacts: [[1, 2, 3]] (1 channel, 3 values)
             - wghts: [[1], [2], [3]] (3 weights, 1 filter)
             - psums: [1] (1 bias value)
     """
     # Generate input activations: sequential values from 1 to (channels * dimensions)
-    iacts = np.arange(1, hyperparameter_list[1] * hyperparameter_list[0] + 1, 1).reshape(
-        hyperparameter_list[1], hyperparameter_list[0]
+    iacts = np.arange(1,iactsize_y * iactsize_x + 1, 1).reshape(
+        iactsize_y, iactsize_x
     )
 
     # Apply random sparsity to activations
     # Choose random indices to zero out (sparse_iact fraction of total)
     indices = np.random.choice(
-        np.arange(iacts.size), replace=False, size=int(iacts.size * hyperparameter_list[2])
+        np.arange(iacts.size), replace=False, size=int(iacts.size * sparse_iact)
     )
 
     # Zero out selected elements (convert flat index to 2D coordinates)
     # indices = [] #Manual override option
     for x in range(len(indices)):
-        iacts[int(indices[x] / hyperparameter_list[0])][int(indices[x] % hyperparameter_list[0])] = 0
+        iacts[int(indices[x] / iactsize_x)][int(indices[x] % iactsize_x)] = 0
 
     # Generate weights: sequential values from 1 to (filters * weights_per_filter)
-    wghts = np.arange(1, hyperparameter_list[4] * hyperparameter_list[3] + 1, 1).reshape(
-        hyperparameter_list[4], hyperparameter_list[3]
+    wghts = np.arange(1, wghtsize_y * wghtsize_x + 1, 1).reshape(
+        wghtsize_y, wghtsize_x
     )
 
     # Apply random sparsity to weights
     indices = np.random.choice(
-        np.arange(wghts.size), replace=False, size=int(wghts.size * hyperparameter_list[5])
+        np.arange(wghts.size), replace=False, size=int(wghts.size * sparse_wght)
     )
 
     # Zero out selected weight elements
     for x in range(len(indices)):
-        wghts[int(indices[x] / hyperparameter_list[3])][int(indices[x] % hyperparameter_list[3])] = 0
+        wghts[int(indices[x] / wghtsize_x)][int(indices[x] % wghtsize_x)] = 0
 
     # wghts[indices] = 0 #Alternative: direct indexing (may not work with 2D reshape)
 
     # Generate partial sums/bias: sequential values from 1 to (number of filters)
-    psums = np.arange(1, hyperparameter_list[3] + 1, 1)
+    psums = np.arange(1, wghtsize_x + 1, 1)
 
     return iacts, wghts, psums
