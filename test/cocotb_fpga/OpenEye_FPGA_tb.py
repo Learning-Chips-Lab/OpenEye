@@ -108,7 +108,7 @@ async def single_layer_test(dut):
 
 
     try:
-        use_random = int((os.environ("USE_RANDOM_VALUES")))
+        use_random = int((os.environ["USE_RANDOM_VALUES"]))
         print("try use random")
     except:
         use_random = 1
