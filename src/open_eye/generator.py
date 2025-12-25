@@ -14,10 +14,12 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
 
     if output_v_path is None:
         output_v_path = os.path.join(os.path.dirname(regmap_yaml_path))
+    
+    output_py_path = Path(__file__).resolve().parent
 
     YAML_FILE = os.path.join(regmap_yaml_path, "regmap.yaml")
     VERILOG_PARAMS_OUT = os.path.join(output_vh_path, "regmap_params.vh")
-    PYTHON_OUT = os.path.join(output_vh_path, "regmap_pack.py")
+    PYTHON_OUT = os.path.join(output_py_path, "regmap_pack.py")
     DMA_STORAGE_OUT = os.path.join(output_v_path, "dma_storage.v") if output_v_path else "dma_storage.v"
 
     # ------------------------------------------------------------
