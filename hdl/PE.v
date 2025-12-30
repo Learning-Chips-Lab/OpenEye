@@ -737,15 +737,17 @@ module PE #(
   // ============================================================================
 `ifndef NO_TRACE
   initial begin
-    string fst_path;
-    // Read the path from the command line argument
-    if ($value$plusargs("FST_PATH=%s", fst_path)) begin
-      $dumpfile(fst_path);
-      $dumpvars(0, PE);
-    end else begin
-      // Fallback for when the argument is not provided
-      $dumpfile("PE.fst");
-      $dumpvars(0, PE);
+    if (IS_TOPLEVEL) begin
+      string fst_path;
+      // Read the path from the command line argument
+      if ($value$plusargs("FST_PATH=%s", fst_path)) begin
+        $dumpfile(fst_path);
+        $dumpvars(0, PE);
+      end else begin
+        // Fallback for when the argument is not provided
+        $dumpfile("PE.fst");
+        $dumpvars(0, PE);
+      end
     end
   end
 `endif
