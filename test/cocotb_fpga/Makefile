@@ -121,7 +121,9 @@ export ONLY_FILES=0
 
 export
 run:
-	@python -m test_utils.generator . ../../hdl/include ../../hdl && python -m test_utils.vh_file_creator && make -f $(shell cocotb-config --makefiles)/Makefile.sim
+	@python -m open_eye.generator . ../../hdl/include ../../hdl
+	@python -m open_eye.vh_file_creator
+	@make -f $(shell cocotb-config --makefiles)/Makefile.sim
 
 gtkwave:
 	touch $($(HDL_PATH)OpenEye_FPGA.v)
