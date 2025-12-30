@@ -348,7 +348,6 @@ class WghtStreamMapper(object):
             # Stop when we've filled the used portion of SPAD
             if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
-
         return spad_storage
         
     def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
@@ -862,12 +861,12 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         dram = self.dram_weights
 
         # Initialize SPAD storage
-        spad_storage = [[[0 for _ in range(2)] for _ in range(2)] for _ in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS))]
+        spad_storage = [[[0 for _ in range(2)] for _ in range(2)] for _ in range(int(params.Wghts_per_PE/params.PARALLEL_MACS))]
         overhead_counter = 0
 
         # Populate SPAD with weights from the 2D weight matrix
-        for words_in_storage in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS)):
-            for spad_val_number in range(self.params.PARALLEL_MACS):
+        for words_in_storage in range(int(params.Wghts_per_PE/params.PARALLEL_MACS)):
+            for spad_val_number in range(params.PARALLEL_MACS):
                 # Calculate linear position in weight stream
                 position = words_in_storage * 2 + spad_val_number
 
@@ -875,10 +874,9 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                 filters =  (position%layer_params.used_psum_per_PE) + \
                 cl_x * layer_params.used_psum_per_PE + \
                 (math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.psum_transmissions_pe) * params.Clusters_X * params.Clusters_Y * layer_params.used_psum_per_PE
-
                 # Recalculate channel with Y-cluster assignment
                 #channel = math.floor((layer_repetition%layer_params.iact_transmissions_pe)*params.Wght_Routers*layer_params.used_iact_per_PE) + \
-                channel = math.floor((layer_repetition)*288) + \
+                channel = math.floor((layer_repetition)*(params.NUM_GLB_WGHT * params.Clusters_Y * layer_params.used_iact_per_PE)) + \
                 math.floor(position/layer_params.used_psum_per_PE) + \
                 cl_y * params.NUM_GLB_WGHT * layer_params.used_iact_per_PE + \
                 router * layer_params.used_iact_per_PE 
