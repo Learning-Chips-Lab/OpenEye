@@ -15,7 +15,7 @@ sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
 
-import test.test_utils.test_utils_main as ptu
+import open_eye.test_utils_main as ptu
 
 
 #As ref:

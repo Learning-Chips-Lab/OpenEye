@@ -11,4 +11,4 @@ jobs:
         run: sudo apt install -y verilator
 
       - name: run verilator lint
-        run: verilator --lint-only -Wall -Ihdl/ -Ihdl/memory/ -Ihdl/memory/impl/ hdl/OpenEye_Parallel.v
+        run: verilator --lint-only -Wall -Ihdl/ hdl/OpenEye_Parallel.v

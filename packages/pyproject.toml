@@ -1,8 +1,0 @@
-[build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "test_utils"
-version = "1.0"
-authors = [{ name="Denis Lebold", email="denis.lebold@uni-due.de" }]

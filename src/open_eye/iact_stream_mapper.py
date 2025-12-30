@@ -33,8 +33,8 @@ Typical Usage:
 import numpy as np
 import math
 import logging
-import test_utils.generic_test_utils as gtu
-import test_utils.stream_dicts as strdic
+import open_eye.generic_test_utils as gtu
+import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 
@@ -812,27 +812,33 @@ class DenseIactStreamMapper(IactStreamMapper):
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
 
     def get_iact_stream(self):
+        layer_params = self.layer_params
+        params = self.params
+        dram_fmap = self.dram_fmap
         if (not self.params.SERIAL) :
-            iact_stream = [[[[] for c in range(self.params.NUM_GLB_IACT)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
-            for cl_x in range(self.params.Clusters_X):
-                for cl_y in range(self.params.Clusters_Y):
-                    for router in range(self.params.NUM_GLB_IACT):
-                        iact_stream[cl_x][cl_y][router] = self.write_iact_data_glb(cl_x, cl_y, router)
-            iact_stream = self.create_complete_iact_stream(iact_stream)
+            iact_stream = [[[[] for c in range(params.NUM_GLB_IACT)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+            for cl_x in range(params.Clusters_X):
+                for cl_y in range(params.Clusters_Y):
+                    for router in range(params.NUM_GLB_IACT):
+                        iact_stream[cl_x][cl_y][router] = write_iact_data_glb(cl_x, cl_y, router)
+            iact_stream = create_complete_iact_stream(iact_stream)
         else :
             iact_stream = []
-            if (self.layer_params.skipIact == 0) :
-                bitwidth = self.params.IACT_Bitwidth
-                dma_bitwidth = self.params.DMA_Bit_AXI
+            if (layer_params.skipIact == 0) :
+                bitwidth = params.IACT_Bitwidth
+                dma_bitwidth = params.DMA_Bit_AXI
                 values_per_word = dma_bitwidth // bitwidth
-                for i in range(0, len(self.dram_fmap), values_per_word):
+                transmissions = math.ceil((layer_params.input_shape[3] / (params.NUM_GLB_IACT*layer_params.used_iact_per_PE))) * (params.NUM_GLB_IACT*layer_params.used_iact_per_PE)
+                transmissions = math.ceil(transmissions/values_per_word)
+                for i in range(0, transmissions):
                     word = 0
                     for j in range(values_per_word):
-                        if i + j < len(self.dram_fmap):
-                            val_twos = gtu.to_twos_complement(self.dram_fmap[i + j], bitwidth)
+                        if (i * values_per_word) + j < len(dram_fmap):
+                            val_twos = gtu.to_twos_complement(dram_fmap[(i * values_per_word) + j], bitwidth)
                             word |= val_twos << (j * bitwidth)
                     iact_stream.append(word)
-            return iact_stream
+        return iact_stream
+
     def write_iact_data_glb(self, cl_x, cl_y, router):
         """Generate GLB activation data for Dense layers.
 

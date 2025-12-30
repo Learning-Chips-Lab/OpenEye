@@ -1257,10 +1257,10 @@ class LayerParameters(object):
         self.iact_size_y = layer.input.shape[2]
         self.filters = layer.output.shape[3]
         self.fully_connected = 1
-        self.diff_iact_layer = 1
         self.output_cycles = 1
         self.y_lines_per_calculation = 1
         self.kernel_size = [0]
+        self.used_iact_addr_per_PE = 15
         if (layer_number == max_layers - 1) :
             self.send_values_out = 1
         else:
@@ -1274,38 +1274,41 @@ class LayerParameters(object):
         self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
             
-        self.used_channels = math.ceil(self.input_shape[3]/4)
+        self.used_channels = params.NUM_GLB_IACT*math.ceil(self.input_shape[3]/(params.Clusters_Y*params.NUM_GLB_IACT))
         #Calculate Iact Cycles
         self.needed_Iact_writes = math.ceil(params.PEs_Y/params.NUM_GLB_IACT)
 
         # Calculate the number of refreshes needed for the layer
         
-        self.used_iact_per_PE = math.ceil(self.input_shape[3]/4)
-        self.used_wght_per_PE = math.ceil(self.input_shape[3]*self.output_shape[3]/(4*params.Clusters_X))
+        self.used_iact_per_PE = math.ceil(self.input_shape[3]/(params.Clusters_Y*params.PEs_Y))
+        self.used_iact_per_PE = min(self.used_iact_per_PE, 12)
+        self.diff_iact_layer = math.ceil(self.input_shape[3]/(params.NUM_GLB_WGHT*self.used_iact_per_PE))
+        self.needed_wght_transmissions = math.ceil(self.diff_iact_layer/params.Clusters_Y)
+        self.used_iact_per_PE = math.ceil(self.input_shape[3]/(self.needed_wght_transmissions*params.Clusters_Y*params.PEs_Y))
+        self.diff_iact_layer = math.ceil(self.input_shape[3]/(params.NUM_GLB_WGHT*self.used_iact_per_PE))
         self.used_psum_per_PE = math.ceil(self.output_shape[3]/params.Clusters_X)
         
-
         self.used_Y_cluster = params.Clusters_Y
         self.used_X_cluster = 1
         self.kernel_per_pe_cluster = 1
+        self.needed_iact_buffer_words = math.ceil(self.used_iact_per_PE/2)
+        self.needed_standing_cycles = self.needed_iact_buffer_words
 
         self.computing_mx = [[[[1 for _ in range(params.PEs_X)]
                                         for _ in range(params.PEs_Y)]
                                         for _ in range(params.Clusters_Y)]
                                         for _ in range(params.Clusters_X)]
         
+        self.used_wght_per_PE = self.used_iact_per_PE*self.used_psum_per_PE
         for x_cluster in range(params.Clusters_X):
             for y_cluster in range(params.Clusters_Y):
                 for y_pe in range(params.PEs_Y):
                     for x_pe in range(params.PEs_X):
-                        if((x_pe != 0) | (y_pe != 0) | (y_cluster >= 4)):
+                        if(x_pe != 0):
                             self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
         
         self.psum_transmissions_pe = math.ceil(self.output_shape[1]/(self.used_psum_per_PE * params.Clusters_X * params.Clusters_Y))
         self.psum_transmissions_glb = 1
-        self.needed_refreshes_mx = [[1 for _ in range(3)] for _ in range(self.needed_total_transmissions)]
-        for layer_repetition in range(self.needed_total_transmissions):
-            self.needed_refreshes_mx[layer_repetition][0] = 1
 
         self.iact_transmissions_pe = math.ceil(self.input_shape[1]/(self.used_iact_per_PE * params.PEs_Y))
         self.iact_transmissions_glb = 1
@@ -1313,11 +1316,10 @@ class LayerParameters(object):
         self.needed_psum_transmissions = self.psum_transmissions_pe * self.psum_transmissions_glb
         self.wght_transmissions_pe = 1
         self.wght_transmissions_glb = 1
-        self.needed_wght_transmissions = self.wght_transmissions_pe * self.wght_transmissions_glb
+        #self.needed_wght_transmissions = self.wght_transmissions_pe * self.wght_transmissions_glb
         self.needed_iact_transmissions = self.iact_transmissions_pe * self.iact_transmissions_glb
         self.Used_refreshes = self.iact_transmissions_pe * self.wght_transmissions_pe * self.psum_transmissions_pe
         
-        self.used_iact_per_PE = math.ceil(self.input_shape[3]/4)
         self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_Bit_AXI/2)/params.IACT_WOH_Bitwidth))
         logger.debug("Refreshes: " + str(self.Used_refreshes))
         logger.debug("Used complete new descriptions: " + str(self.Used_refreshes))
@@ -1328,17 +1330,16 @@ class LayerParameters(object):
         if (self.used_wght_addr_per_PE >= 16):
             self.used_wght_addr_per_PE = 16
 
-        self.needed_total_transmissions = self.needed_psum_transmissions * \
-                                                    self.needed_wght_transmissions * \
-                                                    self.needed_iact_transmissions
-        self.needed_refreshes_mx = [[1 for _ in range(3)]
-                                    for _ in range(self.needed_total_transmissions)]
+        self.needed_total_transmissions = 1
+        self.needed_refreshes_mx = [[1 for _ in range(3)] for _ in range(self.needed_total_transmissions)]
         for layer_repetition in range(self.needed_total_transmissions):
             self.needed_refreshes_mx[layer_repetition][2] = math.floor(((math.floor(math.floor(layer_repetition/self.iact_transmissions_pe))+1)/ \
                 self.needed_total_transmissions) * self.Used_refreshes)
             self.needed_refreshes_mx[layer_repetition][1] = math.floor((math.floor(math.floor(layer_repetition/self.iact_transmissions_pe))/ \
                 self.needed_total_transmissions) * self.Used_refreshes)
             self.needed_refreshes_mx[layer_repetition][0] = self.needed_refreshes_mx[layer_repetition][2] - self.needed_refreshes_mx[layer_repetition][1]
+            self.needed_refreshes_mx[layer_repetition][0] = math.ceil(self.diff_iact_layer/params.Clusters_Y)
+        self.psum_storage_cycles = self.needed_wght_transmissions
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))

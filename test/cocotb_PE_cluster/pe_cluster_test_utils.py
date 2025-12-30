@@ -182,11 +182,11 @@ def get_verilog_sources(hdl_dir):
         os.path.join(hdl_dir, "mux_iact.v"),
         os.path.join(hdl_dir, "SPad_DP_RW.v"),
         os.path.join(hdl_dir, "SPad_SP.v"),
-        os.path.join(hdl_dir, "memory/RAM_DP_RW.v"),
-        os.path.join(hdl_dir, "memory/RAM_DP.v"),
-        os.path.join(hdl_dir, "memory/RAM_SP.v"),
-        os.path.join(hdl_dir, "memory/impl/RAM_DP_RW_generic.v"),
-        os.path.join(hdl_dir, "memory/impl/RAM_SP_generic.v"),
+        os.path.join(hdl_dir, "RAM_DP_RW.v"),
+        os.path.join(hdl_dir, "RAM_DP.v"),
+        os.path.join(hdl_dir, "RAM_SP.v"),
+        os.path.join(hdl_dir, "RAM_DP_RW_generic.v"),
+        os.path.join(hdl_dir, "RAM_SP_generic.v"),
     ]
     return verilog_sources
 

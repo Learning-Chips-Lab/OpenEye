@@ -17,11 +17,11 @@ cluster array.
 
 import math
 import logging
-import test_utils.stream_dicts as strdic
-from test_utils.layer_mapper import LayerMapper
-from test_utils.iact_stream_mapper import DenseIactStreamMapper
-from test_utils.wght_stream_mapper import DenseWghtStreamMapper
-from test_utils.psum_stream_mapper import DensePsumStreamMapper
+import open_eye.stream_dicts as strdic
+from open_eye.layer_mapper import LayerMapper
+from open_eye.iact_stream_mapper import DenseIactStreamMapper
+from open_eye.wght_stream_mapper import DenseWghtStreamMapper
+from open_eye.psum_stream_mapper import DensePsumStreamMapper
 
 logger = logging.getLogger("cocotb")
 
@@ -127,7 +127,7 @@ class DenseMapper(LayerMapper):
         # Uses pack_registers() utility from regmap_pack module
             from regmap_pack import pack_registers
             words = pack_registers({
-            "wght_cycles_reg": layer_params.needed_wght_transmissions,
+            "wght_cycles_reg": layer_params.needed_refreshes_mx[layer_repetition][0],
             "stride_x_reg": layer_params.strideX,
             "stride_y_reg": layer_params.strideY,
             "skipIact_reg": layer_params.skipIact,
@@ -137,10 +137,10 @@ class DenseMapper(LayerMapper):
             "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
             "kernel_size": 1,
             "x_lines_reg": layer_params.iact_x_lines,
-            "needed_wght_cycles_reg": 0,
+            "needed_wght_cycles_reg": 1,
             "needed_cycles_reg": layer_params.needed_refreshes_mx[layer_repetition][0],
-            "iact_converter_buffer_addr_max_cycles": 2,
-            "iact_channels_per_pe": layer_params.used_channels,
+            "iact_converter_buffer_addr_max_cycles": layer_params.needed_standing_cycles,
+            "iact_channels_per_pe": layer_params.used_iact_per_PE,
             "iact_size_y": layer_params.iact_size_y,
             "iact_size_x":layer_params.iact_size_x,
             "iact_needed_cycles": layer_params.iact_stream_cycles,
@@ -154,7 +154,7 @@ class DenseMapper(LayerMapper):
             "choose_iact_buffer_input": layer_params.choose_iact_storage_input,
             "iact_channels_per_pe_next_layer": layer_params.diff_iact_layer_next_layer,
             "needed_psum_storage_cycles_reg": layer_params.psum_storage_cycles,
-            "iact_channel_max_cycles": 1,
+            "iact_channel_max_cycles": layer_params.diff_iact_layer,
             "input_activations_reg": layer_params.used_iact_per_PE,
             "filters_reg": layer_params.used_psum_per_PE,
             "needed_x_cls_reg": layer_params.used_X_cluster,
@@ -406,10 +406,8 @@ class DenseMapper(LayerMapper):
             for cl_x in range(params.Clusters_X):
                 for router in range(params.NUM_GLB_IACT):
                     if(params.SERIAL):
-                        # For dense layers, broadcast to first 4 Y-clusters only
-                        if (cl_y < 4) :
-                            # Routing value 1: broadcast input data to this cluster
-                            line = line + (1 << (params.Iact_Router_Bits * router_cycle))
+                        # Routing value 1: broadcast input data to this cluster
+                        line = line + (1 << (params.Iact_Router_Bits * router_cycle))
                     else:
                         # Parallel mode: store routing value directly
                         storage[cl_x][cl_y][router] = 1

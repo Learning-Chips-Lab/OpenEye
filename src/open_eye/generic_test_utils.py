@@ -6,7 +6,7 @@
 import os
 import shutil
 import logging
-import test_utils.stream_dicts as strdic
+import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 

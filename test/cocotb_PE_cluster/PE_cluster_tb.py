@@ -9,7 +9,7 @@ import numpy as np
 from numpy import genfromtxt
 directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
-import test_utils.open_eye_parameters as oep
+import open_eye.open_eye_parameters as oep
 
 import cocotb
 from cocotb.triggers import Timer, Combine

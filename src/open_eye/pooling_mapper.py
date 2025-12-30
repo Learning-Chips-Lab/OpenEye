@@ -26,9 +26,8 @@ Typical Usage:
 
 import math
 import logging
-import test_utils.stream_dicts as strdic
-from test_utils.layer_mapper import LayerMapper
-
+import open_eye.stream_dicts as strdic
+from open_eye.layer_mapper import LayerMapper
 
 logger = logging.getLogger("cocotb")
 

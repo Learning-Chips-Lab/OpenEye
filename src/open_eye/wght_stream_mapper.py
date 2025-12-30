@@ -45,8 +45,8 @@ Typical Usage:
 import numpy as np
 import math
 import logging
-import test_utils.generic_test_utils as gtu
-import test_utils.stream_dicts as strdic
+import open_eye.generic_test_utils as gtu
+import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 
@@ -348,7 +348,6 @@ class WghtStreamMapper(object):
             # Stop when we've filled the used portion of SPAD
             if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
-
         return spad_storage
         
     def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
@@ -550,7 +549,6 @@ class WghtStreamMapper(object):
                 stream.append(temp_trans)
 
             line_counter = line_counter + 1
-
             # Stop when we've processed all used weights
             if (line_counter == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
@@ -743,7 +741,6 @@ class DenseWghtStreamMapper(WghtStreamMapper):
     - Uses 2D weight matrix instead of 4D convolution kernels
     - Different PE assignment strategy based on output features
     - Always processes all weight transmissions in sequence
-    - Uses hardcoded 4 Y-clusters for address/data stream creation
 
     Attributes:
         Inherited from WghtStreamMapper
@@ -767,8 +764,7 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         """Generate complete weight bitstream for Dense layer across all PEs.
 
         This overridden method handles Dense layer-specific transmission patterns.
-        Unlike Conv layers, Dense layers always iterate through all weight transmissions
-        and use a fixed 4 Y-clusters configuration.
+        Unlike Conv layers, Dense layers always iterate through all weight transmissions.
 
         Returns:
             list: Complete weight bitstream including both address and data streams
@@ -777,20 +773,18 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         storage = [[[[] for c in range(self.params.Wght_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
 
         wght_stream = []
-
         # Always iterate through all weight transmissions for Dense layers
         for layer_repetition_loop in range(self.layer_params.needed_wght_transmissions):
             self.layer_repetition = layer_repetition_loop
             temp_storage = [[[[] for c in range(self.params.Wght_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
 
-            # Process all X clusters and fixed 4 Y clusters
+            # Process all X clusters and Y clusters
             for cl_x in range(self.params.Clusters_X):
-                for cl_y in range(4):  # Dense layers use fixed 4 Y-clusters
+                for cl_y in range(self.params.Clusters_Y):
                     for router in range(self.params.Wght_Routers):
                         # Check if this PE is active
                         if(self.layer_params.computing_mx[cl_x][cl_y][router][0] == 1):
                             spad = self.write_wght_pe(cl_x, cl_y, router)
-
                             # Apply sparse encoding if enabled
                             if (self.sparse_data == 1):
                                 temp_storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
@@ -799,14 +793,13 @@ class DenseWghtStreamMapper(WghtStreamMapper):
 
             # Convert and append this transmission's stream
             wght_stream.extend(self.create_complete_wght_stream(temp_storage))
-
         return wght_stream
 
     def create_complete_wght_stream(self, spad_storage):
         """Convert Dense layer SPAD storage to formatted weight bitstream.
 
         This overridden method creates bitstreams specific to Dense layers,
-        combining both address and data streams and using fixed 4 Y-clusters.
+        combining both address and data streams.
 
         Args:
             spad_storage (list): 3D array of SPAD contents [cluster_x][cluster_y][router]
@@ -817,12 +810,12 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         """
         params = self.params
 
-        # Initialize stream with fixed 4 Y-clusters for Dense layers
-        stream = [[[[] for c in range(params.Wght_Routers)] for b in range(4)] for a in range(params.Clusters_X)]
+        # Initialize stream for Dense layers
+        stream = [[[[] for c in range(params.Wght_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
 
         # Create combined address + data stream for each PE
         for cl_x in range(params.Clusters_X):
-            for cl_y in range(4):  # Fixed 4 Y-clusters for Dense
+            for cl_y in range(params.Clusters_Y):
                 for router in range(params.Wght_Routers):
                     current_spad = spad_storage[cl_x][cl_y][router]
 
@@ -835,7 +828,7 @@ class DenseWghtStreamMapper(WghtStreamMapper):
             stream = []
 
             for word in range(len(temp_stream[0][0][0])):
-                for cl_y in range(4):  # Fixed 4 Y-clusters
+                for cl_y in range(params.Clusters_Y):
                     for router in range(params.NUM_GLB_WGHT):
                         try:
                             # Combine data from both X-clusters (24-bit shift)
@@ -868,35 +861,25 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         dram = self.dram_weights
 
         # Initialize SPAD storage
-        spad_storage = [[[0 for _ in range(2)] for _ in range(2)] for _ in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS))]
+        spad_storage = [[[0 for _ in range(2)] for _ in range(2)] for _ in range(int(params.Wghts_per_PE/params.PARALLEL_MACS))]
         overhead_counter = 0
 
         # Populate SPAD with weights from the 2D weight matrix
-        for words_in_storage in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS)):
-            for spad_val_number in range(self.params.PARALLEL_MACS):
+        for words_in_storage in range(int(params.Wghts_per_PE/params.PARALLEL_MACS)):
+            for spad_val_number in range(params.PARALLEL_MACS):
                 # Calculate linear position in weight stream
                 position = words_in_storage * 2 + spad_val_number
-
-                # Calculate output feature (filter) index based on cluster position
-                filters =  (position%layer_params.used_psum_per_PE) + \
-                cl_x * layer_params.used_psum_per_PE + \
-                cl_y * params.Clusters_X * layer_params.used_psum_per_PE + \
-                (math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.psum_transmissions_pe) * params.Clusters_X * params.Clusters_Y * layer_params.used_psum_per_PE
-
-                # Calculate input feature (channel) index based on router and repetition
-                channel = math.floor((layer_repetition%layer_params.iact_transmissions_pe)*params.Wght_Routers*layer_params.used_iact_per_PE) + \
-                math.floor(position/layer_params.used_psum_per_PE) + \
-                router * layer_params.used_iact_per_PE
 
                 # Recalculate filter index with Y-cluster assignment
                 filters =  (position%layer_params.used_psum_per_PE) + \
                 cl_x * layer_params.used_psum_per_PE + \
                 (math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.psum_transmissions_pe) * params.Clusters_X * params.Clusters_Y * layer_params.used_psum_per_PE
-
                 # Recalculate channel with Y-cluster assignment
-                channel = math.floor((layer_repetition%layer_params.iact_transmissions_pe)*params.Wght_Routers*layer_params.used_iact_per_PE) + \
+                #channel = math.floor((layer_repetition%layer_params.iact_transmissions_pe)*params.Wght_Routers*layer_params.used_iact_per_PE) + \
+                channel = math.floor((layer_repetition)*(params.NUM_GLB_WGHT * params.Clusters_Y * layer_params.used_iact_per_PE)) + \
                 math.floor(position/layer_params.used_psum_per_PE) + \
-                cl_y * layer_params.used_iact_per_PE
+                cl_y * params.NUM_GLB_WGHT * layer_params.used_iact_per_PE + \
+                router * layer_params.used_iact_per_PE 
 
                 try:
                     # Load weight from 2D matrix: dram[output_feature][input_feature]

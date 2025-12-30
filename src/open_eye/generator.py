@@ -4,24 +4,23 @@ from pathlib import Path
 import sys
 import os
 
-if __name__ == "__main__":
-
-    # ------------------------------------------------------------
-    # Path to .vh-file
-    # ------------------------------------------------------------
-    try:
-        path = sys.argv[1]
-    except:
-        path = os.getcwd()
-
+def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v_path=None):
 
     # ------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------
-    YAML_FILE = "regmap.yaml"
-    VERILOG_PARAMS_OUT = "regmap_params.vh"
-    PYTHON_OUT = "regmap_pack.py"
-    DMA_STORAGE_OUT = "../../hdl/dma_storage.v"
+    if output_vh_path is None:
+        output_vh_path = os.path.join(os.path.dirname(regmap_yaml_path), "include")
+
+    if output_v_path is None:
+        output_v_path = os.path.join(os.path.dirname(regmap_yaml_path))
+    
+    output_py_path = Path(__file__).resolve().parent
+
+    YAML_FILE = os.path.join(regmap_yaml_path, "regmap.yaml")
+    VERILOG_PARAMS_OUT = os.path.join(output_vh_path, "regmap_params.vh")
+    PYTHON_OUT = os.path.join(output_py_path, "regmap_pack.py")
+    DMA_STORAGE_OUT = os.path.join(output_v_path, "dma_storage.v") if output_v_path else "dma_storage.v"
 
     # ------------------------------------------------------------
     # Load YAML
@@ -64,7 +63,8 @@ if __name__ == "__main__":
     # ------------------------------------------------------------
     # 1) Write Verilog parameter file
     # ------------------------------------------------------------
-    with open(path + "/" + VERILOG_PARAMS_OUT, "w") as vf:
+    with open(VERILOG_PARAMS_OUT, "w") as vf:
+        vf.write("`ifndef REGMAP_PARAMS_VH\n`define REGMAP_PARAMS_VH\n\n")
         vf.write("// Auto-generated from {}\n\n".format(YAML_FILE))
         vf.write(f"parameter DMA_BITWIDTH = {dma_bitwidth};\n")
         vf.write(f"parameter TRANSMISSIONS = {num_transmissions};\n\n")
@@ -80,8 +80,9 @@ if __name__ == "__main__":
                     prev_width = regs[i-1]['width']
                     vf.write(f"parameter {pname} = {prev_name} + {prev_width};\n")
             vf.write("\n")
+        vf.write("`endif // REGMAP_PARAMS_VH\n")
 
-    print(f"[OK] Verilog parameters written to {path + "/" + VERILOG_PARAMS_OUT}.")
+    print(f"[OK] Verilog parameters written to {VERILOG_PARAMS_OUT}.")
 
     # ------------------------------------------------------------
     # 2) Write Python pack/unpack
@@ -150,3 +151,35 @@ if __name__ == "__main__":
         dv.write("end\n\nendmodule\n")
 
     print(f"[OK] dma_storage module written to {DMA_STORAGE_OUT}.")
+
+
+if __name__ == "__main__":
+
+    # ------------------------------------------------------------
+    # Path to .vh-file
+    # ------------------------------------------------------------
+    
+    # first argument: path to regmap.yaml 
+    try:
+        path = sys.argv[1]
+    except:
+        path = os.getcwd()
+
+    # second argument: output path (optional)
+    try:
+        output_pathvh = sys.argv[2]
+    except:
+        output_pathvh = path
+
+    # second argument: output path (optional)
+    try:
+        output_pathv = sys.argv[3]
+    except:
+        output_pathv = path
+    
+
+    # ------------------------------------------------------------
+    # Create regmap_params.vh file
+    # ------------------------------------------------------------
+    create_regmap_params_vh_file(path, output_pathvh, output_pathv)
+

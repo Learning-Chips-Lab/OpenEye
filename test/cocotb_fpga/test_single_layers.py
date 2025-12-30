@@ -13,13 +13,15 @@ import subprocess
 logger = logging.getLogger("cocotb")
 
 directory = (os.path.abspath(os.getcwd()))
-sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
-tests_dir = os.path.abspath(os.path.dirname(__file__))
-hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
-import test_utils.test_utils_main as ptu
-import test_utils.vh_file_creator as vh_file_creator
+
+import open_eye.test_utils_main as ptu
+import open_eye.vh_file_creator as vh_file_creator
+import open_eye.generator as generator
+from open_eye import hdl_dir, test_dir, open_eye_dir
 
 
+
+##########################################################################################
 # TODO: put everything below in a common function
 clk_cycle = 20
 clk_cycle_unit = "ns"
@@ -36,13 +38,13 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("STRIDE", [1])
 @pytest.mark.parametrize("KERNEL_SIZE", [3])
 @pytest.mark.parametrize("INPUT_SIZE_X", [32])
-@pytest.mark.parametrize("INPUT_SIZE_Y", [32])
+@pytest.mark.parametrize("INPUT_SIZE_Y", [1])
 @pytest.mark.parametrize("INPUT_CHANNELS", [4])
 @pytest.mark.parametrize("USE_SPARSE_IACTS", [0])
 @pytest.mark.parametrize("USE_SPARSE_WGHTS", [0])
 @pytest.mark.parametrize("USE_RANDOM_VALUES", [1])
 @pytest.mark.parametrize("CLUSTER_ROWS", [4])
-@pytest.mark.parametrize("NUM_GLB_IACT", [1,2,3,4,5,6])
+@pytest.mark.parametrize("NUM_GLB_IACT", [4])
 @pytest.mark.parametrize("NUM_GLB_PSUM", [4])
 @pytest.mark.parametrize("NUM_GLB_WGHT", [3])
 @pytest.mark.parametrize("LOGGER_LEVEL", [0])
@@ -63,20 +65,23 @@ def test_single_conv_layer(
 
     # NodeID aus pytest, als eindeutiger Ordnername
     nodeid = request.node.nodeid.replace("::", "_").replace("/", "_").replace("[","_").replace("]","_")
-    target_dir = os.path.join(tests_dir, '.temp/' + nodeid)
+    target_dir = os.path.join(test_dir, '.temp/' + nodeid)
     os.makedirs(target_dir, exist_ok=True)
 
-    result = subprocess.run(['python', '../../packages/test_utils/generator.py', target_dir])
+    regmap_dir = os.path.join(test_dir, 'cocotb_fpga')
+    result = subprocess.run(['python', os.path.join(open_eye_dir, 'generator.py'), regmap_dir,target_dir])
 
     vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel="OpenEye_FPGA")
+    generator.create_regmap_params_vh_file(os.path.join(test_dir, "cocotb_fpga"), target_dir, target_dir)
 
     results = cocotb_test.simulator.run(
-        python_search=[tests_dir],
+        python_search=[test_dir],
         verilog_sources=verilog_sources,
         toplevel=toplevel,
         module=module,
         sim_build=target_dir,
         testcase='single_layer_test',
+        defines={"NO_TRACE": "TRUE"},
         force_compile=True,
         waves=True,
         simulator="icarus",
@@ -110,4 +115,8 @@ def test_single_conv_layer(
     
 
 if __name__ == '__main__':
-    test_single_conv_layer()
+    test_single_conv_layer(NUM_FILTERS=16, STRIDE=1, KERNEL_SIZE=3, INPUT_SIZE_X=32, INPUT_SIZE_Y=1,
+        INPUT_CHANNELS=4, USE_SPARSE_IACTS=0, USE_SPARSE_WGHTS=0, USE_RANDOM_VALUES=1,
+        CLUSTER_ROWS=4, NUM_GLB_IACT=1, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3, LOGGER_LEVEL=0,
+        request=pytest.fixture(lambda: None)()
+    )

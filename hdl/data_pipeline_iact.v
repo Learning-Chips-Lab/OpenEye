@@ -222,9 +222,14 @@ module data_pipeline_iact #(
         second_spad_addr_o         <= 0;
         second_spad_words_o        <= 0;
         compute_sent               <= 1;
-        if (cycle_counter != 0) begin
-          cycle_counter <= cycle_counter;
-          uneven_ending <= 1;
+        //Fully-Connected
+        if (second_spad_words_o >= 4) begin
+          cycle_counter              <= 0;
+        end else begin
+          if (cycle_counter != 0) begin
+            cycle_counter <= cycle_counter;
+            uneven_ending <= 1;
+          end
         end
       end
     end

@@ -48,6 +48,7 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_DP_RW_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_SP_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/iact_stream_constructor.v)
 
+COMPILE_ARGS += -I$(abspath $(PWD)/../../hdl/include)
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
 TOPLEVEL = OpenEye_FPGA
@@ -121,7 +122,9 @@ export ONLY_FILES=0
 
 export
 run:
-	@python -m test_utils.generator && python -m test_utils.vh_file_creator && make -f $(shell cocotb-config --makefiles)/Makefile.sim
+	@python -m open_eye.generator . ../../hdl/include ../../hdl
+	@python -m open_eye.vh_file_creator
+	@make -f $(shell cocotb-config --makefiles)/Makefile.sim
 
 gtkwave:
 	touch $($(HDL_PATH)OpenEye_FPGA.v)

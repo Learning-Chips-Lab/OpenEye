@@ -17,10 +17,10 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/demux2.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/mux_iact.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_DP.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/SPad_SP.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_DP.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/RAM_SP.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_DP_generic.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/memory/impl/RAM_SP_generic.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_DP.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_SP.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_DP_generic.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_SP_generic.v)
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
 TOPLEVEL = PE_cluster
