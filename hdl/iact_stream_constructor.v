@@ -189,7 +189,7 @@ module iact_stream_constructor #(
               end else begin
                 fsm_enc_current_state      <= ENCODE;
                 if (iact_channels_i == 1) begin
-                  if (finished_y_lines % 2 == 1) begin
+                  if (finished_y_lines % 2 == 0) begin
                     //ram_rd_addr            <= ram_rd_addr + 1;
                     ram_inc_counter_offset <= 1;
                   end
@@ -214,7 +214,9 @@ module iact_stream_constructor #(
             if (fsm_row_offset == y_cluster_counter) begin
               ram_rd_en             <= 1;
               if ((current_iact_cycle_reg >> 1) != {15{1'b1}}) begin
-                iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
+                if ((ram_rd_addr < address_storage) | (!fully_connected_i)) begin
+                  iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
+                end
               end
               iact_data_o <= ram_data_o;
             end
@@ -248,7 +250,7 @@ module iact_stream_constructor #(
             end
             // Full Iact Cycle
             ram_inc_counter <= ram_inc_counter + 1;
-            if (ram_inc_counter[7:0] + ram_inc_counter_offset >= iact_channels_i - 1) begin
+            if ((ram_inc_counter[7:0] + ram_inc_counter_offset >= iact_channels_i - 1) & (ram_inc_counter[7:0] + ram_inc_counter_offset != 0)) begin
               ram_inc_counter        <= 0;
               ram_inc_counter_offset <= 0;
               if (iact_channels_i == 1) begin
@@ -563,12 +565,13 @@ module iact_stream_constructor #(
                   ram_var_trace = ram_var;
                 end
                 //PADDING
-                if (((
+                if ((((
                 (0 > x_reg[r]) |
                 ((iact_size_x_i - 1) < x_reg[r])) | (
                 (- w > (y_reg * iact_channels_i)) |
                 ((iact_channels_i * (iact_size_y_i)) <= w + (y_reg * iact_channels_i))
-                )) & !fully_connected_i) begin
+                )) & !fully_connected_i)
+                | (fully_connected_i)) begin
                   mem_data_payload_reg[r][w] <= 0;
                 end else begin
                   mem_data_payload_reg[r][w] <= storage_w[ram_var[4:0]][byte_var[2:0]];
@@ -579,6 +582,7 @@ module iact_stream_constructor #(
               fsm_cycle         <= 0;
               current_cycle     <= current_cycle + 1;
               address_storage   <= ram_wr_addr + 2;
+
               fsm_current_state <= GET_PARAMETER;
             end
             if (enable_store) begin

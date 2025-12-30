@@ -1302,8 +1302,8 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
         end
         
         GET_ROUTER_CONFIG: begin
-          ready_dma_o <= 1;
-          new_stream  <= 1;
+          ready_dma_o   <= 1;
+          new_stream    <= 1;
           iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
           iact_x_with_add_up <= iact_size_x + add_up_reg;
           if (fully_connected_layer) begin
@@ -1417,12 +1417,13 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
             fsm_current_state      <= GET_QUANTIZE;
             wght_buffer_SP_wr_addr <= 0;
             limit_increase_reg     <= ((iact_size_x*iact_channels_per_pe + (WORDS_PER_CYCLE[7:0]*4) - 1)/(WORDS_PER_CYCLE[7:0]*4)); //ÄNDERN
-            overhang_discrepancy   <= ((WORDS_PER_CYCLE[7:0]*4) - ((iact_size_x*iact_channels_per_pe)%(WORDS_PER_CYCLE[7:0]*4)))%(WORDS_PER_CYCLE[7:0]*4);
+            overhang_discrepancy   <= ((iact_size_x*iact_channels_per_pe)%(WORDS_PER_CYCLE[7:0]*4));
             overhang               <= 0;
             overhang_delay         <= 0;
             if (fully_connected_layer) begin
-              limit_increase_reg <= ((PE_ROWS*iact_channels_per_pe)/8) + 1;
-              overhang <= 0;
+              overhang_discrepancy <= ((iact_size_x*iact_channels_per_pe*PE_ROWS)%(WORDS_PER_CYCLE[7:0]*4));
+              limit_increase_reg   <= ((PE_ROWS*iact_channels_per_pe)/8);
+              overhang             <= 0;
             end
             fsm_cycle <= 0;
           end
@@ -1480,10 +1481,12 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
             fsm_last_state    <= GET_OFFSET;
             fsm_current_state <= START_CONVERTER;
             buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + limit_increase_reg);
+            /*
             if (overhang_counter + overhang_discrepancy >= (WORDS_PER_CYCLE[7:0]*4)) begin
-              overhang_delay             <= 1;
-              buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + limit_increase_reg - 1);
+              //overhang_delay             <= 1;
+              buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + limit_increase_reg);
             end
+            */
             if (max_pooling) begin
               fsm_cycle           <= 2;
               fsm_current_state   <= MAXPOOLING_READ;
@@ -1544,8 +1547,8 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
                   end
                 end
               end
-              buffer_SP_addr_upper_limit <= ((buffer_SP_addr_upper_limit + limit_increase_reg - overhang)%RAM_CELLS);
-              buffer_SP_addr_lower_limit <= ((buffer_SP_addr_lower_limit + limit_increase_reg - overhang_delay)%RAM_CELLS);
+              buffer_SP_addr_upper_limit <= ((buffer_SP_addr_upper_limit + limit_increase_reg + overhang)%RAM_CELLS);
+              buffer_SP_addr_lower_limit <= ((buffer_SP_addr_lower_limit + limit_increase_reg + overhang_delay)%RAM_CELLS);
               overhang                   <= 0;
               overhang_delay             <= overhang;
               overhang_counter           <= overhang_counter + overhang_discrepancy;

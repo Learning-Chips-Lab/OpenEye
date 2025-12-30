@@ -339,7 +339,7 @@ def compare_iact_storage(ptp, dut, iact_ref, oep):
     for c in range(len(iact_ref)):
         for y in range(len(iact_ref[c])):
             for x in range(len(iact_ref[c][y])):
-                if(iact_ref[c][y][x] != dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[56 - (i * 8):63 - (i * 8)].signed_integer):
+                if(iact_ref[c][y][x] != dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[8 + (i * 8):(i * 8)].signed_integer):
                     logger.error("Error found in Iact storage; Channel: " + str(c) + " X: " + str(x) + " Y: " + str(y) + " buffer: " + str(buffer) + " word: " + str(word) + " i: " + str(i))
                     logger.error("Ref-Value: " + str(iact_ref[c][y][x]) + " DUT-Value: " + str(dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[56 - (i * 8):63 - (i * 8)].signed_integer))
                     error_found = True
@@ -676,7 +676,7 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                     if(logging.DEBUG >= login_level):
                         storage_file.write("f: " + str(f) + " x: " + str(flat_list[x]) + " y: " + str(y) + "\n")
                     try:
-                        dram.fmap[layer_number + 1][f][flat_list[x]][y] = int(dut.data_dma_o.value[44-20*i:63-20*i])
+                        dram.fmap[layer_number + 1][f][flat_list[x]][y] = int(dut.data_dma_o.value[19+20*i:20*i])
                         if (dram.fmap[layer_number + 1][f][flat_list[x]][y] >= 2**19):
                             dram.fmap[layer_number + 1][f][flat_list[x]][y] = dram.fmap[layer_number + 1][f][flat_list[x]][y] - 2**20
                     except:
@@ -861,7 +861,7 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         if(logging.DEBUG >= login_level):
             storage_file.write("f: " + str(f) + "\n")
         try:
-            dram.fmap[layer_number + 1][f] = int(dut.data_dma_o.value[44:63])
+            dram.fmap[layer_number + 1][f] = int(dut.data_dma_o.value[19:0])
             if (dram.fmap[layer_number + 1][f] >= 2**19) :
                 dram.fmap[layer_number + 1][f] = dram.fmap[layer_number + 1][f] - 2**20
         except:
@@ -870,7 +870,6 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
             f = f + cluster_offset
         else :
             f = f - cluster_offset + 1
-
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
     cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
