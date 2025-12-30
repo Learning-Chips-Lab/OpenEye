@@ -48,6 +48,7 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_DP_RW_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_SP_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/iact_stream_constructor.v)
 
+COMPILE_ARGS += -I$(abspath $(PWD)/../../hdl/include)
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
 TOPLEVEL = OpenEye_FPGA
