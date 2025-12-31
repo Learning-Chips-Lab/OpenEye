@@ -570,8 +570,7 @@ module iact_stream_constructor #(
                 ((iact_size_x_i - 1) < x_reg[r])) | (
                 (- w > (y_reg * iact_channels_i)) |
                 ((iact_channels_i * (iact_size_y_i)) <= w + (y_reg * iact_channels_i))
-                )) & !fully_connected_i)
-                | (fully_connected_i)) begin
+                )) & !fully_connected_i)) begin
                   mem_data_payload_reg[r][w] <= 0;
                 end else begin
                   mem_data_payload_reg[r][w] <= storage_w[ram_var[4:0]][byte_var[2:0]];
