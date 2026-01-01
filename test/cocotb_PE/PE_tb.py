@@ -121,7 +121,7 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
         7. Wait for completion
     """
     # Start the clock (10 time units per cycle)
-    cocotb.start_soon(Clock(dut.clk_i, 10, unit=clk_cycle_unit).start())
+    cocotb.start_soon(Clock(dut.clk_i, 10, unit=clk_cycle_unit).start()) # type: ignore
     dut._log.info("Clock is %s " + clk_cycle_unit, clk_cycle)
 
     # Reset all input signals to initial state
@@ -138,7 +138,7 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
 
     # Trigger computation: pulse compute_i high for one cycle
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, 1))
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, 0))
 
     # Signal that we're ready to accept partial sums
@@ -146,14 +146,14 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
 
     # Wait for PE to signal it's ready for partial sum data
     await RisingEdge(dut.psum_ready_o)
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
     # Send bias/initial partial sum values
     cocotb.start_soon(send_bias(ptp, dut, psum_array))
 
     # Wait for PE to start outputting partial sums
     await RisingEdge(dut.psum_enable_o)
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
     # Start output validation (compares against golden model)
     cocotb.start_soon(get_psum(dut, iacts_array, wghts_array, psum_array))
@@ -163,7 +163,7 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
 
     # Additional settling time
     for _ in range(100):
-        await Timer(clk_cycle, unit=clk_cycle_unit)
+        await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
     # Final sanity check
     assert dut.compute_i.value == 0, "rst_ni is not 0!"
@@ -221,7 +221,7 @@ async def send_iact(ptp, dut, data_array):
 
     # Disable input activation interface
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.iact_enable_i, 0))
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
 async def get_psum(dut, iacts_array, wghts_array, psum_array):
     """
@@ -295,7 +295,7 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
             + ". PSUM Value"
         )
         current_control = current_control + 1
-        await Timer(clk_cycle, unit=clk_cycle_unit)
+        await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
 async def send_wght(ptp, dut, data_array):
     """
@@ -343,7 +343,7 @@ async def send_wght(ptp, dut, data_array):
 
     # Disable weight interface
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.wght_enable_i, 0))
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
 async def send_bias(ptp, dut, data_array):
     """
@@ -390,7 +390,7 @@ async def send_bias(ptp, dut, data_array):
 
     # Disable partial sum interface
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.psum_enable_i, 0))
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
     
 
@@ -408,17 +408,17 @@ async def send_data_params(ptp, dut):
 
     data_reg_i =  (wght_addr_max_reg << 4) + (stride_reg << 1)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
     data_reg_i =  (filters_reg_i << 4) + (channel_reg_i << 0)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
     data_reg_i =  (iact_addr_max_i << 0)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
     # Disable the params reading
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.enable_stream_i), 0))
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
 async def reset_all_signals(ptp, dut):
     """
@@ -453,13 +453,13 @@ async def reset_all_signals(ptp, dut):
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), 0))
 
     # Hold reset for one cycle
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
     # Release reset
     cocotb.start_soon(rtl_test_utils.set_input(ptp,dut.rst_ni, 1))
 
     # Wait for reset to propagate
-    await Timer(clk_cycle, unit=clk_cycle_unit)
+    await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
 async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits, parallel):
     """
@@ -524,7 +524,7 @@ async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits,
         # Send the packed transmission
         cocotb.start_soon(rtl_test_utils.set_input(ptp, (data_signal), sending_data))
         sending_data = 0
-        await Timer(clk_cycle, unit=clk_cycle_unit)
+        await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
     # Clear the signal after transmission complete
     cocotb.start_soon(rtl_test_utils.set_input(ptp, data_signal, 0))
