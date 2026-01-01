@@ -29,12 +29,11 @@ class PortTimingParameters(object):
 
     Attributes:
         clk_cycle (int): Clock cycle duration
-        clk_cycle_unit (int): Time unit for clock cycle (e.g., ns, ps)
+        clk_cycle_unit (str): Time unit for clock cycle (e.g., ns, ps)
         clk_delay_in (int): Input path delay duration
-        clk_delay_unit_in (int): Time unit for input delay
+        clk_delay_unit_in (str): Time unit for input delay
         clk_delay_out (int): Output path delay duration
-        clk_delay_unit_out (int): Time unit for output delay
-
+        clk_delay_unit_out (str): Time unit for output delay
     Note:
         The name PortTimingParameters reflects its role in managing timing
         for hardware interface ports, including both input and output paths
