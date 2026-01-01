@@ -54,9 +54,9 @@ class PortTimingParameters(object):
         self.clk_delay_out = 0
         self.clk_delay_unit_out = 0
 
-    def initiate_params(self, clk_cycle: int, clk_cycle_unit: int, 
-                       clk_delay_in: int, clk_delay_unit_in: int, 
-                       clk_delay_out: int, clk_delay_unit_out: int) -> None:
+    def initiate_params(self, clk_cycle: int, clk_cycle_unit: str, 
+                       clk_delay_in: int, clk_delay_unit_in: str, 
+                       clk_delay_out: int, clk_delay_unit_out: str) -> None:
         """Configure timing parameters for hardware interface.
 
         Args:
