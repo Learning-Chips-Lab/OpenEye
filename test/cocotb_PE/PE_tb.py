@@ -29,8 +29,6 @@ from cocotb.clock import Clock
 from cocotb.triggers import FallingEdge, RisingEdge, Timer
 
 # Add parent directory to path for importing OpenEye modules
-directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
-sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 import open_eye.timing_parameters as timing_parameters
 import open_eye.rtl_test_utils as rtl_test_utils
 
