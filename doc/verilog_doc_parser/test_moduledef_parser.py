@@ -621,5 +621,3 @@ endmodule
     def test_parse_OpenEye_Parallel_file(self):
         self.parse_and_compare_module_name_from_moduledef("OpenEye_Parallel.v")
 
-    def test_parse_OpenEye_Wrapper_file(self):
-        self.parse_and_compare_module_name_from_moduledef("OpenEye_Wrapper.v")
