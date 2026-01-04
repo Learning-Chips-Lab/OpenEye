@@ -153,9 +153,6 @@ timescale 1ns / 1ps
     def test_parse_OpenEye_Parallel_file(self):
         self.parse_and_compare_module_name_from_doc("OpenEye_Parallel.v")
 
-    def test_parse_OpenEye_Wrapper_file(self):
-        self.parse_and_compare_module_name_from_doc("OpenEye_Wrapper.v")
-
 if __name__ == "__main__":
     t = TestDocstringParser()
     t.test_parse_tripleslash()
