@@ -67,10 +67,8 @@ module PE_AXI_wrapper #(
     localparam integer PSUM_WORDS_PER_TRANSFER = (SERIAL ? 1 : PARALLEL_MACS),
     localparam integer TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER,
 
-    // AXI-Stream data width - maximum of all input widths
-    localparam integer AXI_DATA_WIDTH = (TRANS_BITWIDTH_IACT > TRANS_BITWIDTH_WGHT) ?
-                                       ((TRANS_BITWIDTH_IACT > TRANS_BITWIDTH_PSUM) ? TRANS_BITWIDTH_IACT : TRANS_BITWIDTH_PSUM) :
-                                       ((TRANS_BITWIDTH_WGHT > TRANS_BITWIDTH_PSUM) ? TRANS_BITWIDTH_WGHT : TRANS_BITWIDTH_PSUM)
+    // AXI-Stream data width - fixed at 32 bits
+    localparam integer AXI_DATA_WIDTH = 32
 ) (
     // Clock and Reset
     input                            clk_i,
@@ -82,7 +80,7 @@ module PE_AXI_wrapper #(
     output                           s_axis_tready,
 
     // AXI-Stream Master Interface (Output - Partial Sums)
-    output     [TRANS_BITWIDTH_PSUM-1:0] m_axis_tdata,
+    output     [AXI_DATA_WIDTH-1:0]  m_axis_tdata,
     output                           m_axis_tvalid,
     input                            m_axis_tready,
 
@@ -143,16 +141,24 @@ module PE_AXI_wrapper #(
                           1'b1;  // Always ready for data_stream (config params)
 
     // ============================================================================
-    // PE Input Connections
+    // PE Input Connections with Bitwidth Conversion
     // ============================================================================
 
     // IACT Interface - replicate single input to all NUM_GLB_IACT inputs
     // Only the selected input (via iact_select_i) will be active
+    // Handle bitwidth conversion: pad with zeros if AXI width > IACT width, truncate if smaller
     genvar i;
     generate
         for (i = 0; i < NUM_GLB_IACT; i = i + 1) begin : gen_iact_inputs
-            assign pe_iact_data[TRANS_BITWIDTH_IACT*(i+1)-1 : TRANS_BITWIDTH_IACT*i] =
-                   s_axis_tdata[TRANS_BITWIDTH_IACT-1:0];
+            if (TRANS_BITWIDTH_IACT <= AXI_DATA_WIDTH) begin
+                // IACT fits in AXI data width - use lower bits
+                assign pe_iact_data[TRANS_BITWIDTH_IACT*(i+1)-1 : TRANS_BITWIDTH_IACT*i] =
+                       s_axis_tdata[TRANS_BITWIDTH_IACT-1:0];
+            end else begin
+                // IACT larger than AXI - truncate (take lower AXI_DATA_WIDTH bits)
+                assign pe_iact_data[TRANS_BITWIDTH_IACT*(i+1)-1 : TRANS_BITWIDTH_IACT*i] =
+                       {{(TRANS_BITWIDTH_IACT-AXI_DATA_WIDTH){1'b0}}, s_axis_tdata};
+            end
             assign pe_iact_enable[i] = iact_enable_mux;
         end
     endgenerate
@@ -161,25 +167,51 @@ module PE_AXI_wrapper #(
     assign iact_ready_mux = (iact_select_i > 0 && iact_select_i <= NUM_GLB_IACT) ?
                            pe_iact_ready[iact_select_i-1] : 1'b0;
 
-    // WGHT Interface
-    assign pe_wght_data   = s_axis_tdata[TRANS_BITWIDTH_WGHT-1:0];
+    // WGHT Interface - handle bitwidth conversion
+    generate
+        if (TRANS_BITWIDTH_WGHT <= AXI_DATA_WIDTH) begin
+            // WGHT fits in AXI data width - use lower bits
+            assign pe_wght_data = s_axis_tdata[TRANS_BITWIDTH_WGHT-1:0];
+        end else begin
+            // WGHT larger than AXI - pad with zeros
+            assign pe_wght_data = {{(TRANS_BITWIDTH_WGHT-AXI_DATA_WIDTH){1'b0}}, s_axis_tdata};
+        end
+    endgenerate
     assign pe_wght_enable = wght_enable_mux;
     assign wght_ready_mux = pe_wght_ready;
 
-    // PSUM Input Interface
-    assign pe_psum_data_i   = s_axis_tdata[TRANS_BITWIDTH_PSUM-1:0];
+    // PSUM Input Interface - handle bitwidth conversion
+    generate
+        if (TRANS_BITWIDTH_PSUM <= AXI_DATA_WIDTH) begin
+            // PSUM fits in AXI data width - use lower bits
+            assign pe_psum_data_i = s_axis_tdata[TRANS_BITWIDTH_PSUM-1:0];
+        end else begin
+            // PSUM larger than AXI - pad with zeros
+            assign pe_psum_data_i = {{(TRANS_BITWIDTH_PSUM-AXI_DATA_WIDTH){1'b0}}, s_axis_tdata};
+        end
+    endgenerate
     assign pe_psum_enable_i = psum_in_enable_mux;
     assign psum_in_ready_mux = pe_psum_ready_o;
 
-    // Data Stream Interface (configuration parameters)
+    // Data Stream Interface (configuration parameters - always 12 bits)
     assign pe_data_stream   = s_axis_tdata[11:0];
     assign pe_enable_stream = data_stream_enable_mux;
 
     // ============================================================================
-    // PE Output Connections (PSUM to AXI-Stream Master)
+    // PE Output Connections (PSUM to AXI-Stream Master) with Bitwidth Conversion
     // ============================================================================
 
-    assign m_axis_tdata  = pe_psum_data_o;
+    // Handle output bitwidth conversion - pad PSUM data to 32 bits if needed
+    generate
+        if (TRANS_BITWIDTH_PSUM <= AXI_DATA_WIDTH) begin
+            // PSUM fits in AXI data width - pad upper bits with zeros
+            assign m_axis_tdata = {{(AXI_DATA_WIDTH-TRANS_BITWIDTH_PSUM){1'b0}}, pe_psum_data_o};
+        end else begin
+            // PSUM larger than AXI - truncate to lower AXI_DATA_WIDTH bits
+            assign m_axis_tdata = pe_psum_data_o[AXI_DATA_WIDTH-1:0];
+        end
+    endgenerate
+
     assign m_axis_tvalid = pe_psum_enable_o;
     // PE's psum_ready_i comes from AXI master interface
 
