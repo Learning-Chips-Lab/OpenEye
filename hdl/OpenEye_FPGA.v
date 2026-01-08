@@ -1481,12 +1481,6 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
             fsm_last_state    <= GET_OFFSET;
             fsm_current_state <= START_CONVERTER;
             buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + limit_increase_reg);
-            /*
-            if (overhang_counter + overhang_discrepancy >= (WORDS_PER_CYCLE[7:0]*4)) begin
-              //overhang_delay             <= 1;
-              buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + limit_increase_reg);
-            end
-            */
             if (max_pooling) begin
               fsm_cycle           <= 2;
               fsm_current_state   <= MAXPOOLING_READ;
