@@ -738,7 +738,7 @@ module PE #(
 `ifndef NO_TRACE
   initial begin
     if (IS_TOPLEVEL) begin
-      string fst_path;
+      reg[1023:0] fst_path;
       // Read the path from the command line argument
       if ($value$plusargs("FST_PATH=%s", fst_path)) begin
         $dumpfile(fst_path);
