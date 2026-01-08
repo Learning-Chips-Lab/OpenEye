@@ -276,7 +276,7 @@ module OpenEye_FPGA #(
   reg [$clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_reg;
   wire [17:0] needed_cycles_reg;
   wire [1:0] needed_x_cls_reg;
-  wire [3:0] needed_y_cls_reg;
+  wire [$clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg;
   wire [3:0] needed_iact_cycles_reg;
   wire [$clog2(PSUM_PER_PE+1)-1:0] filters_reg;
   wire [$clog2(IACT_ADDR_PER_PE+1)-1:0] iact_addr_len_reg;
