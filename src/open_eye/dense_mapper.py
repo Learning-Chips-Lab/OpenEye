@@ -142,7 +142,7 @@ class DenseMapper(LayerMapper):
             "iact_converter_buffer_addr_max_cycles": layer_params.needed_standing_cycles,
             "iact_channels_per_pe": layer_params.used_iact_per_PE,
             "iact_size_y": layer_params.iact_size_y,
-            "iact_size_x":layer_params.iact_size_x,
+            "iact_size_x": 1,
             "iact_needed_cycles": layer_params.iact_stream_cycles,
             "kernels_per_calc": layer_params.different_kernels_per_calculation,
             "y_lines_per_calc": layer_params.y_lines_per_calculation,
