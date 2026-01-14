@@ -736,9 +736,9 @@ module PE #(
   // FST Waveform Dump Configuration (for CocoTB simulation)
   // ============================================================================
 `ifndef NO_TRACE
+  reg[1023:0] fst_path;
   initial begin
     if (IS_TOPLEVEL) begin
-      reg[1023:0] fst_path;
       // Read the path from the command line argument
       if ($value$plusargs("FST_PATH=%s", fst_path)) begin
         $dumpfile(fst_path);
