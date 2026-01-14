@@ -619,6 +619,7 @@ module iact_stream_constructor #(
       end
     end
 
+    genvar r_gen, w_gen, b_gen;
     for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin : BUFFER
       wire [BITS_PER_ROUTER-1:0]ram_data_i_w;
       wire [BITS_PER_ROUTER-1:0]ram_data_o_w;
@@ -635,7 +636,6 @@ module iact_stream_constructor #(
           .data_o  (ram_data_o_w)
       );
     end
-    genvar r_gen, w_gen, b_gen;
     for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin
       assign ram_data_o[r_gen * BITS_PER_ROUTER+:BITS_PER_ROUTER]=BUFFER[r_gen].ram_data_o_w;
       for (w_gen = 0; w_gen < WORDS_PER_TRANS; w_gen = w_gen + 1) begin
