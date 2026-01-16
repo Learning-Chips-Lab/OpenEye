@@ -69,11 +69,11 @@ async def start_test_pe(dut):
         - No sparsity (all values are non-zero)
     """
     # Configure test dimensions
-    global iactsize_x   # Number of input activation values (spatial dimension)
-    global iactsize_y   # Number of input channels
+    global iactsize_x   # Number of input activation values (spatial dimension, C0 in Eyeriss V2 paper)
+    global iactsize_y   # Number of input channels (number of C0*U blocks in Eyeriss V2 paper, U=1 here)
     global sparse_iact  # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
-    global wghtsize_x   # Number of output filters
-    global wghtsize_y   # Weights match input dimensions
+    global wghtsize_x   # Number of output filters (M0 in Eyeriss V2 paper)
+    global wghtsize_y   # Weights match input dimensions (iactsize_x * iactsize_y
     global sparse_wght  # Weight sparsity: 0 = no sparsity, 1 = fully sparse
 
     iactsize_x = int(os.environ["IACTSIZE_X"])
