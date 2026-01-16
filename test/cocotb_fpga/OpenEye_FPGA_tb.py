@@ -6,6 +6,7 @@
 import sys
 import os
 import cocotb
+import tensorflow as tf
 from cocotb.clock import Clock
 import open_eye.test_utils_main as tum
 import open_eye.rtl_test_utils as rtl_test_utils
@@ -138,9 +139,16 @@ async def single_layer_test(dut):
     else:
         model = tflite2model.create_model_from_tflite(use_random)
     #load_model_function
-    
-    await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model)
+    trunc_model = truncate_model(model)
+    await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, trunc_model)
 
+def truncate_model(model):
+    
+    trunc_model = [
+        layer for layer in model.layers
+        if not isinstance(layer, tf.keras.layers.Flatten)
+    ]
+    return trunc_model
 
 async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model):
     openeye_parameter = oep.get_oep(serial)
@@ -157,59 +165,62 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
 
     # Process the layers of the model one after another
-    max_layers = len(model.layers)
-    layer_parameters = [0 for _ in range(len(model.layers))]
-    for layer_number, layer in reversed(list(enumerate(model.layers))):
+    max_layers = len(model)
+    layer_parameters = [0 for _ in range(len(model))]
+    for layer_number, layer in reversed(list(enumerate(model))):
         layer_parameters[max_layers - layer_number - 1] = lp.LayerParameters(layer_parameters, layer, openeye_parameter, layer_number, max_layers)
     layer_parameters = list(reversed(layer_parameters))
     # Create the OpenEye parameters and the DRAM given the model
     dram = DRAM.DRAMContents(model, layer_parameters)
     time_printer.timestamp("Initialized DRAM. ", logger)
     dram.write_initial_data_to_dram(model, layer_parameters, sparse_iacts, sparse_wghts)
-    for layer_number, layer in enumerate(model.layers):
-        # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
-        time_printer.timestamp("Layer parameters created. ", logger)
-        calculated_results = tum.collect_results(layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
-        output_order = tum.make_ref(openeye_parameter, layer_parameters[layer_number], layer_number, dram, calculated_results)
-        if(logging.DEBUG >= log_level):
-            time_printer.timestamp("Reference data created. ", logger)
-        dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
-        time_printer.timestamp("Start creating stream. " , logger)
-        stream = tum.write_stream(openeye_parameter, layer_parameters[layer_number], dram_layer_content, sparse_iacts, sparse_wghts)
-        time_printer.timestamp("Streams set. " , logger)
-        for _ in range(1):
-            for layer_repetition in range(layer_parameters[layer_number].needed_total_transmissions):
-                gtu.create_stream_file(stream[layer_repetition],layer_number,layer_repetition)
-                if (only_files == 0) :
-                    logger.info("Send stream.")
-                    await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters[layer_number], layer_repetition))
-                    logger.info("Stream is sent.")
-                    if (layer_number == max_layers - 1) :
-                        await cocotb.start_soon(rtl_test_utils.await_enable_signal(ptp, dut))
-                        if("Depthwise" in str(layer_parameters[layer_number].layer_name)):
-                            await cocotb.start_soon(rtl_test_utils.compare_stream_Dw(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
-                        elif("Conv" in str(layer_parameters[layer_number].layer_name)):
-                            await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level, output_order))
-                        elif("Dense" in str(layer_parameters[layer_number].layer_name)):
-                            await cocotb.start_soon(rtl_test_utils.compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
-                        elif("Pooling" in str(layer_parameters[layer_number].layer_name)):
-                            await cocotb.start_soon(rtl_test_utils.compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
-                        if(logging.DEBUG >= log_level):
-                            assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
-                                                    'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
-                        assert tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
+    test_amount = 1
+    for _ in range(test_amount) :
+        for layer_number, layer in enumerate(model):
+            # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
+            time_printer.timestamp("Layer parameters created. ", logger)
+            calculated_results = tum.collect_results(layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
+            output_order = tum.make_ref(openeye_parameter, layer_parameters[layer_number], layer_number, dram, calculated_results)
+            if(logging.DEBUG >= log_level):
+                time_printer.timestamp("Reference data created. ", logger)
+            dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
+            time_printer.timestamp("Start creating stream. " , logger)
+            stream = tum.write_stream(openeye_parameter, layer_parameters[layer_number], dram_layer_content, sparse_iacts, sparse_wghts)
+            time_printer.timestamp("Streams set. " , logger)
+            for _ in range(1):
+                for layer_repetition in range(layer_parameters[layer_number].needed_total_transmissions):
+                    gtu.create_stream_file(stream[layer_repetition],layer_number,layer_repetition)
+                    if (only_files == 0) :
+                        logger.info("Send stream.")
+                        await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters[layer_number], layer_repetition))
+                        logger.info("Stream is sent.")
+                        if (layer_number == max_layers - 1) :
+                            await cocotb.start_soon(rtl_test_utils.await_enable_signal(ptp, dut))
+                            if("Depthwise" in str(layer_parameters[layer_number].layer_name)):
+                                await cocotb.start_soon(rtl_test_utils.compare_stream_Dw(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
+                            elif("Conv" in str(layer_parameters[layer_number].layer_name)):
+                                await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level, output_order))
+                            elif("Dense" in str(layer_parameters[layer_number].layer_name)):
+                                await cocotb.start_soon(rtl_test_utils.compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
+                            elif("Pooling" in str(layer_parameters[layer_number].layer_name)):
+                                await cocotb.start_soon(rtl_test_utils.compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
+                            if(logging.DEBUG >= log_level):
+                                assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
+                                                        'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
+                            assert tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
+                        else :
+                            await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
+                            time_printer.timestamp("Ready signal detected. Start new stream " , logger)
+                            dram.fmap[1 + layer_number] = tum.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number], layer_parameters[layer_number+1])
+                        if (layer_parameters[layer_number].layer_name != "Pooling") :
+                            slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
+                        if (layer_number != max_layers - 1) :
+                            assert rtl_test_utils.compare_iact_storage(ptp, dut, dram.fmap[1 + layer_number], openeye_parameter)
                     else :
-                        await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
-                        time_printer.timestamp("Ready signal detected. Start new stream " , logger)
-                        dram.fmap[1 + layer_number] = tum.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number])
-                    if (layer_parameters[layer_number].layer_name != "Pooling") :
-                        slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
-                    if (layer_number != max_layers - 1) :
-                        assert rtl_test_utils.compare_iact_storage(ptp, dut, dram.fmap[1 + layer_number], openeye_parameter)
-                else :
-                    dram.fmap[1 + layer_number] = tum.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number])
-                    if (layer_parameters[layer_number].layer_name != "Pooling") :
-                        slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
+                        if (layer_number == max_layers - 1) :
+                            dram.fmap[1 + layer_number] = tum.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number], layer_parameters[layer_number+1])
+                        if (layer_parameters[layer_number].layer_name != "Pooling") :
+                            slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
 
                 
     if (only_files == 0) :

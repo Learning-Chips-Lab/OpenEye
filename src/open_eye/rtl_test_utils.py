@@ -25,6 +25,7 @@ import cocotb
 import numpy as np
 from cocotb.triggers import Timer
 import open_eye.stream_dicts as strdic
+import random
 
 logger = logging.getLogger("cocotb")
 
@@ -288,8 +289,17 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
         # Send partial sum data
-        for data_word in range(len(stream[strdic.stream_parallel_dict["psum"]])):
+        """for data_word in range(len(stream[strdic.stream_parallel_dict["psum"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["psum"]][data_word]))
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)"""
+        index = 0
+        while index < len(stream[strdic.stream_parallel_dict["psum"]]):
+            cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["psum"]][index]))
+            if random.random() < 1.0:
+                index += 1
+                cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 1))
+            else:
+                cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
         # Send quantization parameters
@@ -334,35 +344,47 @@ def compare_iact_storage(ptp, dut, iact_ref, oep):
     i,c,x,y = 0,0,0,0
     word, word_reset, buffer, buffer_reset = 0,0,0,0
     iact_ref = np.array(iact_ref)
-    iact_ref = iact_ref.transpose((0, 2, 1))
     error_found = False
-    for c in range(len(iact_ref)):
-        for y in range(len(iact_ref[c])):
-            for x in range(len(iact_ref[c][y])):
-                if(iact_ref[c][y][x] != dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[8 + (i * 8):(i * 8)].signed_integer):
-                    logger.error("Error found in Iact storage; Channel: " + str(c) + " X: " + str(x) + " Y: " + str(y) + " buffer: " + str(buffer) + " word: " + str(word) + " i: " + str(i))
-                    logger.error("Ref-Value: " + str(iact_ref[c][y][x]) + " DUT-Value: " + str(dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[56 - (i * 8):63 - (i * 8)].signed_integer))
-                    error_found = True
-                i = i + 4
-                if (i >= 8):
-                    i = i - 8
-                    buffer = buffer + 1
-                    if (buffer >= oep.NUM_BUFFER):
-                        word = word + 1
-                        buffer = buffer - oep.NUM_BUFFER
-        if ((c%4 == 3)):
-            buffer_reset = buffer
-            word_reset = word
-            if ((len(iact_ref[c] * len(iact_ref[c][y]))) %2 == 1):
-                i = i - 3
-            else :
-                i = 0
-        else:
-            i = i + 1
-            if ((len(iact_ref[c] * len(iact_ref[c][y]))) %2 == 1):
-                i = (i + 4) % 8
-            buffer = buffer_reset
-            word = word_reset
+    try:
+        temp = iact_ref.transpose((0, 2, 1))
+        iact_ref = temp
+        for c in range(len(iact_ref)):
+            for y in range(len(iact_ref[c])):
+                for x in range(len(iact_ref[c][y])):
+                    if(iact_ref[c][y][x] != dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[7 + (i * 8):(i * 8)].to_signed()):
+                        logger.error("Error found in Iact storage; Channel: " + str(c) + " X: " + str(x) + " Y: " + str(y) + " buffer: " + str(buffer) + " word: " + str(word) + " i: " + str(i))
+                        logger.error("Ref-Value: " + str(iact_ref[c][y][x]) + " DUT-Value: " + str(dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[7 + (i * 8):(i * 8)].to_signed()))
+                        error_found = True
+                    i = i + 4
+                    if (i >= 8):
+                        i = i - 8
+                        buffer = buffer + 1
+                        if (buffer >= oep.NUM_BUFFER):
+                            word = word + 1
+                            buffer = buffer - oep.NUM_BUFFER
+            if ((c%4 == 3)):
+                buffer_reset = buffer
+                word_reset = word
+                if ((len(iact_ref[c] * len(iact_ref[c][y]))) %2 == 1):
+                    i = i - 3
+                else :
+                    i = 0
+            else:
+                i = i + 1
+                if ((len(iact_ref[c]) * len(iact_ref[c][y])) %2 == 1):
+                    i = (i + 4) % 8
+                buffer = buffer_reset
+                word = word_reset
+    except:
+        for c in range(len(iact_ref)):
+            word = c%8
+            buffer = math.floor(c/8)%oep.NUM_BUFFER
+            addr = math.floor(c/8/oep.NUM_BUFFER)
+            if(iact_ref[c] != dut.BUFFER_A[buffer].iact_converter_buffer_SP.impl.mem[addr].value[7 + (word * 8):(word * 8)].to_signed()):
+                logger.error("Error found in Iact storage; Channel: " + str(c)  + " buffer: " + str(buffer) + " word: " + str(word) + " addr: " + str(addr))
+                logger.error("Ref-Value: " + str(iact_ref[c]) + " DUT-Value: " + str(dut.BUFFER_A[buffer].iact_converter_buffer_SP.impl.mem[addr].value[7 + (word * 8):(word * 8)].to_signed()))
+                error_found = True
+
     if error_found:
         return True
     return True

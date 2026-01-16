@@ -88,6 +88,7 @@ module iact_stream_constructor #(
     output reg [ (PES*$clog2(NUM_GLB_IACT+1))-1:0] iact_choose_o,
     input      [       $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                            8-1:0] needed_iact_channel_cycles_i,
+    input      [                           12-1:0] fc_size_i,
     input signed [                          8-1:0] iact_size_x_i,
     input signed [                          8-1:0] iact_size_y_i,
     input signed [                          8-1:0] iact_channels_i,
@@ -301,7 +302,7 @@ module iact_stream_constructor #(
                       end
                       finished_y_lines <= finished_y_lines + 1;
                       if (finished_y_lines == {{8{1'd0}},iact_size_y_i} - 1) begin
-                        finished_y_lines <= 0;
+                        finished_y_lines         <= 0;
                         ram_rd_addr              <= 0;
                         line_offset              <= 0;
                       end
@@ -570,7 +571,8 @@ module iact_stream_constructor #(
                 ((iact_size_x_i - 1) < x_reg[r])) | (
                 (- w > (y_reg * iact_channels_i)) |
                 ((iact_channels_i * (iact_size_y_i)) <= w + (y_reg * iact_channels_i))
-                )) & !fully_connected_i)) begin
+                )) & !fully_connected_i) |
+                (((2 * byte_var_pre_calc) + w + (((channels * NUM_GLB_IACT) + r) * iact_channels_i) >= fc_size_i) & fully_connected_i)) begin
                   mem_data_payload_reg[r][w] <= 0;
                 end else begin
                   mem_data_payload_reg[r][w] <= storage_w[ram_var[4:0]][byte_var[2:0]];

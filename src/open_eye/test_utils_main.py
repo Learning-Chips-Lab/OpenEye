@@ -318,8 +318,8 @@ def write_weight_file(layer_params, layer_number, dram):
     """
     if "Dense" in str(layer_params.layer_name):
         wght_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_0.csv')
-        for c in range(layer_params.input_shape[3]):
-            for x in range(layer_params.output_shape[3]):
+        for c in range(layer_params.iact_size_x):
+            for x in range(layer_params.filters):
                 wght_ref.write(str(int(dram.weights[layer_number][x][c])).rjust(5) + ";")
             wght_ref.write("\n")
         wght_ref.close()
@@ -348,7 +348,7 @@ def write_weight_file(layer_params, layer_number, dram):
 def write_iact_file(layer_params, layer_number, dram):
     if "Dense" in str(layer_params.layer_name):
         iact_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/iact/iact_ref' + '_0.csv')
-        for c in range(layer_params.input_shape[3]):
+        for c in range(layer_params.iact_size_x):
             iact_ref.write(str(int(dram.fmap[layer_number][c])))
             iact_ref.write("\n")
         iact_ref.close()
@@ -381,7 +381,7 @@ def write_psum_file(layer_params, layer_number, dram, calculated_results):
     jobs = []
     if "Dense" in str(layer_params.layer_name):
         psum_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_0.csv')
-        for x in range(layer_params.output_shape[3]):
+        for x in range(layer_params.filters):
             psum_ref.write(str(calculated_results[x]))
             psum_ref.write("\n")
         psum_ref.close()
@@ -427,11 +427,11 @@ def write_psum_file_conv_mp(f, layer_params, calculated_results, return_dict):
 def collect_results(layer_number, layer_params, dram, serial):
     #Calculate Bias
     if "Dense" in str(layer_params.layer_name):
-        calculated_results = [0 for i in range(layer_params.output_shape[3])]
+        calculated_results = [0 for i in range(layer_params.filters)]
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
-        for x in range(layer_params.output_shape[3]):
+        for x in range(layer_params.filters):
             p = mp.Process(target = calculate_dense_results_mp, args = (x, layer_params, layer_number, dram, calculated_results[x], return_dict))
             p.start()
             jobs.append(p)
@@ -496,7 +496,7 @@ def collect_results(layer_number, layer_params, dram, serial):
     return calculated_results
 
 def calculate_dense_results_mp(x, layer_params, layer_number, dram, calculated_results,return_dict):
-    for c in range(layer_params.input_shape[3]):
+    for c in range(layer_params.iact_size_x):
         calculated_results = int(calculated_results + dram.weights[layer_number][x][c] * dram.fmap[layer_number][c])
     calculated_results = int(calculated_results + dram.bias[layer_number][x])
     return_dict[x] = calculated_results
@@ -803,7 +803,7 @@ def compare_dram_with_ref_mp(f, ref_output, dram, return_dict):
                 return_dict[f] = False
                 return
           
-def fill_dram_with_ref(ref_output, dram, layer_params):
+def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params):
     """Fill DRAM with reference output data for testing.
     
     This function copies reference output data into a DRAM object for
@@ -832,12 +832,19 @@ def fill_dram_with_ref(ref_output, dram, layer_params):
     - Preserves layer-specific data organization
     """
     logger.info("Results are transmitted.")
-    if "Conv" in str(layer_params.layer_name):
-        for f in range(len(ref_output)):    
-            for x in range(len(ref_output[f])):
-                for y in range(len(ref_output[f][x])):
-                    dram[f][x][y] = ref_output[f][x][y]
-    elif "Pooling" in str(layer_params.layer_name):
+    if "Conv" in str(current_layer_params.layer_name):
+        if any(x in str(next_layer_params.layer_name) for x in ("Conv", "Pooling")):
+            for f in range(len(ref_output)):    
+                for x in range(len(ref_output[f])):
+                    for y in range(len(ref_output[f][x])):
+                        dram[f][x][y] = ref_output[f][x][y]
+        else:
+            if any(x in str(next_layer_params.layer_name) for x in ("Dense")):
+                for f in range(len(ref_output)):  
+                    for x in range(len(ref_output[f])):
+                        for y in range(len(ref_output[f][x])):
+                            dram[x+current_layer_params.iact_size_x*y+current_layer_params.iact_size_x*current_layer_params.iact_size_y*f] = ref_output[f][x][y]
+    elif "Pooling" in str(current_layer_params.layer_name):
         for f in range(len(ref_output)):    
             for x in range(len(ref_output[f])):
                 for y in range(len(ref_output[f][x])):

@@ -643,7 +643,7 @@ module PE #(
   // Partial sum scratch pad data outputs
   wire [               PSUM_DATA-1 : 0] psum_spad_data_a_o;   // Data read from port A
   wire [               PSUM_DATA-1 : 0] psum_spad_data_b_o;   // Data read from port B
-
+  wire [                         3 : 0] filters_ceil;         // Ceiled Filters Value
   // Adder input signals (summands)
   wire [      DATA_PSUM_BITWIDTH-1 : 0] adder_1_summand_1;   // Adder 1 input 1 (psum or 0)
   wire [      DATA_PSUM_BITWIDTH-1 : 0] adder_1_summand_2;   // Adder 1 input 2 (mult result)
@@ -866,6 +866,9 @@ module PE #(
 
   // Psum output ready signal (gated by internal select)
   assign psum_ready_o = psum_ready_i & psum_select;
+
+  // Calculated ceiled filters from filters depending on PARALLEL_MACS
+  assign filters_ceil = (filters_reg+PARALLEL_MACS-1)/PARALLEL_MACS;
 
   // ============================================================================
   // Configuration Parameter Streaming FSM
@@ -1840,7 +1843,7 @@ module PE #(
       .enable_i(wght_enable_i),
 
       .first_spad_words_o (first_spad_words_wght),
-      .first_spad_max_i   (filters_reg[4:1]),
+      .first_spad_max_i   (filters_ceil),
       .second_spad_words_o(second_spad_words_wght),
 
       .first_spad_addr_o(first_spad_wght_addr_w),
