@@ -257,7 +257,7 @@ module OpenEye_FPGA #(
 
 `ifndef NO_TRACE
   initial begin
-    string fst_path;
+    reg [1023:0] fst_path;
     // Read the path from the command line argument
     if ($value$plusargs("FST_PATH=%s", fst_path)) begin
       $dumpfile(fst_path);
@@ -2550,9 +2550,9 @@ assign iact_buffer_next_addr = ((iact_converter_buffer_addr_cycles + 2 == (iact_
               end
             end
           end
-          fsm_y_cl_psum <= fsm_y_cl_psum + needed_y_cls_reg[2:0];
+          fsm_y_cl_psum <= fsm_y_cl_psum + needed_y_cls_reg;
           if (fsm_y_cl_psum + needed_y_cls_reg >= ((iact_x_with_add_up * kernels_per_calc)/8)) begin
-            fsm_y_cl_psum       <= fsm_psum_row_offset[2:0] + 1;
+            fsm_y_cl_psum       <= fsm_psum_row_offset + 1;
             fsm_psum_row_offset <= fsm_psum_row_offset + 1;
             if (fsm_psum_row_offset == needed_y_cls_reg - 1) begin
               fsm_y_cl_psum       <= 0;
