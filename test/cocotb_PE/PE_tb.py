@@ -79,8 +79,11 @@ async def start_test_pe(dut):
     iactsize_x = int(os.environ["IACTSIZE_X"])
     iactsize_y = int(os.environ["IACTSIZE_Y"])
     wghtsize_x = int(os.environ["WGHTSIZE_X"])
-    sparse_iact = int(os.environ["SPARSE_IACT"])
-    sparse_wght = int(os.environ["SPARSE_WGHT"])
+    # if the SPARSE_IACT/WGHT values are floats between 0 and 1, we will use these,
+    # if they are integers between 0 and 100, we will use these as percentages and convert
+    # them to floats, accordingly 
+    sparse_iact = float(os.environ["SPARSE_IACT"]) / 100 if float(os.environ["SPARSE_IACT"]) > 1 else float(os.environ["SPARSE_IACT"])
+    sparse_wght = float(os.environ["SPARSE_WGHT"]) / 100 if float(os.environ["SPARSE_WGHT"]) > 1 else float(os.environ["SPARSE_WGHT"])
     wghtsize_y = iactsize_x * iactsize_y
 
     # Initialize timing parameters from environment variables
