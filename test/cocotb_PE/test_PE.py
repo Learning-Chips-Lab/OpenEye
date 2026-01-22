@@ -16,6 +16,7 @@ tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
 
 import pe_test_utils as ptu
+from open_eye import hdl_dir, test_dir, open_eye_dir
 
 
 #As ref:
