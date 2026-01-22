@@ -225,7 +225,7 @@ class DRAMContents(object):
                 for c in range(layer_parameters[l].iact_size_x):
                     for x in range(layer_parameters[l].filters):
                         # Generate random INT8 weights for Dense layer
-                        self.weights[l][x][c] = np.random.randint(-128, 127)
+                        self.weights[l][x][c] = np.random.randint(-64, 63)
                         # Apply sparsity pattern if requested
                         if (sparse_wghts & (((c+l+x) % 2) == 0)):
                             self.weights[l][x][c] = 0
@@ -282,3 +282,7 @@ class DRAMContents(object):
             for c in range(layer_parameters[0].iact_size_x):
                 # Generate random INT8 activation values (no sparsity for Dense)
                 self.fmap[0][c] = np.random.randint(-128, 127)
+                self.fmap[0][c] = np.random.randint(-32, 31)
+                self.fmap[0][c] = np.random.randint(-16, 15)
+                if (self.fmap[0][c] == 0):
+                    self.fmap[0][c] = int(np.random.choice([-1, 1]))
