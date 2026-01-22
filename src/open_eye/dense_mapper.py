@@ -153,7 +153,7 @@ class DenseMapper(LayerMapper):
             "fully_connected_layer": layer_params.fully_connected,
             "choose_iact_buffer_output": layer_params.choose_iact_storage_output,
             "choose_iact_buffer_input": layer_params.choose_iact_storage_input,
-            "iact_channels_per_pe_next_layer": layer_params.diff_iact_layer_next_layer,
+            "iact_channels_per_pe_next_layer": 1,
             "needed_psum_storage_cycles_reg": layer_params.psum_storage_cycles,
             "iact_channel_max_cycles": layer_params.diff_iact_layer,
             "input_activations_reg": layer_params.used_iact_per_PE,
