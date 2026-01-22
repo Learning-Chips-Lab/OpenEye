@@ -68,6 +68,7 @@ module iact_stream_constructor #(
     localparam IACT_DATA_DATA      = DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD,
     localparam BITS_PER_ROUTER     = WORD_BITWIDTH / NUM_GLB_IACT,
     localparam WORDS_PER_TRANS     = BITS_PER_ROUTER / IACT_DATA_DATA,
+    localparam IACT_CHOOSE_BITS    = $clog2(NUM_GLB_IACT+1),    
     localparam PARAMS_SIZE         = 32,
     localparam PARAM_LENGTH        = 8,
     localparam WORDS_PER_CYCLE     = 2
@@ -101,6 +102,7 @@ module iact_stream_constructor #(
     input      [                    ADDRWIDTH-1:0] needed_iact_buffer_words_i
 );
   reg                           ram_wr_en;
+  reg                           configured;
   reg  [         ADDRWIDTH-1:0] ram_wr_addr;
   reg                           ram_rd_en;
   reg  [         ADDRWIDTH-1:0] ram_rd_addr;
@@ -171,7 +173,7 @@ module iact_stream_constructor #(
         case (fsm_enc_current_state)
           IDLE: begin
             iact_data_o                <= 0;
-            iact_choose_o              <= ~0;
+            iact_choose_o              <= {PES{NUM_GLB_IACT[IACT_CHOOSE_BITS-1:0]}};
             fsm_enc_cycle              <= 0;
             ram_inc_counter            <= 0;
             ram_inc_counter_offset     <= 0;
@@ -321,7 +323,7 @@ module iact_stream_constructor #(
             fsm_enc_current_state <= IDLE;
           end
         endcase
-        if (enable_converter) begin
+        if (enable_converter & configured) begin
           fsm_enc_cycle <= 1;
         end
         if (reset_cycle_i) begin
@@ -409,6 +411,7 @@ module iact_stream_constructor #(
         pos                    <= 0;
         change_state           <= 0;
         ready_o                <= 0;
+        configured             <= 0;
         ram_wr_en              <= 0;
         ram_wr_addr            <= 0;
         ram_wr_addr_reg        <= 0;
@@ -612,6 +615,7 @@ module iact_stream_constructor #(
           y              <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4];
           channels       <= params[(PARAMS_SIZE/4)-1:0];
           ready_o        <= 1;
+          configured     <= 1;
         end
         needed_iact_cycles_reg <= needed_iact_router_cycles_i;
         wght_size_reg          <= wght_size_i;
