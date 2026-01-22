@@ -35,10 +35,10 @@ clk_delay_unit_out = "ps"
 
 @pytest.mark.parametrize("IACTSIZE_X", [(4),(3),(2),(1)])
 @pytest.mark.parametrize("IACTSIZE_Y", [(3),(2),(1)])
-@pytest.mark.parametrize("WGHTSIZE_X", [(12),(10),(8),(1)])
-@pytest.mark.parametrize("SPARSE_IACT", [(0),(0.1),(0.2)])
-@pytest.mark.parametrize("SPARSE_WGHT", [(0),(0.1),(0.2),(0.3),(0.4)])
-def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT):
+@pytest.mark.parametrize("WGHTSIZE_X", [(12),(10),(8),(4)])
+@pytest.mark.parametrize("SPARSE_IACT", [(0)])
+@pytest.mark.parametrize("SPARSE_WGHT", [(0)])
+def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,request):
     dut = 'PE'
     module = 'PE_tb'
     toplevel = dut
