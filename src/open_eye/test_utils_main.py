@@ -849,4 +849,7 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
             for x in range(len(ref_output[f])):
                 for y in range(len(ref_output[f][x])):
                     dram[f][x][y] = ref_output[f][x][y]
+    elif "Dense" in str(current_layer_params.layer_name):
+        for f in range(len(ref_output)):  
+            dram[f] = ref_output[f]
     return dram       
