@@ -52,7 +52,6 @@ USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL, CLUSTER_ROW
     toplevel = dut
     verilog_sources = ptu.get_verilog_sources(hdl_dir)
     target_dir = os.path.join(tests_dir, '.temp')
-    #target_dir = os.path.join(tests_dir, '.temp/test_' + str(datetime.now().isoformat())) 
     os.makedirs(target_dir, exist_ok=True)
     vh_file_creator.create_vh_file_from_envvars(target_dir,hdl_dir + "/", toplevel = "OpenEye_Parallel")
     results = cocotb_test.simulator.run(
