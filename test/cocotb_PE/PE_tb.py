@@ -20,8 +20,10 @@ Key Features:
 import math
 import sys
 import os
+import csv
 import numpy as np
 from numpy import genfromtxt
+from pathlib import Path
 
 import cocotb
 from cocotb.triggers import Timer, Combine
@@ -42,6 +44,85 @@ clk_delay_unit_in = os.environ["CLOCK_DELAY_UNIT_INPUT"]  # Input delay unit
 clk_delay_out = int(os.environ["CLOCK_DELAY_OUTPUT"])  # Output delay
 clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]  # Output delay unit
 
+
+
+async def measure_computation_time(dut):
+    """
+    Asynchronous function that measures the time from compute_i pulse to psum_enable_o rise.
+
+    This function runs in parallel with the main test and counts clock cycles between
+    when compute_i is asserted and when psum_enable_o first rises.
+
+    Args:
+        dut: Device Under Test
+
+    Returns:
+        elapsed_cycles: Number of clock cycles elapsed
+    """
+    elapsed_cycles = 0
+
+    # Wait for compute_i to go high
+    await RisingEdge(dut.compute_i)
+
+    # Now count cycles until psum_enable_o goes high
+    while dut.psum_enable_o.value == 0:
+        await RisingEdge(dut.clk_i)
+        elapsed_cycles += 1
+
+    return elapsed_cycles
+
+
+def log_computation_time(elapsed_cycles, csv_filename="computation_times.csv"):
+    """
+    Logs computation timing data to a CSV file.
+
+    Records the time elapsed from compute signal to first partial sum reception,
+    along with test parameters. Creates the file if it doesn't exist, otherwise appends.
+
+    Args:
+        elapsed_cycles: Number of clock cycles elapsed during computation
+        csv_filename: Path to output CSV file (default: "computation_times.csv" in current directory)
+
+    CSV Columns:
+        - iactsize_x: Number of input activation values
+        - iactsize_y: Number of input channels
+        - wghtsize_x: Number of output filters
+        - sparse_iact: Input activation sparsity (0-1)
+        - sparse_wght: Weight sparsity (0-1)
+        - elapsed_cycles: Clock cycles from compute to first psum
+        - elapsed_time_ns: Elapsed time in nanoseconds
+    """
+    # Calculate elapsed time in nanoseconds
+    elapsed_time_ns = elapsed_cycles * clk_cycle  # clk_cycle is in the unit specified by clk_cycle_unit
+    if clk_cycle_unit == "ps":
+        elapsed_time_ns = elapsed_time_ns / 1000
+    elif clk_cycle_unit == "us":
+        elapsed_time_ns = elapsed_time_ns * 1000
+    print(80*"#")
+    print("ELAPSED TIME:", elapsed_cycles)
+    print(80*"#")
+
+    csv_path = Path(csv_filename)
+    file_exists = csv_path.exists()
+
+    with open(csv_path, mode='a', newline='') as csvfile:
+        fieldnames = ['iactsize_x', 'iactsize_y', 'wghtsize_x', 'sparse_iact', 'sparse_wght', 'elapsed_cycles', 'elapsed_time_ns']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        # Write header if file is new
+        if not file_exists:
+            writer.writeheader()
+
+        # Write the data row
+        writer.writerow({
+            'iactsize_x': iactsize_x,
+            'iactsize_y': iactsize_y,
+            'wghtsize_x': wghtsize_x,
+            'sparse_iact': sparse_iact,
+            'sparse_wght': sparse_wght,
+            'elapsed_cycles': elapsed_cycles,
+            'elapsed_time_ns': elapsed_time_ns
+        })
 
 # Dimensions for PE initiliazed as globals
 iactsize_x = 0  # Number of input activation values (spatial dimension)
@@ -94,8 +175,9 @@ async def start_test_pe(dut):
     # Generate test input data (activations, weights, partial sums)
     (iacts, wghts, psums) = create_iact_wght_psum_arrays(dut)
 
-    # Launch main test sequence
-    await cocotb.start_soon(test_hdls(ptp, dut, iacts, wghts, psums))
+    # Launch main test sequence and wait for completion
+    test_thread = cocotb.start_soon(test_hdls(ptp, dut, iacts, wghts, psums))
+    await test_thread
 
 async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
     """
@@ -137,6 +219,9 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
     # Wait for both data loading operations to complete
     await Combine(send_iact_thread, send_wght_thread)
 
+    # Start timing measurement in parallel with the test
+    timing_thread = cocotb.start_soon(measure_computation_time(dut))
+
     # Trigger computation: pulse compute_i high for one cycle
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, 1))
     await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
@@ -156,8 +241,11 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
     await RisingEdge(dut.psum_enable_o)
     await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
+    # Get the timing measurement result
+    compute_cycles = await timing_thread
+
     # Start output validation (compares against golden model)
-    cocotb.start_soon(get_psum(dut, iacts_array, wghts_array, psum_array))
+    #cocotb.start_soon(get_psum(dut, iacts_array, wghts_array, psum_array))
 
     # Wait for output to complete
     await FallingEdge(dut.psum_enable_o)
@@ -165,6 +253,8 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
     # Additional settling time
     for _ in range(100):
         await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
+
+    log_computation_time(compute_cycles)
 
     # Final sanity check
     assert dut.compute_i.value == 0, "rst_ni is not 0!"

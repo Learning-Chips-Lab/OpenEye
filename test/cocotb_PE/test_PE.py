@@ -55,19 +55,19 @@ def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT):
         force_compile=True,
         waves=True,
         simulator="icarus",
-        extra_env = {"CLOCK_LEN" : str(clk_cycle)
-                    ,"CLOCK_UNIT" : clk_cycle_unit
-                    ,"CLOCK_DELAY_INPUT" : str(clk_delay_in)
-                    ,"CLOCK_DELAY_UNIT_INPUT" : clk_delay_unit_in
-                    ,"CLOCK_DELAY_OUTPUT" : str(clk_delay_out)
-                    ,"CLOCK_DELAY_UNIT_OUTPUT" : clk_delay_unit_out
-                    ,"IACTSIZE_X" : str(IACTSIZE_X)
-                    ,"IACTSIZE_Y" : str(IACTSIZE_Y)
-                    ,"WGHTSIZE_X" : str(WGHTSIZE_X)
-                    ,"WGHTSIZE_Y" : str(IACTSIZE_X*IACTSIZE_Y)
-                    ,"SPARSE_IACT" : str(SPARSE_IACT)
-                    ,"SPARSE_WGHT" : str(SPARSE_WGHT)}
+        extra_env = {"CLOCK_LEN" : str(clk_cycle),
+                    "CLOCK_UNIT" : clk_cycle_unit,
+                    "CLOCK_DELAY_INPUT" : str(clk_delay_in),
+                    "CLOCK_DELAY_UNIT_INPUT" : clk_delay_unit_in,
+                    "CLOCK_DELAY_OUTPUT" : str(clk_delay_out),
+                    "CLOCK_DELAY_UNIT_OUTPUT" : clk_delay_unit_out,
+                    "IACTSIZE_X" : str(IACTSIZE_X),
+                    "IACTSIZE_Y" : str(IACTSIZE_Y),
+                    "WGHTSIZE_X" : str(WGHTSIZE_X),
+                    "WGHTSIZE_Y" : str(IACTSIZE_X*IACTSIZE_Y),
+                    "SPARSE_IACT" : str(SPARSE_IACT),
+                    "SPARSE_WGHT" : str(SPARSE_WGHT)}
     )
 
 if __name__ == '__main__':
-    test_single_pe()
+    test_single_pe(IACTSIZE_X=6, IACTSIZE_Y=2, WGHTSIZE_X=4, SPARSE_IACT=0, SPARSE_WGHT=0)
