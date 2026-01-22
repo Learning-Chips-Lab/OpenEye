@@ -639,8 +639,9 @@ def create_iact_wght_psum_arrays(dut):
             - wghts: [[1], [2], [3]] (3 weights, 1 filter)
             - psums: [1] (1 bias value)
     """
-    # Generate input activations: sequential values from 1 to (channels * dimensions)
+    # Generate input activations: random values from -128 to 127, without 0
     iacts = np.random.randint(-128, 127, size=(iactsize_y, iactsize_x))
+    iacts[iacts >= 0] += 1
     # Apply random sparsity to activations
     # Choose random indices to zero out (sparse_iact fraction of total)
     indices = np.random.choice(
@@ -652,8 +653,9 @@ def create_iact_wght_psum_arrays(dut):
     for x in range(len(indices)):
         iacts[int(indices[x] / iactsize_x)][int(indices[x] % iactsize_x)] = 0
 
-    # Generate weights: sequential values from 1 to (filters * weights_per_filter)
+    # Generate weights: random values from -128 to 127, without 0
     wghts = np.random.randint(-128, 127, size=(wghtsize_y, wghtsize_x))
+    wghts[wghts >= 0] += 1
 
     # Apply random sparsity to weights
     indices = np.random.choice(
