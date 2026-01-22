@@ -107,12 +107,14 @@ def batchnorm_output(layer_parameters, divide_value, layer_number, dram):
     
     All operations are performed in-place on dram[layer_number + 1].
     """
-    if "Conv" in str(layer_parameters.layer_name):
+    #if "Conv" in str(layer_parameters.layer_name):
+    try:
         for f in range(len(dram.fmap[1 + layer_number])):
             for x in range(len(dram.fmap[1 + layer_number][f])):
                 for y in range(len(dram.fmap[1 + layer_number][f][x])):
                     dram.fmap[1 + layer_number][f][x][y] = math.floor((layer_parameters.quantize[f][0]*dram.fmap[1 + layer_number][f][x][y])/(2**layer_parameters.quantize[f][1]))
-    elif "Dense" in str(layer_parameters.layer_name):
+    #elif "Dense" in str(layer_parameters.layer_name):
+    except:
         for f in range(len(dram.fmap[1 + layer_number])):
-            dram.fmap[1 + layer_number][f] = math.floor(dram.fmap[1 + layer_number][f]/divide_value)
+            dram.fmap[1 + layer_number][f] = math.floor(dram.fmap[1 + layer_number][f]/(2**layer_parameters.quantize[0][1]))
 

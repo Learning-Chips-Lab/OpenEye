@@ -223,7 +223,7 @@ module data_pipeline_iact #(
         second_spad_words_o        <= 0;
         compute_sent               <= 1;
         //Fully-Connected
-        if (second_spad_words_o >= 4) begin
+        if (first_spad_max_i >= 4) begin
           cycle_counter              <= 0;
         end else begin
           if (cycle_counter != 0) begin

@@ -234,8 +234,8 @@ class LayerParameters(object):
         self.used_channels = 1                 # Channels processed per iteration
         self.channel_repetition = 4            # Channel processing repetition factor
         self.single_cluster_computation = 0    # Cluster computation mode
-        self.iact_size_x = 0                   # Input activation width
-        self.iact_size_y = 0                   # Input activation height
+        self.iact_size_x = 1                   # Input activation width
+        self.iact_size_y = 1                   # Input activation height
 
         # === Transmission Count Defaults ===
         self.iact_transmissions_pe = 1         # Activation transmissions (PE level)
@@ -317,7 +317,6 @@ class LayerParameters(object):
         self.different_kernels_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1])
         # Limit to at most ceil(output_channels/8) kernels
         self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.output_shape[3]/8))
-
         # Calculate how many Y lines can be processed per computation
         self.y_lines_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1]/self.different_kernels_per_calculation)
         # Limit by available Y clusters and input height
@@ -1007,6 +1006,8 @@ class LayerParameters(object):
         if (layer_number != max_layers - 1) :
             # Store next layer's channel requirements for inter-layer optimization
             self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
+            if (layer_parameters[max_layers - layer_number - 2].layer_name == "Dense"):
+                self.diff_iact_layer_next_layer = 1
 
         # Total activations per PE = kernel height * channels per iteration
         self.used_iact_per_PE = self.kernel_size[0] * self.used_channels
@@ -1253,9 +1254,14 @@ class LayerParameters(object):
             Dense layers typically use only PE[0][0] in each cluster.
         """
         self.layer_name = "Dense"
-        self.iact_size_x = 1
-        self.iact_size_y = layer.input.shape[2]
-        self.filters = layer.output.shape[3]
+        try:
+            self.iact_size_x = layer.input.shape[3]
+        except:
+            self.iact_size_x = layer.input.shape[1]
+        try:
+            self.filters = layer.output.shape[3]
+        except:
+            self.filters = layer.output.shape[1]
         self.fully_connected = 1
         self.output_cycles = 1
         self.y_lines_per_calculation = 1
@@ -1274,19 +1280,22 @@ class LayerParameters(object):
         self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
             
-        self.used_channels = params.NUM_GLB_IACT*math.ceil(self.input_shape[3]/(params.Clusters_Y*params.NUM_GLB_IACT))
-        #Calculate Iact Cycles
+        self.used_channels = params.NUM_GLB_IACT*math.ceil(self.iact_size_x/(params.Clusters_Y*params.NUM_GLB_IACT))
+        # Calculate Iact Cycles
         self.needed_Iact_writes = math.ceil(params.PEs_Y/params.NUM_GLB_IACT)
 
         # Calculate the number of refreshes needed for the layer
         
-        self.used_iact_per_PE = math.ceil(self.input_shape[3]/(params.Clusters_Y*params.PEs_Y))
+        self.used_iact_per_PE = math.ceil(self.iact_size_x/(params.Clusters_Y*params.PEs_Y))
         self.used_iact_per_PE = min(self.used_iact_per_PE, 12)
-        self.diff_iact_layer = math.ceil(self.input_shape[3]/(params.NUM_GLB_WGHT*self.used_iact_per_PE))
+        self.diff_iact_layer = math.ceil(self.iact_size_x/(params.PEs_Y*self.used_iact_per_PE))
         self.needed_wght_transmissions = math.ceil(self.diff_iact_layer/params.Clusters_Y)
-        self.used_iact_per_PE = math.ceil(self.input_shape[3]/(self.needed_wght_transmissions*params.Clusters_Y*params.PEs_Y))
-        self.diff_iact_layer = math.ceil(self.input_shape[3]/(params.NUM_GLB_WGHT*self.used_iact_per_PE))
-        self.used_psum_per_PE = math.ceil(self.output_shape[3]/params.Clusters_X)
+        self.used_iact_per_PE = math.ceil(self.iact_size_x/(self.needed_wght_transmissions*params.Clusters_Y*params.PEs_Y))
+        self.used_wght_per_PE = self.used_iact_per_PE * math.ceil(self.filters/params.Clusters_X/params.PARALLEL_MACS)*params.PARALLEL_MACS
+        self.diff_iact_layer = math.ceil(self.iact_size_x/(params.NUM_GLB_WGHT*self.used_iact_per_PE))
+        self.used_psum_per_PE = math.ceil(self.used_wght_per_PE/self.used_iact_per_PE)
+        self.used_psum_per_PE = math.ceil(self.filters/params.Clusters_X)
+        #self.needed_wght_transmissions = self.needed_wght_transmissions * 1
         
         self.used_Y_cluster = params.Clusters_Y
         self.used_X_cluster = 1
@@ -1299,7 +1308,6 @@ class LayerParameters(object):
                                         for _ in range(params.Clusters_Y)]
                                         for _ in range(params.Clusters_X)]
         
-        self.used_wght_per_PE = self.used_iact_per_PE*self.used_psum_per_PE
         for x_cluster in range(params.Clusters_X):
             for y_cluster in range(params.Clusters_Y):
                 for y_pe in range(params.PEs_Y):
@@ -1307,10 +1315,10 @@ class LayerParameters(object):
                         if(x_pe != 0):
                             self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
         
-        self.psum_transmissions_pe = math.ceil(self.output_shape[1]/(self.used_psum_per_PE * params.Clusters_X * params.Clusters_Y))
+        self.psum_transmissions_pe = math.ceil(1/16)
         self.psum_transmissions_glb = 1
 
-        self.iact_transmissions_pe = math.ceil(self.input_shape[1]/(self.used_iact_per_PE * params.PEs_Y))
+        self.iact_transmissions_pe = math.ceil(1/(self.used_iact_per_PE * params.PEs_Y))
         self.iact_transmissions_glb = 1
 
         self.needed_psum_transmissions = self.psum_transmissions_pe * self.psum_transmissions_glb

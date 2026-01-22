@@ -869,30 +869,30 @@ class DenseWghtStreamMapper(WghtStreamMapper):
             for spad_val_number in range(params.PARALLEL_MACS):
                 # Calculate linear position in weight stream
                 position = words_in_storage * 2 + spad_val_number
-
+                needed_wghts_in_word = math.ceil(layer_params.used_psum_per_PE/2)*2
                 # Recalculate filter index with Y-cluster assignment
-                filters =  (position%layer_params.used_psum_per_PE) + \
+                filters =  (position%needed_wghts_in_word) + \
                 cl_x * layer_params.used_psum_per_PE + \
                 (math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.psum_transmissions_pe) * params.Clusters_X * params.Clusters_Y * layer_params.used_psum_per_PE
                 # Recalculate channel with Y-cluster assignment
                 #channel = math.floor((layer_repetition%layer_params.iact_transmissions_pe)*params.Wght_Routers*layer_params.used_iact_per_PE) + \
                 channel = math.floor((layer_repetition)*(params.NUM_GLB_WGHT * params.Clusters_Y * layer_params.used_iact_per_PE)) + \
-                math.floor(position/layer_params.used_psum_per_PE) + \
+                math.floor(position/needed_wghts_in_word) + \
                 cl_y * params.NUM_GLB_WGHT * layer_params.used_iact_per_PE + \
                 router * layer_params.used_iact_per_PE 
 
-                try:
-                    # Load weight from 2D matrix: dram[output_feature][input_feature]
-                    spad_storage[words_in_storage][spad_val_number][0] = dram[filters][channel]
-                    spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
-                except:
-                    # Out of bounds, leave as zero
-                    pass
+                if ((position % needed_wghts_in_word) < layer_params.used_psum_per_PE) :
+                    try:
+                        # Load weight from 2D matrix: dram[output_feature][input_feature]
+                        spad_storage[words_in_storage][spad_val_number][0] = dram[filters][channel]
+                        spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
+                    except:
+                        # Out of bounds, leave as zero
+                        pass
 
             # Stop when SPAD is full
             if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
-
         return spad_storage
 
     def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):

@@ -68,6 +68,7 @@ module iact_stream_constructor #(
     localparam IACT_DATA_DATA      = DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD,
     localparam BITS_PER_ROUTER     = WORD_BITWIDTH / NUM_GLB_IACT,
     localparam WORDS_PER_TRANS     = BITS_PER_ROUTER / IACT_DATA_DATA,
+    localparam IACT_CHOOSE_BITS    = $clog2(NUM_GLB_IACT+1),    
     localparam PARAMS_SIZE         = 32,
     localparam PARAM_LENGTH        = 8,
     localparam WORDS_PER_CYCLE     = 2
@@ -88,6 +89,7 @@ module iact_stream_constructor #(
     output reg [ (PES*$clog2(NUM_GLB_IACT+1))-1:0] iact_choose_o,
     input      [       $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                            8-1:0] needed_iact_channel_cycles_i,
+    input      [                           12-1:0] fc_size_i,
     input signed [                          8-1:0] iact_size_x_i,
     input signed [                          8-1:0] iact_size_y_i,
     input signed [                          8-1:0] iact_channels_i,
@@ -100,6 +102,7 @@ module iact_stream_constructor #(
     input      [                    ADDRWIDTH-1:0] needed_iact_buffer_words_i
 );
   reg                           ram_wr_en;
+  reg                           configured;
   reg  [         ADDRWIDTH-1:0] ram_wr_addr;
   reg                           ram_rd_en;
   reg  [         ADDRWIDTH-1:0] ram_rd_addr;
@@ -170,7 +173,7 @@ module iact_stream_constructor #(
         case (fsm_enc_current_state)
           IDLE: begin
             iact_data_o                <= 0;
-            iact_choose_o              <= ~0;
+            iact_choose_o              <= {PES{NUM_GLB_IACT[IACT_CHOOSE_BITS-1:0]}};
             fsm_enc_cycle              <= 0;
             ram_inc_counter            <= 0;
             ram_inc_counter_offset     <= 0;
@@ -301,7 +304,7 @@ module iact_stream_constructor #(
                       end
                       finished_y_lines <= finished_y_lines + 1;
                       if (finished_y_lines == {{8{1'd0}},iact_size_y_i} - 1) begin
-                        finished_y_lines <= 0;
+                        finished_y_lines         <= 0;
                         ram_rd_addr              <= 0;
                         line_offset              <= 0;
                       end
@@ -320,7 +323,7 @@ module iact_stream_constructor #(
             fsm_enc_current_state <= IDLE;
           end
         endcase
-        if (enable_converter) begin
+        if (enable_converter & configured) begin
           fsm_enc_cycle <= 1;
         end
         if (reset_cycle_i) begin
@@ -408,6 +411,7 @@ module iact_stream_constructor #(
         pos                    <= 0;
         change_state           <= 0;
         ready_o                <= 0;
+        configured             <= 0;
         ram_wr_en              <= 0;
         ram_wr_addr            <= 0;
         ram_wr_addr_reg        <= 0;
@@ -570,7 +574,8 @@ module iact_stream_constructor #(
                 ((iact_size_x_i - 1) < x_reg[r])) | (
                 (- w > (y_reg * iact_channels_i)) |
                 ((iact_channels_i * (iact_size_y_i)) <= w + (y_reg * iact_channels_i))
-                )) & !fully_connected_i)) begin
+                )) & !fully_connected_i) |
+                (((2 * byte_var_pre_calc) + w + (((channels * NUM_GLB_IACT) + r) * iact_channels_i) >= fc_size_i) & fully_connected_i)) begin
                   mem_data_payload_reg[r][w] <= 0;
                 end else begin
                   mem_data_payload_reg[r][w] <= storage_w[ram_var[4:0]][byte_var[2:0]];
@@ -610,6 +615,7 @@ module iact_stream_constructor #(
           y              <= params[(3*PARAMS_SIZE/4)-1:2*PARAMS_SIZE/4];
           channels       <= params[(PARAMS_SIZE/4)-1:0];
           ready_o        <= 1;
+          configured     <= 1;
         end
         needed_iact_cycles_reg <= needed_iact_router_cycles_i;
         wght_size_reg          <= wght_size_i;
@@ -619,6 +625,7 @@ module iact_stream_constructor #(
       end
     end
 
+    genvar r_gen, w_gen, b_gen;
     for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin : BUFFER
       wire [BITS_PER_ROUTER-1:0]ram_data_i_w;
       wire [BITS_PER_ROUTER-1:0]ram_data_o_w;
@@ -635,7 +642,6 @@ module iact_stream_constructor #(
           .data_o  (ram_data_o_w)
       );
     end
-    genvar r_gen, w_gen, b_gen;
     for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin
       assign ram_data_o[r_gen * BITS_PER_ROUTER+:BITS_PER_ROUTER]=BUFFER[r_gen].ram_data_o_w;
       for (w_gen = 0; w_gen < WORDS_PER_TRANS; w_gen = w_gen + 1) begin

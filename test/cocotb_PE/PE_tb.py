@@ -347,7 +347,6 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
 
     if wght.ndim == 1:
         wght = [wght]
-
     # Initialize golden model with bias values
     for psum_x in range(len(bias)):
         control[psum_x] = bias[psum_x]
@@ -360,11 +359,12 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
         for iact_x in range(len(iact[iact_y])):  # For each activation in channel
             for wght_x in range(len(wght[current_iact])):  # For each filter/output
                 # Accumulate: output[filter] += activation * weight[filter]
-                control[wght_x] = (
-                    control[wght_x] + wght[current_iact][wght_x] * iact[iact_y][iact_x]
-                )
-            current_iact = current_iact + 1
 
+                control[wght_x] = control[wght_x] + (wght[current_iact][wght_x] * iact[iact_y][iact_x])
+            current_iact = current_iact + 1
+    for output_word in range(len(control)):  # For each filter/output
+        if (control[output_word] < 0):
+            control[output_word] = control[output_word] + 2**20
     # Validate hardware outputs against golden model
     current_control = 0
     for output_word in range(len(control)):
@@ -372,7 +372,6 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
             control[output_word] = control[2*output_word] + (control[1+(2*output_word)] << 20)
         else:
             control[output_word] = 0
-
     # Check outputs while PE is producing results (psum_enable_o is high)
     while dut.psum_enable_o.value == 1:
         # Validate adder_1 output
@@ -387,7 +386,6 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
         )
         current_control = current_control + 1
         await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
-
 async def send_wght(ptp, dut, data_array):
     """
     Formats and sends weight data to the WGHT scratchpad memory.
@@ -583,7 +581,6 @@ async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits,
     sending_data = 0
     current_storage_position = 0
     offset = 0
-
     # Send data over multiple clock cycles
     for cycle in range(addr_bits):
         # Calculate how many words fit in one transmission
@@ -667,23 +664,27 @@ def generate_spad(
     data_spad_data = np.zeros(data_spad_words)
     current_count = 0  # Count of non-zero elements processed
     overhead = 0  # Count of consecutive zeros skipped
-
     # Process each element in the input array
     for y in range(len(data)):  # For each row
         for x in range(len(data[y])):  # For each element in row
             # Include this element if it's non-zero OR we're not ignoring zeros
             if (data[y][x] != 0) | (not ignore_zeros):
+                if (data[y][x] < 0):
+                    temp_data = data[y][x] + 2**bitwidth
+                else :
+                    temp_data = data[y][x]
+
                 if sisd:
                     # SISD mode: one value per word
                     # Encode: overhead in upper bits, value in lower bits
-                    data_spad_data[current_count] = data[y][x] + (overhead << bitwidth)
+                    data_spad_data[current_count] = temp_data + (overhead << bitwidth)
                 else:
                     # Packed mode: two values per word
                     # Pack values at different bit offsets
                     data_spad_data[int(math.floor(current_count / 2))] = data_spad_data[
                         int(math.floor(current_count / 2))
                     ] + (
-                        (data[y][x] + (overhead << bitwidth))
+                        (temp_data + (overhead << bitwidth))
                         << (offset * (current_count % 2))
                     )
 
@@ -731,11 +732,9 @@ def create_iact_wght_psum_arrays(dut):
             - wghts: [[1], [2], [3]] (3 weights, 1 filter)
             - psums: [1] (1 bias value)
     """
-    # Generate input activations: sequential values from 1 to (channels * dimensions)
-    iacts = np.arange(1,iactsize_y * iactsize_x + 1, 1).reshape(
-        iactsize_y, iactsize_x
-    )
-
+    # Generate input activations: random values from -128 to 127, without 0
+    iacts = np.random.randint(-128, 127, size=(iactsize_y, iactsize_x))
+    iacts[iacts >= 0] += 1
     # Apply random sparsity to activations
     # Choose random indices to zero out (sparse_iact fraction of total)
     indices = np.random.choice(
@@ -747,10 +746,9 @@ def create_iact_wght_psum_arrays(dut):
     for x in range(len(indices)):
         iacts[int(indices[x] / iactsize_x)][int(indices[x] % iactsize_x)] = 0
 
-    # Generate weights: sequential values from 1 to (filters * weights_per_filter)
-    wghts = np.arange(1, wghtsize_y * wghtsize_x + 1, 1).reshape(
-        wghtsize_y, wghtsize_x
-    )
+    # Generate weights: random values from -128 to 127, without 0
+    wghts = np.random.randint(-128, 127, size=(wghtsize_y, wghtsize_x))
+    wghts[wghts >= 0] += 1
 
     # Apply random sparsity to weights
     indices = np.random.choice(

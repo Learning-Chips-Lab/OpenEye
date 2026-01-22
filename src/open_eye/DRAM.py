@@ -98,9 +98,9 @@ class DRAMContents(object):
                                     for j in range(layer_parameters[i].input_shape[3])])
             elif "Dense" in str(layer_parameters[i].layer_name):
                 # Fully connected layer: weight matrix
-                # Shape: [output_features][input_features]
-                dram_weights.append([[0 for m in range(layer_parameters[i].input_shape[3])]
-                                    for l in range(layer_parameters[i].output_shape[3])])
+                # Shape: [filters][input_features]
+                dram_weights.append([[0 for m in range(layer_parameters[i].iact_size_x)]
+                                    for l in range(layer_parameters[i].filters)])
             elif "Flat" in str(layer_parameters[i].layer_name):
                 # Flatten layer: no weights needed (placeholder)
                 dram_weights.append([0])
@@ -119,7 +119,7 @@ class DRAMContents(object):
                 dram_bias.append([0 for m in range(layer_parameters[i].filters)])
             elif "Dense" in str(layer_parameters[i].layer_name):
                 # Dense layer: one bias per output feature
-                dram_bias.append([0 for m in range(layer_parameters[i].output_shape[3])])
+                dram_bias.append([0 for m in range(layer_parameters[i].filters)])
             elif "Pooling" in str(layer_parameters[i].layer_name):
                 # Pooling layer: one bias per output channel (width dimension)
                 dram_bias.append([0 for m in range(layer_parameters[i].output_shape[2])])
@@ -134,7 +134,7 @@ class DRAMContents(object):
                                 for j in range(layer_parameters[i].input_shape[3])])
             elif "Dense" in str(layer_parameters[i].layer_name):
                 # Dense layer input: 1D vector [features]
-                dram_fmap.append([0 for j in range(layer_parameters[i].input_shape[3])])
+                dram_fmap.append([0 for j in range(layer_parameters[i].iact_size_x)])
             elif "Flat" in str(layer_parameters[i].layer_name):
                 # Flatten layer input: 3D tensor (pre-flattening shape)
                 dram_fmap.append([[[0 for l in range(layer_parameters[i].input_shape[2])]
@@ -155,7 +155,7 @@ class DRAMContents(object):
                                     for j in range(layer_parameters[i].output_shape[3])])
             elif "Dense" in str(layer_parameters[i].layer_name):
                 # Dense output: 1D vector [features]
-                dram_fmap.append([0 for l in range(layer_parameters[i].output_shape[3])])
+                dram_fmap.append([0 for l in range(layer_parameters[i].filters)])
 
         # Assign initialized structures to instance attributes
         self.fmap = dram_fmap
@@ -198,7 +198,7 @@ class DRAMContents(object):
                     for x in range(layer_parameters[l].kernel_size[0]):
                         for y in range(layer_parameters[l].kernel_size[1]):
                             # Quantize weight to INT8: multiply by 127 and floor
-                            self.weights[l][c][x][y] = int(math.floor(float(127*model.layers[l].weights[0][x][y][c])))
+                            self.weights[l][c][x][y] = int(math.floor(float(127*model[l].weights[0][x][y][c])))
                             # Replace zeros with random -1 or 1 to avoid true zero weights
                             if (self.weights[l][c][x][y] == 0):
                                 self.weights[l][c][x][y] = int(np.random.choice([-1, 1]))
@@ -210,7 +210,7 @@ class DRAMContents(object):
                         for x in range(layer_parameters[l].kernel_size[0]):
                             for y in range(layer_parameters[l].kernel_size[1]):
                                 # Quantize weight to INT8
-                                self.weights[l][c][f][x][y] = int(math.floor(float(127*model.layers[l].weights[0][x][y][c][f])))
+                                self.weights[l][c][f][x][y] = int(math.floor(float(127*model[l].weights[0][x][y][c][f])))
                                 # Apply sparsity pattern if requested: zero out elements where sum of indices is even
                                 if (sparse_wghts & (((c+f+x+y) % 2) == 0)):
                                     self.weights[l][c][f][x][y] = 0
@@ -222,10 +222,10 @@ class DRAMContents(object):
                 # Load Dense (fully connected) layer weights
                 # Note: Uses random weights instead of model weights
                 # Iterate: input_features -> output_features
-                for c in range(layer_parameters[l].input_shape[3]):
-                    for x in range(layer_parameters[l].output_shape[3]):
+                for c in range(layer_parameters[l].iact_size_x):
+                    for x in range(layer_parameters[l].filters):
                         # Generate random INT8 weights for Dense layer
-                        self.weights[l][x][c] = np.random.randint(-128, 127)
+                        self.weights[l][x][c] = np.random.randint(-64, 63)
                         # Apply sparsity pattern if requested
                         if (sparse_wghts & (((c+l+x) % 2) == 0)):
                             self.weights[l][x][c] = 0
@@ -242,20 +242,20 @@ class DRAMContents(object):
                 if (layer_parameters[l].kernel_size[0] != 1):
                     # Multiple bias values (one per kernel row)
                     for x in range(layer_parameters[l].kernel_size[0]):
-                        self.bias[l][x] = int(math.floor(float(model.layers[l].weights[1][x])))
+                        self.bias[l][x] = int(math.floor(float(model[l].weights[1][x])))
                 else:
                     # Single bias value for 1x1 kernels
-                    self.bias[l][0] = int(math.floor(float(model.layers[l].weights[1])))
+                    self.bias[l][0] = int(math.floor(float(model[l].weights[1])))
             elif "Conv" in str(layer_parameters[l].layer_name):
                 # Load Conv2D biases: one bias per output filter
                 for x in range(layer_parameters[l].filters):
-                    self.bias[l][x] = int(math.floor(float(model.layers[l].weights[1][x])))
+                    self.bias[l][x] = int(math.floor(float(model[l].weights[1][x])))
                     # Alternative: self.bias[l][x] = x * (-1)  # Uncomment for test pattern
             elif "Dense" in str(layer_parameters[l].layer_name):
                 # Load Dense layer biases: one bias per output feature
                 # Note: Uses sequential test values (c+1) instead of model biases
-                for c in range(layer_parameters[l].output_shape[3]):
-                    # Alternative: self.bias[l][c] = int(math.floor(float(model.layers[l].weights[1][c])))
+                for c in range(layer_parameters[l].filters):
+                    # Alternative: self.bias[l][c] = int(math.floor(float(model[l].weights[1][c])))
                     self.bias[l][c] = int(c + 1)  # Test pattern: 1, 2, 3, ...
 
         # === INPUT FEATURE MAP INITIALIZATION ===
@@ -279,6 +279,10 @@ class DRAMContents(object):
                                 self.fmap[0][c][x][y] = int(np.random.choice([-1, 1]))
         elif "Dense" in str(layer_parameters[0].layer_name):
             # Initialize 1D input feature map for Dense layers
-            for c in range(layer_parameters[0].input_shape[3]):
+            for c in range(layer_parameters[0].iact_size_x):
                 # Generate random INT8 activation values (no sparsity for Dense)
                 self.fmap[0][c] = np.random.randint(-128, 127)
+                self.fmap[0][c] = np.random.randint(-32, 31)
+                self.fmap[0][c] = np.random.randint(-16, 15)
+                if (self.fmap[0][c] == 0):
+                    self.fmap[0][c] = int(np.random.choice([-1, 1]))

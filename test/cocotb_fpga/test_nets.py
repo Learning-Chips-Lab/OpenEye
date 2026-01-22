@@ -8,6 +8,8 @@ import sys
 import pytest
 import cocotb_test.simulator
 import subprocess
+import tensorflow as tf
+import math
 
 logger = logging.getLogger("cocotb")
 
@@ -33,12 +35,37 @@ clk_delay_unit_out = "ps"
 
 ##########################################################################################
 
-@pytest.mark.parametrize("NUM_FILTERS", [16])
-@pytest.mark.parametrize("STRIDE", [1])
-@pytest.mark.parametrize("KERNEL_SIZE", [3])
-@pytest.mark.parametrize("INPUT_SIZE_X", [32])
-@pytest.mark.parametrize("INPUT_SIZE_Y", [1])
-@pytest.mark.parametrize("INPUT_CHANNELS", [4])
+#@pytest.fixture(scope="session")
+def create_tf_model(model_path):
+    model = tf.keras.models.Sequential()
+    channels = 1
+    x_axis = 28
+    y_axis = 28
+    filters = 16
+    pool_x_axis = 2
+    pool_y_axis = 2
+    strides = (1,1)
+    model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
+    model.add(tf.keras.layers.MaxPooling2D(pool_size = (pool_x_axis, pool_y_axis), strides=(pool_x_axis,pool_y_axis), padding="valid"))
+    channels = filters
+    x_axis   = math.ceil(x_axis/pool_x_axis)
+    y_axis   = math.ceil(y_axis/pool_y_axis)
+    filters  = 32
+    model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
+    model.add(tf.keras.layers.MaxPooling2D(pool_size = (pool_x_axis, pool_y_axis), strides=(pool_x_axis,pool_y_axis), padding="valid"))
+    channels = filters
+    x_axis   = math.ceil(x_axis/pool_x_axis)
+    y_axis   = math.ceil(y_axis/pool_y_axis)
+    filters  = 32
+    model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
+    model.add(tf.keras.layers.Flatten())
+    output_size  = 32
+    model.add(tf.keras.layers.Dense(units=output_size, use_bias = True))
+    output_size  = 10
+    model.add(tf.keras.layers.Dense(units=output_size, use_bias = True))
+    model = model.save(model_path)
+    
+
 @pytest.mark.parametrize("USE_SPARSE_IACTS", [0])
 @pytest.mark.parametrize("USE_SPARSE_WGHTS", [0])
 @pytest.mark.parametrize("USE_RANDOM_VALUES", [1])
@@ -47,25 +74,26 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("NUM_GLB_PSUM", [4])
 @pytest.mark.parametrize("NUM_GLB_WGHT", [3])
 @pytest.mark.parametrize("LOGGER_LEVEL", [0])
-def test_single_conv_layer(
-    NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE_X, INPUT_SIZE_Y, INPUT_CHANNELS,
+@pytest.mark.parametrize("MODEL_PATH", ["MNIST"])
+def test_mnist(
     USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES,
-    CLUSTER_ROWS, NUM_GLB_IACT, NUM_GLB_PSUM, NUM_GLB_WGHT, LOGGER_LEVEL,
+    CLUSTER_ROWS, NUM_GLB_IACT, NUM_GLB_PSUM, NUM_GLB_WGHT, LOGGER_LEVEL, MODEL_PATH,
     request
 ):
+    #create_tf_model()
     os.environ["NUM_GLB_IACT"] = str(NUM_GLB_IACT)
     os.environ["CLUSTER_ROWS"] = str(CLUSTER_ROWS)
-
-    layer = "Convolution"
+    # NodeID aus pytest, als eindeutiger Ordnername
+    nodeid = request.node.nodeid.replace("::", "_").replace("/", "_").replace("[","_").replace("]","_")
+    target_dir = os.path.join(test_dir, '.temp/' + nodeid)
+    os.makedirs(target_dir, exist_ok=True)
+    model_path = target_dir + "MNIST.h5"
+    create_tf_model(model_path)
     dut = 'OpenEye_FPGA'
     module = 'OpenEye_FPGA_tb'
     toplevel = dut
     verilog_sources = ptu.get_verilog_sources(hdl_dir)
 
-    # NodeID aus pytest, als eindeutiger Ordnername
-    nodeid = request.node.nodeid.replace("::", "_").replace("/", "_").replace("[","_").replace("]","_")
-    target_dir = os.path.join(test_dir, '.temp/' + nodeid)
-    os.makedirs(target_dir, exist_ok=True)
 
     regmap_dir = os.path.join(test_dir, 'cocotb_fpga')
     result = subprocess.run(['python', os.path.join(open_eye_dir, 'generator.py'), regmap_dir,target_dir])
@@ -79,7 +107,7 @@ def test_single_conv_layer(
         toplevel=toplevel,
         module=module,
         sim_build=target_dir,
-        testcase='single_layer_test',
+        testcase='model_test',
         defines={"NO_TRACE": "TRUE"},
         force_compile=True,
         waves=True,
@@ -91,13 +119,6 @@ def test_single_conv_layer(
             "CLOCK_DELAY_UNIT_INPUT": clk_delay_unit_in,
             "CLOCK_DELAY_OUTPUT": str(clk_delay_out),
             "CLOCK_DELAY_UNIT_OUTPUT": clk_delay_unit_out,
-            "LAYER": layer,
-            "NUM_FILTERS": str(NUM_FILTERS),
-            "STRIDE": str(STRIDE),
-            "KERNEL_SIZE": str(KERNEL_SIZE),
-            "INPUT_SIZE_X": str(INPUT_SIZE_X),
-            "INPUT_SIZE_Y": str(INPUT_SIZE_Y),
-            "INPUT_CHANNELS": str(INPUT_CHANNELS),
             "USE_SPARSE_IACTS": str(USE_SPARSE_IACTS),
             "USE_SPARSE_WGHTS": str(USE_SPARSE_WGHTS),
             "USE_RANDOM_VALUES": str(USE_RANDOM_VALUES),
@@ -107,15 +128,14 @@ def test_single_conv_layer(
             "NUM_GLB_PSUM": str(NUM_GLB_PSUM),
             "LOGGER_LEVEL": str(LOGGER_LEVEL),
             "COCOTB_TRACE": "1",
-            #,"IVERILOG_DUMPER" : "fst"
+            "MODEL_PATH" : model_path
         }
     )
 
     
 
 if __name__ == '__main__':
-    test_single_conv_layer(NUM_FILTERS=16, STRIDE=1, KERNEL_SIZE=3, INPUT_SIZE_X=32, INPUT_SIZE_Y=1,
-        INPUT_CHANNELS=4, USE_SPARSE_IACTS=0, USE_SPARSE_WGHTS=0, USE_RANDOM_VALUES=1,
-        CLUSTER_ROWS=4, NUM_GLB_IACT=1, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3, LOGGER_LEVEL=0,
+    test_test_mnist(USE_SPARSE_IACTS=0, USE_SPARSE_WGHTS=0, USE_RANDOM_VALUES=1,
+        CLUSTER_ROWS=4, NUM_GLB_IACT=1, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3, LOGGER_LEVEL=0, MODEL_PATH="MNIST.h5",
         request=pytest.fixture(lambda: None)()
     )

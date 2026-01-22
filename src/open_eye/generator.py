@@ -1,8 +1,29 @@
 #!/usr/bin/env python3
 import yaml
 from pathlib import Path
+import open_eye.generic_test_utils as gtu
 import sys
 import os
+import math
+
+context = {
+    "dma_bitwidth": 64,
+    "iact_buffer_size": 4096,
+    "num_pes": 14,
+    "CLUSTER_ROWS":gtu.load_env_to_variable("CLUSTER_ROWS", 8),
+
+    "ceil": math.ceil,
+    "log2": math.log2,
+    "max": max
+}
+
+def eval_width(width, ctx):
+    if isinstance(width, int):
+        return width
+    elif isinstance(width, str):
+        return int(eval(width, {"__builtins__": {}}, ctx))
+    else:
+        raise TypeError("Invalid width type")
 
 def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v_path=None):
 
@@ -31,6 +52,8 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     dma_bitwidth = int(config["dma_bitwidth"])
     registers = config["registers"]
 
+    for reg in registers:
+        reg["width"] = eval_width(reg["width"], context)
     # ------------------------------------------------------------
     # Calculate transmission splitting & positions
     # ------------------------------------------------------------

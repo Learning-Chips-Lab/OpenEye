@@ -43,7 +43,9 @@ def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT):
     toplevel = dut
     verilog_sources = ptu.get_verilog_sources(hdl_dir)
 
-    target_dir = os.path.join(tests_dir, '.temp') 
+    nodeid = request.node.nodeid.replace("::", "_").replace("/", "_").replace("[","_").replace("]","_")
+    target_dir = os.path.join(test_dir, '.temp/' + nodeid)
+    os.makedirs(target_dir, exist_ok=True)
 
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],
