@@ -2,34 +2,36 @@
 # All rights reserved. © Fachhochschule Dortmund - University of Applied Sciences and Arts.
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
+
 import math
-import os
 import sys
+import os
 import numpy as np
 from numpy import genfromtxt
-directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
-sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
-import open_eye.open_eye_parameters as oep
 
 import cocotb
 from cocotb.triggers import Timer, Combine
 from cocotb.clock import Clock
-from cocotb.triggers import FallingEdge, RisingEdge, Timer
+from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout, SimTimeoutError
 
-import cocotb_PE_cluster.pe_cluster_test_utils as pe_cluster_test_utils
+# Add parent directory to path for importing OpenEye modules
+import open_eye.timing_parameters as timing_parameters
+import open_eye.rtl_test_utils as rtl_test_utils
+import pe_cluster_test_utils as pctu
 
-clk_cycle = int(os.environ["CLOCK_LEN"])
-clk_cycle_unit = os.environ["CLOCK_UNIT"]
+# Timing configuration from environment variables
+clk_cycle = int(os.environ["CLOCK_LEN"])  # Clock cycle length
+clk_cycle_unit = os.environ["CLOCK_UNIT"]  # Clock cycle unit (e.g., "ns", "ps")
 
-clk_delay_in = int(os.environ["CLOCK_DELAY_INPUT"])
-clk_delay_unit_in = os.environ["CLOCK_DELAY_UNIT_INPUT"]
+clk_delay_in = int(os.environ["CLOCK_DELAY_INPUT"])  # Input delay
+clk_delay_unit_in = os.environ["CLOCK_DELAY_UNIT_INPUT"]  # Input delay unit
 
-clk_delay_out = int(os.environ["CLOCK_DELAY_OUTPUT"])
-clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]
+clk_delay_out = int(os.environ["CLOCK_DELAY_OUTPUT"])  # Output delay
+clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]  # Output delay unit
 
 signals_dict = {}
 
-async def test_pe_cluster(dut, params, iacts_array, wghts_array, psum_array):
+async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
     """_summary_
 
     Args:
@@ -38,221 +40,156 @@ async def test_pe_cluster(dut, params, iacts_array, wghts_array, psum_array):
         wghts_array (_type_): _description_
         psum_array (_type_): _description_
     """
-    global signals_dict
-    # start the clock
-    global clk
-    last_time_point = 0
-    time = 0
-    clk = Clock(dut.clk_i, clk_cycle, units=clk_cycle_unit)
-    cocotb.start_soon(clk.start())
+    # Start the clock (10 time units per cycle)
+    cocotb.start_soon(Clock(dut.clk_i, 10, unit=clk_cycle_unit).start())
     dut._log.info("Clock is %s " + clk_cycle_unit, clk_cycle)
 
-    # reset the DUT
-    await cocotb.start_soon(reset_all_signals(dut, params))
-    
-    last_time_point = cocotb.utils.get_sim_time("ns")
-    time = cocotb.utils.get_sim_time("ns")
-    print("Reset time: From: " + str(last_time_point - time) + " Till: " + str(last_time_point) + " Duration: " + str(time) + " ns!\n")
+    # Reset the DUT
+    await cocotb.start_soon(pctu.reset_all_signals(ptp, dut))
+    # Send needed parameters to PEs
+    await cocotb.start_soon(pctu.send_data_params(ptp, dut, iactsize_x, iactsize_y, wghtsize_x))
     # start the test threads
-    send_iact_thread = cocotb.start_soon(send_iact(dut, params, iacts_array))
-    send_wght_thread = cocotb.start_soon(send_wght(dut, params, wghts_array))
+    send_iact_thread = cocotb.start_soon(send_iact(ptp, dut, iacts_array))
+    send_wght_thread = cocotb.start_soon(send_wght(ptp, dut, wghts_array))
 
     await Combine(send_iact_thread, send_wght_thread)
-    time = cocotb.utils.get_sim_time("ns") - last_time_point
-    last_time_point = cocotb.utils.get_sim_time("ns")
-    print("Loading time: From: " + str(last_time_point - time) + " Till: " + str(last_time_point) + " Duration: " + str(time) + " ns!\n")
-    await RisingEdge(clk.signal)
-    # activate all PEs to start the computation
-    # (this is done by setting the compute_i signal to 1 for one clock cycle)
-    for pe_x in range(params.PEs_X):
-        for pe_y in range(params.PEs_Y):
-            cocotb.start_soon(set_flat_input(signals_dict["compute_i"][pe_x][pe_y], 1))
-
-    await RisingEdge(clk.signal)
-
-    # reset compute_i signal to 0 after one clock cycle
-    for pe_x in range(params.PEs_X):
-        for pe_y in range(params.PEs_Y):
-            cocotb.start_soon(set_flat_input(signals_dict["compute_i"][pe_x][pe_y], 0))
-
+    await Timer(clk_cycle, unit=clk_cycle_unit)
+    # Trigger computation: pulse compute_i high for one cycle
+    cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, (2**12)-1))
+    await Timer(clk_cycle, unit=clk_cycle_unit)
+    cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, 0))
+    await Timer(3*clk_cycle, unit=clk_cycle_unit)
     # configure the vertical routing of the PEs to send the psums upwards in the column of the PEs
     # (by default, the accumulate the psums inside the PE)
-    for glb_cluster in range(params.NUM_GLB_PSUM):
-        cocotb.start_soon(set_flat_input(signals_dict["pe_router_psum_ready_i"][glb_cluster], 1))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.pe_router_psum_ready_i, (2**int(dut.PE_COLUMNS.value))-1))
     
     # wait until all PEs have finished the computation
     # (i.e. the psums are ready to be read out)
-    pes_ready = 0
-    while pes_ready != params.NUM_GLB_PSUM:
-        pes_ready = 0
-        for glb_cluster in range(params.NUM_GLB_PSUM):
-            if dut.pe_router_psum_ready_o[glb_cluster].value == 1:
-                pes_ready = pes_ready + 1
-        await RisingEdge(clk.signal)
+    while int(dut.pe_router_psum_ready_o.value) != (2**int(dut.PE_COLUMNS.value))-1:
+        await Timer(clk_cycle, unit=clk_cycle_unit)
     # now send the bias to the PEs
-    time = cocotb.utils.get_sim_time("ns") - last_time_point
-    last_time_point = cocotb.utils.get_sim_time("ns")
-    print("Computing time: From: " + str(last_time_point - time) + " Till: " + str(last_time_point) + " Duration: " + str(time) + " ns!\n")
-    cocotb.start_soon(send_bias(dut, params, psum_array))
+    cocotb.start_soon(send_bias(ptp, dut, psum_array))
     
     # wait until the PEs have send out the data
     pes_ready = 0
-    while pes_ready != params.NUM_GLB_PSUM:
-        await RisingEdge(clk.signal)
-        await Timer(clk_delay_out, units=clk_delay_unit_out)
-        pes_ready = 0
-        for glb_cluster in range(params.NUM_GLB_PSUM):
-            if dut.pe_router_psum_enable_o[glb_cluster].value == 1:
-                pes_ready = pes_ready + 1
+    while int(dut.pe_router_psum_enable_o.value) != (2**int(dut.PE_COLUMNS.value))-1:
+        await Timer(clk_cycle, unit=clk_cycle_unit)
     
     # now we can read out the psums and compare them to the expected values
-    cocotb.start_soon(get_psum(dut, params, iacts_array, wghts_array, psum_array))
+    cocotb.start_soon(get_psum(ptp, dut, iacts_array, wghts_array, psum_array))
     
     # check if all enable signals are 0
-    pes_ready = 0
-    while pes_ready != params.NUM_GLB_PSUM:
-        await RisingEdge(clk.signal)
-        pes_ready = 0
-        for glb_cluster in range(params.NUM_GLB_PSUM):
-            if dut.pe_router_psum_enable_o[glb_cluster].value == 0:
-                pes_ready = pes_ready + 1
-    await RisingEdge(clk.signal)
+    while int(dut.pe_router_psum_enable_o.value) != 0:
+        await Timer(clk_cycle, unit=clk_cycle_unit)
     
     # finally check if reset is still 1
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"
 
 @cocotb.test()
 async def start_test_pe_cluster(dut):
+    """
+    Main cocotb test entry point for PE verification.
+
+    Configures test parameters, generates test data, and launches the main test
+    sequence. This is the function that cocotb calls when running the test.
+
+    Args:
+        dut: Device Under Test (PE module instance from cocotb)
+
+    Test Configuration:
+        - 3 input activation values (dimensions)
+        - 1 channel
+        - 1 output filter
+        - No sparsity (all values are non-zero)
+    """
+    timeout_time = 40000
+    timeout_unit = 'ns'
+
+    try:
+        # Here the test gets started
+        await with_timeout(initialize_test_pe_cluster(dut),timeout_time, timeout_unit)
+    except SimTimeoutError:
+        dut._log.error("Test did not finish in time!")
+        raise # Error if does not finish in time
+async def initialize_test_pe_cluster(dut):
     # Sparse Testcase
-    try:
-        iactsize_x = int(os.environ["IACTSIZE_X"]) # Dimensions
-    except:
-        iactsize_x = 3
-
-    try:
-        iactsize_y = int(os.environ["IACTSIZE_Y"]) # Channels
-    except:
-        iactsize_y = 2
-
-    try:
-        wghtsize_x = int(os.environ["WGHTSIZE_X"]) # Filters
-    except:
-        wghtsize_x = 8
-
-    wghtsize_y = iactsize_x * iactsize_y
-    sparse_iact = 0 # Sparsity of Iacts, 0 No Sparsity, 1 Full Sparse
-    sparse_wght = 0 # Sparsity of Wghts, 0 No Sparsity, 1 Full Sparse
-    sel_iacts_zero = np.array([], int) # Added Zeros to iacts
-    sel_wghts_zero = np.array([], int) # Added Zeros to wghts
-
+    
+    # Configure test dimensions
+    global iactsize_x   # Number of input activation values (spatial dimension, C0 in Eyeriss V2 paper)
+    global iactsize_y   # Number of input channels (number of C0*U blocks in Eyeriss V2 paper, U=1 here)
+    global sparse_iact  # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
+    global wghtsize_x   # Number of output filters (M0 in Eyeriss V2 paper)
+    global wghtsize_y   # Weights match input dimensions (iactsize_x * iactsize_y
+    global sparse_wght  # Weight sparsity: 0 = no sparsity, 1 = fully sparse
     global pe_iact_cycles
-    global signals_dict
-    params = oep.create_vh_file()
-    pe_iact_cycles = int(math.ceil((params.PEs_X + params.PEs_Y - 1) / params.NUM_GLB_IACT))
 
-    await cocotb.start_soon(create_dict(dut, params))
-    (iacts, wghts, psums) = create_iact_wght_psum_arrays(
-        iactsize_x,
-        iactsize_y,
-        wghtsize_x,
-        wghtsize_y,
-        sparse_iact,
-        sparse_wght,
-        sel_iacts_zero,
-        sel_wghts_zero,
-        params,
-        pe_iact_cycles * params.NUM_GLB_IACT,
-    )
-    await cocotb.start_soon(test_pe_cluster(dut, params, iacts, wghts, psums))
+    iactsize_x = int(os.environ["IACTSIZE_X"])
+    iactsize_y = int(os.environ["IACTSIZE_Y"])
+    wghtsize_x = int(os.environ["WGHTSIZE_X"])
+    sparse_iact = int(os.environ["SPARSE_IACT"])
+    sparse_wght = int(os.environ["SPARSE_WGHT"])
+    np.random.seed(int(os.environ["SEED"]))
+    pe_iact_cycles = math.ceil((int(dut.PE_ROWS.value) + int(dut.PE_COLUMNS.value) - 1)/int(dut.NUM_GLB_IACT.value))
+    wghtsize_y = iactsize_x * iactsize_y
 
-async def send_iact(dut, params, data_array):
-    global signals_dict
-    spad_data = [[0 for x in range(params.NUM_GLB_IACT)] for y in range(pe_iact_cycles)]
+    # Initialize timing parameters from environment variables
+    ptp = timing_parameters.PortTimingParameters()
+    ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
+
+
+    # Generate test input data (activations, weights, partial sums)
+    (iacts, wghts, psums) = create_iact_wght_psum_arrays(dut)
+
+    # Launch main test sequence
+    await cocotb.start_soon(test_hdls(ptp, dut, iacts, wghts, psums))
+
+async def send_iact(ptp, dut, data_array):
+    spad_data = [[0 for x in range(int(dut.NUM_GLB_IACT.value))] for y in range(pe_iact_cycles)]
+    iact_transmission = [[0 for x in range(int(dut.NUM_GLB_IACT.value))] for y in range(pe_iact_cycles)]
     for cycle in range(pe_iact_cycles):
-        for glb_cluster in range(params.NUM_GLB_IACT):
+        for glb_cluster in range(int(dut.NUM_GLB_IACT.value)):
             spad_data[cycle][glb_cluster] = generate_spad(
-                data_array[glb_cluster + cycle * params.NUM_GLB_IACT],
-                params.Iacts_Addr_per_PE,
-                params.Iacts_per_PE,
-                params.IACT_Bitwidth,
-                True,
+                data_array[glb_cluster + cycle * int(dut.NUM_GLB_IACT.value)],
+                int(dut.IACT_ADDR_WORDS.value),  # Convert LogicArray to int
+                int(dut.IACT_DATA_WORDS.value),  # Convert LogicArray to int
+                int(dut.DATA_IACT_BITWIDTH.value),  # Convert LogicArray to int
+                True,  # SISD mode
                 0,
-                True,
-                True
+                False,  # Ignore zeros
             )
+    for cycle in range(pe_iact_cycles):
+        for glb_cluster in range(int(dut.NUM_GLB_IACT.value)):
+            iact_transmission[cycle][glb_cluster] = pctu.send_to_iact_spad(ptp,spad_data[cycle][glb_cluster],dut,iactsize_x*iactsize_y)
 
-    max_transimission_addr = [[] for x in range(pe_iact_cycles)]
-    current_max = 0
-    for cycle in range(pe_iact_cycles):
-        for glb_cluster in range(params.NUM_GLB_IACT):
-            for x in range(len(spad_data[cycle][glb_cluster][0])):
-                if (spad_data[cycle][glb_cluster][0][x] != 0):
-                    current_max = x + 2
-            max_transimission_addr[cycle].append(current_max)
-    print("MAX: " + str(max_transimission_addr))
-    print("ADDR: " + str(spad_data[cycle][glb_cluster][0]))
-    max_transimission_data = [[] for x in range(pe_iact_cycles)]
-    current_max = 0
-    for cycle in range(pe_iact_cycles):
-        for glb_cluster in range(params.NUM_GLB_IACT):
-            for x in range(len(spad_data[cycle][glb_cluster][1])):
-                if (spad_data[cycle][glb_cluster][1][x] != 0):
-                    current_max = x + 2
-            max_transimission_data[cycle].append(current_max)
-    print("MAX: " + str(max_transimission_data))
+    # Send Iact data
+    for transmission in range(16):
+        for cycle in range(pe_iact_cycles):
+            temp_enable = 0
+            temp_data = 0
+            if (cycle == 0) :
+                temp_choose = (0 << 0) + (1 << 2) + (1 << 8) + (2 << 4) + (2 << 10)+ (2 << 16)
+                temp_choose = temp_choose + (3 << 6) + (3 << 12) + (3 << 14) + (3 << 18) + (3 << 20)+ (3 << 22)
+            else :
+                temp_choose = (0 << 6) + (0 << 12) + (0 << 18) + (1 << 14) + (1 << 20) + (2 << 22)
+                temp_choose = temp_choose + (3 << 0) + (3 << 2) + (3 << 4) + (3 << 8) + (3 << 10)+ (3 << 16)
+            cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.iact_choose_i), temp_choose))
+            for glb_cluster in range(int(dut.NUM_GLB_IACT)):
+                temp_enable = temp_enable + (iact_transmission[cycle][glb_cluster][0][transmission] << (1 * glb_cluster))
+                temp_data = temp_data + (iact_transmission[cycle][glb_cluster][1][transmission] << (int(dut.TRANS_BITWIDTH_IACT.value) * glb_cluster))
+            cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_iact_enable), temp_enable))
+            cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_iact_data), temp_data))
+            if (temp_enable != 0):
+                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_iact_enable), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_iact_data), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.iact_choose_i), 0))
 
-    for cycle in range(pe_iact_cycles):
-        for glb_cluster in range(params.NUM_GLB_IACT):
-            for x in range(len(spad_data[cycle][glb_cluster][1])):
-                if((spad_data[cycle][glb_cluster][1][x] != 0)):
-                    spad_data[cycle][glb_cluster][1][x] = spad_data[cycle][glb_cluster][1][x] + int(math.floor(spad_data[cycle][glb_cluster][1][x-1] / 256) * 256)
-            for x in range(len(spad_data[cycle][glb_cluster][1])):
-                if((spad_data[cycle][glb_cluster][1][x] != 0)):
-                    spad_data[cycle][glb_cluster][1][x] = spad_data[cycle][glb_cluster][1][x] + x * 256
-
-    thread = []
-    for cycle in range(pe_iact_cycles):
-        for pe_x in range(params.PEs_X):
-            for pe_y in range(params.PEs_Y):
-                if ((pe_x + pe_y) >= (cycle * params.NUM_GLB_IACT)) & (
-                    (pe_x + pe_y) < ((params.NUM_GLB_IACT * cycle) + params.NUM_GLB_IACT)
-                ):
-                    cocotb.start_soon(set_flat_input(signals_dict["iact_choose_i"][pe_x][pe_y], pe_x + pe_y - (cycle * params.NUM_GLB_IACT)))
-                else:
-                    cocotb.start_soon(set_flat_input(signals_dict["iact_choose_i"][pe_x][pe_y], 3))
         
-        for glb_cluster in range(params.NUM_GLB_IACT):
-            
-            thread.append(
-                cocotb.start_soon(
-                    send_both_spads(
-                        spad_data[cycle][glb_cluster][0],
-                        signals_dict["pe_iact_data"][glb_cluster],
-                        signals_dict["pe_iact_enable"][glb_cluster],
-                        max_transimission_addr[cycle][glb_cluster],
-                        params.IACT_Trans_Bitwidth,
-                        int(math.ceil(math.log2(params.Iacts_per_PE))),
-                        False,
-                        "IACT_ADDR_" + str(glb_cluster) + "_" + str(cycle),
-                        spad_data[cycle][glb_cluster][1],
-                        signals_dict["pe_iact_data"][glb_cluster],
-                        signals_dict["pe_iact_enable"][glb_cluster],
-                        max_transimission_data[cycle][glb_cluster],
-                        params.IACT_Trans_Bitwidth,
-                        12,
-                        False,
-                        "IACT_DATA_" + str(glb_cluster) + "_" + str(cycle)
-                    )
-                )
-            )
-        for glb_cluster in range(params.NUM_GLB_IACT):
-            await thread[glb_cluster]
-        thread = []
 
-async def get_psum(dut, params, iacts_array, wghts_array, psum_array):
+async def get_psum(ptp, dut, iacts_array, wghts_array, psum_array):
     control = np.zeros(
-        params.NUM_GLB_PSUM * params.Psums_per_PE * 2, dtype=int
-    ).reshape(params.NUM_GLB_PSUM, params.Psums_per_PE * 2)
+        int(dut.PE_COLUMNS.value) * int(dut.PSUM_WORDS.value) * 2, dtype=int
+    ).reshape(int(dut.PE_COLUMNS.value), int(dut.PSUM_WORDS.value) * 2)
 
     iact = iacts_array
     wght = wghts_array
@@ -264,14 +201,14 @@ async def get_psum(dut, params, iacts_array, wghts_array, psum_array):
     if wght.ndim == 1:
         wght = [wght]
 
-    for glb_cluster in range(params.NUM_GLB_PSUM):
+    for glb_cluster in range(int(dut.PE_COLUMNS.value)):
         for psum_x in range(len(bias[glb_cluster])):
             control[glb_cluster][psum_x] = bias[glb_cluster][psum_x]
 
     current_iact = 0
     iact_line = 0
-    for pe_x in range(params.NUM_GLB_PSUM):
-        for pe_y in range(params.NUM_GLB_WGHT):
+    for pe_x in range(int(dut.PE_COLUMNS.value)):
+        for pe_y in range(int(dut.PE_ROWS.value)):
             for iact_y in range(len(iact[pe_x + pe_y])):
                 for iact_x in range(len(iact[pe_x + pe_y][iact_y])):
                     for wght_x in range(len(wght[pe_y][current_iact])):
@@ -299,29 +236,30 @@ async def get_psum(dut, params, iacts_array, wghts_array, psum_array):
                 iact_line = current_iact + iact_line
                 current_iact = 0
             iact_line = 0
+    print(control)
     thread = []
     global first_error_found
     first_error_found = 0
 
-    for pe_x in range(params.NUM_GLB_PSUM):
-        thread.append(cocotb.start_soon(check_psum(dut, pe_x, control[pe_x])))
+    for pe_x in range(int(dut.PE_COLUMNS.value)):
+        thread.append(cocotb.start_soon(check_psum(dut, pe_x, control[pe_x], ptp)))
 
-    for pe_x in range(params.NUM_GLB_PSUM):
+    for pe_x in range(int(dut.PE_COLUMNS.value)):
         await thread[pe_x]
     print("First error is: " + str(first_error_found))
     assert first_error_found == 0, "Outcoming Partial Sums are not equal to Calculated data!"
 
-async def check_psum(dut, pe_x, control):
+async def check_psum(dut, pe_x, control, ptp):
     current_control = 0
     global first_error_found
-    while dut.pe_router_psum_enable_o[pe_x].value == 1:
+    while int(int(dut.pe_router_psum_enable_o.value)/(2**pe_x))%2 == 1:
         # Make sure there are no X values for gate level simulation
-        assert 'x' not in dut.pe_router_psum_data_o[pe_x].value, "x values in PSUM"
+        assert 'x' not in dut.pe_router_psum_data_o.value, "x values in PSUM"
         
-        if ((read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])%(2**20)) == control[current_control]):
+        if ((int(int(dut.pe_router_psum_data_o.value)/(2**(20*pe_x)))%(2**20)) == control[current_control]):
             print(
             "PSUM("
-            + str(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])%(2**20))
+            + str(int(int(dut.pe_router_psum_data_o.value)/(2**(20*pe_x)))%(2**20))
             + ") is equal to control("
             + str(control[current_control])
             + "), "
@@ -333,36 +271,7 @@ async def check_psum(dut, pe_x, control):
         else:
             print(
             "PSUM("
-            + str(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])%(2**20))
-            + ") is not equal to control("
-            + str(control[current_control])
-            + "), "
-            + str(current_control + 1)
-            + ". PSUM Value, "
-            + str(pe_x + 1)
-            + ". PE_X"
-            )
-            first_error_found = 1
-
-            
-        current_control = current_control + 1
-        
-        if (int(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])/(2**20)) == control[current_control]):
-            print(
-            "PSUM("
-            + str(int(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])/(2**20)))
-            + ") is equal to control("
-            + str(control[current_control])
-            + "), "
-            + str(current_control + 1)
-            + ". PSUM Value, "
-            + str(pe_x + 1)
-            + ". PE_X"
-            )
-        else:
-            print(
-            "PSUM("
-            + str(int(read_flat_output(signals_dict["pe_router_psum_data_o"][pe_x])/(2**20)))
+            + str(int(int(dut.pe_router_psum_data_o.value)/(2**(20*pe_x)))%(2**20))
             + ") is not equal to control("
             + str(control[current_control])
             + "), "
@@ -373,289 +282,252 @@ async def check_psum(dut, pe_x, control):
             )
             first_error_found = 1
         current_control = current_control + 1
-        await RisingEdge(clk.signal)
-        await Timer(clk_delay_out, units=clk_delay_unit_out)
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-async def send_wght(dut, params, data_array):
+async def send_wght(ptp, dut, data_array):
     global signals_dict
+    spad_data = [0 for _ in range(int(dut.PE_ROWS.value))]
+    for glb_cluster in range(int(dut.PE_ROWS.value)):
+        spad_data[glb_cluster] = generate_spad(
+            data_array[glb_cluster],
+            int(dut.WGHT_ADDR_WORDS.value),  # Convert LogicArray to int
+            int(dut.WGHT_DATA_WORDS.value),  # Convert LogicArray to int
+            int(dut.DATA_WGHT_BITWIDTH.value),  # Convert LogicArray to int
+            False,  # Packed mode (not SISD)
+            int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value),  # Convert to int
+            True  # Ignore zeros
+        )
+    wght_transmission = []
+    for glb_cluster in range(int(dut.PE_ROWS.value)):
+        wght_transmission.append(
+            pctu.send_to_wght_spad(ptp, spad_data[glb_cluster], dut))
+
+    for transmission in range (int(dut.WGHT_DATA_WORDS.value)):
+        temp_enable = 0
+        temp_data = 0
+        for glb_cluster in range(int(dut.PE_ROWS.value)):
+            temp_enable = temp_enable + (wght_transmission[glb_cluster][0][transmission] << (1 * glb_cluster))
+            temp_data = temp_data + (wght_transmission[glb_cluster][1][transmission] << (int(dut.TRANS_BITWIDTH_WGHT.value) * glb_cluster))
+        cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_wght_enable), temp_enable))
+        cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_wght_data), temp_data))
+        if (temp_enable != 0):
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+
+    #Transmit wght data
+
+async def send_bias(ptp, dut, data_array):
     spad_data = []
-    for glb_cluster in range(params.NUM_GLB_WGHT):
+    print(data_array)
+    for glb_cluster in range(int(dut.PE_COLUMNS.value)):
         spad_data.append(
             generate_spad(
                 data_array[glb_cluster],
-                params.Wghts_Addr_per_PE,
-                params.Wghts_per_PE,
-                params.WGHT_Bitwidth,
-                False,
-                params.WGHT_WOH_Bitwidth,
+                int(dut.PSUM_WORDS.value),
+                int(dut.PSUM_WORDS.value),
+                int(dut.DATA_PSUM_BITWIDTH.value),
                 True,
+                int(dut.DATA_PSUM_BITWIDTH.value),
                 False
             )
         )
-    for glb_cluster in range(params.NUM_GLB_WGHT):
-        for x in reversed(range(len(spad_data[glb_cluster][0]))):
-            if(x == 0):
-                spad_data[glb_cluster][0][x] = 0
-            else:
-                spad_data[glb_cluster][0][x] = spad_data[glb_cluster][0][x - 1]
+    psum_transmission = []
+    for glb_cluster in range(int(dut.PE_COLUMNS.value)):
+        psum_transmission.append(pctu.send_to_psum_spad(ptp, spad_data[glb_cluster], dut))
     
-    max_transimission_addr = []
-    current_max = params.Wghts_Addr_per_PE
-    for glb_cluster in range(params.NUM_GLB_WGHT):
-        for x in range(len(spad_data[glb_cluster][0]) - 1):
-            if (spad_data[glb_cluster][0][params.Wghts_Addr_per_PE - x - 1] == 0):
-                current_max = params.Wghts_Addr_per_PE - x
-        max_transimission_addr.append(current_max)
+    print(psum_transmission)
 
-    max_transimission_data = []
-    current_max = 0
-    for glb_cluster in range(params.NUM_GLB_WGHT):
-        for x in range(len(spad_data[glb_cluster][1])):
-            if (spad_data[glb_cluster][1][x] != 0):
-                current_max = x + 2
-        max_transimission_data.append(current_max)
-        
-    thread = []
-    for glb_cluster in range(params.NUM_GLB_WGHT):
-        
-        thread.append(
-            cocotb.start_soon(
-                send_both_spads(
-                    spad_data[glb_cluster][0],
-                    signals_dict["pe_wght_data"][glb_cluster],
-                    signals_dict["pe_wght_enable"][glb_cluster],
-                    int(max_transimission_addr[glb_cluster]), 
-                    params.WGHT_Trans_Bitwidth,
-                    int(math.ceil(math.log2(params.Wghts_per_PE/params.PARALLEL_MACS))),
-                    False,
-                    "WGHT_ADDR_" + str(glb_cluster),
-                    spad_data[glb_cluster][1],
-                    signals_dict["pe_wght_data"][glb_cluster],
-                    signals_dict["pe_wght_enable"][glb_cluster],
-                    int(max_transimission_data[glb_cluster]), 
-                    params.WGHT_Trans_Bitwidth,
-                    24,
-                    False,
-                    "WGHT_DATA_" + str(glb_cluster)
-                )
-            )
-        )
-    for glb_cluster in range(params.NUM_GLB_WGHT):
-        await thread[glb_cluster]
+    for transmission in range (int(dut.PSUM_WORDS.value)):
+        temp_enable = 0
+        temp_data = 0
+        for glb_cluster in range(int(dut.PE_COLUMNS.value)):
+            temp_enable = temp_enable + (psum_transmission[glb_cluster][0][transmission] << (1 * glb_cluster))
+            temp_data = temp_data + (psum_transmission[glb_cluster][1][transmission] << (int(dut.TRANS_BITWIDTH_PSUM.value) * glb_cluster))
+        cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_router_psum_enable_i), temp_enable))
+        cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_router_psum_data_i), temp_data))
+        if (temp_enable != 0):
+            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_router_psum_enable_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_router_psum_data_i), 0))
 
-async def send_bias(dut, params, data_array):
-    global signals_dict
-    spad_data = []
-    for glb_cluster in range(params.NUM_GLB_PSUM):
-        spad_data.append(
-            generate_spad(
-                data_array[glb_cluster],
-                params.Psums_per_PE,
-                params.Psums_per_PE,
-                params.PSUM_Bitwidth,
-                False,
-                params.PSUM_Bitwidth,
-                False,
-                False
-            )
-        )
-    #dut._log.info("PSUM is %s", spad_data[1])
-    thread = []
-    for glb_cluster in range(params.NUM_GLB_PSUM):
-        thread.append(
-            cocotb.start_soon(
-                send_to_spad(
-                    spad_data[glb_cluster][1],
-                    signals_dict["pe_router_psum_data_i"][glb_cluster],
-                    signals_dict["pe_router_psum_enable_i"][glb_cluster],
-                    math.ceil(params.Psums_per_PE/params.PARALLEL_MACS),
-                    params.PSUM_Bitwidth * 2,
-                    params.PSUM_Trans_Bitwidth,
-                    False,
-                    "PSUM_" + str(glb_cluster)
-                )
-            )
-        )
+   
+async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits, parallel):
+    """
+    Generic function to transmit SPAD data over a limited-width bus.
 
-    for glb_cluster in range(params.NUM_GLB_PSUM):
-        await thread[glb_cluster]
-    await RisingEdge(clk.signal)
+    Packs multiple data words into each transmission cycle based on bus width,
+    then sends them serially over multiple clock cycles.
 
-async def send_both_spads(spad1, data_signal_dict_1, enable_signal_dict_1, addr_bits1, trans_bits1, data_bits1, parallel1,txt_name1,
-                          spad2, data_signal_dict_2, enable_signal_dict_2, addr_bits2, trans_bits2, data_bits2, parallel2,txt_name2):
-    process = cocotb.start_soon(
-        send_to_spad(
-            spad1,
-            data_signal_dict_1,
-            enable_signal_dict_1,
-            addr_bits1, 
-            trans_bits1,
-            data_bits1,
-            parallel1,
-            txt_name1
-        )
-    )
-    await process
-    process = cocotb.start_soon(
-        send_to_spad(
-            spad2,
-            data_signal_dict_2,
-            enable_signal_dict_2,
-            addr_bits2, 
-            trans_bits2,
-            data_bits2,
-            parallel2,
-            txt_name2
-        )
-    )
-    await process
-    
-async def send_to_spad(spad, data_signal_dict, enable_signal_dict, addr_bits, trans_bits, data_bits, parallel,txt_name):
-    txt = pe_cluster_test_utils.open_or_create_file("TXTs/" + str(txt_name) + ".txt")
+    Args:
+        ptp: Port timing parameters for signal timing
+        spad: Array of data words to transmit
+        data_signal: DUT signal to write data to
+        addr_bits: Number of transmission cycles (address space)
+        trans_bits: Transmission bus width in bits
+        data_bits: Width of each data word in bits
+        parallel: Packing mode
+            - True: Parallel mode - one word per cycle (position = cycle)
+            - False: Sequential mode - pack multiple words per transmission
+
+    Operation:
+        - Calculates words_per_transmit = trans_bits / data_bits
+        - Packs multiple words into single transmission by bit-shifting
+        - Sends one transmission per clock cycle
+        - Handles index out of bounds gracefully
+
+    Example:
+        If trans_bits=64, data_bits=16, then 4 words are packed per transmission
+    """
     words_per_transmit = 0
     sending_data = 0
     current_storage_position = 0
     offset = 0
-
+    # Send data over multiple clock cycles
     for cycle in range(addr_bits):
+        # Calculate how many words fit in one transmission
         words_per_transmit = int(math.floor(trans_bits / data_bits))
+
+        # Pack multiple words into this transmission
         for writing_cycle in range(words_per_transmit):
-            offset = data_bits * writing_cycle
+            offset = data_bits * writing_cycle  # Bit position for this word
+
             if parallel:
+                # Parallel mode: one word per cycle
                 current_storage_position = cycle
             else:
+                # Sequential mode: pack words sequentially
                 current_storage_position = int(
                     writing_cycle
                     + math.floor(cycle / words_per_transmit) * words_per_transmit
                 )
+
             try:
+                # Add this word to the transmission, shifted to correct position
                 sending_data = sending_data + (
                     int(spad[current_storage_position]) << offset
                 )
             except:
+                # Handle out of bounds (sparse data)
                 sending_data = sending_data
-        cocotb.start_soon(set_flat_input(data_signal_dict, sending_data))
-        cocotb.start_soon(set_flat_input(enable_signal_dict, 1))
-        txt.write(str(bin(sending_data)[2:].zfill(trans_bits)) + "\n")
+
+        # Send the packed transmission
+        cocotb.start_soon(rtl_test_utils.set_input(ptp, (data_signal), sending_data))
         sending_data = 0
-        await RisingEdge(clk.signal)
-    cocotb.start_soon(set_flat_input(data_signal_dict, 0))
-    cocotb.start_soon(set_flat_input(enable_signal_dict, 0))
-    txt.close()
+        await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
+
+    # Clear the signal after transmission complete
+    cocotb.start_soon(rtl_test_utils.set_input(ptp, data_signal, 0))
 
 def generate_spad(
-    array, addr_spad_words, data_spad_words, bitwidth, sisd, offset, ignore_zeros,count_around_lines
+    array, addr_spad_words, data_spad_words, bitwidth, sisd, offset, ignore_zeros
 ):
+    """
+    Converts 2D data arrays into compressed scratchpad (SPAD) format.
+
+    Creates two arrays: an address array tracking data locations, and a data array
+    with optional zero-compression. Supports two packing modes (SISD and packed).
+
+    Args:
+        array: Input data as numpy array (1D or 2D)
+        addr_spad_words: Size of address array
+        data_spad_words: Size of data array
+        bitwidth: Bit width of each data element
+        sisd: Packing mode
+            - True: SISD (Single Instruction Single Data) - one value per word
+            - False: Packed mode - two values per word
+        offset: Bit offset for packed mode (where to place second value)
+        ignore_zeros: Enable zero-compression
+            - True: Skip zeros, encode skip count in overhead bits
+            - False: Include all values
+
+    Returns:
+        Tuple of (addr_spad_data, data_spad_data)
+            - addr_spad_data: Cumulative count of non-zero elements per row
+            - data_spad_data: Non-zero values with overhead encoding
+
+    Compression Format:
+        - Non-zero values stored with overhead count in upper bits
+        - overhead = number of consecutive zeros skipped before this value
+        - Encoded as: (overhead << bitwidth) | value
+        - In packed mode: two values concatenated with bit offset
+
+    Example:
+        Input: [[1, 0, 0, 2], [3, 4, 0, 5]] with ignore_zeros=True
+        - Data encodes: 1 (0 skipped), 2 (2 skipped), 3 (0 skipped), etc.
+        - Addresses track: [2, 5] (cumulative non-zero counts)
+    """
     data = array
+    simd = not sisd
+    # Ensure data is 2D for consistent processing
     if data.ndim == 1:
         data = [data]
-    addr_spad_data = np.zeros(addr_spad_words)
+
+    # Initialize SPAD arrays
     data_spad_data = np.zeros(data_spad_words)
-    current_count = 0
-    overhead = 0
-    for y in range(len(data)):
-        for x in range(len(data[y])):
-            if (data[y][x] != 0) | (not ignore_zeros):
+    current_count = 0  # Count of non-zero elements processed
+    overhead = 0  # Count of consecutive zeros skipped
+    # Process each element in the input array
+    for y in range(len(data)):  # For each row
+        for x in range(len(data[y])):  # For each element in row
+            # Include this element if it's non-zero OR we're not ignoring zeros
+            if (data[y][x] != 0) | (not ignore_zeros) | (((len(data[y]) - 1 == x) & (current_count%2 != 0))):
+                if (data[y][x] < 0):
+                    temp_data = data[y][x] + 2**bitwidth
+                else :
+                    temp_data = data[y][x]
+
                 if sisd:
-                    data_spad_data[current_count] = data[y][x] + (overhead << bitwidth)
+                    # SISD mode: one value per word
+                    # Encode: overhead in upper bits, value in lower bits
+                    data_spad_data[current_count] = temp_data + (overhead << bitwidth)
                 else:
+                    # Packed mode: two values per word
+                    # Pack values at different bit offsets
                     data_spad_data[int(math.floor(current_count / 2))] = data_spad_data[
                         int(math.floor(current_count / 2))
                     ] + (
-                        (data[y][x] + (overhead << bitwidth))
+                        (temp_data + (overhead << bitwidth))
                         << (offset * (current_count % 2))
                     )
 
                 current_count = current_count + 1
-                overhead = 0
+                overhead = 0  # Reset zero counter after storing a value
             else:
+                # This element is zero - increment skip counter
                 overhead = overhead + 1
-        if sisd:
-            addr_spad_data[y] = current_count
-        else:
-            addr_spad_data[y] = int(math.ceil(current_count / 2))
+
+        # Store cumulative count for this row in address array
+        if simd:
+            # If odd number of values, advance to next word
             if current_count % 2 == 1:
                 current_count = current_count + 1
-        if count_around_lines == False:
-            overhead = 0
-            
-    spad_data = (addr_spad_data, data_spad_data)
+
+    #overhead = 0  # Reset overhead counter for next row
+
+    spad_data = data_spad_data
     return spad_data
 
-def create_iact_wght_psum_arrays(
-    iactsize_x,
-    iactsize_y,
-    wghtsize_x,
-    wghtsize_y,
-    sparse_iact,
-    sparse_wght,
-    sel_iacts_zero,
-    sel_wghts_zero,
-    params,
-    pe_iact_cycles,
-):
-    temp = ((np.arange(0, iactsize_y * iactsize_x * pe_iact_cycles, 1)%126)+1)
-    indices = np.random.choice(
-        np.arange(temp.size), replace=False, size=int(temp.size * sparse_iact)
-    )
-    indices = np.append(indices, sel_iacts_zero)
-    temp[indices] = 0
-    iacts = temp.reshape(
-        pe_iact_cycles, iactsize_y, iactsize_x
-    )
+def create_iact_wght_psum_arrays(dut):
+    # Generate input activations: random values from -128 to 127, without 0
+    shape = (pe_iact_cycles * int(dut.NUM_GLB_IACT.value), iactsize_y, iactsize_x)
+    iacts = np.random.randint(-64, 63, size=shape)
+    iacts[iacts >= 0] += 1
+    # Apply random sparsity to activations
+    mask = np.random.rand(*iacts.shape) < (sparse_iact / 100.0)
+    iacts[mask] = 0
+    print(iacts)
+    # Generate weights: random values from -128 to 127, without 0
+    shape = (int(dut.PE_ROWS.value), wghtsize_y, wghtsize_x)
+    wghts = np.random.randint(-64, 63, size=shape)
+    wghts[wghts >= 0] += 1
 
-    temp = ((np.arange(0, wghtsize_y * wghtsize_x * params.PEs_Y, 1)%126)+1)
-    indices = np.random.choice(
-        np.arange(temp.size), replace=False, size=int(temp.size * sparse_wght)
-    )
-    indices = np.append(indices, sel_wghts_zero)
-    temp[indices] = 0
-    wghts = temp.reshape(
-        params.PEs_Y, wghtsize_y, wghtsize_x
-    )
+    # Apply random sparsity to weights
+    mask = np.random.rand(*wghts.shape) < (sparse_wght / 100.0)
+    wghts[mask] = 0
 
-    psums = np.arange(1, wghtsize_x * params.PEs_X + 1, 1).reshape(params.PEs_X, wghtsize_x)
+    psums = np.arange(1, wghtsize_x * int(dut.PE_COLUMNS.value) + 1, 1).reshape(int(dut.PE_COLUMNS.value), wghtsize_x)
 
     return iacts, wghts, psums
 
-async def reset_all_signals(dut, params):
-
-    cocotb.start_soon(set_flat_input(signals_dict["rst_ni"], 0))
-    cocotb.start_soon(set_flat_input(signals_dict["data_mode_i"], 0))
-    cocotb.start_soon(set_flat_input(signals_dict["fraction_bit_i"], 0))
-    
-    for pe_columns in range(params.PEs_X):
-        for pe_rows in range(params.PEs_Y):
-            cocotb.start_soon(set_flat_input(signals_dict["iact_choose_i"][pe_columns][pe_rows], 3))
-            cocotb.start_soon(set_flat_input(signals_dict["compute_i"][pe_columns][pe_rows], 0))
-
-    for glb_iact in range(params.NUM_GLB_IACT):
-        cocotb.start_soon(set_flat_input(signals_dict["pe_iact_enable"][glb_iact], 0))
-        cocotb.start_soon(set_flat_input(signals_dict["pe_iact_data"][glb_iact], 0))
-
-    for glb_wght in range(params.NUM_GLB_WGHT):
-        cocotb.start_soon(set_flat_input(signals_dict["pe_wght_enable"][glb_wght], 0))
-        cocotb.start_soon(set_flat_input(signals_dict["pe_wght_data"][glb_wght], 0))
-
-    for glb_psum in range(params.NUM_GLB_PSUM):
-        cocotb.start_soon(set_flat_input(signals_dict["psum_choose_i"][glb_psum], 1))
-
-        cocotb.start_soon(set_flat_input(signals_dict["pe_psum_data_i"][glb_psum], 0))
-        cocotb.start_soon(set_flat_input(signals_dict["pe_psum_enable_i"][glb_psum], 0))
-        cocotb.start_soon(set_flat_input(signals_dict["pe_psum_ready_i"][glb_psum], 0))
-
-        cocotb.start_soon(set_flat_input(signals_dict["pe_router_psum_data_i"][glb_psum], 0))
-        cocotb.start_soon(set_flat_input(signals_dict["pe_router_psum_enable_i"][glb_psum], 0))
-        cocotb.start_soon(set_flat_input(signals_dict["pe_router_psum_ready_i"][glb_psum], 0))
-
-
-    # Fixed 10 ns of reset
-    await Timer(clk_cycle, units="ns")
-    cocotb.start_soon(set_flat_input(signals_dict["rst_ni"], 1))
-
-    # After deasserting reset, we wait 3 clock cycles
-    for _ in range(3):
-        await RisingEdge(clk.signal)
 
 async def create_dict(dut, params):
     global signals_dict
@@ -698,17 +570,17 @@ async def create_dict(dut, params):
         current_signal.append({"signal":dut.pe_iact_ready, "start_bit":glb, "end_bit":glb})
     signals_dict["pe_iact_ready"] = current_signal
     current_signal = []
-    for glb in range(params.NUM_GLB_WGHT):
+    for glb in range(int(dut.PE_ROWS.value)):
         current_signal.append({"signal":dut.pe_wght_enable, "start_bit":glb, "end_bit":glb})
     signals_dict["pe_wght_enable"] = current_signal
     current_signal = []
-    for glb in range(params.NUM_GLB_WGHT):
+    for glb in range(int(dut.PE_ROWS.value)):
         current_signal.append({"signal":dut.pe_wght_data, \
                                "start_bit":glb*params.WGHT_Trans_Bitwidth, \
                                "end_bit":(glb+1)*params.WGHT_Trans_Bitwidth-1})
     signals_dict["pe_wght_data"] = current_signal
     current_signal = []
-    for glb in range(params.NUM_GLB_WGHT):
+    for glb in range(int(dut.PE_ROWS.value)):
         current_signal.append({"signal":dut.pe_wght_ready, "start_bit":glb, "end_bit":glb})
     signals_dict["pe_wght_ready"] = current_signal
     current_signal = []
@@ -785,23 +657,3 @@ def read_flat_output(signal_dict):
         return value
     else:
         return signal.value
-
-async def set_flat_input(signal_dict, new_value):
-    # input delay of 100 ps relative to rising edge
-    # this is the value used for the implementation constraints of OpenEye
-    signal = signal_dict["signal"]
-    start_bit = signal_dict["start_bit"]
-    end_bit = signal_dict["end_bit"]
-    await Timer(clk_delay_in, units=clk_delay_unit_in)
-    if(len(signal) != 1):
-        value_pos = 0
-        new_value = bin(new_value)[2:]
-        new_value = new_value[::-1]
-        for bit in range(start_bit, end_bit + 1):
-            try:
-                signal[bit].value = int(new_value[value_pos])
-            except:
-                signal[bit].value = 0
-            value_pos = value_pos + 1
-    else:
-        signal.value = new_value

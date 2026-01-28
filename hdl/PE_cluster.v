@@ -129,7 +129,7 @@
 module PE_cluster #(
     //Set parameters
     parameter  IS_TOPLEVEL            = 1,
-    parameter  SERIAL                 = 0,
+    parameter  SERIAL                 = 1,
     parameter  PARALLEL_MACS          = 2,
     parameter  TOP_CLUSTER            = 1,
     parameter  DATA_IACT_BITWIDTH     = 8,
@@ -151,38 +151,38 @@ module PE_cluster #(
     localparam PES                    = PE_ROWS * PE_COLUMNS
 
 ) (
-    input                                  clk_i,
-    input                                  rst_ni,
-    input [$clog2(NUM_GLB_IACT+1)*PES-1:0] iact_choose_i,
-    input [                PE_COLUMNS-1:0] psum_choose_i,
-    input [                       PES-1:0] compute_i,
+    input                                         clk_i,
+    input                                         rst_ni,
+    input [       $clog2(NUM_GLB_IACT+1)*PES-1:0] iact_choose_i,
+    input [                       PE_COLUMNS-1:0] psum_choose_i,
+    input [                              PES-1:0] compute_i,
 
     input  [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] pe_iact_data,
     input  [                    NUM_GLB_IACT-1:0] pe_iact_enable,
     output [                    NUM_GLB_IACT-1:0] pe_iact_ready,
 
-    input  [TRANS_BITWIDTH_WGHT*PE_ROWS-1:0] pe_wght_data,
-    input  [                    PE_ROWS-1:0] pe_wght_enable,
-    output [                    PE_ROWS-1:0] pe_wght_ready,
+    input  [     TRANS_BITWIDTH_WGHT*PE_ROWS-1:0] pe_wght_data,
+    input  [                         PE_ROWS-1:0] pe_wght_enable,
+    output [                         PE_ROWS-1:0] pe_wght_ready,
 
-    input [                    PE_COLUMNS-1:0] pe_psum_ready_i,
-    input [TRANS_BITWIDTH_PSUM*PE_COLUMNS-1:0] pe_psum_data_i,
-    input [                    PE_COLUMNS-1:0] pe_psum_enable_i,
+    input  [                      PE_COLUMNS-1:0] pe_psum_ready_i,
+    input  [  TRANS_BITWIDTH_PSUM*PE_COLUMNS-1:0] pe_psum_data_i,
+    input  [                      PE_COLUMNS-1:0] pe_psum_enable_i,
 
-    output [                    PE_COLUMNS-1:0] pe_psum_ready_o,
-    output [TRANS_BITWIDTH_PSUM*PE_COLUMNS-1:0] pe_psum_data_o,
-    output [                    PE_COLUMNS-1:0] pe_psum_enable_o,
+    output [                      PE_COLUMNS-1:0] pe_psum_ready_o,
+    output [  TRANS_BITWIDTH_PSUM*PE_COLUMNS-1:0] pe_psum_data_o,
+    output [                      PE_COLUMNS-1:0] pe_psum_enable_o,
 
-    input [                    PE_COLUMNS-1:0] pe_router_psum_ready_i,
-    input [TRANS_BITWIDTH_PSUM*PE_COLUMNS-1:0] pe_router_psum_data_i,
-    input [                    PE_COLUMNS-1:0] pe_router_psum_enable_i,
+    input [                       PE_COLUMNS-1:0] pe_router_psum_ready_i,
+    input [   TRANS_BITWIDTH_PSUM*PE_COLUMNS-1:0] pe_router_psum_data_i,
+    input [                       PE_COLUMNS-1:0] pe_router_psum_enable_i,
 
-    output [                    PE_COLUMNS-1:0] pe_router_psum_ready_o,
-    output [TRANS_BITWIDTH_PSUM*PE_COLUMNS-1:0] pe_router_psum_data_o,
-    output [                    PE_COLUMNS-1:0] pe_router_psum_enable_o,
+    output [                      PE_COLUMNS-1:0] pe_router_psum_ready_o,
+    output [  TRANS_BITWIDTH_PSUM*PE_COLUMNS-1:0] pe_router_psum_data_o,
+    output [                      PE_COLUMNS-1:0] pe_router_psum_enable_o,
 
-    input       enable_stream_i,
-    input [11:0] data_stream_i
+    input                                         enable_stream_i,
+    input  [                              12-1:0] data_stream_i
 );
 
   ///#######################
@@ -195,6 +195,26 @@ module PE_cluster #(
   wire [PE_COLUMNS*PE_ROWS*NUM_GLB_IACT-1:0] iact_ready_temp;
 
   reg  [                     PE_COLUMNS-1:0] psum_ready_reg;
+
+  // ============================================================================
+  // FST Waveform Dump Configuration (for CocoTB simulation)
+  // ============================================================================
+  `ifndef NO_TRACE
+    reg[1023:0] fst_path;
+    initial begin
+      if (IS_TOPLEVEL) begin
+        // Read the path from the command line argument
+        if ($value$plusargs("FST_PATH=%s", fst_path)) begin
+          $dumpfile(fst_path);
+          $dumpvars(0, PE_cluster);
+        end else begin
+          // Fallback for when the argument is not provided
+          $dumpfile("PE_cluster.fst");
+          $dumpvars(0, PE_cluster);
+        end
+      end
+    end
+  `endif
 
   always @(posedge clk_i, negedge rst_nw) begin
     if (!rst_nw) begin : reset
