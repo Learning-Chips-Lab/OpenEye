@@ -21,12 +21,14 @@ def get_verilog_sources(hdl_dir):
     os.path.join(hdl_dir, "mux2.v"),
     os.path.join(hdl_dir, "demux2.v"),
     os.path.join(hdl_dir, "mux_iact.v"),
+    os.path.join(hdl_dir, "SPad_DP.v"),
     os.path.join(hdl_dir, "SPad_DP_RW.v"),
     os.path.join(hdl_dir, "SPad_SP.v"),
     os.path.join(hdl_dir, "RST_SYNC.v"),
     os.path.join(hdl_dir, "RAM_DP_RW.v"),
     os.path.join(hdl_dir, "RAM_DP.v"),
     os.path.join(hdl_dir, "RAM_SP.v"),
+    os.path.join(hdl_dir, "RAM_DP_generic.v"),
     os.path.join(hdl_dir, "RAM_DP_RW_generic.v"),
     os.path.join(hdl_dir, "RAM_SP_generic.v")
     ]

@@ -33,17 +33,18 @@ clk_delay_unit_out = "ps"
 
 ##########################################################################################
 
-@pytest.mark.parametrize("IACTSIZE_X", [(4),(3),(2),(1)])
-@pytest.mark.parametrize("IACTSIZE_Y", [(3),(2),(1)])
-@pytest.mark.parametrize("WGHTSIZE_X", [(12),(10),(8),(4)])
-@pytest.mark.parametrize("SPARSE_IACT", [(0)])
-@pytest.mark.parametrize("SPARSE_WGHT", [(0)])
-def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,request):
+@pytest.mark.parametrize("IACTSIZE_X", [3])
+@pytest.mark.parametrize("IACTSIZE_Y", [4])
+@pytest.mark.parametrize("WGHTSIZE_X", [10])
+@pytest.mark.parametrize("SPARSE_IACT", [0,10,20,30,40,50])
+@pytest.mark.parametrize("SPARSE_WGHT", [0,10,20,30,40,50])
+@pytest.mark.parametrize("SEED", range(0, 128))
+def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,SEED,request):
     dut = 'PE'
     module = 'PE_tb'
     toplevel = dut
     verilog_sources = ptu.get_verilog_sources(hdl_dir)
-
+    print(verilog_sources)
     nodeid = request.node.nodeid.replace("::", "_").replace("/", "_").replace("[","_").replace("]","_")
     target_dir = os.path.join(test_dir, '.temp/' + nodeid)
     os.makedirs(target_dir, exist_ok=True)
@@ -55,6 +56,7 @@ def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,r
         module=module,
         sim_build=target_dir,
         testcase='start_test_pe',
+        defines={"NO_TRACE": "TRUE"},
         force_compile=True,
         waves=True,
         simulator="icarus",
@@ -69,8 +71,10 @@ def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,r
                     ,"WGHTSIZE_X" : str(WGHTSIZE_X)
                     ,"WGHTSIZE_Y" : str(IACTSIZE_X*IACTSIZE_Y)
                     ,"SPARSE_IACT" : str(SPARSE_IACT)
+                    ,"SEED" : str(SEED)
+                    ,"COCOTB_TRACE": "1"
                     ,"SPARSE_WGHT" : str(SPARSE_WGHT)}
     )
 
 if __name__ == '__main__':
-    test_single_pe()
+    test_single_pe(4,3,12,0,0,request=pytest.fixture(lambda: None)())

@@ -105,7 +105,7 @@ module data_pipeline_wght #(
     input                                         enable_i,
 
     output reg [ $clog2(FIRST_SPAD_ADDR+1)-1 : 0] first_spad_words_o,
-    input      [   $clog2(FIRST_SPAD_ADDR)-1 : 0] first_spad_max_i,
+    input      [ $clog2(FIRST_SPAD_ADDR+1)-1 : 0] first_spad_max_i,
     output reg [$clog2(SECOND_SPAD_ADDR+1)-1 : 0] second_spad_words_o,
 
     output reg [  FIRST_SPAD_ADDR_BITWIDTH-1 : 0] first_spad_addr_o,
@@ -113,65 +113,103 @@ module data_pipeline_wght #(
     output reg                                    first_spad_en_o,
 
     output reg [ SECOND_SPAD_ADDR_BITWIDTH-1 : 0] second_spad_addr_o,
-    output     [          SECOND_SPAD_DATA-1 : 0] second_spad_data_o,
+    output reg [          SECOND_SPAD_DATA-1 : 0] second_spad_data_o,
     output reg                                    second_spad_en_o
 );
 
-  reg  signed [            FIRST_SPAD_DATA : 0] data_storage;  // Temporary storage for data
-  reg  [            FIRST_SPAD_DATA-1 : 0] temp_acc_overhead;  // Temporary storage for data
-  reg  [     $clog2(SECOND_SPAD_ADDR) : 0] address_temp_2;  // Temporary address storage
-  reg  [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;   // Cycle counter for data loading
-  reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_reg;
-  reg  [      SECOND_OVERHEAD_WIDTH-1 : 0] overhead_delay_reg;
-  reg  [                 DATA_WIDTH-1 : 0] payload_reg;
-  reg  [                              3:0] cycle_max_reg;
-  reg                                      compute_delay;
-  reg                                      compute_sent;
-  wire [             SECOND_SPAD_DATA-1:0] input_words_w [0:2-1];
-  wire [                              3:0] overhead_partial [0:2-2];
-  wire [                              3:0] overhead_w;
-  wire signed [                       7:0] next_channel_counter;
-  reg [                               7:0] overhead_pos;
-  wire signed [                              3:0] upcoming_overhead_in_new_cycle;
-  wire [                              1:0] missingvalue;
+  reg                                             enable_delay;
+  reg         [   FIRST_SPAD_ADDR_BITWIDTH-1 : 0] first_spad_addr_delay;
+  reg         [            FIRST_SPAD_DATA-1 : 0] first_spad_data_delay;
+  reg  signed [            FIRST_SPAD_DATA-1 : 0] data_storage_1;  // Temporary storage for data
+  reg  signed [           SECOND_SPAD_DATA-1 : 0] data_storage_2;  // Temporary storage for data
+  reg         [            FIRST_SPAD_DATA-1 : 0] temp_acc_overhead;  // Temporary storage for data
+  reg         [     $clog2(SECOND_SPAD_ADDR) : 0] address_temp_2;  // Temporary address storage
+  reg         [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;   // Cycle counter for data loading
+  reg         [$clog2(SECOND_OVERHEAD_WIDTH)-1:0] overhead_reg;
+  reg         [$clog2(SECOND_OVERHEAD_WIDTH)-1:0] overhead_delay_reg;
+  reg         [$clog2(SECOND_OVERHEAD_WIDTH)  :0] overhead_new_calc_reg;
+  reg         [                              3:0] cycle_max_reg;
+  reg                                             compute_delay;
+  reg                                             compute_sent;
+  reg                                             over_ending;
+  wire        [             SECOND_SPAD_DATA-1:0] input_words_w [0:2-1];
+  wire        [                              3:0] overhead_w;
+  wire signed [                              7:0] next_channel_counter;
+  reg         [                              7:0] overhead_pos;
+  wire        [                              1:0] missingvalue;
+  wire        [  $clog2(FIRST_SPAD_ADDR+1)-1 : 0] filters_w;
+  wire        [                           23 : 0] premade_spad_2_output;
+  wire        [                            3 : 0] overhead_output;
+  wire        [                            3 : 0] overhead_next_word;
 
-  assign missingvalue = (overhead_pos + input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH] < first_spad_max_i*2) ? 2 : 1;
-  assign upcoming_overhead_in_new_cycle = overhead_pos + overhead_w + temp_acc_overhead + missingvalue - (first_spad_max_i*2);
-  assign next_channel_counter = first_spad_data_o + ((temp_acc_overhead + overhead_w)/2) - data_storage - first_spad_max_i;
+  assign filters_w = first_spad_max_i == 0 ? 16 : first_spad_max_i; 
+
+  assign missingvalue = (overhead_pos + input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH] < filters_w*2) ? 2 : 1;
+  assign next_channel_counter = first_spad_data_o + ((temp_acc_overhead + overhead_w)/2) - data_storage_1 - filters_w;
   genvar w_gen;
   for (w_gen = 0; w_gen < 2; w_gen = w_gen + 1) begin
     assign input_words_w[w_gen] = data_i[(12*w_gen)+:12];
   end
-  assign overhead_partial[0] = input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH] + input_words_w[1][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH];
-  assign overhead_w = overhead_partial[0];
+  assign overhead_w = input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH] + input_words_w[1][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH];
+  assign overhead_next_word = input_words_w[0][11:8];
+  assign premade_spad_2_output = {data_storage_2[23:12],overhead_output,data_storage_2[7:0]};
+  assign overhead_output = (data_storage_2[11:8]!= 0) & overhead_delay_reg + data_storage_2[11:8] >= filters_w ? data_storage_2[11:8] + overhead_delay_reg - filters_w - over_ending: data_storage_2[11:8];
 
-
-  assign second_spad_data_o = payload_reg;  // Assign data to the second SPAD output
 
   always @(posedge clk_i, negedge rst_ni) begin
     if (!rst_ni) begin  // Reset
-      first_spad_words_o  <= 0;
-      second_spad_words_o <= 0;
-      first_spad_data_o   <= 0;
-      first_spad_addr_o   <= 0;
-      first_spad_en_o     <= 0;
-      second_spad_addr_o  <= 0;
-      second_spad_en_o    <= 0;
-      data_storage      <= 0;
-      temp_acc_overhead   <= 0;
-      address_temp_2      <= 0;
-      cycle_counter       <= 0;
-      payload_reg         <= 0;
-      overhead_reg        <= 0;
-      overhead_delay_reg  <= 0;
-      compute_delay       <= 0;
-      compute_sent        <= 0;
-      overhead_pos        <= 0;
+      enable_delay          <= 0;
+      first_spad_words_o    <= 0;
+      second_spad_words_o   <= 0;
+      first_spad_addr_o     <= 0;
+      first_spad_addr_delay <= 0;
+      first_spad_data_o     <= 0;
+      first_spad_data_delay <= 0;
+      first_spad_en_o       <= 0;
+      second_spad_addr_o    <= 0;
+      second_spad_en_o      <= 0;
+      data_storage_1        <= 0;
+      data_storage_2        <= 0;
+      temp_acc_overhead     <= 0;
+      address_temp_2        <= 0;
+      cycle_counter         <= 0;
+      second_spad_data_o    <= 0;
+      overhead_reg          <= 0;
+      overhead_delay_reg    <= 0;
+      overhead_new_calc_reg <= 0;
+      compute_delay         <= 0;
+      compute_sent          <= 0;
+      overhead_pos          <= 0;
+      over_ending           <= 0;
     end else begin
       first_spad_en_o   <= 0;
       first_spad_data_o <= 0;
+      enable_delay      <= enable_i;
+      first_spad_en_o   <= 0;
+      second_spad_en_o  <= 0;
+      data_storage_2    <= data_i;
+      over_ending       <= 0;
+
+      if (enable_delay & (data_storage_2 != 0)) begin
+        first_spad_en_o       <= 1;
+        second_spad_en_o      <= 1;
+        second_spad_data_o    <= premade_spad_2_output;
+        if (overhead_new_calc_reg >= filters_w) begin
+          first_spad_addr_o  <= first_spad_addr_o + 1;
+          first_spad_words_o <= first_spad_addr_o + 2;
+        end
+        if (second_spad_data_o != 0) begin
+          second_spad_addr_o    <= second_spad_addr_o + 1;
+        end
+        first_spad_data_o     <= first_spad_data_delay;
+        second_spad_words_o   <= second_spad_addr_o + 2;
+      end else begin
+        second_spad_addr_o <= 0;
+      end
+
       if (enable_i == 1 & (data_i != 0)) begin
-        compute_sent  <= 0;
+        compute_sent       <= 0;
+        overhead_delay_reg <= overhead_reg;
         if (compute_sent) begin
           second_spad_words_o <= 0;
         end
@@ -179,65 +217,58 @@ module data_pipeline_wght #(
         if (cycle_counter == 0) begin
           cycle_counter <= 0;
         end
-        first_spad_en_o     <= 1;
-        second_spad_en_o    <= 1;
-        second_spad_addr_o  <= address_temp_2[SECOND_SPAD_ADDR_BITWIDTH-1:0];
-        second_spad_words_o <= second_spad_addr_o + 2;
-        address_temp_2      <= address_temp_2 + 1;
-        first_spad_data_o   <= overhead_reg + 1'd1;
-        overhead_reg        <= overhead_reg + 1;
-        overhead_delay_reg  <= overhead_reg;
-        temp_acc_overhead   <= temp_acc_overhead + overhead_w;
-        overhead_pos        <= overhead_pos + 2;
-        if (cycle_counter == 0) begin
-          payload_reg       <= data_i;
-          first_spad_data_o <= overhead_reg + 1;
+        address_temp_2        <= address_temp_2 + 1;
+        first_spad_data_delay <= first_spad_data_delay + 1'd1;
+        overhead_reg          <= overhead_reg + 2 + overhead_w;
+        overhead_new_calc_reg <= overhead_reg;
+        if (overhead_reg + overhead_next_word >= filters_w) begin
+          overhead_reg <= 2 + overhead_reg + overhead_w - filters_w;
+          if (overhead_reg == filters_w + 1) begin
+            overhead_reg <= 2 + overhead_reg + overhead_w - filters_w - 1;
+            over_ending  <= 1;
+          end
+          if (overhead_reg < filters_w) begin
+            overhead_new_calc_reg <= overhead_reg + 2 + overhead_next_word;
+          end
         end
+        temp_acc_overhead     <= temp_acc_overhead + overhead_w;
+        overhead_pos          <= overhead_pos + 2;
         if (address_temp_2 == SECOND_SPAD_ADDR - 1) begin
           address_temp_2 <= 0;
           cycle_counter  <= 0;
         end
         if (next_channel_counter >=  0) begin
-          data_storage    <= first_spad_data_o;
+          data_storage_1    <= first_spad_data_delay;
           overhead_pos      <= 0;
-          if (data_storage >= 0) begin
-            temp_acc_overhead <= 0;
-            first_spad_addr_o <= first_spad_addr_o + 1;
-            payload_reg       <= {data_i[23:12],upcoming_overhead_in_new_cycle[3:0],data_i[7:0]};
+          if (data_storage_1 >= 0) begin
+            temp_acc_overhead     <= 0;
+            first_spad_addr_delay <= first_spad_addr_delay + 1;
           end
         end
       end else begin
-        second_spad_en_o   <= 0;
-        second_spad_addr_o <= 0;
-        data_storage     <= -first_spad_max_i;
-        overhead_pos       <= (first_spad_max_i - 1) * 2;
-        if (second_spad_addr_o != 0) begin
-          first_spad_words_o <= first_spad_addr_o + 1;
-        end
+        data_storage_1     <= -filters_w;
+        overhead_pos       <= filters_w;
+        
       end
       compute_delay <= compute_i;
       if (compute_i) begin  // Reset SPAD addresses and state of module
-        if ((cycle_counter != 0) | (second_spad_addr_o != 0)) begin 
-          first_spad_en_o   <= 1;
-          first_spad_addr_o <= first_spad_addr_o + 1;
-        end else begin
-          first_spad_en_o   <= 0;
-          first_spad_addr_o <= 0;
-        end
-        second_spad_en_o    <= 0;
-        data_storage      <= 0;
-        first_spad_data_o   <= 0;
-        address_temp_2      <= 0;
-        cycle_counter       <= 0;
-        payload_reg         <= 0;
-        overhead_reg        <= 0;
-        overhead_delay_reg  <= 0;
-        compute_sent        <= 1;
-        overhead_pos        <= 0;
+        second_spad_en_o      <= 0;
+        first_spad_data_delay <= 0;
+        address_temp_2        <= 0;
+        cycle_counter         <= 0;
+        second_spad_data_o    <= 0;
+        overhead_reg          <= 0;
+        overhead_new_calc_reg <= 0;
+        overhead_delay_reg    <= 0;
+        compute_sent          <= 1;
+        overhead_pos          <= 0;
       end
       if (compute_delay) begin
-        first_spad_en_o     <= 0;
-        first_spad_addr_o   <= 0;
+        data_storage_1        <= 0;
+        data_storage_2        <= 0;
+        first_spad_en_o       <= 0;
+        first_spad_addr_delay <= 0;
+        first_spad_addr_o     <= 0;
       end
     end
   end

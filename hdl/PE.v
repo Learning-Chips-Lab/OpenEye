@@ -464,7 +464,7 @@
 module PE #(
 
     parameter IS_TOPLEVEL = 1,
-    parameter SERIAL      = 0,
+    parameter SERIAL      = 1,
     parameter CREATE_VCD  = 0,
 
     parameter PE_X = 0,
@@ -643,7 +643,6 @@ module PE #(
   // Partial sum scratch pad data outputs
   wire [               PSUM_DATA-1 : 0] psum_spad_data_a_o;   // Data read from port A
   wire [               PSUM_DATA-1 : 0] psum_spad_data_b_o;   // Data read from port B
-  wire [                         3 : 0] filters_ceil;         // Ceiled Filters Value
   // Adder input signals (summands)
   wire [      DATA_PSUM_BITWIDTH-1 : 0] adder_1_summand_1;   // Adder 1 input 1 (psum or 0)
   wire [      DATA_PSUM_BITWIDTH-1 : 0] adder_1_summand_2;   // Adder 1 input 2 (mult result)
@@ -818,8 +817,8 @@ module PE #(
   // Data forwarding/bypass detection logic (detects read-after-write hazards)
   // These signals indicate when the data being read is the same location just written
   assign reuse_adder_data_a2a = (psum_spad_addr_a_delay == psum_spad_addr_a_w) & (current_state_computing != SEND_PSUM);
-  assign reuse_adder_data_a2b = (psum_spad_addr_b_delay == psum_spad_addr_a_w) & (current_state_computing != SEND_PSUM);
-  assign reuse_adder_data_b2a = (psum_spad_addr_a_delay == psum_spad_addr_b_w) & (current_state_computing != SEND_PSUM);
+  assign reuse_adder_data_a2b = SERIAL ? 0: (psum_spad_addr_b_delay == psum_spad_addr_a_w) & (current_state_computing != SEND_PSUM);
+  assign reuse_adder_data_b2a = SERIAL ? 0: (psum_spad_addr_a_delay == psum_spad_addr_b_w) & (current_state_computing != SEND_PSUM);
   assign reuse_adder_data_b2b = (psum_spad_addr_b_delay == psum_spad_addr_b_w) & (current_state_computing != SEND_PSUM);
 
   // Adder 1 summand 1: select psum source with bypass logic
@@ -868,7 +867,6 @@ module PE #(
   assign psum_ready_o = psum_ready_i & psum_select;
 
   // Calculated ceiled filters from filters depending on PARALLEL_MACS
-  assign filters_ceil = (filters_reg+PARALLEL_MACS-1)/PARALLEL_MACS;
 
   // ============================================================================
   // Configuration Parameter Streaming FSM
@@ -1268,58 +1266,6 @@ module PE #(
         // - Data forwarding to handle read-after-write hazards
         // - Psum memory usage tracking to determine accumulation vs. first write
         CALCULATING: begin
-          /*if (data_mode_reg) begin
-            //Defaulting Values
-            wght_data_SPad_en_r <= 1;
-            wght_data_use_vec   <= 1;
-            next_iact           <= iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]];
-            values_valid        <= next_iact;
-            computing           <= 1;
-            adder_2_en          <= 1;
-            use_psum_1          <= adder_1_en;
-            use_psum_2          <= 1;
-            psum_data_SPad_en_a_w <= 0;
-            if (((input_activations_reg == 1) | ((wght_data_vec+2)=={{(4){1'd0}},input_activations_reg})) & adder_1_en) begin
-              use_psum_1            <= 0;
-              psum_data_SPad_en_a_w <= 1;
-              if (SERIAL) begin
-                used_psum_memory_1[(psum_spad_addr_a_w)] <= 1;
-                used_psum_memory_2[(psum_spad_addr_a_w)] <= 1;
-              end else begin
-                used_psum_memory[(psum_spad_addr_a_w)] <= 1;
-              end
-            end
-            if (psum_data_SPad_en_a_w) begin
-              psum_spad_addr_a_w <= psum_spad_addr_a_w + 1;
-              psum_spad_addr_a_delay <= psum_spad_addr_a_delay + 1;
-            end
-            wght_data_vec <= wght_data_vec + 1;
-            adder_1_en    <= values_valid;
-            if (iact_data_position_reg == 0) begin
-              iact_data_current_2 <= iact_part_1_w;
-            end else begin
-              if (iact_data_position_reg == 1) begin
-                iact_data_current_2 <= iact_part_2_w;
-              end else begin
-                iact_data_current_2 <= iact_part_3_w;
-              end
-            end
-            iact_data_current_3 <= iact_data_current_2;
-            if ((wght_data_vec + 1) >= input_activations_reg) begin
-              wght_data_vec        <= 0;
-              psum_spad_addr_a_mem <= psum_spad_addr_b_r + 1;
-              psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
-            end
-            if (!values_valid & adder_1_en) begin
-              current_state_computing <= WAIT_TO_SEND_PSUM;
-              wght_addr_vec           <= 0;
-              wght_data_vec           <= 0;
-              wght_ready_o            <= 1;
-              computing               <= 0;
-              use_psum_1              <= 0;
-            end
-          end else begin*/
-            //Defaulting Values
             iact_addr_SPad_en_r   <= 0;
             iact_data_SPad_en_r   <= !mux_iact_ready;
             wght_addr_SPad_en_r   <= 1;
@@ -1337,7 +1283,7 @@ module PE #(
             next_iact2            <= 0;
             psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1;
             psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
-            if (wght_data_vec < (second_spad_words_wght - 1)) begin
+            if (wght_data_vec < (second_spad_words_wght)) begin
               wght_data_vec <= wght_data_vec + 1;
             end else begin
               mux_iact_ready <= 1;
@@ -1364,9 +1310,7 @@ module PE #(
               wght_start_set  <= 0;
               if (wght_start_set) begin
                 wght_data_start <= wght_data_start_pre;
-                if (wght_data_vec < (second_spad_words_wght - 1)) begin
-                  wght_data_vec <= wght_data_start_pre;
-                end
+                wght_data_vec <= wght_data_start_pre;
               end
               if (wght_end_set) begin
                 wght_data_end       <= wght_data_end_pre;
@@ -1408,12 +1352,12 @@ module PE #(
               iact_addr_current    <= iact_addr_current + 1;
             end
             // Check valid values
-            values_valid <= 1;
-            if (wght_data_end <= wght_data_vec) begin
-              values_valid <= 0;
+            values_valid <= 0;
+            if (wght_data_end > wght_data_vec) begin
+              values_valid <= 1;
             end
             //Reuse Values of PSUM SPad
-            if (((iact_addr_SPad_data_r == iact_addr_current+1) | (iact_addr_count == 0)) & (next_iact)) begin
+            if (((iact_addr_SPad_data_r == iact_addr_current+1) | (iact_addr_count == 0)) & (wght_data_vec >= wght_data_end) | (iact_addr_count > iact_addr_SPad_data_r)) begin
               current_state_computing <= WAIT_TO_SEND_PSUM;
               wght_addr_vec           <= 0;
               wght_data_vec           <= 0;
@@ -1440,15 +1384,16 @@ module PE #(
               reuse_psum_spad_b <= 1;
               reused_data_b     <= adder_2_o_w;
             end
-            if (psum_spad_addr_a_r == psum_spad_addr_b_w) begin
-              reuse_psum_spad_a <= 1;
-              reused_data_a     <= adder_2_o_w;
+            if (!SERIAL) begin
+              if (psum_spad_addr_a_r == psum_spad_addr_b_w) begin
+                reuse_psum_spad_a <= 1;
+                reused_data_a     <= adder_2_o_w;
+              end
+              if (psum_spad_addr_b_r == psum_spad_addr_a_w) begin
+                reuse_psum_spad_b <= 1;
+                reused_data_b     <= adder_1_o_w;
+              end
             end
-            if (psum_spad_addr_b_r == psum_spad_addr_a_w) begin
-              reuse_psum_spad_b <= 1;
-              reused_data_b     <= adder_1_o_w;
-            end
-
             adder_1_en <= 1;
             adder_2_en <= 1;
             if (SERIAL == 1) begin
@@ -1843,7 +1788,7 @@ module PE #(
       .enable_i(wght_enable_i),
 
       .first_spad_words_o (first_spad_words_wght),
-      .first_spad_max_i   (filters_ceil),
+      .first_spad_max_i   (filters_reg),
       .second_spad_words_o(second_spad_words_wght),
 
       .first_spad_addr_o(first_spad_wght_addr_w),

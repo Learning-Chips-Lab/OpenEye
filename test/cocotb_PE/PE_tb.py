@@ -26,7 +26,7 @@ from numpy import genfromtxt
 import cocotb
 from cocotb.triggers import Timer, Combine
 from cocotb.clock import Clock
-from cocotb.triggers import FallingEdge, RisingEdge, Timer
+from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout, SimTimeoutError
 
 # Add parent directory to path for importing OpenEye modules
 import open_eye.timing_parameters as timing_parameters
@@ -68,6 +68,29 @@ async def start_test_pe(dut):
         - 1 output filter
         - No sparsity (all values are non-zero)
     """
+    timeout_time = 40000
+    timeout_unit = 'ns'
+
+    try:
+        # Here the test gets started
+        await with_timeout(initialize_test_pe(dut),timeout_time, timeout_unit)
+    except SimTimeoutError:
+        dut._log.error("Test did not finish in time!")
+        raise # Error if does not finish in time
+async def initialize_test_pe(dut):
+    """
+    Configures test parameters, generates test data, and launches the main test
+    sequence. This is the function that cocotb calls when running the test.
+
+    Args:
+        dut: Device Under Test (PE module instance from cocotb)
+
+    Test Configuration:
+        - 3 input activation values (dimensions)
+        - 1 channel
+        - 1 output filter
+        - No sparsity (all values are non-zero)
+    """
     # Configure test dimensions
     global iactsize_x   # Number of input activation values (spatial dimension, C0 in Eyeriss V2 paper)
     global iactsize_y   # Number of input channels (number of C0*U blocks in Eyeriss V2 paper, U=1 here)
@@ -81,6 +104,7 @@ async def start_test_pe(dut):
     wghtsize_x = int(os.environ["WGHTSIZE_X"])
     sparse_iact = int(os.environ["SPARSE_IACT"])
     sparse_wght = int(os.environ["SPARSE_WGHT"])
+    np.random.seed(int(os.environ["SEED"]))
     wghtsize_y = iactsize_x * iactsize_y
 
     # Initialize timing parameters from environment variables
@@ -191,13 +215,8 @@ async def send_iact(ptp, dut, data_array):
         int(dut.DATA_IACT_BITWIDTH.value),  # Convert LogicArray to int
         True,  # SISD mode
         0,
-        True,  # Ignore zeros
+        False,  # Ignore zeros
     )
-
-    # Adjust data array addresses: add offset from previous element's upper bits
-    for x in range(len(spad_data)):
-        if((spad_data[x] != 0)):
-            spad_data[x] = spad_data[x] + int(math.floor(spad_data[x-1] / 256) * 256)
 
     dut._log.info("IACT DATA is %s", spad_data)
 
@@ -269,20 +288,16 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
 
                 control[wght_x] = control[wght_x] + (wght[current_iact][wght_x] * iact[iact_y][iact_x])
             current_iact = current_iact + 1
-    for output_word in range(len(control)):  # For each filter/output
+    """for output_word in range(len(control)):  # For each filter/output
         if (control[output_word] < 0):
-            control[output_word] = control[output_word] + 2**20
+            control[output_word] = control[output_word] + 2**20"""
     # Validate hardware outputs against golden model
+    print(control[0])
     current_control = 0
-    for output_word in range(len(control)):
-        if (output_word < math.ceil(wghtsize_x/2)):
-            control[output_word] = control[2*output_word] + (control[1+(2*output_word)] << 20)
-        else:
-            control[output_word] = 0
     # Check outputs while PE is producing results (psum_enable_o is high)
     while dut.psum_enable_o.value == 1:
         # Validate adder_1 output
-        assert dut.psum_data_o.value.to_unsigned() == control[current_control], (
+        assert dut.psum_data_o.value.to_signed() == control[current_control], (
             "PSUM("
             + str(dut.psum_data_o.value.to_unsigned())
             + ") is not equal to control("
@@ -318,15 +333,15 @@ async def send_wght(ptp, dut, data_array):
         int(dut.DATA_WGHT_BITWIDTH.value),  # Convert LogicArray to int
         False,  # Packed mode (not SISD)
         int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value),  # Convert to int
-        False  # Ignore zeros
+        True  # Ignore zeros
     )
-
+    print(spad_data)
     dut._log.info("WGHT DATA is %s", spad_data)
 
     # Enable weight interface
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.wght_enable_i, 1))
 
-    # Send data array second
+    # Send data array
     await send_to_spad(
         ptp,
         spad_data,
@@ -364,7 +379,7 @@ async def send_bias(ptp, dut, data_array):
         int(dut.PSUM_ADDR.value),           # Convert LogicArray to int
         int(dut.PSUM_ADDR.value),           # Convert LogicArray to int
         int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
-        False,                              # Packed mode
+        True,                              # Packed mode
         int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
         False                               # Don't ignore zeros
     )
@@ -372,7 +387,6 @@ async def send_bias(ptp, dut, data_array):
 
     # Enable partial sum interface
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.psum_enable_i, 1))
-
     # Send data directly (only data array, no address array)
     await send_to_spad(
         ptp,
@@ -380,7 +394,7 @@ async def send_bias(ptp, dut, data_array):
         dut.psum_data_i,
         int(dut.PSUM_ADDR.value),  # Convert LogicArray to int
         int(dut.TRANS_BITWIDTH_PSUM.value),  # Convert LogicArray to int
-        int(dut.DATA_PSUM_BITWIDTH.value) * 2,  # Convert LogicArray to int
+        int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
         False,  # Sequential mode
     )
 
@@ -563,6 +577,7 @@ def generate_spad(
         - Addresses track: [2, 5] (cumulative non-zero counts)
     """
     data = array
+    simd = not sisd
     # Ensure data is 2D for consistent processing
     if data.ndim == 1:
         data = [data]
@@ -575,7 +590,7 @@ def generate_spad(
     for y in range(len(data)):  # For each row
         for x in range(len(data[y])):  # For each element in row
             # Include this element if it's non-zero OR we're not ignoring zeros
-            if (data[y][x] != 0) | (not ignore_zeros):
+            if (data[y][x] != 0) | (not ignore_zeros) | (((len(data[y]) - 1 == x) & (current_count%2 != 0))):
                 if (data[y][x] < 0):
                     temp_data = data[y][x] + 2**bitwidth
                 else :
@@ -602,12 +617,12 @@ def generate_spad(
                 overhead = overhead + 1
 
         # Store cumulative count for this row in address array
-        if not sisd:
+        if simd:
             # If odd number of values, advance to next word
             if current_count % 2 == 1:
                 current_count = current_count + 1
 
-        overhead = 0  # Reset overhead counter for next row
+    #overhead = 0  # Reset overhead counter for next row
 
     spad_data = data_spad_data
     return spad_data
@@ -640,32 +655,44 @@ def create_iact_wght_psum_arrays(dut):
             - psums: [1] (1 bias value)
     """
     # Generate input activations: random values from -128 to 127, without 0
-    iacts = np.random.randint(-128, 127, size=(iactsize_y, iactsize_x))
+    iacts = np.random.randint(-64, 63, size=(iactsize_y, iactsize_x))
     iacts[iacts >= 0] += 1
     # Apply random sparsity to activations
     # Choose random indices to zero out (sparse_iact fraction of total)
     indices = np.random.choice(
-        np.arange(iacts.size), replace=False, size=int(iacts.size * sparse_iact)
+        np.arange(iacts.size), replace=False, size=int(iacts.size * sparse_iact / 100)
     )
-
     # Zero out selected elements (convert flat index to 2D coordinates)
     # indices = [] #Manual override option
     for x in range(len(indices)):
         iacts[int(indices[x] / iactsize_x)][int(indices[x] % iactsize_x)] = 0
 
     # Generate weights: random values from -128 to 127, without 0
-    wghts = np.random.randint(-128, 127, size=(wghtsize_y, wghtsize_x))
+    wghts = np.random.randint(-64, 63, size=(wghtsize_y, wghtsize_x))
     wghts[wghts >= 0] += 1
 
     # Apply random sparsity to weights
     indices = np.random.choice(
-        np.arange(wghts.size), replace=False, size=int(wghts.size * sparse_wght)
+        np.arange(wghts.size), replace=False, size=int(wghts.size * sparse_wght / 100)
     )
 
     # Zero out selected weight elements
     for x in range(len(indices)):
         wghts[int(indices[x] / wghtsize_x)][int(indices[x] % wghtsize_x)] = 0
 
+    print(wghts)
+    array = []
+    counter = 0
+    temp = 0
+    for a in range(len(wghts)):
+        for b in range(len(wghts[a])):
+            if (wghts[a][b] != 0):
+                counter = counter + 1
+        counter = math.ceil(counter / 2)
+        temp = temp + counter
+        counter = 0
+        array.append(temp)
+    print(array)
     # wghts[indices] = 0 #Alternative: direct indexing (may not work with 2D reshape)
 
     # Generate partial sums/bias: sequential values from 1 to (number of filters)
