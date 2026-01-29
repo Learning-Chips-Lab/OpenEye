@@ -2533,7 +2533,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
               end
             end
             fsm_psum_r <= fsm_psum_r + 1;
-            if ((fsm_psum_r == NUM_GLB_PSUM - 3) | fully_connected_layer) begin
+            if ((fsm_psum_r == (NUM_GLB_PSUM/2) - 1) | fully_connected_layer) begin
               fsm_psum_r <= 0;
               fsm_x_cl_psum <= fsm_x_cl_psum + 1;
               if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
@@ -2997,7 +2997,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
         .wght_addr_len_i              (wght_addr_len_reg),
         .bano_cluster_mode_i          (bano_cluster_mode_reg),
         .af_cluster_mode_i            (af_cluster_mode_reg),
-        .pooling_cluster_mode_i       (4'd0),
+        .pooling_cluster_mode_i       ({NUM_GLB_PSUM{1'd0}}),
         .kernel_per_pe_cluster_i      (kernel_per_pe_cluster_reg[$clog2(PE_ROWS)-1:0]),
         .kernel_size_i                (kernel_size),
         .input_activations_i          (input_activations_reg),

@@ -458,7 +458,6 @@ class LayerParameters(object):
             else:
                 # Output width perfectly aligned - no padding needed
                 self.add_up = 0
-
             # === MASKING PHASE 2: Eliminate PEs beyond computation requirements ===
             # Calculate total number of X positions needed per computation cycle
             x_values_per_cycle = (self.calc_X + self.add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation
@@ -467,7 +466,7 @@ class LayerParameters(object):
                     for y_pe in range(params.PEs_Y):
                         for x_pe in range(params.PEs_X):
                             # Calculate linear position of this PE in the flattened array
-                            x_pos_in_pes = x_cluster * 4 + y_cluster * 8 + x_pe
+                            x_pos_in_pes = x_cluster * params.PEs_X + y_cluster * params.PEs_X * params.Clusters_X + x_pe
                             # Disable PEs beyond the required computation width
                             if(x_pos_in_pes >= x_values_per_cycle):
                                 self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
@@ -492,7 +491,6 @@ class LayerParameters(object):
                                 # Disable PEs beyond the distributed kernel height
                                 if((1 + y_pe + (y_cluster % self.used_Y_cluster) * params.PEs_Y) > (self.kernel_size[0]*self.kernel_per_pe_cluster)):
                                     self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
-
         else:
             # Kernel dimensions exceed hardware capacity
             logger.error("Can't fit model, kernel size must be adjusted.")

@@ -125,8 +125,8 @@ module data_pipeline_wght #(
   reg         [            FIRST_SPAD_DATA-1 : 0] temp_acc_overhead;  // Temporary storage for data
   reg         [     $clog2(SECOND_SPAD_ADDR) : 0] address_temp_2;  // Temporary address storage
   reg         [$clog2(FIRST_SPAD_DATA_CYCLE) : 0] cycle_counter;   // Cycle counter for data loading
-  reg         [$clog2(SECOND_OVERHEAD_WIDTH)-1:0] overhead_reg;
-  reg         [$clog2(SECOND_OVERHEAD_WIDTH)-1:0] overhead_delay_reg;
+  reg         [$clog2(SECOND_OVERHEAD_WIDTH)  :0] overhead_reg;
+  reg         [$clog2(SECOND_OVERHEAD_WIDTH)  :0] overhead_delay_reg;
   reg         [$clog2(SECOND_OVERHEAD_WIDTH)  :0] overhead_new_calc_reg;
   reg         [                              3:0] cycle_max_reg;
   reg                                             compute_delay;

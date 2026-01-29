@@ -694,7 +694,6 @@ class ConvWghtStreamMapper(WghtStreamMapper):
             # Stop when SPAD is full
             if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
-
         return spad_storage
         
     def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
