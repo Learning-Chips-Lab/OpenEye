@@ -60,19 +60,15 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
     Generated Parameters:
         - CLUSTER_ROWS: Number of cluster rows (Y dimension)
         - NUM_GLB_IACT: Number of global input activation buffers
-        - PE_COLUMNS: Number of processing element columns (X)
         - NUM_GLB_PSUM: Number of global partial sum buffers
         - NUM_GLB_WGHT: Number of global weight buffers
-        - PE_ROWS: Number of processing element rows (Y)
     """
     gtu.delete_files_in_directory('demo/')
     with open(filename, 'w') as txt_file:
         txt_file.write(f"parameter CLUSTER_ROWS  = {openeye_parameter.Clusters_Y},\n")
         txt_file.write(f"parameter NUM_GLB_IACT  = {openeye_parameter.NUM_GLB_IACT},\n")
-        txt_file.write(f"parameter PE_COLUMNS  = {openeye_parameter.PEs_X},\n")
         txt_file.write(f"parameter NUM_GLB_PSUM  = {openeye_parameter.NUM_GLB_PSUM},\n")
         txt_file.write(f"parameter NUM_GLB_WGHT = {openeye_parameter.NUM_GLB_WGHT},\n")
-        txt_file.write(f"parameter PE_ROWS  = {openeye_parameter.PEs_Y},\n")
 
 
 def create_vh_file_from_envvars(

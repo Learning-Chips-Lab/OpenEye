@@ -61,8 +61,6 @@
 ///   NUM_GLB_IACT           - Number of input activation global buffers
 ///   NUM_GLB_WGHT           - Number of rows of PEs in cluster (No WGHT GLBs)
 ///   NUM_GLB_PSUM           - Number of partial sum global buffers
-///   PE_ROWS                - Amount of rows of process elements
-///   PE_COLUMNS             - Amount of columns of process elements
 ///   CLUSTER_ROWS           - Amount of rows of clusters
 ///   CLUSTER_COLUMNS        - Amount of columns of clusters
 ///   IACT_PER_PE            - Maximum Iact Words in process element
@@ -100,10 +98,8 @@ module OpenEye_FPGA #(
   `ifdef USE_INTERNAL_PARAMS
       parameter CLUSTER_ROWS  = 8,
       parameter NUM_GLB_IACT  = 3,
-      parameter PE_COLUMNS    = 4,
       parameter NUM_GLB_PSUM  = 4,
       parameter NUM_GLB_WGHT  = 3,
-      parameter PE_ROWS       = 3,
   `else
     `include "parameters.vh"
       // Defaultvalues
@@ -124,7 +120,7 @@ module OpenEye_FPGA #(
     parameter TRANS_BITWIDTH_PSUM = 20,
     parameter DATA_IACT_OVERHEAD  = 4,
 
-    parameter PES = PE_COLUMNS * PE_ROWS,
+    parameter PES = NUM_GLB_PSUM * NUM_GLB_WGHT,
 
     parameter CLUSTER_COLUMNS = 2,
     parameter CLUSTERS        = CLUSTER_COLUMNS * CLUSTER_ROWS,
@@ -456,7 +452,7 @@ reg [1023:0] fst_path;
   wire [ 7:0] needed_wght_cycles_reg;
   wire [11:0] fc_size_reg;
   wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] needed_iact_buffer_words_reg;
-  assign start_param_array = (1 << (((kernels_per_calc * y_lines_per_calc * ((iact_size_x-1+PE_COLUMNS)/PE_COLUMNS)*PE_COLUMNS) + PE_COLUMNS - 1)/PE_COLUMNS)) - 1;
+  assign start_param_array = (1 << (((kernels_per_calc * y_lines_per_calc * ((iact_size_x-1+NUM_GLB_PSUM)/NUM_GLB_PSUM)*NUM_GLB_PSUM) + NUM_GLB_PSUM - 1)/NUM_GLB_PSUM)) - 1;
   //#######################
   //States of the FSM
   //#######################
@@ -624,7 +620,7 @@ reg [1023:0] fst_path;
                       CLUSTER_ROWS
                   )-1:0]][23:16] <= iact_converter_y;
               end else begin
-                if ((a != 0) & ((iact_converter_x + a[7:0] * PE_COLUMNS[7:0]) >= iact_size_x)) begin
+                if ((a != 0) & ((iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0]) >= iact_size_x)) begin
                   iact_converter_params_reg[a
                   ][fsm_row[$clog2(
                       CLUSTER_ROWS
@@ -633,9 +629,9 @@ reg [1023:0] fst_path;
                   iact_converter_params_reg[a
                   ][fsm_row[$clog2(
                       CLUSTER_ROWS
-                  )-1:0]][31:24] <= iact_converter_x + a[7:0] * PE_COLUMNS[7:0];
+                  )-1:0]][31:24] <= iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0];
                 end
-                if ((a != 0) & ((iact_converter_x + a[7:0] * PE_COLUMNS[7:0]) >= iact_size_x) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
+                if ((a != 0) & ((iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0]) >= iact_size_x) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
                   iact_converter_params_reg[a
                   ][fsm_row[$clog2(
                       CLUSTER_ROWS
@@ -672,12 +668,12 @@ reg [1023:0] fst_path;
                 fsm_row_offset <= 0;
               end
             end
-            iact_converter_x <= iact_converter_x + (PE_COLUMNS * CLUSTER_COLUMNS);
-            if ((!fully_connected_layer & (iact_converter_x + (PE_COLUMNS * CLUSTER_COLUMNS) >= iact_size_x))
+            iact_converter_x <= iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS);
+            if ((!fully_connected_layer & (iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS) >= iact_size_x))
              | (fully_connected_layer)) begin
               iact_converter_x <= 0;
-              if (((iact_converter_x + PE_COLUMNS[7:0]) >= iact_size_x) & (!fully_connected_layer)) begin
-                iact_converter_x <= PE_COLUMNS[7:0];
+              if (((iact_converter_x + NUM_GLB_PSUM[7:0]) >= iact_size_x) & (!fully_connected_layer)) begin
+                iact_converter_x <= NUM_GLB_PSUM[7:0];
               end
               fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
               if (fsm_iact_params_kernel == kernels_per_calc - 1) begin
@@ -719,22 +715,22 @@ reg [1023:0] fst_path;
                 end
               end
             end
-            param_array_reg <= ((kernels_per_calc * iact_size_x / PE_COLUMNS) | param_array_reg>>(CLUSTERS-(kernels_per_calc * iact_size_x / PE_COLUMNS)));
+            param_array_reg <= ((kernels_per_calc * iact_size_x / NUM_GLB_PSUM) | param_array_reg>>(CLUSTERS-(kernels_per_calc * iact_size_x / NUM_GLB_PSUM)));
           end
           if ((iact_converter_params_enable) | (fsm_iact_params > 0)) begin
             if (fsm_iact_params > 0) begin
               fsm_iact_params <= fsm_iact_params - 1;
             end
             if (iact_converter_params_enable & (fsm_current_state == CONVERT_IACT)) begin
-              fsm_iact_params <= fsm_iact_params + kernels_per_calc * ((iact_size_x - 1 + (2 * PE_COLUMNS)) / (2 * PE_COLUMNS));
+              fsm_iact_params <= fsm_iact_params + kernels_per_calc * ((iact_size_x - 1 + (2 * NUM_GLB_PSUM)) / (2 * NUM_GLB_PSUM));
             end
             if (fsm_iact_params > 0) begin
               for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin 
                 iact_converter_params_reg[a
                 ][fsm_row[$clog2(
                     CLUSTER_ROWS
-                )-1:0]][31:24] <= iact_converter_x + a[7:0] * PE_COLUMNS[7:0];
-                if ((a != 0) & ((iact_converter_x + a[7:0] * PE_COLUMNS[7:0]) >= iact_size_x) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
+                )-1:0]][31:24] <= iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0];
+                if ((a != 0) & ((iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0]) >= iact_size_x) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
                   iact_converter_params_reg[a
                   ][fsm_row[$clog2(
                       CLUSTER_ROWS
@@ -745,7 +741,7 @@ reg [1023:0] fst_path;
                       CLUSTER_ROWS
                   )-1:0]][23:16] <= iact_converter_y;
                 end
-                if ((a != 0) & ((iact_converter_x + a[7:0] * PE_COLUMNS[7:0]) >= iact_size_x)) begin
+                if ((a != 0) & ((iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0]) >= iact_size_x)) begin
                   iact_converter_params_reg[a
                   ][fsm_row[$clog2(
                       CLUSTER_ROWS
@@ -754,7 +750,7 @@ reg [1023:0] fst_path;
                   iact_converter_params_reg[a
                   ][fsm_row[$clog2(
                       CLUSTER_ROWS
-                  )-1:0]][31:24] <= iact_converter_x + a[7:0] * PE_COLUMNS[7:0];
+                  )-1:0]][31:24] <= iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0];
                 end
                 iact_converter_params_reg[a
                 ][fsm_row[$clog2(
@@ -770,11 +766,11 @@ reg [1023:0] fst_path;
                   fsm_row_offset <= 0;
                 end
               end
-              iact_converter_x <= iact_converter_x + (PE_COLUMNS * CLUSTER_COLUMNS);
-              if ((iact_converter_x + (PE_COLUMNS * CLUSTER_COLUMNS) >= iact_size_x)) begin
+              iact_converter_x <= iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS);
+              if ((iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS) >= iact_size_x)) begin
                 iact_converter_x <= 0;
-                if ((iact_converter_x + PE_COLUMNS[7:0]) >= iact_size_x & (!fully_connected_layer)) begin
-                  iact_converter_x <= PE_COLUMNS[7:0];
+                if ((iact_converter_x + NUM_GLB_PSUM[7:0]) >= iact_size_x & (!fully_connected_layer)) begin
+                  iact_converter_x <= NUM_GLB_PSUM[7:0];
                 end
                 fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
                 if (fsm_iact_params_kernel == kernels_per_calc - 1) begin
@@ -931,7 +927,7 @@ reg [1023:0] fst_path;
           if (fsm_sending_cycle > 2) begin
             flat_help_var_send = 0;
             for (a = 0; a < CLUSTER_ROWS; a=a+1) begin
-              if ((a * (PE_COLUMNS * CLUSTER_COLUMNS)) <= (((iact_size_x%PE_COLUMNS)+iact_size_x) * y_lines_per_calc * kernels_per_calc) - 1) begin
+              if ((a * (NUM_GLB_PSUM * CLUSTER_COLUMNS)) <= (((iact_size_x%NUM_GLB_PSUM)+iact_size_x) * y_lines_per_calc * kernels_per_calc) - 1) begin
                 temp_var = {{EXTENDEDBITS{1'b0}}, {NUM_GLB_WGHT{1'b1}}};
                 flat_help_var_send = flat_help_var_send + (temp_var << (a * NUM_GLB_WGHT));
                 temp_var = 0;
@@ -1320,7 +1316,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
           iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
           iact_x_with_add_up <= iact_size_x + add_up_reg;
           if (fully_connected_layer) begin
-            iact_channels <= iact_channels_per_pe * PE_ROWS * iact_channel_max_cycles; //iact_channel contains CLUSTER_Y
+            iact_channels <= iact_channels_per_pe * NUM_GLB_WGHT * iact_channel_max_cycles; //iact_channel contains CLUSTER_Y
           end
           if (max_pooling) begin
             for (a = 0; a < RAM_CELLS; a=a+1) begin
@@ -1438,8 +1434,8 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
             overhang               <= 0;
             overhang_delay         <= 0;
             if (fully_connected_layer) begin
-              overhang_discrepancy <= ((iact_size_x*iact_channels_per_pe*PE_ROWS)%(WORDS_PER_CYCLE[7:0]*4));
-              limit_increase_reg   <= ((PE_ROWS*iact_channels_per_pe)/8);
+              overhang_discrepancy <= ((iact_size_x*iact_channels_per_pe*NUM_GLB_WGHT)%(WORDS_PER_CYCLE[7:0]*4));
+              limit_increase_reg   <= ((NUM_GLB_WGHT*iact_channels_per_pe)/8);
               overhang             <= 0;
             end
             fsm_cycle <= 0;
@@ -1608,11 +1604,11 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
               fsm_current_state <= WAIT_FOR_RESULTS;
             end else begin
               fsm_current_state          <= RECEIVE_PSUMS_TO_IACT;
-              ram_iact_modulo            <= iact_size_x % (CLUSTER_COLUMNS * PE_COLUMNS);
+              ram_iact_modulo            <= iact_size_x % (CLUSTER_COLUMNS * NUM_GLB_PSUM);
               select_ram_offset          <= 0;
               ram_counter_storage        <= 0;
               select_ram_counter         <= 0;
-              buffer_SP_addr_upper_limit <= (CLUSTER_ROWS * (iact_size_x+1)/2/PE_COLUMNS/CLUSTER_COLUMNS)%RAM_CELLS;
+              buffer_SP_addr_upper_limit <= (CLUSTER_ROWS * (iact_size_x+1)/2/NUM_GLB_PSUM/CLUSTER_COLUMNS)%RAM_CELLS;
               buffer_SP_addr_lower_limit <= 0;
               limit_increase_reg         <= 0;
               overhang_discrepancy       <= 0;
@@ -2500,7 +2496,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
               if (store_in_psum == 0) begin
                 fsm_psum_current_state    <= SEND_PSUM_TO_IACT;
                 iteration_for_kernels_reg <= (iact_channels_per_pe_next_layer+kernels_per_calc-1) / kernels_per_calc;
-                psum_sending_counter      <= psum_sending_counter + CLUSTER_COLUMNS * PE_COLUMNS;
+                psum_sending_counter      <= psum_sending_counter + CLUSTER_COLUMNS * NUM_GLB_PSUM;
               end else begin
                 fsm_psum_current_state <= PSUM_IDLE;
               end
@@ -2612,8 +2608,8 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
             end
           end
           if (iact_size_x > 8) begin
-            psum_sending_counter <= psum_sending_counter + CLUSTER_COLUMNS * PE_COLUMNS;
-            if (psum_sending_counter >= kernels_per_calc * iact_x_with_add_up - CLUSTER_COLUMNS * PE_COLUMNS) begin
+            psum_sending_counter <= psum_sending_counter + CLUSTER_COLUMNS * NUM_GLB_PSUM;
+            if (psum_sending_counter >= kernels_per_calc * iact_x_with_add_up - CLUSTER_COLUMNS * NUM_GLB_PSUM) begin
               psum_sending_counter <= 0;
             end
             if (psum_sending_counter == 0) begin
@@ -2650,12 +2646,12 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
             end
           end
           /*
-          psum_sending_counter <= psum_sending_counter + CLUSTER_COLUMNS * PE_COLUMNS;
-          if (psum_sending_counter >= kernels_per_calc * iact_x_with_add_up - CLUSTER_COLUMNS * PE_COLUMNS) begin
+          psum_sending_counter <= psum_sending_counter + CLUSTER_COLUMNS * NUM_GLB_PSUM;
+          if (psum_sending_counter >= kernels_per_calc * iact_x_with_add_up - CLUSTER_COLUMNS * NUM_GLB_PSUM) begin
             psum_sending_counter <= 0;
           end
-          if ((psum_sending_counter >= kernels_per_calc * iact_x_with_add_up - 2 * CLUSTER_COLUMNS * PE_COLUMNS) &
-          (psum_sending_counter < kernels_per_calc * iact_x_with_add_up - CLUSTER_COLUMNS * PE_COLUMNS)) begin
+          if ((psum_sending_counter >= kernels_per_calc * iact_x_with_add_up - 2 * CLUSTER_COLUMNS * NUM_GLB_PSUM) &
+          (psum_sending_counter < kernels_per_calc * iact_x_with_add_up - CLUSTER_COLUMNS * NUM_GLB_PSUM)) begin
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
@@ -2790,8 +2786,8 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
         iact_stream_constructor #(
             .CLUSTER_ROWS      (CLUSTER_ROWS),
             .NUM_GLB_IACT      (NUM_GLB_IACT),
-            .PE_X              (PE_COLUMNS),
-            .PE_Y              (PE_ROWS),
+            .PE_X              (NUM_GLB_PSUM),
+            .PE_Y              (NUM_GLB_WGHT),
             .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
             .DATA_IACT_OVERHEAD(DATA_IACT_OVERHEAD),
             .RAM_CELLS         (RAM_CELLS),
@@ -2935,8 +2931,8 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
         .TRANS_BITWIDTH_PSUM(TRANS_BITWIDTH_PSUM),
         .DATA_IACT_OVERHEAD (DATA_IACT_OVERHEAD),
 
-        .PE_COLUMNS(PE_COLUMNS),
-        .PE_ROWS   (PE_ROWS),
+        .PE_COLUMNS(NUM_GLB_PSUM),
+        .PE_ROWS   (NUM_GLB_WGHT),
 
         .NUM_GLB_IACT(NUM_GLB_IACT),
         .NUM_GLB_WGHT(NUM_GLB_WGHT),
@@ -2998,7 +2994,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
         .bano_cluster_mode_i          (bano_cluster_mode_reg),
         .af_cluster_mode_i            (af_cluster_mode_reg),
         .pooling_cluster_mode_i       ({NUM_GLB_PSUM{1'd0}}),
-        .kernel_per_pe_cluster_i      (kernel_per_pe_cluster_reg[$clog2(PE_ROWS)-1:0]),
+        .kernel_per_pe_cluster_i      (kernel_per_pe_cluster_reg[$clog2(NUM_GLB_WGHT)-1:0]),
         .kernel_size_i                (kernel_size),
         .input_activations_i          (input_activations_reg),
         .stride_x_i                   (stride_x_reg),

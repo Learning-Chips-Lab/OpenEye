@@ -103,10 +103,6 @@ export NUM_GLB_IACT=3
 export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
-#Set Number of PEelements
-export PE_ROWS=3
-export PE_COLUMNS=4
-
 #Set number of Cluster rows need at least to be 2 COLUMNS
 export CLUSTER_COLUMNS=2
 export CLUSTER_ROWS=8
