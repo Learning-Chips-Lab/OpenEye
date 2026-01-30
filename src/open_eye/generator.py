@@ -10,10 +10,10 @@ context = {
     "dma_bitwidth": 64,
     "iact_buffer_size": 4096,
     "num_pes": 14,
-    "CLUSTER_ROWS":gtu.load_env_to_variable("CLUSTER_ROWS", 8),
 
     "ceil": math.ceil,
     "log2": math.log2,
+    "int": int,
     "max": max
 }
 
@@ -25,7 +25,7 @@ def eval_width(width, ctx):
     else:
         raise TypeError("Invalid width type")
 
-def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v_path=None):
+def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v_path=None, output_py_path=None):
 
     # ------------------------------------------------------------
     # Configuration
@@ -36,12 +36,13 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     if output_v_path is None:
         output_v_path = os.path.join(os.path.dirname(regmap_yaml_path))
     
-    output_py_path = Path(__file__).resolve().parent
+    if output_py_path is None:
+        output_py_path = Path(__file__).resolve().parent
 
     YAML_FILE = os.path.join(regmap_yaml_path, "regmap.yaml")
     VERILOG_PARAMS_OUT = os.path.join(output_vh_path, "regmap_params.vh")
     PYTHON_OUT = os.path.join(output_py_path, "regmap_pack.py")
-    DMA_STORAGE_OUT = os.path.join(output_v_path, "dma_storage.v") if output_v_path else "dma_storage.v"
+    DMA_STORAGE_OUT = os.path.join(output_v_path, "dma_storage.v")
 
     # ------------------------------------------------------------
     # Load YAML
@@ -51,9 +52,10 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
 
     dma_bitwidth = int(config["dma_bitwidth"])
     registers = config["registers"]
-
+    env_ctx = dict(os.environ)
+    comb_ctx = context | env_ctx
     for reg in registers:
-        reg["width"] = eval_width(reg["width"], context)
+        reg["width"] = eval_width(reg["width"], comb_ctx)
     # ------------------------------------------------------------
     # Calculate transmission splitting & positions
     # ------------------------------------------------------------
@@ -80,7 +82,6 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
 
     if current_trans:
         transmissions.append(current_trans)
-
     num_transmissions = len(transmissions)
 
     # ------------------------------------------------------------
@@ -194,15 +195,20 @@ if __name__ == "__main__":
     except:
         output_pathvh = path
 
-    # second argument: output path (optional)
+    # third argument: output path (optional)
     try:
         output_pathv = sys.argv[3]
     except:
         output_pathv = path
+    # third argument: output path (optional)
+    try:
+        output_pathpy = sys.argv[3]
+    except:
+        output_pathpy = None
     
 
     # ------------------------------------------------------------
     # Create regmap_params.vh file
     # ------------------------------------------------------------
-    create_regmap_params_vh_file(path, output_pathvh, output_pathv)
+    create_regmap_params_vh_file(path, output_pathvh, output_pathv, output_pathpy)
 

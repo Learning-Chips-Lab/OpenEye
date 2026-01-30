@@ -10,14 +10,20 @@ import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 
-def load_env_to_variable(variable_string, default_value) :
+def load_env_to_variable(variable_string, default_value):
+    val = os.environ.get(variable_string) # Results in None, if Value is not present
+    
+    if val is None:
+        logger.debug(f"{variable_string} not set, using default: {default_value}")
+        print("Value not present.")
+        print(str(val))
+        return default_value
+    
     try:
-        if (type(default_value) == int) :
-            return int((os.environ[variable_string]))
-        else :
-            return os.environ[variable_string]
-    except:
-        logger.debug(variable_string + " not set")
+        if isinstance(default_value, int):
+            return int(val)
+        return val
+    except ValueError:
         return default_value
 def delete_files_in_directory(directory_path):
     try:
