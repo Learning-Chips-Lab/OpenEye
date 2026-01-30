@@ -35,7 +35,6 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
 
     if output_v_path is None:
         output_v_path = os.path.join(os.path.dirname(regmap_yaml_path))
-    
     if output_py_path is None:
         output_py_path = Path(__file__).resolve().parent
 
@@ -202,7 +201,7 @@ if __name__ == "__main__":
         output_pathv = path
     # third argument: output path (optional)
     try:
-        output_pathpy = sys.argv[3]
+        output_pathpy = sys.argv[4]
     except:
         output_pathpy = None
     
