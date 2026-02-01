@@ -1279,28 +1279,21 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                     write_dma_en   <= 1;
                     padding_reg    <= (kernel_size-1)/2;
                   end
-                  32'd4: begin
-                    compute_mask_reg[DMA_BITWIDTH-1:0] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
-                  end
-                  32'd5: begin
-                    choose_iact_buffer <= choose_iact_buffer_input;
-                    compute_mask_reg[2*DMA_BITWIDTH-1:DMA_BITWIDTH] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
-                  end
-                  32'd6: begin
-                    compute_mask_reg[3*DMA_BITWIDTH-1:2*DMA_BITWIDTH] <= data_dma_i_reg[DMA_BITWIDTH-1:0];
-                  end
                   default: begin
-                    fsm_last_state    <= GET_PARAMETERS;
-                    fsm_current_state <= GET_ROUTER_CONFIG;
-                    fsm_cycle         <= 0;
-                    write_dma_addr    <= ~0;
+
                   end
                 endcase
-                if (fsm_cycle == 4 + (((CLUSTER_COLUMNS * CLUSTER_ROWS * PES) - 1)/64)) begin
-                  fsm_last_state    <= GET_PARAMETERS;
-                  fsm_current_state <= GET_ROUTER_CONFIG;
-                  fsm_cycle         <= 0;
-                  write_dma_addr    <= ~0;
+                for (a = 0; a < PES * CLUSTERS; a = a + 1) begin
+                  if (fsm_cycle >= 4 & (((fsm_cycle - 4) * DMA_BITWIDTH <= a) & ((fsm_cycle - 3) * DMA_BITWIDTH > a))) begin
+                    compute_mask_reg[a] <= data_dma_i_reg[a%DMA_BITWIDTH];
+                  end
+                end
+                if (fsm_cycle == (4 + (((PES * CLUSTERS) - 1)/64))) begin
+                  choose_iact_buffer <= choose_iact_buffer_input;
+                  fsm_last_state     <= GET_PARAMETERS;
+                  fsm_current_state  <= GET_ROUTER_CONFIG;
+                  fsm_cycle          <= 0;
+                  write_dma_addr     <= ~0;
                   if (fully_connected_layer) begin
                     padding_reg <= 0;
                   end
