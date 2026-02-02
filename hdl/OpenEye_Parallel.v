@@ -241,7 +241,6 @@ module OpenEye_Parallel #(
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg;
   reg  [                                          3:0] needed_iact_cycles_reg;
   reg  [                    $clog2(PSUM_PER_PE+1)-1:0] filters_reg;
-  reg  [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_addr_len_reg;
   reg  [               $clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_reg;
   reg  [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_reg;
   reg  [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_reg;
@@ -436,7 +435,6 @@ module OpenEye_Parallel #(
       needed_y_cls_reg               <= 0;
       needed_iact_cycles_reg         <= 0;
       filters_reg                    <= 0;
-      iact_addr_len_reg              <= 0;
       stride_x_reg                   <= 0;
       stride_y_reg                   <= 0;
       bano_cluster_mode_reg          <= 0;
@@ -520,7 +518,6 @@ module OpenEye_Parallel #(
         needed_y_cls_reg            <= needed_y_cls_i_w;
         needed_iact_cycles_reg      <= needed_iact_cycles_i_w;
         filters_reg                 <= filters_i_w;
-        iact_addr_len_reg           <= 0;
         wght_addr_len_reg           <= wght_addr_len_i_w;
         bano_cluster_mode_reg       <= bano_cluster_mode_i_w;
         af_cluster_mode_reg         <= af_cluster_mode_i_w;
