@@ -281,7 +281,7 @@ reg [1023:0] fst_path;
   wire [$clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_reg;
   reg [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_reg;
   reg [$clog2(AF_MODES)-1:0] af_cluster_mode_reg;
-  wire [4:0] input_activations_reg;
+  wire [4:0] input_activations;
   wire [7:0] wght_cycles_reg;
   wire [2:0] stride_x_reg;
   wire [2:0] stride_y_reg;
@@ -312,9 +312,10 @@ reg [1023:0] fst_path;
   reg [19:0] finished_cycles_iact;
   reg [19:0] finished_cycles_psum;
   reg new_stream;
-  reg reset_cycle_reg;
+  reg reset_cycle;
   wire send_data_out;
-  wire [2:0] add_up_reg;
+  wire [2:0] add_up;
+  wire [7:0] iact_x_line_repititions;
   reg [7:0] iact_x_with_add_up;
   reg [16:0] fsm_psum_limit;
   reg early_stream_start;
@@ -424,9 +425,9 @@ reg [1023:0] fst_path;
   reg  [ CLUSTERS * PES-1:0] compute_mask_reg; //Clusters * PEs in Cluster
   wire [CLUSTERS * PES -1:0] compute_mask_reg_port;
   assign compute_mask_reg_port = compute_mask_reg[CLUSTERS * PES -1:0];
-  reg [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_reg;
-  reg [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_reg;
-  reg [ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_reg;
+  reg [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact;
+  reg [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght;
+  reg [ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum;
 
   wire [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_data_i_w;
   assign wght_data_i_w = wght_buffer_SP_data_r;
@@ -555,7 +556,7 @@ reg [1023:0] fst_path;
         end
       end
       if ((fsm_current_state == GET_PARAMETERS) |
-        reset_cycle_reg) begin
+        reset_cycle) begin
         current_cycle       <= 0;
         iact_cycle_count    <= 0;
         iact_router_counter <= 0;
@@ -802,7 +803,7 @@ reg [1023:0] fst_path;
             param_array_reg <= conv_array_reg;
           end
         end
-        if (reset_cycle_reg) begin
+        if (reset_cycle) begin
           param_array_reg  <= 0;
           fsm_iact_params  <= 0;
           iact_converter_x <= 0;
@@ -865,7 +866,7 @@ reg [1023:0] fst_path;
           conv_array_reg <= (conv_array_reg<<2 | conv_array_reg>>(CLUSTERS-2));
         end
       end
-      if (reset_cycle_reg) begin
+      if (reset_cycle) begin
         conv_array_reg <= 0;
         for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
           for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
@@ -1004,7 +1005,7 @@ reg [1023:0] fst_path;
           end
         end
       end
-      if (reset_cycle_reg) begin
+      if (reset_cycle) begin
         sending_data                   <= 0;
         fsm_sending_cycle              <= 0;
         wght_enable_i_reg              <= 0;
@@ -1155,7 +1156,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
       current_buffer_addr                   <= 0;
       iact_channels                         <= 0;
       iact_channels_counter                 <= 0;
-      reset_cycle_reg                       <= 0;
+      reset_cycle                       <= 0;
       select_ram_counter                    <= 0;
       ram_counter_storage                   <= 0;
       iact_x_with_add_up                    <= 0;
@@ -1222,7 +1223,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
           fifo_write_i               <= 0;
           status_reg_enable_reg      <= 1;
           ready_dma_o                <= 1;
-          reset_cycle_reg            <= 1;
+          reset_cycle            <= 1;
           buffer_SP_addr_lower_limit <= 0;
           buffer_SP_addr_upper_limit <= 0;
           limit_increase_reg         <= 0;
@@ -1259,7 +1260,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
               early_stream_start <= 0;
               if (!early_stream_start) begin
                 fsm_cycle       <= fsm_cycle + 1;
-                reset_cycle_reg <= 0;
+                reset_cycle <= 0;
                 dma_data_i      <= data_dma_i_reg;
                 case (fsm_cycle)
                   32'd0: begin
@@ -1307,7 +1308,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
           ready_dma_o   <= 1;
           new_stream    <= 1;
           iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
-          iact_x_with_add_up <= iact_size_x + add_up_reg;
+          iact_x_with_add_up <= iact_size_x + add_up;
           if (fully_connected_layer) begin
             iact_channels <= iact_channels_per_pe * NUM_GLB_WGHT * iact_channel_max_cycles; //iact_channel contains CLUSTER_Y
           end
@@ -1399,9 +1400,9 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                 fsm_cycle              <= fsm_cycle + 1;
                 wght_buffer_SP_en_w    <= 1;
                 wght_buffer_SP_wr_addr <= wght_buffer_SP_wr_addr + 1;
-                wght_cnt               <= ({7'd0,wght_cycles_reg} * ({7'd0,input_activations_reg} * ((PARALLEL_MACS+filters_reg-1) / PARALLEL_MACS))) - 1;
-                if(fsm_cycle == (wght_cycles_reg * (input_activations_reg * ((PARALLEL_MACS+filters_reg-1) / PARALLEL_MACS))) - 1)begin
-                  wght_cnt       <= (input_activations_reg * ((PARALLEL_MACS+filters_reg-1) / PARALLEL_MACS));
+                wght_cnt               <= ({7'd0,wght_cycles_reg} * ({7'd0,input_activations} * ((PARALLEL_MACS+filters_reg-1) / PARALLEL_MACS))) - 1;
+                if(fsm_cycle == (wght_cycles_reg * (input_activations * ((PARALLEL_MACS+filters_reg-1) / PARALLEL_MACS))) - 1)begin
+                  wght_cnt       <= (input_activations * ((PARALLEL_MACS+filters_reg-1) / PARALLEL_MACS));
                   fsm_cycle      <= 0;
                   fsm_last_state <= GET_WGHT;
                   if (!skipPsum_reg) begin
@@ -1648,8 +1649,8 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                   iact_channels_counter <= iact_channels_counter + 1;
                   if (iact_channels_counter == {4'd0,iact_channels_per_pe_next_layer} - 1) begin
                     iact_channels_counter      <= 0;
-                    ram_counter_storage        <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up_reg/2) - limit_increase_reg) % RAM_CELLS;
-                    select_ram_counter         <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up_reg/2) - limit_increase_reg) % RAM_CELLS;
+                    ram_counter_storage        <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up/2) - limit_increase_reg) % RAM_CELLS;
+                    select_ram_counter         <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up/2) - limit_increase_reg) % RAM_CELLS;
                     buffer_SP_addr_upper_limit <= (buffer_SP_addr_upper_limit + (iact_size_x/2) + limit_increase_reg) % RAM_CELLS;
                     buffer_SP_addr_lower_limit <= buffer_SP_addr_upper_limit;
                     for (a = 0; a < RAM_CELLS; a=a+1) begin
@@ -2008,10 +2009,10 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
   reg [7:0] iact_channels_counter_psum_router;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
-      router_mode_iact_reg              <= 0;
+      router_mode_iact              <= 0;
       router_mode_iact_storage          <= 0;
-      router_mode_wght_reg              <= 0;
-      router_mode_psum_reg              <= 0;
+      router_mode_wght              <= 0;
+      router_mode_psum              <= 0;
       storage_cycles_router             <= 0;
       first_cycle                       <= 1;
       psum_choose_i_reg                 <= 0;
@@ -2047,7 +2048,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                 for (g = 0; g < NUM_GLB_IACT; g = g + 1) begin
                   if(((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)>=(fsm_cycle    *(DMA_BITWIDTH/ROUTER_MODES_IACT)))
                     &((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)< ((fsm_cycle+1)*(DMA_BITWIDTH/ROUTER_MODES_IACT))))begin
-                    router_mode_iact_reg[cc * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
+                    router_mode_iact[cc * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
                                         cr * NUM_GLB_IACT * ROUTER_MODES_IACT + 
                                         g * ROUTER_MODES_IACT +:ROUTER_MODES_IACT] <=
                     data_dma_i_reg[(cc*NUM_GLB_IACT+cr*CLUSTER_COLUMNS*NUM_GLB_IACT+g-fsm_cycle*(DMA_BITWIDTH/ROUTER_MODES_IACT))
@@ -2063,7 +2064,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                   for (g = 0; g < NUM_GLB_WGHT; g = g + 1) begin
                     if(((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_WGHT)))
                       &((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))))begin
-                      router_mode_wght_reg[cc * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
+                      router_mode_wght[cc * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
                                           cr * NUM_GLB_WGHT * ROUTER_MODES_WGHT + 
                                           g * ROUTER_MODES_WGHT+: ROUTER_MODES_WGHT] <=
                       data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))+:ROUTER_MODES_WGHT];
@@ -2077,7 +2078,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                   for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
                     if(((cc*CLUSTER_ROWS*NUM_GLB_PSUM+cr*NUM_GLB_PSUM+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_PSUM)))
                       &((cc*CLUSTER_ROWS*NUM_GLB_PSUM+cr*NUM_GLB_PSUM+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_PSUM))))begin
-                      router_mode_psum_reg[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
+                      router_mode_psum[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                                           cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + 
                                           g * ROUTER_MODES_PSUM +:ROUTER_MODES_PSUM] <=
                       data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_PSUM*ROUTER_MODES_PSUM+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*FSM_PSUM_RTR_CCLS_C)+:ROUTER_MODES_PSUM];
@@ -2088,62 +2089,62 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
             end
           end
         end
-        router_mode_iact_storage <= router_mode_iact_reg;
+        router_mode_iact_storage <= router_mode_iact;
       end else begin
         if (fsm_current_state == WAIT_FOR_RESULTS | fsm_current_state == RECEIVE_PSUMS_TO_IACT) begin
           if (single_iteration3) begin
             if (iact_channels_counter == iact_channel_max_cycles -1) begin
               if (iact_router_counter == needed_y_cls_reg - 1) begin
-                router_mode_iact_reg <= router_mode_iact_storage;
+                router_mode_iact <= router_mode_iact_storage;
               end else begin
                 for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                   for (g=0; g<NUM_GLB_IACT; g=g+1) begin
-                    router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+3] <= 0;
-                    router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+4] <= 1;
-                    router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+5] <= 1;
+                    router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+3] <= 0;
+                    router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+4] <= 1;
+                    router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+5] <= 1;
                   end
                 end
                 for (cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
                   for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                     for (g=0; g<NUM_GLB_IACT; g=g+1) begin
                       // If router is not on top of source already
-                      if (!((router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT] == 1) &
-                              (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] == 1) &
-                              (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+2] == 0) &
-                              (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] == 0) &
-                              (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
-                              (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1))) begin
+                      if (!((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT] == 1) &
+                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] == 1) &
+                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+2] == 0) &
+                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] == 0) &
+                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
+                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1))) begin
                         // If router is source
-                        if ((router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 0) &
-                              (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
+                        if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 0) &
+                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
                               // If router above is already destination
-                              if ((router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
-                                  (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1)) begin
-                                router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
+                              if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
+                                  (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1)) begin
+                                router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
                               end
-                              router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] <= 0;
-                              router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
-                              router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 1;
+                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] <= 0;
+                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
+                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 1;
                         end else begin
-                          if ((router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 0) &
-                              (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
-                            router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
-                            router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 0;
-                            router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 0;
+                          if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 0) &
+                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
+                            router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
+                            router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 0;
+                            router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 0;
                           end else begin
-                            if ((router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
-                                (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1)) begin
-                              router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
-                              router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] <= 0;
-                              router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
-                              router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 1;
+                            if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
+                                (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1)) begin
+                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
+                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] <= 0;
+                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
+                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 1;
                             end else begin
-                              if ((router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] == 1) &
-                                  (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
-                                  (router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
+                              if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] == 1) &
+                                  (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
+                                  (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
 
-                                  router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
-                                  router_mode_iact_reg[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 0;
+                                  router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
+                                  router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 0;
                               end
                             end
                           end
@@ -2164,8 +2165,8 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                   for (cr = 1; cr < CLUSTER_ROWS; cr = cr + 1) begin
                     for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
                       for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
-                        router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2] <=
-                        router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2];
+                        router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2] <=
+                        router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2];
                       end
                     end
                   end
@@ -2173,21 +2174,21 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                     storage_cycles_router <= storage_cycles_router + 1;
                     for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
                       for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
-                        router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 0;
+                        router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 0;
                       end
                     end
                     for (cr = 1; cr < CLUSTER_ROWS; cr = cr + 1) begin
                       for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
                         for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
-                          router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2] <=
-                          router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2];
+                          router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2] <=
+                          router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2];
                         end
                       end
                     end
                   end else begin
                     for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
                       for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
-                        router_mode_psum_reg[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 1;
+                        router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 1;
                       end
                     end
                     storage_cycles_router <= 0;
@@ -2203,8 +2204,8 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
           end
         end
       end
-      if (reset_cycle_reg) begin
-        router_mode_iact_reg              <= 0;
+      if (reset_cycle) begin
+        router_mode_iact              <= 0;
         router_mode_iact_storage          <= 0;
         storage_cycles_router             <= 0;
         first_cycle                       <= 1;
@@ -2351,7 +2352,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
                   results_ready = results_ready & (psum_ready_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum*2] |
-                   (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0));
+                   (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0));
                 end
               end
             end
@@ -2362,10 +2363,10 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                  if (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) begin
+                  if (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) begin
                     psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] + 1;
                   end
-                  if ((fsm_psum_cycle != 0) & (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1)) begin
+                  if ((fsm_psum_cycle != 0) & (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1)) begin
                     psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] <= 1;
                     psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2 + 1] <= 1;
                   end
@@ -2382,7 +2383,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                    if (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) begin
+                    if (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) begin
                       psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_SP_addr_storage;
                     end
                   end
@@ -2403,7 +2404,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                   psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] + 1;
                 end
                 results_ready = results_ready & (psum_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] | 
-                (router_mode_psum_reg[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0));
+                (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0));
                 if (psum_enable_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] != 0) begin
                   psum_buffer_SP_en_w[cc_psum*NUM_GLB_PSUM/2*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM/2+g_psum] <= 1;
                 end else begin
@@ -2790,7 +2791,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
             .clk_i                       (clk_i),
             .rst_ni                      (rst_ni),
             .storage_i                   (buffer_SP_data_r),
-            .reset_cycle_i               (reset_cycle_reg),
+            .reset_cycle_i               (reset_cycle),
             .params                      (iact_converter_params_reg[i_gen][j_gen]),
             .enable_config               (iact_converter_en_cfg_reg[i_gen][j_gen]),
             .enable_store                (iact_converter_en_store_reg[i_gen][j_gen]),
@@ -2898,7 +2899,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
         .iact_channels_per_pe_next_layer(iact_channels_per_pe_next_layer),
         .needed_psum_storage_cycles_reg(needed_psum_storage_cycles_reg),
         .iact_channel_max_cycles(iact_channel_max_cycles),
-        .input_activations_reg(input_activations_reg),
+        .input_activations_reg(input_activations),
         .filters_reg(filters_reg),
         .needed_x_cls_reg(needed_x_cls_reg),
         .needed_y_cls_reg(needed_y_cls_reg),
@@ -2907,7 +2908,8 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
         .iact_addr_len_reg(iact_addr_len_reg),
         .send_data_out(send_data_out),
         .needed_iact_buffer_words_reg(needed_iact_buffer_words_reg),
-        .add_up_reg(add_up_reg)
+        .add_up_reg(add_up),
+        .iact_x_line_repititions_reg(iact_x_line_repititions)
     );
 
 
@@ -2989,14 +2991,14 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
         .pooling_cluster_mode_i       ({NUM_GLB_PSUM{1'd0}}),
         .kernel_per_pe_cluster_i      (kernel_per_pe_cluster_reg[$clog2(NUM_GLB_WGHT)-1:0]),
         .kernel_size_i                (kernel_size),
-        .input_activations_i          (input_activations_reg),
+        .input_activations_i          (input_activations),
         .stride_x_i                   (stride_x_reg),
         .stride_y_i                   (stride_y_reg),
         .delay_psum_glb_i             (psum_delay_reg),
         .compute_mask_i               (compute_mask_reg_port),
-        .router_mode_iact_i           (router_mode_iact_reg),
-        .router_mode_wght_i           (router_mode_wght_reg),
-        .router_mode_psum_i           (router_mode_psum_reg),
+        .router_mode_iact_i           (router_mode_iact),
+        .router_mode_wght_i           (router_mode_wght),
+        .router_mode_psum_i           (router_mode_psum),
         .needed_psum_storage_cycles_i (needed_psum_storage_cycles_reg),
         .needed_iact_channel_cycles_i (iact_channel_max_cycles),
         .psum_transmitted_i           (psum_transmitted)
