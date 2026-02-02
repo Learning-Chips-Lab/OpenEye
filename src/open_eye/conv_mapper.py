@@ -176,7 +176,8 @@ class ConvMapper(LayerMapper):
         "iact_addr_len_reg": layer_params.used_iact_addr_per_PE,
         "send_data_out": layer_params.send_values_out,
         "needed_iact_buffer_words_reg": layer_params.needed_iact_buffer_words,
-        "add_up_reg":layer_params.add_up
+        "add_up_reg":layer_params.add_up,
+        "iact_x_line_repititions_reg":layer_params.iact_x_line_repititions
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===

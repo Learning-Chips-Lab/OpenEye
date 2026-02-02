@@ -266,6 +266,7 @@ class LayerParameters(object):
         self.computing_mx = 0                  # 4D matrix of active PEs
         self.data_mode = 0                     # Data processing mode
         self.y_lines_per_calculation = 1       # Y lines per computation cycle
+        self.iact_x_line_repititions = 1       # Cycles needed for computing a single x iact line
         self.different_kernels_per_calculation = 1 # Kernels per cycle
 
         # === FPGA-Specific Parameters ===
@@ -312,17 +313,24 @@ class LayerParameters(object):
             Sets self.different_kernels_per_calculation and self.y_lines_per_calculation.
             Currently hardcoded to set y_lines_per_calculation = 1 (disabled optimization).
         """
-        # Calculate how many different kernels can be processed simultaneously
-        # based on available PE resources divided by input width
-        self.different_kernels_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1])
-        # Limit to at most ceil(output_channels/8) kernels
-        self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.output_shape[3]/8))
-        # Calculate how many Y lines can be processed per computation
-        self.y_lines_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1]/self.different_kernels_per_calculation)
-        # Limit by available Y clusters and input height
-        self.y_lines_per_calculation = min(self.y_lines_per_calculation,params.Clusters_Y,self.input_shape[2])
-        # Currently disabled - process one line at a time
-        self.y_lines_per_calculation = 1
+        #Can it all be mapped in one single compuation Cycle?
+        if (self.input_shape[1] > (params.Clusters * params.PEs_X)) : # No
+            self.iact_x_line_repititions = math.ceil(self.input_shape[1]/(params.Clusters * params.PEs_X))
+            self.y_lines_per_calculation = 1
+            self.different_kernels_per_calculation = 1
+        else : # Yes
+            self.iact_x_line_repititions = 1
+            # Calculate how many different kernels can be processed simultaneously
+            # based on available PE resources divided by input width
+            self.different_kernels_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1])
+            # Limit to at most ceil(output_channels/8) kernels
+            self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.output_shape[3]/8))
+            # Calculate how many Y lines can be processed per computation
+            self.y_lines_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1]/self.different_kernels_per_calculation)
+            # Limit by available Y clusters and input height
+            self.y_lines_per_calculation = min(self.y_lines_per_calculation,params.Clusters_Y,self.input_shape[2])
+            # Currently disabled - process one line at a time
+            self.y_lines_per_calculation = 1
 
     def calculate_used_Y_cluster(self, params):
         """Calculate the number of Y-direction clusters needed for this layer.
