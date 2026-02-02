@@ -11,12 +11,11 @@ import open_eye.stream_dicts as strdic
 logger = logging.getLogger("cocotb")
 
 def load_env_to_variable(variable_string, default_value):
-    val = os.environ.get(variable_string) # Results in None, if Value is not present
+    val = os.environ.get(variable_string)
     
     if val is None:
         logger.debug(f"{variable_string} not set, using default: {default_value}")
-        print("Value not present.")
-        print(str(val))
+
         return default_value
     
     try:
