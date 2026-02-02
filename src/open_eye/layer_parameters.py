@@ -442,19 +442,21 @@ class LayerParameters(object):
 
             # === MASKING PHASE 1: Handle non-aligned output width ===
             # If output width doesn't evenly divide by PEs_X, some PEs will be unused
-            if((self.output_shape[1] % params.PEs_X) != 0):
-                    # Calculate padding needed to align to PE array
-                    self.add_up = params.PEs_X - (self.output_shape[1] % params.PEs_X)
-                    # Determine which Y-clusters handle the partial row
-                    yc_step = math.ceil(self.output_shape[1]/(params.PEs_X*params.Clusters_X))
-                    yc_start = yc_step - 1
-                    yc_end = params.Clusters_Y
-                    # Disable PEs in the partial row that exceed output width
-                    for y_cluster in range(yc_start,yc_end,yc_step):
-                        for x_cluster in range(math.floor((self.output_shape[1]%(params.Clusters_X*params.PEs_X)) / params.PEs_X),params.Clusters_X):
-                            for x_pe in range(self.output_shape[1] % params.PEs_X,params.PEs_X):
-                                for y_pe in range(params.PEs_Y):
-                                    self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
+            if(((self.output_shape[1] * self.different_kernels_per_calculation) % (params.PEs_X * params.Clusters_X)) != 0):
+                # Calculate padding needed to align to PE arrays
+                self.add_up = (params.PEs_X * params.Clusters_X)- ((self.output_shape[1] * self.different_kernels_per_calculation) % (params.PEs_X * params.Clusters_X))
+                # Determine which Y-clusters handle the partial row
+                yc_step = math.ceil(self.output_shape[1]/(params.PEs_X*params.Clusters_X))
+                yc_start = yc_step - 1
+                yc_end = params.Clusters_Y
+                # Disable PEs in the partial row that exceed output width
+                for y_cluster in range(yc_start,yc_end,yc_step):
+                    for x_cluster in range(math.floor((self.output_shape[1]%(params.Clusters_X*params.PEs_X)) / params.PEs_X),params.Clusters_X):
+                        for x_pe in range(self.output_shape[1] % params.PEs_X,params.PEs_X):
+                            for y_pe in range(params.PEs_Y):
+                                self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
+                if ((self.output_shape[1]% (params.PEs_X)) != 0):
+                    self.add_up = (params.PEs_X)- (self.output_shape[1] % params.PEs_X)
             else:
                 # Output width perfectly aligned - no padding needed
                 self.add_up = 0
@@ -1111,9 +1113,9 @@ class LayerParameters(object):
                                 if((1 + y_pe) > self.kernel_size[1]):
                                     self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
 
-            if((self.output_shape[1] % params.PEs_X) != 0):
+            if(((self.output_shape[1]) % (params.PEs_X * params.Clusters_X)) != 0):
                 if((self.output_shape[1] < 8) | ((self.output_shape[1] > 12) & (self.output_shape[1] < 16))):
-                    self.add_up = params.PEs_X - (self.output_shape[1] % params.PEs_X)
+                    self.add_up = (params.PEs_X * params.Clusters_X)- (self.output_shape[1] % (params.PEs_X * params.Clusters_X))
                     yc_step = math.ceil(self.output_shape[1]/(params.PEs_X*params.Clusters_X))
                     yc_start = yc_step - 1
                     yc_end = params.Clusters_Y
