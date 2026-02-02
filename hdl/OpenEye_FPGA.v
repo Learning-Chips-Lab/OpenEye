@@ -314,7 +314,7 @@ reg [1023:0] fst_path;
   reg new_stream;
   reg reset_cycle_reg;
   wire send_data_out;
-  wire [1:0] add_up_reg;
+  wire [2:0] add_up_reg;
   reg [7:0] iact_x_with_add_up;
   reg [16:0] fsm_psum_limit;
   reg early_stream_start;
@@ -421,8 +421,8 @@ reg [1023:0] fst_path;
   reg status_reg_enable_reg;
 
   reg compute_reg;
-  reg [192-1:0] compute_mask_reg; //Clusters * PEs in Cluster
-  wire [CLUSTERS * PES -1:0]compute_mask_reg_port;
+  reg  [ CLUSTERS * PES-1:0] compute_mask_reg; //Clusters * PEs in Cluster
+  wire [CLUSTERS * PES -1:0] compute_mask_reg_port;
   assign compute_mask_reg_port = compute_mask_reg[CLUSTERS * PES -1:0];
   reg [ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_reg;
   reg [ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_reg;
@@ -1159,7 +1159,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
       select_ram_counter                    <= 0;
       ram_counter_storage                   <= 0;
       iact_x_with_add_up                    <= 0;
-      fsm_psum_limit                         <= 0;
+      fsm_psum_limit                        <= 0;
       //new iact regs
       iact_converter_max_cycles             <= 0;
       min_standing_cycles                   <= 0;
@@ -1681,7 +1681,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                 for (a = 0; a < RAM_CELLS; a=a+1) begin
                   for (word = 0; word < 8; word=word+1) begin
                     //Wrapping around higher and lower edge
-                    if ((select_ram_counter - ram_counter_storage + iact_channels_per_pe_next_layer  > (iact_x_with_add_up/2)) &
+                    if ((select_ram_counter - ram_counter_storage + iact_channels_per_pe_next_layer  > (iact_x_with_add_up/2) ) &
                       (((a >= (ram_counter_storage - ((1+limit_increase_reg)/2))) & (a < ram_counter_storage + ram_iact_modulo/2)) |
                       (((a > (select_ram_counter + 1)%RAM_CELLS) | (a < (select_ram_counter + ram_iact_modulo)%RAM_CELLS)) & (((select_ram_counter)%32) + ram_iact_modulo >= RAM_CELLS))
                       )) begin
@@ -1689,7 +1689,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
                           (word == (    {{24{1'd0}},iact_channels_counter} + limit_increase_reg*4) % 8)) &
                           !((a == buffer_SP_addr_lower_limit) & (limit_increase_reg) & word >= 4)) begin
                         if (a < buffer_SP_addr_lower_limit + select_ram_counter + 4 - (iact_x_with_add_up/2)) begin
-                          buffer_SP_data_w_reg[a][8*(word+1)+:8] <= quantized_value_reg[((word / 4) + limit_increase_reg + ((a-ram_counter_storage) * 2) + overhang_discrepancy + 4)%8];
+                          buffer_SP_data_w_reg[a][8*((word+1)%8)+:8] <= quantized_value_reg[((word / 4) + limit_increase_reg + ((a-ram_counter_storage) * 2) + overhang_discrepancy + 4)%8];
                         end else begin
                           buffer_SP_data_w_reg[a][8*word+:8] <= quantized_value_reg[((word / 4) + ((a-ram_counter_storage) * 2) + overhang_discrepancy + 4)%8];
                         end
@@ -2617,7 +2617,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
               end
             end
             fsm_y_cl_psum <= fsm_y_cl_psum + needed_y_cls_reg;
-            if (fsm_y_cl_psum + needed_y_cls_reg >= ((iact_x_with_add_up * kernels_per_calc)/8)) begin
+            if (fsm_y_cl_psum + needed_y_cls_reg >= (((iact_x_with_add_up * kernels_per_calc)+8-1)/8)) begin
               fsm_y_cl_psum       <= fsm_psum_row_offset + 1;
               fsm_psum_row_offset <= fsm_psum_row_offset + 1;
               if (fsm_psum_row_offset == needed_y_cls_reg - 1) begin
