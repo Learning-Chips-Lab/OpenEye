@@ -39,7 +39,7 @@ registers:
   - {name: send_data_out, width: 1}
   - {name: needed_iact_buffer_words_reg, width: 13}
   - {name: add_up_reg, width: 3}
-  - {name: iact_x_line_repititions_reg, width: 8}
+  - {name: iact_x_line_repetitions_reg, width: 8}
   
   
   
