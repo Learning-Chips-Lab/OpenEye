@@ -46,6 +46,13 @@ def to_twos_complement_string(value, bits):
     binary_string = format(value, '0' + str(bits) + 'b')
     return binary_string
 
+def twos_complement(binary_str, bits):
+    val = int(binary_str, 2)
+    # Wenn das MSB (Most Significant Bit) gesetzt ist
+    if val & (1 << (bits - 1)):
+        val = val - (1 << bits)
+    return val
+
 def open_ref_txts(params, layer_params, layer, layer_number, dram):
     file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
     for layer_repetition in range(layer_params.needed_total_transmissions):
@@ -99,8 +106,12 @@ def check_results(file_1,file_2):
     for i, (line1, line2) in enumerate(zip(lines1, lines2)):
         if line1 != line2:
             logger.error(f'Difference found at line {i + 1}:')
-            logger.error(f'ReferenceData: {line1.strip()}')
-            logger.error(f'Output Stream: {line2.strip()}')
+            line1_first = line1.strip()[:20]
+            line1_second = line1.strip()[20:]
+            line2_first = line2.strip()[:20]
+            line2_second = line2.strip()[20:]
+            logger.error(f'ReferenceData: {line1.strip()}' + "   " + str(twos_complement(line1_first, 20)) + " " + str(twos_complement(line1_second, 20)))
+            logger.error(f'Output Stream: {line2.strip()}' + "   " + str(twos_complement(line2_first, 20)) + " " + str(twos_complement(line2_second, 20)))
 
             return False
         
