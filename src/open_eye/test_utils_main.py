@@ -510,51 +510,40 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
     needed_refreshes = math.ceil(output_number / (layer_params.iact_size_x * layer_params.different_kernels_per_calculation * layer_params.y_lines_per_calculation) / layer_params.used_psum_per_PE)
     elements_per_calculation = layer_params.different_kernels_per_calculation * layer_params.y_lines_per_calculation * (layer_params.iact_size_x + layer_params.add_up)
     layer_es = les.LayerExecutionState()
-    for refresh in range(needed_refreshes):
-        y_line_counter = 0
-        kernel_counter = 0
-        les.x_start = 0
-        les.y_start = (refresh // filter_cycles) * layer_params.y_lines_per_calculation
+    les.x_start = 0
+    for refresh in range(layer_params.needed_refreshes_mx[0][0]) :
+        les.y_start = ((refresh // filter_cycles) // layer_params.iact_x_line_repetitions) * layer_params.y_lines_per_calculation
         les.f_start = layer_params.used_psum_per_PE * (refresh % filter_cycles) * layer_params.different_kernels_per_calculation
-        x_cor = les.x_start
-        y_cor = les.y_start
+
         filter = les.f_start
         position = 0
-        for psum_pe in range(layer_params.used_psum_per_PE):
-            for cl_y in range(params.Clusters_Y):
-                for cl_x in range(params.Clusters_X):
-                    for router in range(0, params.Psum_Routers, 2):
+        for psum_pe in range(layer_params.used_psum_per_PE) :
+            kernel_counter = 0
+            x_cor = les.x_start
+            y_cor = les.y_start
+            for cl_y in range(params.Clusters_Y) :
+                for cl_x in range(params.Clusters_X) :
+                    if (x_cor >= layer_params.iact_size_x) :
+                        if (kernel_counter < layer_params.different_kernels_per_calculation - 1) :
+                            kernel_counter = kernel_counter + 1
+                            x_cor = les.x_start
+                            filter = filter + 1
+                    for router in range(0, params.Psum_Routers, 2) :
                         partial_result_a, partial_result_b = gtu.to_twos_complement_string(0,20), gtu.to_twos_complement_string(0,20)
-                        current_position_in_calculation = cl_x * params.Psum_Routers + cl_y * params.Psum_Routers * params.Clusters_X + router
-                        if (current_position_in_calculation < math.ceil(elements_per_calculation)) :
-                            for counter in range(params.PARALLEL_MACS):
-                                try:
-                                    if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[2])) :
+                        for counter in range(params.PARALLEL_MACS) :
+                                if (kernel_counter < layer_params.different_kernels_per_calculation) :
+                                    if((x_cor < layer_params.iact_size_x) & (y_cor < layer_params.iact_size_y)) :
                                         if (counter == 0):
                                             partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
                                         else:
                                             partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
-                                    x_cor = x_cor + 1
-                                except:
-                                    pass
+                                        x_cor = x_cor + 1
                         file_dma_ref.write(partial_result_a + partial_result_b + "\n")
-                    if (x_cor >= layer_params.output_shape[1]) :
-                        x_cor = 0
-                        les.x_start = 0
-                        if (kernel_counter == layer_params.different_kernels_per_calculation - 1) :
-                            kernel_counter = 0
-                            if (y_line_counter == layer_params.y_lines_per_calculation - 1) :
-                                y_line_counter = 0
-                            else :
-                                y_line_counter = y_line_counter + 1
-                                y_cor = y_cor + 1
-                        else :
-                            kernel_counter = kernel_counter + 1
-                            filter = filter + 1
-            x_cor = 0
-            les.x_start = 0
-            y_cor = les.y_start
             filter = filter + 1
+        if (x_cor >= layer_params.iact_size_x) :
+            les.x_start = 0
+        else :
+            les.x_start = x_cor
 
 def calculate_conv_parallel(params, layer_params, calculated_results, cluster_order, layer_repetition, file_dma_ref):
     coordinates = []

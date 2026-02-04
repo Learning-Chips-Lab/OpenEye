@@ -266,7 +266,7 @@ class LayerParameters(object):
         self.computing_mx = 0                  # 4D matrix of active PEs
         self.data_mode = 0                     # Data processing mode
         self.y_lines_per_calculation = 1       # Y lines per computation cycle
-        self.iact_x_line_repititions = 1       # Cycles needed for computing a single x iact line
+        self.iact_x_line_repetitions = 1       # Cycles needed for computing a single x iact line
         self.different_kernels_per_calculation = 1 # Kernels per cycle
 
         # === FPGA-Specific Parameters ===
@@ -315,11 +315,11 @@ class LayerParameters(object):
         """
         #Can it all be mapped in one single compuation Cycle?
         if (self.input_shape[1] > (params.Clusters * params.PEs_X)) : # No
-            self.iact_x_line_repititions = math.ceil(self.input_shape[1]/(params.Clusters * params.PEs_X))
+            self.iact_x_line_repetitions = math.ceil(self.input_shape[1]/(params.Clusters * params.PEs_X))
             self.y_lines_per_calculation = 1
             self.different_kernels_per_calculation = 1
         else : # Yes
-            self.iact_x_line_repititions = 1
+            self.iact_x_line_repetitions = 1
             # Calculate how many different kernels can be processed simultaneously
             # based on available PE resources divided by input width
             self.different_kernels_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1])
@@ -381,8 +381,6 @@ class LayerParameters(object):
 
         # Total number of output positions
         self.total_computations = self.calc_X * self.calc_Y
-        # Cycles needed to produce all output rows
-        self.output_cycles = self.calc_Y
 
     def calculate_iact_transmissions(self, params):
         """Calculate the number of activation write operations needed per computation.
@@ -450,21 +448,25 @@ class LayerParameters(object):
 
             # === MASKING PHASE 1: Handle non-aligned output width ===
             # If output width doesn't evenly divide by PEs_X, some PEs will be unused
-            if(((self.output_shape[1] * self.different_kernels_per_calculation) % (params.PEs_X * params.Clusters_X)) != 0):
+            if(((self.output_shape[1]) % (params.PEs_X * params.Clusters_X)) != 0):
                 # Calculate padding needed to align to PE arrays
                 self.add_up = (params.PEs_X * params.Clusters_X)- ((self.output_shape[1] * self.different_kernels_per_calculation) % (params.PEs_X * params.Clusters_X))
-                # Determine which Y-clusters handle the partial row
-                yc_step = math.ceil(self.output_shape[1]/(params.PEs_X*params.Clusters_X))
-                yc_start = yc_step - 1
-                yc_end = params.Clusters_Y
-                # Disable PEs in the partial row that exceed output width
-                for y_cluster in range(yc_start,yc_end,yc_step):
-                    for x_cluster in range(math.floor((self.output_shape[1]%(params.Clusters_X*params.PEs_X)) / params.PEs_X),params.Clusters_X):
-                        for x_pe in range(self.output_shape[1] % params.PEs_X,params.PEs_X):
-                            for y_pe in range(params.PEs_Y):
-                                self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
-                if ((self.output_shape[1]% (params.PEs_X)) != 0):
+                self.add_up = self.add_up % (params.PEs_X * params.Clusters_X)
+                if ((self.output_shape[1] % (params.PEs_X)) != 0):
                     self.add_up = (params.PEs_X)- (self.output_shape[1] % params.PEs_X)
+                x_count       = 0
+                kernel_number = 0
+                # Disable PEs in the partial row that exceed output width
+                for y_cluster in range(params.Clusters_Y):
+                    for x_cluster in range(params.Clusters_X):
+                        if ((x_count >= self.output_shape[1]) & (kernel_number < self.different_kernels_per_calculation - 1)) :
+                            x_count = 0
+                            kernel_number = kernel_number + 1
+                        for x_pe in range(params.PEs_X):
+                            if (x_count >= self.output_shape[1]) :
+                                for y_pe in range(params.PEs_Y):
+                                    self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
+                            x_count = x_count + 1
             else:
                 # Output width perfectly aligned - no padding needed
                 self.add_up = 0
@@ -748,7 +750,7 @@ class LayerParameters(object):
             case _:
                 # Multi-cluster mode: full distribution
                 self.Used_refreshes = math.ceil(self.output_shape[1] * self.output_shape[2]/self.iact_size_x)
-                self.Used_refreshes = math.ceil(self.used_Y_cluster * self.all_transmissions_of_pe * self.Used_refreshes)
+                self.Used_refreshes = math.ceil(self.iact_x_line_repetitions * self.used_Y_cluster * self.all_transmissions_of_pe * self.Used_refreshes)
 
     def calculate_single_cluster_computation(self, params):
         """Determine if layer can use single-cluster optimization mode.
@@ -952,7 +954,7 @@ class LayerParameters(object):
         # Set X-line buffer size for sliding window (kernel height + input height - 1)
         self.iact_x_lines = self.kernel_size[1] + self.iact_size_y - 1
         # Update standing cycles based on channel packing
-        self.needed_standing_cycles = ((self.used_channels + 1) // 2) * self.needed_Iact_writes
+        self.needed_standing_cycles = ((self.used_channels + 1) // 2) * self.needed_Iact_writes * self.iact_x_line_repetitions
 
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         """Compute all configuration parameters for a Conv2D layer.
@@ -1064,11 +1066,14 @@ class LayerParameters(object):
         if(self.used_wght_addr_per_PE == (params.Wghts_Addr_per_PE + 1)):
             self.used_wght_addr_per_PE = self.used_wght_addr_per_PE - 1
 
+        # Cycles needed to produce all output rows
+        self.output_cycles = self.calc_Y * self.iact_x_line_repetitions
+
         # Calculate partial sum storage requirements
         self.psum_storage_cycles = self.diff_iact_layer * self.used_Y_cluster
         if (self.choose_iact_storage_output) :
             self.psum_storage_cycles = self.diff_iact_layer
-        self.needed_iact_buffer_words = self.needed_Iact_writes*math.ceil((self.used_channels*(self.kernel_size[0]+self.iact_size_y-1)/2))
+        self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*math.ceil((self.used_channels*(self.kernel_size[0]+self.iact_size_y-1)/2))
 
         # === Phase 9: Finalize calculations ===
         self.calculate_needed_refreshes_mx(params)
