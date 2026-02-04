@@ -1022,6 +1022,7 @@ module PE #(
       psum_spad_addr_a_w      <= 0;
       psum_spad_addr_b_w      <= 1;
     end else begin
+      // Normal operation: Update internal states and handle partial sum (psum) pipeline
       if (psum_ready_i) begin
         psum_enable <= psum_enable_i;
       end else begin
@@ -1165,6 +1166,16 @@ module PE #(
         // ====================================================================
         // LOADING_1: Fetch first weight address and iact data
         // ====================================================================
+        // Rationale: Initiate the weight-activation loading pipeline
+        // - Fetch the weight address from the weight address scratchpad (SPad)
+        // - Advance to the next iact data entry in the iact SPad
+        // - Setup the iact address from the max register for proper indexing
+        // Signal assignments:
+        //   wght_addr_use_vec <= 0: Don't use computed weight vector yet
+        //   wght_addr_SPad_en_r <= 1: Enable reading weight addresses
+        //   iact_data_SPad_addr + 1: Move to next iact entry
+        //   iact_addr_SPad_addr <= max-1: Set iact address for current iteration
+        //   iact_oh_delay_1 <= oh: Latch overhead bits for zero-skipping
         LOADING_1: begin
           current_state_computing <= LOADING_2;
           wght_addr_use_vec       <= 0;
@@ -1177,6 +1188,18 @@ module PE #(
         // ====================================================================
         // LOADING_2: Compute weight data address from weight addr SPad
         // ====================================================================
+        // Rationale: Calculate the actual weight data address and latch iact
+        // - Use the fetched weight address to locate weight data in SPad
+        // - Latch the first iact data value from the previous cycle
+        // - Store the iact address for use in MAC operations
+        // - Disable weight address SPad enable (single cycle fetch)
+        // Signal assignments:
+        //   wght_data_SPad_en_r <= 1: Enable weight data SPad read
+        //   wght_addr_use_vec <= 1: Use the fetched address for weight lookup
+        //   wght_addr_vec <= address + 1: Pre-increment for next access
+        //   iact_data_current_1 <= payload: Capture first iact value
+        //   iact_addr_current <= fetched_addr: Store for MAC loop
+        //   Special case: If overhead bits = 0, reset to address 1
         LOADING_2: begin
           current_state_computing <= LOADING_3;
           wght_data_SPad_en_r <= 1;
@@ -1195,6 +1218,17 @@ module PE #(
         // ====================================================================
         // LOADING_3: Determine weight data start address for zero-skipping
         // ====================================================================
+        // Rationale: Setup the weight range for sparse computation
+        // - Determine the starting weight address based on overhead bits
+        // - Handle the zero-skipping case where no activations exist (oh=0)
+        // - Pipeline the iact data through delay registers for alignment
+        // Signal assignments:
+        //   wght_addr_use_vec <= 0: Stop using weight address vector
+        //   wght_data_use_vec <= 0: Not yet using weight data vector
+        //   iact_data_current_2 <= current_1: Shift iact pipeline
+        //   iact_data_SPad_addr + 1: Advance to next iact entry
+        //   wght_data_start <= fetched_addr: Set weight range start
+        //   Zero-case: If oh=0, set start to 0, end to fetched address
         LOADING_3: begin
           current_state_computing <= LOADING_4;
           wght_addr_use_vec       <= 0;
@@ -1214,6 +1248,17 @@ module PE #(
         // ====================================================================
         // LOADING_4: Determine weight data end address for zero-skipping
         // ====================================================================
+        // Rationale: Complete the weight range definition for the MAC loop
+        // - Determine ending weight address to define the sparse computation range
+        // - Start using weight data and addresses for MAC operations
+        // - Continue iact data pipeline advancement
+        // Signal assignments:
+        //   iact_data_SPad_addr + 1: Continue advancing iact entries
+        //   wght_addr_use_vec <= 1: Enable using computed weight addresses
+        //   wght_data_use_vec <= 1: Enable weight data SPad for MAC
+        //   wght_data_vec <= start_addr: Begin at calculated start address
+        //   wght_addr_vec + 1: Pre-increment for next weight address
+        //   Zero-case: If oh!=0, set end address from next fetched value
         LOADING_4: begin
           current_state_computing <= LOADING_5;
           iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
@@ -1231,6 +1276,21 @@ module PE #(
         // ====================================================================
         // LOADING_5: Final preparation, fetch next weight range, enter compute
         // ====================================================================
+        // Rationale: Complete initialization and transition to MAC computation
+        // - Signal readiness to start multiply-accumulate operations
+        // - Prepare the next weight range addresses for seamless iteration
+        // - Finalize the iact data pipeline alignment (3-cycle delay established)
+        // - Prepare for fast cycling through weight vectors
+        // Signal assignments:
+        //   current_state_computing <= CALCULATING: Transition to MAC state
+        //   wght_start_set <= 1: Mark weight start address as valid
+        //   computing <= 1: Enable MAC operations
+        //   wght_addr_use_vec <= 1: Use weight addresses in MAC
+        //   values_valid <= 1: Data is ready if weight range is valid (end > start)
+        //   wght_data_vec + 1: Pre-increment for first MAC iteration
+        //   iact_data_current_3 <= current_2: Complete 3-cycle pipeline delay
+        //   fast_cycle <= 1: Enable fast cycling for consecutive activations
+        //   Special cases: Handle iact_addr_current==1 and zero address scenarios
         LOADING_5: begin
           current_state_computing <= CALCULATING;
           wght_start_set          <= 1;
@@ -1265,60 +1325,100 @@ module PE #(
         // - Sparse data indexing (skipping zeros via overhead bits)
         // - Data forwarding to handle read-after-write hazards
         // - Psum memory usage tracking to determine accumulation vs. first write
+        //
+        // MAJOR CODE BLOCKS:
+        // 1. DEFAULT SIGNAL SETUP: Initialize all control signals for normal operation
+        // 2. WEIGHT RANGE COMPUTATION: Compute start/end addresses for each activation
+        // 3. NEXT ACTIVATION TRIGGER: Determine when to move to next activation
+        // 4. DATA VALIDITY CHECK: Verify current weight vector is in valid range
+        // 5. NEXT ACTIVATION HANDLING: Update data pipeline when moving to next activation
+        // 6. READ-AFTER-WRITE FORWARDING: Detect and forward recently computed psums
+        // 7. PSUM MEMORY TRACKING: Track which psum locations have been written
+        // 8. COMPLETION CHECK: Detect end of computation for this activation
         CALCULATING: begin
-            iact_addr_SPad_en_r   <= 0;
-            iact_data_SPad_en_r   <= !mux_iact_ready;
-            wght_addr_SPad_en_r   <= 1;
-            psum_data_SPad_en_a_r <= computing;
-            psum_data_SPad_en_b_r <= computing;
-            psum_data_SPad_en_a_w <= 0;
-            psum_data_SPad_en_b_w <= 0;
-            reuse_psum_spad_a     <= 0;
-            reuse_psum_spad_b     <= 0;
-            reused_data_a         <= 0;
-            reused_data_b         <= 0;
-            wght_addr_use_vec     <= 1;
-            fast_cycle            <= 0;
-            next_iact             <= 0;
-            next_iact2            <= 0;
-            psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1;
-            psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
-            if (wght_data_vec < (second_spad_words_wght)) begin
-              wght_data_vec <= wght_data_vec + 1;
+            // ================================================================
+            // BLOCK 1: DEFAULT SIGNAL SETUP
+            // ================================================================
+            // Initialize control signals for normal MAC operation
+            // Rationale: Set defaults for all SPad enables and control flags
+            iact_addr_SPad_en_r   <= 0;            // Disable iact address reads
+            iact_data_SPad_en_r   <= !mux_iact_ready; // Enable iact data when ready
+            wght_addr_SPad_en_r   <= 1;            // Always enable weight address reads
+            psum_data_SPad_en_a_r <= computing;    // Read psum port A when computing
+            psum_data_SPad_en_b_r <= computing;    // Read psum port B when computing
+            psum_data_SPad_en_a_w <= 0;            // Disable psum writes (default)
+            psum_data_SPad_en_b_w <= 0;            // Disable psum writes (default)
+            reuse_psum_spad_a     <= 0;            // No data forwarding (default)
+            reuse_psum_spad_b     <= 0;            // No data forwarding (default)
+            reused_data_a         <= 0;            // No forwarded data (default)
+            reused_data_b         <= 0;            // No forwarded data (default)
+            wght_addr_use_vec     <= 1;            // Use computed weight addresses
+            fast_cycle            <= 0;            // Not in fast cycling mode
+            next_iact             <= 0;            // Don't advance activation yet
+            next_iact2            <= 0;            // No dual activation
+            psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1; // Next psum A memory
+            psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2; // Next psum B memory
+
+            // ================================================================
+            // BLOCK 1b: WEIGHT VECTOR INCREMENT
+            // ================================================================
+            // Advance through weight data for current activation
+            if (wght_data_vec < (second_spad_words_wght - 1)) begin
+              wght_data_vec <= wght_data_vec + 1; // Increment weight index
             end else begin
-              mux_iact_ready <= 1;
+              mux_iact_ready <= 1;                 // Signal ready for next activation
             end
 
+            // ================================================================
+            // BLOCK 2: WEIGHT RANGE COMPUTATION
+            // ================================================================
+            // Compute start/end addresses for current activation's weights
+            // Rationale: Use overhead bits and weight address SPad to determine
+            // the range of weights that correspond to non-zero activations
             if (!next_iact || fast_cycle) begin
               if (wght_start_set) begin
+                // Weight start address already set, now compute end address
                 if (!wght_end_set) begin
-                  wght_data_end_pre <= wght_addr_SPad_data_r;
-                  wght_end_set      <= 1;
+                  wght_data_end_pre <= wght_addr_SPad_data_r; // Fetch end address
+                  wght_end_set      <= 1;                      // Mark end as valid
                 end
               end else begin
-                wght_data_start_pre <= wght_addr_SPad_data_r;
-                wght_start_set <= 1;
+                // First weight in this activation range
+                wght_data_start_pre <= wght_addr_SPad_data_r; // Fetch start address
+                wght_start_set <= 1;                           // Mark start as valid
+                // Adjust weight address vector based on overhead bits
                 if ((first_spad_words_wght - 1) > wght_addr_vec) begin
-                  wght_addr_vec <= iact_oh_delay_1;
+                  wght_addr_vec <= iact_oh_delay_1; // Use overhead to index weights
                 end
               end
             end
 
+            // ================================================================
+            // BLOCK 3: NEXT ACTIVATION TRIGGER
+            // ================================================================
+            // Detect when weight range is completely fetched, trigger next activation
+            // Rationale: When we've fetched all weight range data, prepare to advance
+            // to the next activation in the input sequence
             if ((wght_data_end <= wght_data_SPad_addr + 1) && !next_iact) begin
-              wght_data_start <= wght_data_start_pre;
-              wght_end_set    <= 0;
+              wght_data_start <= wght_data_start_pre;  // Commit start address
+              wght_end_set    <= 0;                     // Clear flags for next activation
               wght_start_set  <= 0;
+
               if (wght_start_set) begin
                 wght_data_start <= wght_data_start_pre;
                 wght_data_vec <= wght_data_start_pre;
               end
+
               if (wght_end_set) begin
-                wght_data_end       <= wght_data_end_pre;
+                wght_data_end       <= wght_data_end_pre; // Commit end address
                 wght_data_start_pre <= wght_addr_SPad_data_r;
               end else begin
                 wght_data_end <= wght_addr_SPad_data_r;
               end
+
+              // Determine next weight address vector based on activation sparsity
               if (iact_oh_delay_1 <= iact_oh_delay_2 + 1) begin
+                // Sequential weight addressing
                 if ((first_spad_words_wght - 1) > wght_addr_vec) begin
                   wght_addr_vec <= wght_addr_vec + 1;
                 end
@@ -1328,59 +1428,94 @@ module PE #(
                   wght_data_start_pre <= wght_addr_SPad_data_r;
                 end
               end else begin
+                // Sparse weight addressing (skip based on overhead bits)
                 if ((first_spad_words_wght - 1) > wght_addr_vec) begin
                   wght_addr_vec <= iact_oh_delay_1 + 1;
                 end
                 wght_start_set <= 0;
               end
+
               if ((first_spad_words_wght - 1) > wght_addr_vec) begin
                 wght_addr_vec <= wght_addr_vec + 1;
               end
-              fast_cycle          <= 1;
-              iact_data_SPad_addr <= iact_data_SPad_addr + 1;
-              next_iact           <= 1;
-              iact_addr_count     <= iact_addr_count + 1;
+
+              // Signal transition to next activation
+              fast_cycle          <= 1;                     // Enable fast cycling
+              iact_data_SPad_addr <= iact_data_SPad_addr + 1; // Move to next iact entry
+              next_iact           <= 1;                     // Assert activation advance signal
+              iact_addr_count     <= iact_addr_count + 1;   // Increment activation counter
             end
 
+            // ================================================================
+            // BLOCK 4: NEXT ACTIVATION HANDLING & DATA VALIDITY CHECK
+            // ================================================================
+            // Update activation data pipeline and validate current weight vector
+            // Rationale: When advancing to next activation, update the pipeline
+            // delays for proper data alignment. Also check if current weight
+            // vector falls within the valid range for MAC operations.
             if (next_iact) begin
-              next_iact2           <= iact_addr_SPad_en_r;
-              iact_data_current_1  <= iact_data_spad_pay;
-              iact_data_current_2  <= iact_data_current_1;
-              iact_data_current_3  <= iact_data_current_2;
-              psum_spad_addr_a_mem <= 0;
-              psum_spad_addr_b_mem <= 1;
-              iact_addr_current    <= iact_addr_current + 1;
+              // Update iact data pipeline (3-cycle delay for SPad read latency)
+              next_iact2           <= iact_addr_SPad_en_r; // Latch enable signal
+              iact_data_current_1  <= iact_data_spad_pay;  // Read new activation
+              iact_data_current_2  <= iact_data_current_1; // Shift pipeline stage 1
+              iact_data_current_3  <= iact_data_current_2; // Shift pipeline stage 2
+              psum_spad_addr_a_mem <= 0;                   // Reset psum A memory addr
+              psum_spad_addr_b_mem <= 1;                   // Reset psum B memory addr
+              iact_addr_current    <= iact_addr_current + 1; // Increment activation index
             end
-            // Check valid values
-            values_valid <= 0;
-            if (wght_data_end > wght_data_vec) begin
-              values_valid <= 1;
+
+            // ================================================================
+            // BLOCK 5: WEIGHT DATA VALIDITY CHECK
+            // ================================================================
+            // Determine if current weight vector should be included in MAC
+            // Rationale: Data is valid only if current weight index is within
+            // [start, end) range. Outside this range, no MAC operation occurs.
+            values_valid <= 0;                              // Default: data is valid
+            if (wght_data_end <= wght_data_vec) begin
+              values_valid <= 1;                            // Weight vector out of range
             end
-            //Reuse Values of PSUM SPad
+            // ================================================================
+            // BLOCK 6: COMPUTATION COMPLETION CHECK
+            // ================================================================
+            // Detect when all activations have been processed
+            // Rationale: When iact_addr_SPad_data_r == current+1, we've reached
+            // the end of the activation sequence. Transition to output state.
+            // Reuse Values of PSUM SPad
             if (((iact_addr_SPad_data_r == iact_addr_current+1) | (iact_addr_count == 0)) & (wght_data_vec >= wght_data_end) | (iact_addr_count > iact_addr_SPad_data_r)) begin
-              current_state_computing <= WAIT_TO_SEND_PSUM;
-              wght_addr_vec           <= 0;
-              wght_data_vec           <= 0;
-              wght_ready_o            <= 1;
-              mux_iact_ready          <= 1;
-              iact_data_current_3     <= 0;
-              computing               <= 0;
-              psum_data_SPad_en_a_r   <= 0;
+              // All activations processed, prepare for psum output
+              current_state_computing <= WAIT_TO_SEND_PSUM; // Transition state
+              wght_addr_vec           <= 0;                  // Clear weight pointer
+              wght_data_vec           <= 0;                  // Clear weight index
+              wght_ready_o            <= 1;                  // Signal ready for new data
+              mux_iact_ready          <= 1;                  // Signal ready status
+              iact_data_current_3     <= 0;                  // Clear iact pipeline
+              computing               <= 0;                  // Disable MAC operations
+              psum_data_SPad_en_a_r   <= 0;                  // Disable psum reads
               psum_data_SPad_en_b_r   <= 0;
-              psum_data_SPad_en_a_w   <= 1;
+              psum_data_SPad_en_a_w   <= 1;                  // Enable psum writes
               psum_data_SPad_en_b_w   <= 1;
-              values_valid            <= 0;
+              values_valid            <= 0;                  // Invalidate current data
             end else begin
-              psum_data_SPad_en_a_w <= 1;
+              // Continue computation, enable psum writes
+              psum_data_SPad_en_a_w <= 1;                    // Write psum results
               psum_data_SPad_en_b_w <= 1;
             end
 
-            //Duplicated Data in adders
+            // ================================================================
+            // BLOCK 7: READ-AFTER-WRITE FORWARDING (Data Hazard Resolution)
+            // ================================================================
+            // Detect when a psum being read was just written, and forward the
+            // newly computed value instead of reading from SPad
+            // Rationale: Adders have 1-cycle latency. If we try to read a psum
+            // that's being written in the same cycle, we need to forward the
+            // result directly to avoid stalling or using stale data.
             if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
-              reuse_psum_spad_a <= 1;
-              reused_data_a     <= adder_1_o_w;
+              // Port A read conflicts with Port A write
+              reuse_psum_spad_a <= 1;       // Enable forwarding
+              reused_data_a     <= adder_1_o_w; // Use adder 1 output
             end
             if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
+              // Port B read conflicts with Port B write
               reuse_psum_spad_b <= 1;
               reused_data_b     <= adder_2_o_w;
             end
@@ -1394,14 +1529,28 @@ module PE #(
                 reused_data_b     <= adder_1_o_w;
               end
             end
-            adder_1_en <= 1;
-            adder_2_en <= 1;
+            
+            // ================================================================
+            // BLOCK 8: ADDER CONTROL AND PSUM MEMORY TRACKING
+            // ================================================================
+            // Enable MAC operations and track which psum locations have been
+            // written to (to determine accumulate vs. first write)
+            // Rationale: use_psum_x signals control whether the adder
+            // accumulates with existing psum or starts fresh. Memory tracking
+            // bits indicate if a psum location already contains a value.
+            adder_1_en <= 1;                       // Enable multiplier/adder 1
+            adder_2_en <= 1;                       // Enable multiplier/adder 2
+
+            // Determine accumulation mode based on memory usage tracking
             if (SERIAL == 1) begin
+              // Serial mode: separate tracking for each adder
               if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
+                // Port A psum already written before: accumulate
                 use_psum_1 <= 1;
               end else begin
+                // Port A psum is new: first write
                 use_psum_1 <= 0;
-                used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
+                used_psum_memory_1[(psum_spad_addr_a_r)] <= 1; // Mark as used
               end
               if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
                 use_psum_2 <= 1;
@@ -1410,22 +1559,30 @@ module PE #(
                 used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
               end
             end else begin
+              // Parallel mode: shared tracking for both adders
               if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
-                use_psum_1 <= 1;
+                use_psum_1 <= 1;                   // Accumulate on port A
               end else begin
-                use_psum_1 <= 0;
+                use_psum_1 <= 0;                   // First write on port A
                 used_psum_memory[(psum_spad_addr_a_r)] <= 1;
               end
               if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
-                use_psum_2 <= 1;
+                use_psum_2 <= 1;                   // Accumulate on port B
               end else begin
-                use_psum_2 <= 0;
+                use_psum_2 <= 0;                   // First write on port B
                 used_psum_memory[(psum_spad_addr_b_r)] <= 1;
               end
             end
-            psum_spad_addr_a_delay <= psum_spad_addr_a_r;
+
+            // ================================================================
+            // BLOCK 8b: PSUM ADDRESS PIPELINE
+            // ================================================================
+            // Delay psum write addresses to match adder latency
+            // Rationale: Adders have 1-cycle latency; we need to pipeline
+            // addresses through registers to write to the correct location
+            psum_spad_addr_a_delay <= psum_spad_addr_a_r; // Stage 1 delay
             psum_spad_addr_b_delay <= psum_spad_addr_b_r;
-            psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
+            psum_spad_addr_a_w     <= psum_spad_addr_a_delay; // Stage 2 delay
             psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
           //end
         end

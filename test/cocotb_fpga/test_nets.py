@@ -135,7 +135,7 @@ def test_mnist(
     
 
 if __name__ == '__main__':
-    test_test_mnist(USE_SPARSE_IACTS=0, USE_SPARSE_WGHTS=0, USE_RANDOM_VALUES=1,
+    test_mnist(USE_SPARSE_IACTS=0, USE_SPARSE_WGHTS=0, USE_RANDOM_VALUES=1,
         CLUSTER_ROWS=4, NUM_GLB_IACT=1, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3, LOGGER_LEVEL=0, MODEL_PATH="MNIST.h5",
         request=pytest.fixture(lambda: None)()
     )
