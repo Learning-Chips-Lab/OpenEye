@@ -166,7 +166,7 @@ class DenseMapper(LayerMapper):
             "send_data_out": layer_params.send_values_out,
             "needed_iact_buffer_words_reg": layer_params.needed_iact_buffer_words,
             "add_up_reg":layer_params.add_up,
-            "iact_x_line_repititions_reg":layer_params.iact_x_line_repititions
+            "iact_x_line_repetitions_reg":layer_params.iact_x_line_repetitions
             })
             """
             # === DMA Line 1: Main configuration parameters ===

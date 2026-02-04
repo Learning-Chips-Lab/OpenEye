@@ -152,7 +152,7 @@ class ConvMapper(LayerMapper):
         "needed_cycles_reg": math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer),
         "iact_converter_buffer_addr_max_cycles": layer_params.needed_standing_cycles,
         "iact_channels_per_pe": layer_params.used_channels,
-        "fc_size_reg":0,
+        "fc_size_reg": 0,
         "iact_size_x":layer_params.iact_size_x,
         "iact_size_y": layer_params.iact_size_y,
         "iact_needed_cycles": layer_params.iact_stream_cycles,
@@ -177,7 +177,7 @@ class ConvMapper(LayerMapper):
         "send_data_out": layer_params.send_values_out,
         "needed_iact_buffer_words_reg": layer_params.needed_iact_buffer_words,
         "add_up_reg":layer_params.add_up,
-        "iact_x_line_repititions_reg":layer_params.iact_x_line_repititions
+        "iact_x_line_repetitions_reg":layer_params.iact_x_line_repetitions
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===

@@ -123,13 +123,14 @@ class PsumStreamMapper(object):
             psum_stream = []
 
             # Generate bias stream for each output position and filter
-            for j in range(self.layer_params.iact_size_y):
-                for i in range(self.layer_params.filters):
-                    # Convert bias to 20-bit two's complement
-                    bias_20bit = gtu.to_twos_complement(self.dram_bias[i], 20)
-                    # Pack two 20-bit values into a 40-bit word and replicate
-                    packed_value = bias_20bit + (bias_20bit * 2**20)
-                    psum_stream.extend([packed_value] * block_length)
+            for k in range (self.layer_params.iact_x_line_repetitions) :
+                for j in range(self.layer_params.iact_size_y) :
+                    for i in range(self.layer_params.filters) :
+                        # Convert bias to 20-bit two's complement
+                        bias_20bit = gtu.to_twos_complement(self.dram_bias[i], 20)
+                        # Pack two 20-bit values into a 40-bit word and replicate
+                        packed_value = bias_20bit + (bias_20bit * 2**20)
+                        psum_stream.extend([packed_value] * block_length)
         else :
             # === PARALLEL MODE: CLUSTER-BASED STREAM GENERATION ===
             # Create 3D structure: [cluster_x][cluster_y][router]
