@@ -98,6 +98,7 @@ module data_pipeline_iact #(
 
     input      [                DATA_WIDTH-1 : 0] data_i,
     input                                         enable_i,
+    input     [                            3 : 0] iact_x_line_repetitions_i,
 
     output reg [ $clog2(FIRST_SPAD_ADDR+1)-1 : 0] first_spad_words_o,
     input      [   $clog2(FIRST_SPAD_ADDR)-1 : 0] first_spad_max_i,
@@ -124,6 +125,8 @@ module data_pipeline_iact #(
   wire [                 DATA_WIDTH-1 : 0] current_data;
   reg                                      compute_sent;
   reg                                      uneven_ending;
+  reg                                      uneven_ending_storage;
+  reg  [                            3 : 0] uneven_counter;
 
   assign current_data = data_storage_2 >> SECOND_SPAD_DATA;
   assign second_spad_data_o = {
@@ -150,6 +153,8 @@ module data_pipeline_iact #(
       transmission_counter_delay <= 0;
       compute_sent               <= 0;
       uneven_ending              <= 0;
+      uneven_ending_storage      <= 0;
+      uneven_counter             <= 0;
     end else begin
       first_spad_en_o   <= 0;
       second_spad_en_o  <= 0;
@@ -222,14 +227,26 @@ module data_pipeline_iact #(
         second_spad_addr_o         <= 0;
         second_spad_words_o        <= 0;
         compute_sent               <= 1;
-        //Fully-Connected
-        if (first_spad_max_i >= 4) begin
-          cycle_counter              <= 0;
-        end else begin
-          if (cycle_counter != 0) begin
-            cycle_counter <= cycle_counter;
-            uneven_ending <= 1;
+        cycle_counter              <= 0;
+        //Not Fully-Connected
+        if (first_spad_max_i < 4) begin
+          uneven_counter <= uneven_counter + 1;
+          if (uneven_counter == iact_x_line_repetitions_i - 1) begin
+            uneven_counter <= 0;
           end
+          if (uneven_counter == iact_x_line_repetitions_i - 1) begin
+            uneven_ending_storage <= 1 - uneven_ending_storage;
+            cycle_counter <= 1 - uneven_ending_storage;
+            uneven_ending <= 1 - uneven_ending_storage;
+          end else begin
+            cycle_counter <= uneven_ending_storage;
+            uneven_ending <= uneven_ending_storage;
+          end
+        end
+        if (compute_sent) begin
+          cycle_counter  <= 0;
+          uneven_ending  <= 0;
+          uneven_counter <= 0;
         end
       end
     end

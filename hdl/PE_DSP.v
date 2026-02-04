@@ -717,11 +717,11 @@ module PE #(
   reg                                   data_mode_reg;          // Data mode configuration
   reg  [                           2:0] stride_reg;             // Stride configuration
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_reg;      // Fixed-point fraction bits
-  reg  [                           3:0] iact_x_line_repetitions;
 
   // Configuration streaming FSM
-  reg  [                           1:0] current_state_stream;   // Config stream state
+  reg  [                         1 : 0] current_state_stream;   // Config stream state
   reg  [                           7:0] iact_data_position_reg; // Position in iact data
+  reg  [                           2:0] input_activations_reg;  // Number of input activations
 
   // Input activation data partitioning (splitting bus into 3 parts)
   wire [        DATA_IACT_BITWIDTH-1:0] iact_part_1_w;         // Bits [7:0] of iact bus
@@ -826,17 +826,15 @@ module PE #(
   assign adder_1_summand_1 =
                  !use_psum_1 ? 0 :                      // First accumulation: use 0
                 (reuse_adder_data_a2a ? adder_1_o_w :   // Forward adder 1 output
-                (reuse_adder_data_b2a ? adder_2_o_w :   // Forward adder 2 output
                 (reuse_psum_spad_a ? reused_data_a :    // Use bypassed SPad data
-                 psum_spad_data_a_o)));                 // Normal SPad read
+                 psum_spad_data_a_o));                  // Normal SPad read
 
   // Adder 2 summand 1: select psum source with bypass logic (same structure as adder 1)
   assign adder_2_summand_1 =
                  !use_psum_2 ? 0 :
                 (reuse_adder_data_b2b ? adder_2_o_w :
-                (reuse_adder_data_a2b ? adder_1_o_w :
                 (reuse_psum_spad_b ? reused_data_b :
-                 psum_spad_data_b_o)));
+                 psum_spad_data_b_o));
 
   // Write data to psum SPad comes from adder outputs
   assign psum_spad_data_a_i = adder_1_o_w;
@@ -876,14 +874,14 @@ module PE #(
   always @(posedge clk_i, negedge rst_ni) begin
     if (!rst_ni) begin
       //data_mode_reg         <= 0;
-      stride_reg              <= 0;
-      fraction_bit_reg        <= 0;
-      current_state_stream    <= 0;
-      wght_addr_max_reg       <= 0;
-      iact_addr_max_reg       <= 0;
-      iact_x_line_repetitions <= 0;
-      filters_reg             <= 0;
-      channel_reg             <= 0;
+      stride_reg            <= 0;
+      fraction_bit_reg      <= 0;
+      current_state_stream  <= 0;
+      input_activations_reg <= 0;
+      wght_addr_max_reg     <= 0;
+      iact_addr_max_reg     <= 0;
+      filters_reg           <= 0;
+      channel_reg           <= 0;
     end else begin
       case (current_state_stream)
         FIRST_PARAMS: begin
@@ -891,8 +889,9 @@ module PE #(
           if (enable_stream_i) begin
             current_state_stream  <= SECOND_PARAMS;
             //data_mode_reg         <= data_stream_i[0];
-            stride_reg              <= data_stream_i[3:1];    // Convolution stride
-            wght_addr_max_reg       <= data_stream_i[7:4];    // Max weight addresses
+            stride_reg            <= data_stream_i[3:1];    // Convolution stride
+            wght_addr_max_reg     <= data_stream_i[7:4];    // Max weight addresses
+            input_activations_reg <= 4;                     // Fixed value
           end
         end
         SECOND_PARAMS: begin
@@ -908,9 +907,8 @@ module PE #(
         THIRD_PARAMS: begin
           // Receive third set: input activation address max
           if (enable_stream_i) begin
-            iact_addr_max_reg       <= data_stream_i[3:0];     // Max iact addresses
-            iact_x_line_repetitions <= data_stream_i[7:4];
-            current_state_stream    <= FOURTH_PARAMS;
+            iact_addr_max_reg    <= data_stream_i[3:0];     // Max iact addresses
+            current_state_stream <= FOURTH_PARAMS;
           end else begin
             current_state_stream <= FIRST_PARAMS;           // Timeout: restart
           end
@@ -1815,121 +1813,71 @@ module PE #(
       .compute_i(compute_i | enable_stream_i),
       //.data_mode         (data_mode_reg), ReAdd later
 
-      .data_i                    (mux_iact_a_o_w),
-      .enable_i                  (mux_iact_b_o_w),
-      .iact_x_line_repetitions_i (iact_x_line_repetitions),
+      .data_i  (mux_iact_a_o_w),
+      .enable_i(mux_iact_b_o_w),
 
-      .first_spad_words_o        (first_spad_words_iact),
-      .first_spad_max_i          (channel_reg),
-      .second_spad_words_o       (second_spad_words_iact),
+      .first_spad_words_o (first_spad_words_iact),
+      .first_spad_max_i   (channel_reg),
+      .second_spad_words_o(second_spad_words_iact),
 
-      .first_spad_addr_o         (first_spad_iact_addr_w),
-      .first_spad_data_o         (first_spad_iact_data_w),
-      .first_spad_en_o           (first_spad_iact_en_w),
+      .first_spad_addr_o(first_spad_iact_addr_w),
+      .first_spad_data_o(first_spad_iact_data_w),
+      .first_spad_en_o  (first_spad_iact_en_w),
 
-      .second_spad_addr_o        (second_spad_iact_addr_w),
-      .second_spad_data_o        (second_spad_iact_data_w),
-      .second_spad_en_o          (second_spad_iact_en_w)
+      .second_spad_addr_o(second_spad_iact_addr_w),
+      .second_spad_data_o(second_spad_iact_data_w),
+      .second_spad_en_o  (second_spad_iact_en_w)
   );
 
   // ============================================================================
   // Computational Units (Multipliers and Adders)
   // ============================================================================
-
-  // Multiplier 1: First parallel MAC unit
-  // Multiplies weight_1 * input_activation (fixed-point arithmetic)
-  multiplier #(
+  
+  dsp_unit #(
       .DATA_WIDTH_FAC1(DATA_WGHT_BITWIDTH),
       .DATA_WIDTH_FAC2(DATA_IACT_BITWIDTH),
-      .DATA_WIDTH_PROD(DATA_PSUM_BITWIDTH)
-  ) multiplier_1 (
+      .DATA_WIDTH_PROD(DATA_PSUM_BITWIDTH),
+      .DATA_WIDTH_ADDI(DATA_PSUM_BITWIDTH)
+  ) dsp_unit_1 (
       .clk_i          (clk_i),
       .rst_ni         (rst_ni),
-      .multiplier_en_i(values_valid),
-      .factor_1       (mult_1_fac_1),
-      .factor_2       (mult_1_fac_2),
-      .product        (mult_1_o_w),
-      .fraction_bit_i (fraction_bit_reg)
+      .multi_en_i     (values_valid),
+      .adder_en_i     (adder_1_en),
+      .adder_sel_i    (psum_select),
+      .a_in           (mult_1_fac_1),
+      .b_in           (mult_1_fac_2),
+      .c_in           (adder_1_summand_1),
+      .d_in           (psum_data_1_delay),
+      .p_out          (adder_1_o_w)
   );
 
-  // Multiplier 2: Second parallel MAC unit
-  // Multiplies weight_2 * input_activation (same iact as multiplier 1)
-  multiplier #(
+  dsp_unit #(
       .DATA_WIDTH_FAC1(DATA_WGHT_BITWIDTH),
       .DATA_WIDTH_FAC2(DATA_IACT_BITWIDTH),
-      .DATA_WIDTH_PROD(DATA_PSUM_BITWIDTH)
-  ) multiplier_2 (
+      .DATA_WIDTH_PROD(DATA_PSUM_BITWIDTH),
+      .DATA_WIDTH_ADDI(DATA_PSUM_BITWIDTH)
+  ) dsp_unit_2 (
       .clk_i          (clk_i),
       .rst_ni         (rst_ni),
-      .multiplier_en_i(values_valid),
-      .factor_1       (mult_2_fac_1),
-      .factor_2       (mult_2_fac_2),
-      .product        (mult_2_o_w),
-      .fraction_bit_i (fraction_bit_reg)
+      .multi_en_i     (values_valid),
+      .adder_en_i     (adder_2_en),
+      .adder_sel_i    (psum_select),
+      .a_in           (mult_2_fac_1),
+      .b_in           (mult_2_fac_2),
+      .c_in           (adder_2_summand_1),
+      .d_in           (psum_data_2_delay),
+      .p_out          (adder_2_o_w)
   );
 
-  // Adder 1: Accumulator for MAC 1
-  // Adds multiplier 1 output to partial sum (for accumulation)
+  // Adder 3: Combines partial sums from both MACs (serial mode only)
   adder #(
       .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
-  ) adder_1 (
+  ) adder_3 (
       .clk_i      (clk_i),
       .rst_ni     (rst_ni),
-      .summand_1_i(adder_1_summand_1),
-      .summand_2_i(adder_1_summand_2),
-      .sum_o      (adder_1_o_w),
-      .adder_en_i (adder_1_en)
+      .summand_1_i(adder_3_summand_1),
+      .summand_2_i(adder_3_summand_2),
+      .sum_o      (adder_3_o_w),
+      .adder_en_i (adder_3_en)
   );
-
-  // Adder 2: Accumulator for MAC 2
-  // Adds multiplier 2 output to partial sum (for accumulation)
-  adder #(
-      .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
-  ) adder_2 (
-      .clk_i      (clk_i),
-      .rst_ni     (rst_ni),
-      .summand_1_i(adder_2_summand_1),
-      .summand_2_i(adder_2_summand_2),
-      .sum_o      (adder_2_o_w),
-      .adder_en_i (adder_2_en)
-  );
-
-  // Serial mode only: Adder 3 combines outputs from adders 1 and 2
-  if (SERIAL) begin : gen_serial_adder
-    // Adder 3: Combines partial sums from both MACs (serial mode only)
-    adder #(
-        .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
-    ) adder_3 (
-        .clk_i      (clk_i),
-        .rst_ni     (rst_ni),
-        .summand_1_i(adder_3_summand_1),
-        .summand_2_i(adder_3_summand_2),
-        .sum_o      (adder_3_o_w),
-        .adder_en_i (adder_3_en)
-    );
-  end
-
-  // ============================================================================
-  // Partial Sum Input Multiplexer
-  // ============================================================================
-  // Selects between psum from SPad (for accumulation) or external psum (from router/other PE)
-  if (SERIAL) begin : gen_serial_psum_multiplexer
-    mux2 #(
-        .DATA_WIDTH(TRANS_BITWIDTH_PSUM * PARALLEL_MACS)
-    ) mux_psum (
-        .a_in ({psum_data_2_delay, psum_data_1_delay}),
-        .b_in ({mult_2_o_w, mult_1_o_w}),
-        .sel_i(psum_select),
-        .y_o  ({adder_2_summand_2, adder_1_summand_2})
-    );
-  end else begin : gen_parallel_psum_multiplexer
-    mux2 #(
-        .DATA_WIDTH(TRANS_BITWIDTH_PSUM)
-    ) mux_psum (
-        .a_in (psum_data_combined_w[TRANS_BITWIDTH_PSUM-1:0]),
-        .b_in ({mult_2_o_w, mult_1_o_w}),
-        .sel_i(psum_select),
-        .y_o  ({adder_2_summand_2, adder_1_summand_2})
-    );
-  end
 endmodule

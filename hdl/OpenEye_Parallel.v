@@ -187,6 +187,7 @@ module OpenEye_Parallel #(
     input      [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                                          3:0] needed_iact_cycles_i,
     input      [                    $clog2(PSUM_PER_PE+1)-1:0] filters_i,
+    input      [                                          7:0] iact_size_x_i,
     input      [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_addr_len_i,
     input      [               $clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_i,
     input      [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i,
@@ -197,6 +198,7 @@ module OpenEye_Parallel #(
     input      [                                          2:0] stride_x_i,
     input      [                                          2:0] stride_y_i,
     input      [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i,
+    input      [                                          3:0] iact_x_line_repetitions_i,
     input      [                                          3:0] kernel_size_i,
     input      [                             CLUSTERS*PES-1:0] compute_mask_i,
     input      [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i,
@@ -241,6 +243,7 @@ module OpenEye_Parallel #(
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg;
   reg  [                                          3:0] needed_iact_cycles_reg;
   reg  [                    $clog2(PSUM_PER_PE+1)-1:0] filters_reg;
+  reg  [                                          7:0] iact_size_x_reg;
   reg  [               $clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_reg;
   reg  [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_reg;
   reg  [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_reg;
@@ -331,6 +334,7 @@ module OpenEye_Parallel #(
   reg  [                                          2:0] stride_x_i_reg;
   reg  [                                          2:0] stride_y_i_reg;
   reg  [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i_reg;
+  reg  [                                          3:0] iact_x_line_repetitions_reg;
   reg  [                             CLUSTERS*PES-1:0] compute_mask_i_reg;
   reg  [  ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_i_reg;
   reg  [  ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_i_reg;
@@ -415,7 +419,7 @@ module OpenEye_Parallel #(
         end
         THIRD_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{8{1'd0}},{kernel_size_i}};
+          data_stream_reg        <= {{4{1'd0}},iact_x_line_repetitions_reg,{kernel_size_i}};
           fsm_transmission_state <= IDLE_TRANSMI;
         end
         default: begin
@@ -424,7 +428,9 @@ module OpenEye_Parallel #(
     end
   end
   reg [7:0] cycle_break_counter;
-  reg [7:0]needed_psum_storage_cycles_reg;
+  reg [7:0] needed_psum_storage_cycles_reg;
+  reg [7:0] x_line_repetition_cycle;
+  integer signed cl_x, cl_y;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin  ///Reset
       start_new_cycle                <= 0;
@@ -459,6 +465,7 @@ module OpenEye_Parallel #(
       needed_y_cls_i_reg             <= 0;
       needed_iact_cycles_i_reg       <= 0;
       filters_i_reg                  <= 0;
+      iact_size_x_reg                <= 0;
       iact_addr_len_i_reg            <= 0;
       bano_cluster_mode_i_reg        <= 0;
       af_cluster_mode_i_reg          <= 0;
@@ -481,6 +488,7 @@ module OpenEye_Parallel #(
       psum_data_i_reg                <= 0;
       psum_ready_i_reg               <= 0;
       psum_enable_i_reg              <= 0;
+      x_line_repetition_cycle        <= 0;
     end else begin
 
       ///Regs for ports
@@ -493,6 +501,7 @@ module OpenEye_Parallel #(
       needed_y_cls_i_reg          <= needed_y_cls_i;
       needed_iact_cycles_i_reg    <= needed_iact_cycles_i;
       filters_i_reg               <= filters_i;
+      iact_size_x_reg             <= iact_size_x_i;
       iact_addr_len_i_reg         <= iact_addr_len_i;
       bano_cluster_mode_i_reg     <= bano_cluster_mode_i;
       af_cluster_mode_i_reg       <= {NUM_GLB_PSUM{af_cluster_mode_i}};
@@ -501,6 +510,7 @@ module OpenEye_Parallel #(
       stride_x_i_reg              <= stride_x_i;
       stride_y_i_reg              <= stride_y_i;
       kernel_per_pe_cluster_i_reg <= kernel_per_pe_cluster_i;
+      iact_x_line_repetitions_reg <= iact_x_line_repetitions_i;
       wght_addr_len_i_reg         <= wght_addr_len_i;
       compute_mask_i_reg          <= compute_mask_i;
       iact_ready_o                <= iact_ready_o_w;
@@ -535,11 +545,12 @@ module OpenEye_Parallel #(
       case (fsm_current_state)
 
         MAIN_IDLE: begin
-          compute_cluster_i_reg <= 0;
-          data_write_enable     <= 1;
-          computing             <= 0;
-          cycle_break_counter   <= 0;
-          router_mode_wght_reg  <= router_mode_wght_i;
+          compute_cluster_i_reg   <= 0;
+          data_write_enable       <= 1;
+          computing               <= 0;
+          cycle_break_counter     <= 0;
+          router_mode_wght_reg    <= router_mode_wght_i;
+          x_line_repetition_cycle <= 0;
           if (compute_i_w) begin
             fsm_last_state    <= MAIN_IDLE;
             fsm_current_state <= COMPUTING;
@@ -562,7 +573,26 @@ module OpenEye_Parallel #(
               if (start_new_cycle != 1) begin
                 finished_cycles <= finished_cycles + 1;
                 if (finished_cycles < needed_cycles_i_reg) begin
-                  compute_cluster_i_reg <= compute_mask_reg;
+                  //if (iact_x_line_repetitions_reg == 1) begin
+                  if (1 == 1) begin
+                    compute_cluster_i_reg <= compute_mask_reg;
+                  end else begin
+                    x_line_repetition_cycle <= x_line_repetition_cycle + 1;
+                    if (x_line_repetition_cycle != iact_x_line_repetitions_reg - 1) begin
+                      compute_cluster_i_reg   <= compute_mask_reg;
+                    end else begin
+                      x_line_repetition_cycle <= 0;
+                      for (cl_x = 0; cl_x < CLUSTER_COLUMNS; cl_x = cl_x + 1) begin
+                        for (cl_y = 0; cl_y < CLUSTER_ROWS; cl_y = cl_y + 1) begin
+                          if (iact_size_x_reg > ((x_line_repetition_cycle * CLUSTERS) + cl_x + cl_y * CLUSTER_COLUMNS) * PE_COLUMNS) begin
+                            compute_cluster_i_reg[((cl_x * CLUSTER_ROWS)+ cl_y) * PES+:PES] <= compute_mask_reg[((cl_x * CLUSTER_ROWS)+ cl_y) * PES+:PES];
+                          end else begin
+                            compute_cluster_i_reg[((cl_x * CLUSTER_ROWS)+ cl_y) * PES+:PES] <= 0;
+                          end
+                        end
+                      end
+                    end
+                  end
                 end
                 if (finished_cycles == needed_cycles_i_reg - 1) begin
                   fsm_last_state    <= COMPUTING;
