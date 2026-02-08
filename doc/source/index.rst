@@ -28,6 +28,7 @@ It has the following features:
 * It supports a wide range of data types and precisions.
 * It is designed to be scalable to support a wide range of model sizes.
 * It can exploit the sparsity in the model to reduce the energy consumption.
+* It supports both sparse mode (with CSC compression) and dense mode (with 33% data bandwidth reduction) via the SPARSITY_EN parameter.
 
 See the `architecture` section for more details on the architecture of the OpenEye.
 The `verilog` section contains the documentation for the Verilog code.

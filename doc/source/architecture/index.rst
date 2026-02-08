@@ -20,6 +20,7 @@ The OpenEye architecture is based on a hierachical structure, with the following
     dataflow
     noc
     PE_cluster
+    sparsity_modes
     configuration
 
 
