@@ -115,6 +115,7 @@ module OpenEye_Cluster #(
     parameter TOP_CLUSTER         = 0,
     parameter BOTTOM_CLUSTER      = 0,
     parameter PARALLEL_MACS       = 2,
+    parameter SPARSITY_EN         = 1,  // 1=sparse mode (default), 0=dense mode
     parameter DATA_IACT_BITWIDTH  = 8,
     parameter DATA_PSUM_BITWIDTH  = 20,
     parameter DATA_WGHT_BITWIDTH  = 8,
@@ -284,6 +285,7 @@ module OpenEye_Cluster #(
       .IS_TOPLEVEL(0),
       .SERIAL     (SERIAL),
       .TOP_CLUSTER(TOP_CLUSTER),
+      .SPARSITY_EN(SPARSITY_EN),
 
       .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
       .DATA_WGHT_BITWIDTH(DATA_WGHT_BITWIDTH),

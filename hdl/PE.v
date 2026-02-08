@@ -472,6 +472,8 @@ module PE #(
 
     parameter integer PARALLEL_MACS = 2,
 
+    parameter integer SPARSITY_EN = 1,  // 1=sparse mode (default), 0=dense mode
+
     parameter integer DATA_IACT_BITWIDTH     = 8,
     parameter integer DATA_WGHT_BITWIDTH     = 8,
     parameter integer DATA_PSUM_BITWIDTH     = 20,
@@ -498,11 +500,11 @@ module PE #(
     localparam integer IACT_ADDR_ADDR_BITWIDTH = $clog2(IACT_ADDR_ADDR),
     localparam integer IACT_ADDR_DATA_BITWIDTH = $clog2(IACT_ADDR_DATA),
 
-    localparam integer IACT_DATA_DATA          = DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD,
+    localparam integer IACT_DATA_DATA          = SPARSITY_EN ? (DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD) : DATA_IACT_BITWIDTH,
     localparam integer IACT_DATA_ADDR_BITWIDTH = $clog2(IACT_DATA_ADDR),
     localparam integer IACT_DATA_DATA_BITWIDTH = $clog2(IACT_DATA_DATA),
 
-    localparam integer WGHT_DATA_DATA          = (DATA_WGHT_BITWIDTH + DATA_WGHT_IGNORE_ZEROS) * PARALLEL_MACS,
+    localparam integer WGHT_DATA_DATA          = SPARSITY_EN ? ((DATA_WGHT_BITWIDTH + DATA_WGHT_IGNORE_ZEROS) * PARALLEL_MACS) : (DATA_WGHT_BITWIDTH * PARALLEL_MACS),
     localparam integer WGHT_ADDR_ADDR_BITWIDTH = $clog2(WGHT_ADDR_ADDR),
     localparam integer WGHT_ADDR_DATA_BITWIDTH = $clog2(WGHT_ADDR_DATA),
 
@@ -790,11 +792,31 @@ module PE #(
   assign iact_part_2_w  = mux_iact_a_o_w[15:8];
   assign iact_part_3_w  = mux_iact_a_o_w[23:16];
 
-  // Unpack iact data SPad output: overhead (sparsity) bits and payload (data value)
-  assign {iact_data_spad_oh, iact_data_spad_pay} = iact_data_SPad_data_r;
+  // Unpack iact data SPad output: conditional based on SPARSITY_EN
+  generate
+    if (SPARSITY_EN) begin : gen_sparse_iact_unpack
+      // Sparse mode: extract overhead bits from packed data
+      assign {iact_data_spad_oh, iact_data_spad_pay} = iact_data_SPad_data_r;
+    end else begin : gen_dense_iact_unpack
+      // Dense mode: no overhead, full word is payload
+      assign iact_data_spad_oh = {DATA_IACT_OVERHEAD{1'b0}};
+      assign iact_data_spad_pay = iact_data_SPad_data_r[DATA_IACT_BITWIDTH-1:0];
+    end
+  endgenerate
 
-  // Unpack weight data SPad output: two sets of overhead+payload for dual MACs
-  assign {wght_data_spad_oh_2, wght_data_spad_pay_2, wght_data_spad_oh_1, wght_data_spad_pay_1} = wght_data_SPad_data_r;
+  // Unpack weight data SPad output: conditional based on SPARSITY_EN
+  generate
+    if (SPARSITY_EN) begin : gen_sparse_wght_unpack
+      // Sparse mode: extract overhead bits for dual MACs
+      assign {wght_data_spad_oh_2, wght_data_spad_pay_2, wght_data_spad_oh_1, wght_data_spad_pay_1} = wght_data_SPad_data_r;
+    end else begin : gen_dense_wght_unpack
+      // Dense mode: no overhead, just two weight values
+      assign wght_data_spad_oh_1 = {DATA_WGHT_IGNORE_ZEROS{1'b0}};
+      assign wght_data_spad_oh_2 = {DATA_WGHT_IGNORE_ZEROS{1'b0}};
+      assign wght_data_spad_pay_1 = wght_data_SPad_data_r[DATA_WGHT_BITWIDTH-1:0];
+      assign wght_data_spad_pay_2 = wght_data_SPad_data_r[2*DATA_WGHT_BITWIDTH-1:DATA_WGHT_BITWIDTH];
+    end
+  endgenerate
 
   // Adder 3 inputs (serial mode only - combines outputs of adder 1 and 2)
   assign adder_3_summand_1 = SERIAL == 1 ? adder_1_o_w : 0;
@@ -847,13 +869,23 @@ module PE #(
 
   // Psum SPad read address calculation
   // During output: use base address directly
-  // During compute: add weight sparsity offset to base address (for sparse indexing)
-  assign psum_spad_addr_a_r = ((current_state_computing == WAIT_TO_SEND_PSUM) | (current_state_computing == SEND_PSUM)) ?
-                                psum_spad_addr_a_mem :
-                                wght_data_spad_oh_1 + psum_spad_addr_a_mem;
-  assign psum_spad_addr_b_r = ((current_state_computing == WAIT_TO_SEND_PSUM) | (current_state_computing == SEND_PSUM)) ?
-                                psum_spad_addr_b_mem :
-                                wght_data_spad_oh_1 + wght_data_spad_oh_2 + psum_spad_addr_b_mem;
+  // During compute:
+  //   - SPARSITY_EN=1: add weight sparsity offset to base address (for sparse indexing)
+  //   - SPARSITY_EN=0: use base address directly (no sparse offset)
+  generate
+    if (SPARSITY_EN) begin : gen_sparse_psum_addr
+      assign psum_spad_addr_a_r = ((current_state_computing == WAIT_TO_SEND_PSUM) | (current_state_computing == SEND_PSUM)) ?
+                                    psum_spad_addr_a_mem :
+                                    wght_data_spad_oh_1 + psum_spad_addr_a_mem;
+      assign psum_spad_addr_b_r = ((current_state_computing == WAIT_TO_SEND_PSUM) | (current_state_computing == SEND_PSUM)) ?
+                                    psum_spad_addr_b_mem :
+                                    wght_data_spad_oh_1 + wght_data_spad_oh_2 + psum_spad_addr_b_mem;
+    end else begin : gen_dense_psum_addr
+      // Dense mode: no sparsity offset, use base address directly
+      assign psum_spad_addr_a_r = psum_spad_addr_a_mem;
+      assign psum_spad_addr_b_r = psum_spad_addr_b_mem;
+    end
+  endgenerate
 
   // Psum SPad write enable logic (prevent write conflicts when addresses match)
   assign psum_data_SPad_en_a_w_i = !psum_data_SPad_en_a_w ? 0 :
@@ -1343,7 +1375,7 @@ module PE #(
             // Rationale: Set defaults for all SPad enables and control flags
             iact_addr_SPad_en_r   <= 0;            // Disable iact address reads
             iact_data_SPad_en_r   <= !mux_iact_ready; // Enable iact data when ready
-            wght_addr_SPad_en_r   <= 1;            // Always enable weight address reads
+            wght_addr_SPad_en_r   <= SPARSITY_EN;  // Enable weight address reads only in sparse mode
             psum_data_SPad_en_a_r <= computing;    // Read psum port A when computing
             psum_data_SPad_en_b_r <= computing;    // Read psum port B when computing
             psum_data_SPad_en_a_w <= 0;            // Disable psum writes (default)
@@ -1794,18 +1826,26 @@ module PE #(
 
   // Input Activation Address SPad (single-port)
   // Stores addresses/indices for sparse input activation data
-  SPad_SP #(
-      .DATA_WIDTH(IACT_ADDR_DATA),
-      .ADDR_WIDTH(IACT_ADDR_ADDR_BITWIDTH),
-      .Implementation("pe_iact_addr")
-  ) iact_addr_SPad (
-      .clk_i (clk_i),
-      .re_i  (iact_addr_SPad_en_r & !first_spad_iact_en_w),
-      .we_i  (first_spad_iact_en_w),
-      .addr_i(iact_addr_SPad_addr | first_spad_iact_addr_w),
-      .data_i(first_spad_iact_data_w),
-      .data_o(iact_addr_SPad_data_r)
-  );
+  // Only instantiated when SPARSITY_EN=1
+  generate
+    if (SPARSITY_EN) begin : gen_iact_addr_spad
+      SPad_SP #(
+          .DATA_WIDTH(IACT_ADDR_DATA),
+          .ADDR_WIDTH(IACT_ADDR_ADDR_BITWIDTH),
+          .Implementation("pe_iact_addr")
+      ) iact_addr_SPad (
+          .clk_i (clk_i),
+          .re_i  (iact_addr_SPad_en_r & !first_spad_iact_en_w),
+          .we_i  (first_spad_iact_en_w),
+          .addr_i(iact_addr_SPad_addr | first_spad_iact_addr_w),
+          .data_i(first_spad_iact_data_w),
+          .data_o(iact_addr_SPad_data_r)
+      );
+    end else begin : gen_iact_addr_spad_dummy
+      // Dense mode: no address SPAD, tie output to 0
+      assign iact_addr_SPad_data_r = {IACT_ADDR_DATA{1'b0}};
+    end
+  endgenerate
 
   // Input Activation Data SPad (single-port)
   // Stores actual input activation values with overhead bits for sparsity
@@ -1824,19 +1864,26 @@ module PE #(
 
   // Weight Address SPad (single-port)
   // Stores pointers/addresses into weight data SPad for sparse weight access
-  SPad_SP #(
-      .DATA_WIDTH(WGHT_ADDR_DATA),
-      .ADDR_WIDTH(WGHT_ADDR_ADDR_BITWIDTH)
-
-      , .Implementation("pe_weight_addr")
-  ) weight_addr_SPad (
-      .clk_i (clk_i),
-      .re_i  (wght_addr_SPad_en_r & !first_spad_wght_en_w),
-      .we_i  (first_spad_wght_en_w),
-      .addr_i(wght_addr_SPad_addr | first_spad_wght_addr_w),
-      .data_i(first_spad_wght_data_w),
-      .data_o(wght_addr_SPad_data_r)
-  );
+  // Only instantiated when SPARSITY_EN=1
+  generate
+    if (SPARSITY_EN) begin : gen_wght_addr_spad
+      SPad_SP #(
+          .DATA_WIDTH(WGHT_ADDR_DATA),
+          .ADDR_WIDTH(WGHT_ADDR_ADDR_BITWIDTH),
+          .Implementation("pe_weight_addr")
+      ) weight_addr_SPad (
+          .clk_i (clk_i),
+          .re_i  (wght_addr_SPad_en_r & !first_spad_wght_en_w),
+          .we_i  (first_spad_wght_en_w),
+          .addr_i(wght_addr_SPad_addr | first_spad_wght_addr_w),
+          .data_i(first_spad_wght_data_w),
+          .data_o(wght_addr_SPad_data_r)
+      );
+    end else begin : gen_wght_addr_spad_dummy
+      // Dense mode: no address SPAD, tie output to 0
+      assign wght_addr_SPad_data_r = {WGHT_ADDR_DATA{1'b0}};
+    end
+  endgenerate
 
   // Weight Data SPad (single-port)
   // Stores actual weight values (parallel sets for dual MACs) with overhead bits
@@ -1934,7 +1981,8 @@ module PE #(
       .FIRST_SPAD_ADDR (WGHT_ADDR_ADDR),
       .FIRST_SPAD_DATA (WGHT_ADDR_DATA),
       .SECOND_SPAD_ADDR(WGHT_DATA_ADDR),
-      .SECOND_SPAD_DATA(WGHT_DATA_DATA)
+      .SECOND_SPAD_DATA(WGHT_DATA_DATA),
+      .SPARSITY_EN     (SPARSITY_EN)
   ) wght_data_handler (
       .clk_i    (clk_i),
       .rst_ni   (rst_ni),
@@ -1965,7 +2013,8 @@ module PE #(
       .FIRST_SPAD_ADDR (IACT_ADDR_ADDR),
       .FIRST_SPAD_DATA (IACT_ADDR_DATA),
       .SECOND_SPAD_ADDR(IACT_DATA_ADDR),
-      .SECOND_SPAD_DATA(IACT_DATA_DATA)
+      .SECOND_SPAD_DATA(IACT_DATA_DATA),
+      .SPARSITY_EN     (SPARSITY_EN)
   ) iact_data_handler (
       .clk_i    (clk_i),
       .rst_ni   (rst_ni),

@@ -107,6 +107,7 @@ module OpenEye_FPGA #(
     parameter IS_TOPLEVEL   = 1,
     parameter SERIAL        = 1,
     parameter PARALLEL_MACS = 2,
+    parameter SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
 
     parameter ADDR_IACT_BITWIDTH = 4,
     parameter ADDR_WGHT_BITWIDTH = 8,
@@ -2872,6 +2873,7 @@ assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 2 == (iact
     OpenEye_Parallel #(
         .IS_TOPLEVEL(0),
         .SERIAL     (SERIAL),
+        .SPARSITY_EN(SPARSITY_EN),
 
         .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
         .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),

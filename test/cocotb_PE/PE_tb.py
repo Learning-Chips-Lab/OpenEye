@@ -131,6 +131,7 @@ sparse_iact = 0 # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
 wghtsize_x = 0  # Number of output filters
 wghtsize_y = 0  # Weights match input dimensions
 sparse_wght = 0 # Weight sparsity: 0 = no sparsity, 1 = fully sparse
+sparsity_en = 1 # Sparsity enable: 1 = sparse mode (default), 0 = dense mode
 
 @cocotb.test()
 async def start_test_pe(dut):
@@ -179,15 +180,17 @@ async def initialize_test_pe(dut):
     global wghtsize_x   # Number of output filters (M0 in Eyeriss V2 paper)
     global wghtsize_y   # Weights match input dimensions (iactsize_x * iactsize_y
     global sparse_wght  # Weight sparsity: 0 = no sparsity, 1 = fully sparse
+    global sparsity_en  # Sparsity enable: 1 = sparse mode, 0 = dense mode
 
     iactsize_x = int(os.environ["IACTSIZE_X"])
     iactsize_y = int(os.environ["IACTSIZE_Y"])
     wghtsize_x = int(os.environ["WGHTSIZE_X"])
     # if the SPARSE_IACT/WGHT values are floats between 0 and 1, we will use these,
     # if they are integers between 0 and 100, we will use these as percentages and convert
-    # them to floats, accordingly 
+    # them to floats, accordingly
     sparse_iact = float(os.environ["SPARSE_IACT"]) / 100 if float(os.environ["SPARSE_IACT"]) > 1 else float(os.environ["SPARSE_IACT"])
     sparse_wght = float(os.environ["SPARSE_WGHT"]) / 100 if float(os.environ["SPARSE_WGHT"]) > 1 else float(os.environ["SPARSE_WGHT"])
+    sparsity_en = int(os.environ.get("SPARSITY_EN", "1"))  # Default to 1 (sparse mode)
     np.random.seed(int(os.environ["SEED"]))
     wghtsize_y = iactsize_x * iactsize_y
 
@@ -309,6 +312,7 @@ async def send_iact(ptp, dut, data_array):
         True,  # SISD mode
         0,
         False,  # Ignore zeros
+        sparsity_en=sparsity_en  # Use global sparsity_en setting
     )
 
     dut._log.info("IACT DATA is %s", spad_data)
@@ -419,14 +423,17 @@ async def send_wght(ptp, dut, data_array):
     """
     
     # Generate SPAD format with packed mode (False = 2 values per word)
+    # For dense mode, offset is just bitwidth (no overhead)
+    offset_val = int(dut.DATA_WGHT_BITWIDTH.value) if sparsity_en == 0 else (int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value))
     spad_data = generate_spad(
         data_array,
         int(dut.WGHT_ADDR_ADDR.value),  # Convert LogicArray to int
         int(dut.WGHT_DATA_ADDR.value),  # Convert LogicArray to int
         int(dut.DATA_WGHT_BITWIDTH.value),  # Convert LogicArray to int
         False,  # Packed mode (not SISD)
-        int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value),  # Convert to int
-        True  # Ignore zeros
+        offset_val,  # Offset for packing
+        True,  # Ignore zeros
+        sparsity_en=sparsity_en  # Use global sparsity_en setting
     )
     print(spad_data)
     dut._log.info("WGHT DATA is %s", spad_data)
@@ -467,6 +474,7 @@ async def send_bias(ptp, dut, data_array):
         - Packed mode with 2 values per word
     """
     # Generate SPAD data without zero-skipping
+    # Psum doesn't use sparsity encoding, so sparsity_en doesn't affect it
     spad_data = generate_spad(
         data_array,
         int(dut.PSUM_ADDR.value),           # Convert LogicArray to int
@@ -474,7 +482,8 @@ async def send_bias(ptp, dut, data_array):
         int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
         True,                              # Packed mode
         int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
-        False                               # Don't ignore zeros
+        False,                              # Don't ignore zeros
+        sparsity_en=False  # Psum never uses sparsity encoding
     )
     dut._log.info("PSUM is %s", spad_data)
 
@@ -632,7 +641,7 @@ async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits,
     cocotb.start_soon(rtl_test_utils.set_input(ptp, data_signal, 0))
 
 def generate_spad(
-    array, addr_spad_words, data_spad_words, bitwidth, sisd, offset, ignore_zeros
+    array, addr_spad_words, data_spad_words, bitwidth, sisd, offset, ignore_zeros, sparsity_en=True
 ):
     """
     Converts 2D data arrays into compressed scratchpad (SPAD) format.
@@ -691,17 +700,29 @@ def generate_spad(
 
                 if sisd:
                     # SISD mode: one value per word
-                    # Encode: overhead in upper bits, value in lower bits
-                    data_spad_data[current_count] = temp_data + (overhead << bitwidth)
+                    if sparsity_en:
+                        # Sparse mode: Encode overhead in upper bits, value in lower bits
+                        data_spad_data[current_count] = temp_data + (overhead << bitwidth)
+                    else:
+                        # Dense mode: Just the raw value, no overhead
+                        data_spad_data[current_count] = temp_data
                 else:
                     # Packed mode: two values per word
-                    # Pack values at different bit offsets
-                    data_spad_data[int(math.floor(current_count / 2))] = data_spad_data[
-                        int(math.floor(current_count / 2))
-                    ] + (
-                        (temp_data + (overhead << bitwidth))
-                        << (offset * (current_count % 2))
-                    )
+                    if sparsity_en:
+                        # Sparse mode: Pack with overhead
+                        data_spad_data[int(math.floor(current_count / 2))] = data_spad_data[
+                            int(math.floor(current_count / 2))
+                        ] + (
+                            (temp_data + (overhead << bitwidth))
+                            << (offset * (current_count % 2))
+                        )
+                    else:
+                        # Dense mode: Pack without overhead
+                        data_spad_data[int(math.floor(current_count / 2))] = data_spad_data[
+                            int(math.floor(current_count / 2))
+                        ] + (
+                            temp_data << (bitwidth * (current_count % 2))
+                        )
 
                 current_count = current_count + 1
                 overhead = 0  # Reset zero counter after storing a value

@@ -135,6 +135,7 @@ module OpenEye_Parallel #(
     ///Set parameters
     parameter  IS_TOPLEVEL         = 1,
     parameter  SERIAL              = 0,
+    parameter  SPARSITY_EN         = 1,  // 1=sparse mode (default), 0=dense mode
     parameter  DATA_IACT_BITWIDTH  = 8,
     parameter  DATA_PSUM_BITWIDTH  = 20,
     parameter  DATA_WGHT_BITWIDTH  = 8,
@@ -754,6 +755,7 @@ module OpenEye_Parallel #(
         OpenEye_Cluster #(
             .IS_TOPLEVEL       (0),
             .SERIAL            (SERIAL),
+            .SPARSITY_EN       (SPARSITY_EN),
             .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
             .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
             .DATA_WGHT_BITWIDTH(DATA_WGHT_BITWIDTH),

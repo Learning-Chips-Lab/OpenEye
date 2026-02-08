@@ -132,6 +132,7 @@ module PE_cluster #(
     parameter  SERIAL                 = 1,
     parameter  PARALLEL_MACS          = 2,
     parameter  TOP_CLUSTER            = 1,
+    parameter  SPARSITY_EN            = 1,  // 1=sparse mode (default), 0=dense mode
     parameter  DATA_IACT_BITWIDTH     = 8,
     parameter  DATA_PSUM_BITWIDTH     = 20,
     parameter  DATA_WGHT_BITWIDTH     = 8,
@@ -250,6 +251,7 @@ module PE_cluster #(
             .IS_TOPLEVEL           (0),
             .SERIAL                (SERIAL),
             .PARALLEL_MACS         (PARALLEL_MACS),
+            .SPARSITY_EN           (SPARSITY_EN),
             .PE_X                  (i),
             .PE_Y                  (j),
             .DATA_IACT_BITWIDTH    (DATA_IACT_BITWIDTH),

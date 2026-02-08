@@ -85,6 +85,7 @@ module data_pipeline_iact #(
     parameter SECOND_SPAD_ADDR          = 16,
     parameter SECOND_SPAD_DATA          = 12,
     parameter SECOND_PAYLOAD_WIDTH      = 8,
+    parameter SPARSITY_EN               = 1,  // 1=sparse mode (default), 0=dense mode
     parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
     parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
     parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
