@@ -219,6 +219,7 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
         psum_array: Partial sum/bias initial values (numpy array)
 
     Test Flow:
+
         1. Start clock generation
         2. Reset all signals to known state
         3. Load input activations and weights in parallel
@@ -347,8 +348,9 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
         psum_array: Initial bias/partial sum values
 
     Algorithm:
-        Golden model computes: result[filter] = bias[filter] + sum(iact[i] * weight[filter][i])
-        Then validates each output from psum_out against expected values.
+
+        - Golden model computes: result[filter] = bias[filter] + sum(iact[i] * weight[filter][i])
+        - Then validates each output from psum_out against expected values.
 
     Raises:
         AssertionError: If any computed partial sum doesn't match the golden model
@@ -535,6 +537,7 @@ async def reset_all_signals(ptp, dut):
         dut: Device Under Test
 
     Reset Sequence:
+
         1. Set all inputs to 0 (including rst_ni active low reset)
         2. Wait 1 clock cycle
         3. Release reset (rst_ni = 1)
@@ -578,17 +581,17 @@ async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits,
         addr_bits: Number of transmission cycles (address space)
         trans_bits: Transmission bus width in bits
         data_bits: Width of each data word in bits
-        parallel: Packing mode
-            - True: Parallel mode - one word per cycle (position = cycle)
-            - False: Sequential mode - pack multiple words per transmission
+        parallel: Packing mode - True: Parallel mode (one word per cycle), False: Sequential mode (pack multiple words per transmission)
 
     Operation:
+
         - Calculates words_per_transmit = trans_bits / data_bits
         - Packs multiple words into single transmission by bit-shifting
         - Sends one transmission per clock cycle
         - Handles index out of bounds gracefully
 
     Example:
+
         If trans_bits=64, data_bits=16, then 4 words are packed per transmission
     """
     words_per_transmit = 0
@@ -645,27 +648,27 @@ def generate_spad(
         addr_spad_words: Size of address array
         data_spad_words: Size of data array
         bitwidth: Bit width of each data element
-        sisd: Packing mode
-            - True: SISD (Single Instruction Single Data) - one value per word
-            - False: Packed mode - two values per word
+        sisd: Packing mode - True: SISD (Single Instruction Single Data, one value per word), False: Packed mode (two values per word)
         offset: Bit offset for packed mode (where to place second value)
-        ignore_zeros: Enable zero-compression
-            - True: Skip zeros, encode skip count in overhead bits
-            - False: Include all values
+        ignore_zeros: Enable zero-compression - True: Skip zeros and encode skip count in overhead bits, False: Include all values
 
     Returns:
         Tuple of (addr_spad_data, data_spad_data)
+
             - addr_spad_data: Cumulative count of non-zero elements per row
             - data_spad_data: Non-zero values with overhead encoding
 
     Compression Format:
+
         - Non-zero values stored with overhead count in upper bits
         - overhead = number of consecutive zeros skipped before this value
         - Encoded as: (overhead << bitwidth) | value
         - In packed mode: two values concatenated with bit offset
 
     Example:
+
         Input: [[1, 0, 0, 2], [3, 4, 0, 5]] with ignore_zeros=True
+
         - Data encodes: 1 (0 skipped), 2 (2 skipped), 3 (0 skipped), etc.
         - Addresses track: [2, 5] (cumulative non-zero counts)
     """
@@ -732,6 +735,7 @@ def create_iact_wght_psum_arrays(dut):
 
     Returns:
         Tuple of (iacts, wghts, psums):
+
             - iacts: Input activations array, shape (iactsize_y, iactsize_x)
             - wghts: Weights array, shape (wghtsize_y, wghtsize_x)
             - psums: Partial sums/bias array, shape (wghtsize_x,)
@@ -742,7 +746,9 @@ def create_iact_wght_psum_arrays(dut):
         - This allows testing zero-skipping compression logic
 
     Example:
+
         Returns:
+
             - iacts: [[1, 2, 3]] (1 channel, 3 values)
             - wghts: [[1], [2], [3]] (3 weights, 1 filter)
             - psums: [1] (1 bias value)
