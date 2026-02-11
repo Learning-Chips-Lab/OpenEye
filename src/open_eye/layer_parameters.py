@@ -254,6 +254,8 @@ class LayerParameters(object):
         self.psum_delay = 0                    # Partial sum delay cycles
         self.fully_connected = 0               # Dense layer flag
         self.store_in_psum = 0                 # Store in psum memory flag
+        self.limit_increase = 0                # Amount of Iact Storages, that incrase adresses
+        self.limit_increase_mod = 0            # Module amount of Iact Storages, that incrase adresses
 
         # === Control Flags ===
         self.send_values_out = 1               # Send outputs to DRAM
@@ -324,7 +326,7 @@ class LayerParameters(object):
             # based on available PE resources divided by input width
             self.different_kernels_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1])
             # Limit to at most ceil(output_channels/8) kernels
-            self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.output_shape[3]/8))
+            self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.output_shape[3]/4))
             # Calculate how many Y lines can be processed per computation
             self.y_lines_per_calculation = math.floor((params.Clusters * params.PEs_X)/self.input_shape[1]/self.different_kernels_per_calculation)
             # Limit by available Y clusters and input height
@@ -445,15 +447,14 @@ class LayerParameters(object):
                                             for _ in range(params.PEs_Y)]
                                             for _ in range(params.Clusters_Y)]
                                             for _ in range(params.Clusters_X)]
-
+            amount_of_psum_per_cycle = min(params.Clusters_Y*params.Clusters_X*params.PEs_X,8)
             # === MASKING PHASE 1: Handle non-aligned output width ===
             # If output width doesn't evenly divide by PEs_X, some PEs will be unused
-            if(((self.output_shape[1]) % (params.PEs_X * params.Clusters_X)) != 0):
+            if(((self.output_shape[1]) % amount_of_psum_per_cycle) != 0):
                 # Calculate padding needed to align to PE arrays
-                self.add_up = (params.PEs_X * params.Clusters_X)- ((self.output_shape[1] * self.different_kernels_per_calculation) % (params.PEs_X * params.Clusters_X))
-                self.add_up = self.add_up % (params.PEs_X * params.Clusters_X)
-                if ((self.output_shape[1] % (params.PEs_X)) != 0):
-                    self.add_up = (params.PEs_X)- (self.output_shape[1] % params.PEs_X)
+                self.add_up = amount_of_psum_per_cycle - ((self.output_shape[1] * self.different_kernels_per_calculation) % amount_of_psum_per_cycle)
+                #if ((self.output_shape[1] % (params.PEs_X)) != 0):
+                #    self.add_up = (params.PEs_X)- (self.output_shape[1] % params.PEs_X)
                 x_count       = 0
                 kernel_number = 0
                 # Disable PEs in the partial row that exceed output width
@@ -470,6 +471,10 @@ class LayerParameters(object):
             else:
                 # Output width perfectly aligned - no padding needed
                 self.add_up = 0
+                if (self.iact_x_line_repetitions != 1) :
+                    self.add_up = (self.output_shape[1]) % (params.Clusters_Y * params.Clusters_X * params.PEs_X)
+                if (self.different_kernels_per_calculation != 1) :
+                    self.add_up = (self.output_shape[1]) % (params.Clusters_Y * params.Clusters_X * params.PEs_X)
             # === MASKING PHASE 2: Eliminate PEs beyond computation requirements ===
             # Calculate total number of X positions needed per computation cycle
             x_values_per_cycle = (self.calc_X + self.add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation
@@ -587,7 +592,7 @@ class LayerParameters(object):
             # Default quantization: factor=1, 9 bits
             for f in range(self.filters):
                 self.quantize[f][0] = 1
-                self.quantize[f][1] = 9
+                self.quantize[f][1] = 7
 
         # Store input activation dimensions
         self.iact_size_x = self.input_shape[1]
@@ -826,7 +831,7 @@ class LayerParameters(object):
             # CASE 1: All weights fit in PE memory
             if (self.filters//self.different_kernels_per_calculation <= 16) :
                 # Small number of filters: use all at once
-                self.used_psum_per_PE = self.filters//self.different_kernels_per_calculation
+                self.used_psum_per_PE = math.ceil(self.filters/self.different_kernels_per_calculation)
                 self.wght_transmissions_pe = math.ceil(self.channels/self.used_channels)
             else :
                 # Many filters: limit to 16 psums per PE, double weight transmissions
@@ -1275,6 +1280,9 @@ class LayerParameters(object):
             self.filters = layer.output.shape[3]
         except:
             self.filters = layer.output.shape[1]
+        for f in range(self.filters):
+            self.quantize[f][0] = 1
+            self.quantize[f][1] = 4
         self.fully_connected = 1
         self.output_cycles = 1
         self.y_lines_per_calculation = 1
@@ -1361,6 +1369,8 @@ class LayerParameters(object):
             self.needed_refreshes_mx[layer_repetition][0] = self.needed_refreshes_mx[layer_repetition][2] - self.needed_refreshes_mx[layer_repetition][1]
             self.needed_refreshes_mx[layer_repetition][0] = math.ceil(self.diff_iact_layer/params.Clusters_Y)
         self.psum_storage_cycles = self.needed_wght_transmissions
+        if (params.Clusters_Y == 1) :
+            self.psum_delay = 5
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))

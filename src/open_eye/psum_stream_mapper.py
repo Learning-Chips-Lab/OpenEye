@@ -119,7 +119,7 @@ class PsumStreamMapper(object):
         if (self.params.SERIAL) :
             # === SERIAL MODE: LINEAR STREAM GENERATION ===
             # Calculate how many times to replicate each bias value
-            block_length = (2 * self.params.Clusters)//self.layer_params.different_kernels_per_calculation
+            block_length = ((self.params.NUM_GLB_PSUM//2) * self.params.Clusters)//self.layer_params.different_kernels_per_calculation
             psum_stream = []
 
             # Generate bias stream for each output position and filter

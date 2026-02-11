@@ -42,10 +42,10 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("USE_SPARSE_IACTS", [0])
 @pytest.mark.parametrize("USE_SPARSE_WGHTS", [0])
 @pytest.mark.parametrize("USE_RANDOM_VALUES", [1])
-@pytest.mark.parametrize("CLUSTER_ROWS", [8])
+@pytest.mark.parametrize("CLUSTER_ROWS", [8,4,2,1])
 @pytest.mark.parametrize("NUM_GLB_IACT", [3])
-@pytest.mark.parametrize("NUM_GLB_PSUM", [4])
-@pytest.mark.parametrize("NUM_GLB_WGHT", [3])
+@pytest.mark.parametrize("NUM_GLB_PSUM", [4,2])
+@pytest.mark.parametrize("NUM_GLB_WGHT", [4,3])
 @pytest.mark.parametrize("LOGGER_LEVEL", [0])
 def test_single_conv_layer(
     NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE_X, INPUT_SIZE_Y, INPUT_CHANNELS,
@@ -55,8 +55,10 @@ def test_single_conv_layer(
 ):
     os.environ["NUM_GLB_IACT"] = str(NUM_GLB_IACT)
     os.environ["CLUSTER_ROWS"] = str(CLUSTER_ROWS)
+    os.environ["NUM_GLB_PSUM"] = str(NUM_GLB_PSUM)
+    os.environ["NUM_GLB_WGHT"] = str(NUM_GLB_WGHT)
 
-    layer = "Convolution"
+    layer = "MNIST"
     dut = 'OpenEye_FPGA'
     module = 'OpenEye_FPGA_tb'
     toplevel = dut
@@ -79,7 +81,7 @@ def test_single_conv_layer(
         toplevel=toplevel,
         module=module,
         sim_build=target_dir,
-        testcase='single_layer_test',
+        testcase='start_test_fpga',
         defines={"NO_TRACE": "TRUE"},
         force_compile=True,
         waves=True,
@@ -106,6 +108,7 @@ def test_single_conv_layer(
             "NUM_GLB_WGHT": str(NUM_GLB_WGHT),
             "NUM_GLB_PSUM": str(NUM_GLB_PSUM),
             "LOGGER_LEVEL": str(LOGGER_LEVEL),
+            "COCOTB_LOG_FILE_PATH": os.path.join(target_dir, "cocotb_sim.log"), # <--- Neu
             "COCOTB_TRACE": "1",
             #,"IVERILOG_DUMPER" : "fst"
         }

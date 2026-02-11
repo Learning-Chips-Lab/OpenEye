@@ -71,18 +71,6 @@ def create_layer(layer_mode, filters, kernelsize, inputsize_x, inputsize_y, stri
             y_axis   = math.ceil(y_axis/pool_y_axis)
             filters  = 32
             model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
-            
-        case "Pooling_OLD":
-            channels = 4
-            x_axis = 64
-            y_axis = 1
-            pool_x_axis = 64
-            pool_y_axis = 1
-            filters = 8
-            outputvalue = 20
-            model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
-            model.add(tf.keras.layers.MaxPooling2D(pool_size = (pool_x_axis, pool_y_axis), strides=(1,1), padding="valid"))
-            model.add(tf.keras.layers.Dense(input_shape=(filters), units=outputvalue, use_bias = True))
 
         case _:
             logger.error("Layer not detected!")
