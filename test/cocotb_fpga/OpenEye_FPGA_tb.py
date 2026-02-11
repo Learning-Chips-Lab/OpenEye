@@ -28,6 +28,11 @@ from cocotb.utils import get_sim_time
 from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout, SimTimeoutError
 
 class CustomSimTimeFormatter(logging.Formatter):
+    """Custom logging formatter that adds simulation time to log messages.
+    
+    This formatter extends the standard logging.Formatter to prepend simulation
+    time in nanoseconds to each log message.
+    """
     def format(self, record):
         # Zeit in ns holen
         try:
