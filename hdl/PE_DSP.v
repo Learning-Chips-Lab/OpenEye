@@ -461,7 +461,7 @@
 ///       reuse_adder_data_b2b: Adder 2 output → Adder 2 input (serial mode)
 ///
 
-module PE #(
+module PE_DSP #(
 
     parameter IS_TOPLEVEL = 1,
     parameter SERIAL      = 1,

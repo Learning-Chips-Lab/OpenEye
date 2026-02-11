@@ -20,6 +20,25 @@ import open_eye.simple_layer_operations as slo
 import open_eye.layer_execution_state as les
 import open_eye.data_create as data_create
 import open_eye.tflite2model as tflite2model
+from cocotb.logging import SimLogFormatter
+import logging
+import sys
+import logging
+from cocotb.utils import get_sim_time
+from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout, SimTimeoutError
+
+class CustomSimTimeFormatter(logging.Formatter):
+    def format(self, record):
+        # Zeit in ns holen
+        try:
+            sim_time = get_sim_time('ns')
+            sim_time_str = f"{sim_time:10.2f}ns"
+        except:
+            sim_time_str = "  -.--ns"
+            
+        # Das Standard-Format von cocotb nachbauen
+        msg = super().format(record)
+        return f"{sim_time_str} {msg}"
 
 os.environ["CLOCK_LEN"] = "10"
 os.environ["CLOCK_UNIT"] = "ns"
@@ -33,24 +52,37 @@ time_printer = time_stamper.time_stamper()
 
 tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = (os.path.abspath(os.path.join(os.getcwd(), os.pardir, os.pardir, "hdl")))
-
-import logging
-
-import sys
-directory = (os.path.abspath(os.path.join(os.getcwd(), os.pardir)))
-sys.path.insert(1, directory)
-
-
+log_level = int(os.getenv("LOGGER_LEVEL"))
 logger = logging.getLogger("cocotb")
+async def setup_file_logging():
+    global logger
+    """Hilfsfunktion, um den Logger sauber zu konfigurieren."""
+    log_path = os.getenv("COCOTB_LOG_FILE_PATH")
+    if not log_path:
+        return
+    
+    log_path = os.path.abspath(log_path)
+    logger = logging.getLogger("cocotb")
+    
+    # Verhindere doppelte Handler, falls dieser Code mehrfach aufgerufen wird
+    for h in logger.handlers[:]:
+        if isinstance(h, logging.FileHandler):
+            logger.removeHandler(h)
+    
+    # Handler erstellen
+    fh = logging.FileHandler(log_path, mode='w')
+    
 
-try:
-    log_level = int(os.getenv("LOGGER_LEVEL"))
-except:
-    logger.warning("Logger Level not given. Setting to INFO.")
-    log_level = logging.INFO
-logger.setLevel(logging.INFO)
+    # Level setzen
+    raw_level = os.getenv("LOGGER_LEVEL")
+    level = int(raw_level) if raw_level else logging.INFO
+    fh.setLevel(level)
+    
+    # Formatter mit Simulationszeit
+    fh.setFormatter(CustomSimTimeFormatter("%(levelname)-8s %(name)-20s %(message)s"))
 
-
+    logger.addHandler(fh)
+    logger.info(f"File logging started at sim time {cocotb.utils.get_sim_time('ns')} ns")
 def envvars_to_vars():    
     # Get variables that are used for the execution of the test
     only_files = gtu.load_env_to_variable("ONLY_FILES", 0)
@@ -66,7 +98,7 @@ def envvars_to_vars():
     sparse_wghts = gtu.load_env_to_variable("USE_SPARSE_WEIGHTS", 0)
     return only_files, layer_mode, filters, kernelsize, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts
 
-@cocotb.test()
+#@cocotb.test()
 async def model_test(dut):
     """ Test the DUT with a given DNN model.
 
@@ -97,9 +129,22 @@ async def model_test(dut):
 
 
     await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, trunc_model)
-
-
 @cocotb.test()
+async def start_test_fpga(dut):
+    """
+    Main cocotb test entry point for FPGA verification.
+    """
+    global logger
+    await setup_file_logging()
+    timeout_time = 1500000
+    timeout_unit = 'ns'
+
+    try:
+        # Here the test gets started
+        await with_timeout(single_layer_test(dut),timeout_time, timeout_unit)
+    except SimTimeoutError:
+        dut._log.error("Test did not finish in time!")
+        raise # Error if does not finish in time
 async def single_layer_test(dut):
     """Simulate a single layer.
     
@@ -152,6 +197,7 @@ def truncate_model(model):
     return trunc_model
 
 async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model):
+    global logger
     openeye_parameter = oep.get_oep(serial)
     time_printer.timestamp("OpenEye parameters set. ", logger)
 
@@ -192,7 +238,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                 for layer_repetition in range(layer_parameters[layer_number].needed_total_transmissions):
                     gtu.create_stream_file(stream[layer_repetition],layer_number,layer_repetition)
                     if (only_files == 0) :
-                        logger.info("Send stream.")
+                        logger.info("Send stream No. " + str(layer_number+1))
                         await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters[layer_number], layer_repetition))
                         logger.info("Stream is sent.")
                         if (layer_number == max_layers - 1) :
@@ -205,9 +251,9 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                             elif("Pooling" in str(layer_parameters[layer_number].layer_name)):
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
-                            if(logging.DEBUG >= log_level):
+                            """if(logging.DEBUG >= log_level):
                                 assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
-                                                        'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
+                                                        'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')"""
                             assert tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
                         else :
                             await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))

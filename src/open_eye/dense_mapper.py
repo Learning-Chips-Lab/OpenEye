@@ -519,7 +519,7 @@ class DenseMapper(LayerMapper):
             for cl_y in range(params.Clusters_Y):
                 for router in range(params.Psum_Routers):
                     # Determine routing mode based on PE usage pattern
-                    if((layer_params.ceil_used_PE_per_clm == 1)):
+                    if((layer_params.ceil_used_PE_per_clm == 1) | (params.Clusters_Y==1)):
                         # Single PE per cluster: direct output (no accumulation chain)
                         if(params.SERIAL):
                             line = line + (4 << (params.Psum_Router_Bits * router_cycle))

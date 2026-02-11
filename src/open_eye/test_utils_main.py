@@ -511,6 +511,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
     elements_per_calculation = layer_params.different_kernels_per_calculation * layer_params.y_lines_per_calculation * (layer_params.iact_size_x + layer_params.add_up)
     layer_es = les.LayerExecutionState()
     les.x_start = 0
+    array = []
     for refresh in range(layer_params.needed_refreshes_mx[0][0]) :
         les.y_start = ((refresh // filter_cycles) // layer_params.iact_x_line_repetitions) * layer_params.y_lines_per_calculation
         les.f_start = layer_params.used_psum_per_PE * (refresh % filter_cycles) * layer_params.different_kernels_per_calculation
@@ -531,6 +532,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                     for router in range(0, params.Psum_Routers, 2) :
                         partial_result_a, partial_result_b = gtu.to_twos_complement_string(0,20), gtu.to_twos_complement_string(0,20)
                         for counter in range(params.PARALLEL_MACS) :
+                                array.append((x_cor,y_cor,filter))
                                 if (kernel_counter < layer_params.different_kernels_per_calculation) :
                                     if((x_cor < layer_params.iact_size_x) & (y_cor < layer_params.iact_size_y)) :
                                         if (counter == 0):
@@ -540,10 +542,11 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                                         x_cor = x_cor + 1
                         file_dma_ref.write(partial_result_a + partial_result_b + "\n")
             filter = filter + 1
-        if (x_cor >= layer_params.iact_size_x) :
-            les.x_start = 0
-        else :
-            les.x_start = x_cor
+        if ((filter >= layer_params.filters)) :
+            if (x_cor >= layer_params.iact_size_x) :
+                les.x_start = 0
+            else :
+                les.x_start = x_cor
 
 def calculate_conv_parallel(params, layer_params, calculated_results, cluster_order, layer_repetition, file_dma_ref):
     coordinates = []
