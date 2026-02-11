@@ -33,11 +33,11 @@ clk_delay_unit_out = "ps"
 
 ##########################################################################################
 
-@pytest.mark.parametrize("IACTSIZE_X", [3])
-@pytest.mark.parametrize("IACTSIZE_Y", [4])
-@pytest.mark.parametrize("WGHTSIZE_X", [10])
-@pytest.mark.parametrize("SPARSE_IACT", [0,10,20,30,40,50])
-@pytest.mark.parametrize("SPARSE_WGHT", [0,10,20,30,40,50])
+@pytest.mark.parametrize("IACTSIZE_X", [(4),(3),(2),(1)])
+@pytest.mark.parametrize("IACTSIZE_Y", [(3),(2),(1)])
+@pytest.mark.parametrize("WGHTSIZE_X", [(12),(10),(8),(4)])
+@pytest.mark.parametrize("SPARSE_IACT", [(0), (10), (20), (30), (40), (50), (60), (70), (80), (90)])
+@pytest.mark.parametrize("SPARSE_WGHT", [(0)])
 @pytest.mark.parametrize("SEED", range(0, 128))
 def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,SEED,request):
     dut = 'PE'
@@ -60,21 +60,22 @@ def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,S
         force_compile=True,
         waves=True,
         simulator="icarus",
-        extra_env = {"CLOCK_LEN" : str(clk_cycle)
-                    ,"CLOCK_UNIT" : clk_cycle_unit
-                    ,"CLOCK_DELAY_INPUT" : str(clk_delay_in)
-                    ,"CLOCK_DELAY_UNIT_INPUT" : clk_delay_unit_in
-                    ,"CLOCK_DELAY_OUTPUT" : str(clk_delay_out)
-                    ,"CLOCK_DELAY_UNIT_OUTPUT" : clk_delay_unit_out
-                    ,"IACTSIZE_X" : str(IACTSIZE_X)
-                    ,"IACTSIZE_Y" : str(IACTSIZE_Y)
-                    ,"WGHTSIZE_X" : str(WGHTSIZE_X)
-                    ,"WGHTSIZE_Y" : str(IACTSIZE_X*IACTSIZE_Y)
-                    ,"SPARSE_IACT" : str(SPARSE_IACT)
-                    ,"SEED" : str(SEED)
+        extra_env = {"CLOCK_LEN" : str(clk_cycle),
+                    "CLOCK_UNIT" : clk_cycle_unit,
+                    "CLOCK_DELAY_INPUT" : str(clk_delay_in),
+                    "CLOCK_DELAY_UNIT_INPUT" : clk_delay_unit_in,
+                    "CLOCK_DELAY_OUTPUT" : str(clk_delay_out),
+                    "CLOCK_DELAY_UNIT_OUTPUT" : clk_delay_unit_out,
+                    "IACTSIZE_X" : str(IACTSIZE_X),
+                    "IACTSIZE_Y" : str(IACTSIZE_Y),
+                    "WGHTSIZE_X" : str(WGHTSIZE_X),
+                    "WGHTSIZE_Y" : str(IACTSIZE_X*IACTSIZE_Y),
+                    "SPARSE_IACT" : str(SPARSE_IACT),
+                    "SPARSE_WGHT" : str(SPARSE_WGHT),
+                                        ,"SEED" : str(SEED)
                     ,"COCOTB_TRACE": "1"
                     ,"SPARSE_WGHT" : str(SPARSE_WGHT)}
     )
 
 if __name__ == '__main__':
-    test_single_pe(4,3,12,0,0,request=pytest.fixture(lambda: None)())
+    test_single_pe(IACTSIZE_X=6, IACTSIZE_Y=2, WGHTSIZE_X=4, SPARSE_IACT=0, SPARSE_WGHT=0, SEED=0, request=pytest.fixture(lambda: None)())
