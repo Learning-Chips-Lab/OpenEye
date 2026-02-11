@@ -1,3 +1,4 @@
+(PE_cluster)=
 # Processing Element (PE) Cluster Architecture
 
 ## Overview
