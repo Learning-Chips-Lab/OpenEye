@@ -364,17 +364,17 @@ async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits,
         addr_bits: Number of transmission cycles (address space)
         trans_bits: Transmission bus width in bits
         data_bits: Width of each data word in bits
-        parallel: Packing mode
-            - True: Parallel mode - one word per cycle (position = cycle)
-            - False: Sequential mode - pack multiple words per transmission
+        parallel: Packing mode - True: Parallel mode (one word per cycle), False: Sequential mode (pack multiple words per transmission)
 
     Operation:
+
         - Calculates words_per_transmit = trans_bits / data_bits
         - Packs multiple words into single transmission by bit-shifting
         - Sends one transmission per clock cycle
         - Handles index out of bounds gracefully
 
     Example:
+
         If trans_bits=64, data_bits=16, then 4 words are packed per transmission
     """
     words_per_transmit = 0
@@ -431,27 +431,27 @@ def generate_spad(
         addr_spad_words: Size of address array
         data_spad_words: Size of data array
         bitwidth: Bit width of each data element
-        sisd: Packing mode
-            - True: SISD (Single Instruction Single Data) - one value per word
-            - False: Packed mode - two values per word
+        sisd: Packing mode - True: SISD (Single Instruction Single Data, one value per word), False: Packed mode (two values per word)
         offset: Bit offset for packed mode (where to place second value)
-        ignore_zeros: Enable zero-compression
-            - True: Skip zeros, encode skip count in overhead bits
-            - False: Include all values
+        ignore_zeros: Enable zero-compression - True: Skip zeros and encode skip count in overhead bits, False: Include all values
 
     Returns:
         Tuple of (addr_spad_data, data_spad_data)
-            - addr_spad_data: Cumulative count of non-zero elements per row
-            - data_spad_data: Non-zero values with overhead encoding
+
+        - addr_spad_data: Cumulative count of non-zero elements per row
+        - data_spad_data: Non-zero values with overhead encoding
 
     Compression Format:
+
         - Non-zero values stored with overhead count in upper bits
         - overhead = number of consecutive zeros skipped before this value
         - Encoded as: (overhead << bitwidth) | value
         - In packed mode: two values concatenated with bit offset
 
     Example:
+
         Input: [[1, 0, 0, 2], [3, 4, 0, 5]] with ignore_zeros=True
+
         - Data encodes: 1 (0 skipped), 2 (2 skipped), 3 (0 skipped), etc.
         - Addresses track: [2, 5] (cumulative non-zero counts)
     """

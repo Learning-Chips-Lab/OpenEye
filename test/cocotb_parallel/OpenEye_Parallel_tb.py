@@ -38,8 +38,8 @@ hdl_dir = (os.path.abspath(os.path.join(os.getcwd(), os.pardir, os.pardir, "hdl"
 import logging
 
 import sys
-directory = (os.path.abspath(os.path.join(os.getcwd(), os.pardir)))
-sys.path.insert(1, directory)
+parent_directory = (os.path.abspath(os.path.join(os.getcwd(), os.pardir)))
+sys.path.insert(1, parent_directory)
 
 
 logger = logging.getLogger("cocotb")

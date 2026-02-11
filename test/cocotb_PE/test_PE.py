@@ -72,9 +72,8 @@ def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,S
                     "WGHTSIZE_Y" : str(IACTSIZE_X*IACTSIZE_Y),
                     "SPARSE_IACT" : str(SPARSE_IACT),
                     "SPARSE_WGHT" : str(SPARSE_WGHT),
-                                        ,"SEED" : str(SEED)
-                    ,"COCOTB_TRACE": "1"
-                    ,"SPARSE_WGHT" : str(SPARSE_WGHT)}
+                    "SEED" : str(SEED),
+                    "COCOTB_TRACE": "1"}
     )
 
 if __name__ == '__main__':
