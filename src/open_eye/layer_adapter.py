@@ -150,13 +150,38 @@ class KerasLayerAdapter:
     the same interface as Keras layers, allowing the existing LayerParameters
     code to work without modification.
 
-    The adapter provides:
-    - .name attribute (layer type)
-    - .input and .output with .shape attributes
-    - .kernel and .weights attributes (for Conv/Dense layers)
-    - .kernel_size, .strides, .filters attributes (for Conv layers)
-    - .get_weights() method
-    - Quantization parameters if available
+    The adapter provides all attributes required by LayerParameters:
+
+    **Common attributes (all layer types):**
+    - .name (str): Layer type name ('conv2d', 'max_pooling2d', 'dense')
+    - .input: Input tensor adapter with .shape attribute
+    - .output: Output tensor adapter with .shape attribute
+
+    **Conv2D layers:**
+    - .kernel: Weight tensor adapter (4D array)
+    - .weights: List [weights, bias]
+    - .kernel_size: Tuple (height, width)
+    - .strides: Tuple (stride_h, stride_w)
+    - .filters: Number of output filters
+    - .padding: Padding mode ('same' or 'valid')
+    - .relu: ReLU activation flag
+    - .batchnorm: Batch normalization flag
+    - .quantization_factor: Quantization scale
+    - .zero_point: Quantization zero point
+    - .store_in_psum: Partial sum storage flag
+    - .skip_psum: Skip partial sum flag
+
+    **Dense layers:**
+    - .kernel: Weight matrix adapter
+    - .weights: List [weights, bias]
+    - .units: Number of output units
+    - .use_bias: Whether bias is used
+    - .quantization_factor: Quantization scale
+    - .zero_point: Quantization zero point
+
+    **MaxPooling2D layers:**
+    - .pool_size: Tuple (pool_h, pool_w)
+    - .strides: Tuple (stride_h, stride_w)
 
     Attributes:
         _layer: The underlying layer object (from PyTorch/ONNX)
@@ -171,7 +196,7 @@ class KerasLayerAdapter:
 
         Args:
             layer: Layer object from PyTorch/ONNX model
-                (e.g., PyTorchConv2d, ONNXConv2d, etc.)
+                (e.g., PyTorchConv2d, ONNXConv2d, TFLite_conv2d, etc.)
         """
         self._layer = layer
 
@@ -179,7 +204,9 @@ class KerasLayerAdapter:
         name_mapping = {
             'conv2d': 'conv2d',
             'max_pooling2d': 'max_pooling2d',
-            'dense': 'dense'
+            'dense': 'dense',
+            'flatten': 'flatten',
+            'relu': 'relu'
         }
         self.name = name_mapping.get(layer.name, layer.name)
 
@@ -202,16 +229,15 @@ class KerasLayerAdapter:
 
             # Conv2D-specific attributes
             if layer.name == 'conv2d':
-                self.kernel_size = layer.kernel_size
+                # Core Conv2D attributes (required by LayerParameters)
+                self.kernel_size = layer.kernel_size if hasattr(layer, 'kernel_size') else (3, 3)
                 self.strides = layer.strides if hasattr(layer, 'strides') else (1, 1)
-                self.filters = layer.filters
-                self.padding = 'same'  # Default assumption
+                self.filters = layer.filters if hasattr(layer, 'filters') else weights_array.shape[-1]
+                self.padding = 'same'  # Default assumption (most common for OpenEye)
 
-                # Check for ReLU and BatchNorm
-                if hasattr(layer, 'relu'):
-                    self.relu = layer.relu
-                if hasattr(layer, 'batchnorm'):
-                    self.batchnorm = layer.batchnorm
+                # Activation and normalization flags
+                self.relu = layer.relu if hasattr(layer, 'relu') else False
+                self.batchnorm = layer.batchnorm if hasattr(layer, 'batchnorm') else False
 
             # Dense-specific attributes
             elif layer.name == 'dense':
@@ -231,20 +257,35 @@ class KerasLayerAdapter:
                 self.skip_psum = layer.skip_psum
 
         else:
-            # Layers without weights (e.g., MaxPooling, ReLU)
+            # Layers without weights (e.g., MaxPooling, ReLU, Flatten)
             self.weights = []
 
             # MaxPooling-specific attributes
             if layer.name == 'max_pooling2d':
-                # Infer pool size from shape change
-                if len(layer.input_shape) >= 3 and len(layer.output_shape) >= 3:
+                # Check if layer has explicit pool_size attribute
+                if hasattr(layer, 'pool_size'):
+                    self.pool_size = layer.pool_size
+                    self.strides = layer.strides if hasattr(layer, 'strides') else layer.pool_size
+                # Otherwise infer pool size from shape change
+                elif len(layer.input_shape) >= 3 and len(layer.output_shape) >= 3:
                     pool_h = layer.input_shape[1] // layer.output_shape[1] if layer.output_shape[1] > 0 else 2
                     pool_w = layer.input_shape[2] // layer.output_shape[2] if layer.output_shape[2] > 0 else 2
                     self.pool_size = (pool_h, pool_w)
                     self.strides = (pool_h, pool_w)
                 else:
+                    # Fallback to default 2x2 pooling
                     self.pool_size = (2, 2)
                     self.strides = (2, 2)
+
+            # Flatten layer
+            elif layer.name == 'flatten':
+                # Flatten doesn't need special attributes
+                pass
+
+            # ReLU or other activation layers
+            elif layer.name in ['relu', 'activation']:
+                # Activation layers don't need special attributes
+                pass
 
     def get_weights(self):
         """Return the layer weights in Keras format.

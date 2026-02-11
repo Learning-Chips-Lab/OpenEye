@@ -32,6 +32,7 @@ from pathlib import Path
 from io import BytesIO
 import tarfile
 import requests
+from open_eye.base_model import OpenEyeBaseModel
 
 class TFLite_layer(object):
     """Base class for TensorFlow Lite layers in OpenEye.
@@ -187,21 +188,27 @@ class TFLite_dense(TFLite_layer):
         self.quantization_factor = qf
         self.zero_point = zp
 
-class TFLite_model(object):
+class TFLite_model(OpenEyeBaseModel):
     """Container class for TensorFlow Lite models in OpenEye.
 
     This class manages a collection of neural network layers and provides
     methods to add different types of layers. It serves as the high-level
     representation of a complete neural network model.
 
+    Inherits from OpenEyeBaseModel to provide:
+    - input_shape property
+    - output_shape property
+    - is_quantized property
+    - Common model inspection methods
+
     Attributes:
         layers (list): List of layer objects in the model
     """
-    layers = []
-    
+
     def __init__(self):
         """Initialize an empty TFLite model."""
-        pass
+        super().__init__(framework='tflite')
+        self.layers = []
 
     def add_conv2d(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu=None, bn=None):
         """Add a 2D convolutional layer to the model.

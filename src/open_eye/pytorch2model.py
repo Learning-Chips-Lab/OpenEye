@@ -36,6 +36,7 @@ import numpy as np
 from pathlib import Path
 import math
 import logging
+from open_eye.base_model import OpenEyeBaseModel
 
 logger = logging.getLogger("cocotb")
 
@@ -187,7 +188,7 @@ class PyTorchLinear(PyTorchLayer):
         self.zero_point = zp
 
 
-class PyTorchModel(object):
+class PyTorchModel(OpenEyeBaseModel):
     """Container class for PyTorch models in OpenEye.
 
     This class manages a collection of neural network layers and provides
@@ -195,13 +196,19 @@ class PyTorchModel(object):
     representation of a complete neural network model compatible with
     the existing OpenEye infrastructure.
 
+    Inherits from OpenEyeBaseModel to provide:
+    - input_shape property
+    - output_shape property
+    - is_quantized property
+    - Common model inspection methods
+
     Attributes:
         layers (list): List of layer objects in the model
     """
-    layers = []
 
     def __init__(self):
         """Initialize an empty PyTorch model."""
+        super().__init__(framework='pytorch')
         self.layers = []
 
     def add_conv2d(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu=None, bn=None):
