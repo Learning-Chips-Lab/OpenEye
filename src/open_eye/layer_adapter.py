@@ -241,7 +241,7 @@ class KerasLayerAdapter:
 
             # Dense-specific attributes
             elif layer.name == 'dense':
-                self.units = layer.output_shape[-1] if layer.output_shape else 0
+                self.units = layer.output_shape[-1] if layer.output_shape is not None else 0
                 self.use_bias = bias_array is not None
 
             # Quantization parameters

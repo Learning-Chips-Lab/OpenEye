@@ -400,7 +400,7 @@ def create_model_from_tflite(use_random=False, tflite_model_path=None, model_nam
                         mult, shift = quantize_scale(qf_i * qf_n / qf_o)
                         qf.append((mult, shift+31))
 
-                    # tflite_model.add_dense(idx_in, idx_out, input_shape, output_shape, w, b, qf, zp_o)
+                    tflite_model.add_dense(idx_in, idx_out, input_shape, output_shape, w, b, qf, zp_o)
 
                 case default:
                     pass
