@@ -294,3 +294,7 @@ dma_storage.v
 *.xise
 *.jou
 synth_*
+
+# demo data
+doc/demo_notebooks/backup/*
+doc/demo_notebooks/mnist_pytorch_cocotb/*
