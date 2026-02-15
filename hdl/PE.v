@@ -473,6 +473,7 @@ module PE #(
     parameter integer PARALLEL_MACS = 2,
 
     parameter integer SPARSITY_EN = 1,  // 1=sparse mode (default), 0=dense mode
+    parameter integer USE_DSP     = 0,  // 0=standard multiplier+adder (default), 1=DSP48 slice optimization
 
     parameter integer DATA_IACT_BITWIDTH     = 8,
     parameter integer DATA_WGHT_BITWIDTH     = 8,
@@ -2041,66 +2042,128 @@ module PE #(
   // ============================================================================
   // Computational Units (Multipliers and Adders)
   // ============================================================================
+  // USE_DSP parameter controls MAC implementation:
+  //   USE_DSP = 0: Standard multiplier + adder pipeline (fabric-based, flexible)
+  //   USE_DSP = 1: DSP48 slice optimization (integrated MAC, FPGA-optimized)
 
-  // Multiplier 1: First parallel MAC unit
-  // Multiplies weight_1 * input_activation (fixed-point arithmetic)
-  multiplier #(
-      .DATA_WIDTH_FAC1(DATA_WGHT_BITWIDTH),
-      .DATA_WIDTH_FAC2(DATA_IACT_BITWIDTH),
-      .DATA_WIDTH_PROD(DATA_PSUM_BITWIDTH)
-  ) multiplier_1 (
-      .clk_i          (clk_i),
-      .rst_ni         (rst_ni),
-      .multiplier_en_i(values_valid),
-      .factor_1       (mult_1_fac_1),
-      .factor_2       (mult_1_fac_2),
-      .product        (mult_1_o_w),
-      .fraction_bit_i (fraction_bit_reg)
-  );
+  generate
+    if (USE_DSP == 0) begin : gen_standard_mac
+      // ========================================================================
+      // Standard Implementation: Separate Multipliers and Adders
+      // ========================================================================
 
-  // Multiplier 2: Second parallel MAC unit
-  // Multiplies weight_2 * input_activation (same iact as multiplier 1)
-  multiplier #(
-      .DATA_WIDTH_FAC1(DATA_WGHT_BITWIDTH),
-      .DATA_WIDTH_FAC2(DATA_IACT_BITWIDTH),
-      .DATA_WIDTH_PROD(DATA_PSUM_BITWIDTH)
-  ) multiplier_2 (
-      .clk_i          (clk_i),
-      .rst_ni         (rst_ni),
-      .multiplier_en_i(values_valid),
-      .factor_1       (mult_2_fac_1),
-      .factor_2       (mult_2_fac_2),
-      .product        (mult_2_o_w),
-      .fraction_bit_i (fraction_bit_reg)
-  );
+      // Multiplier 1: First parallel MAC unit
+      // Multiplies weight_1 * input_activation (fixed-point arithmetic)
+      multiplier #(
+          .DATA_WIDTH_FAC1(DATA_WGHT_BITWIDTH),
+          .DATA_WIDTH_FAC2(DATA_IACT_BITWIDTH),
+          .DATA_WIDTH_PROD(DATA_PSUM_BITWIDTH)
+      ) multiplier_1 (
+          .clk_i          (clk_i),
+          .rst_ni         (rst_ni),
+          .multiplier_en_i(values_valid),
+          .factor_1       (mult_1_fac_1),
+          .factor_2       (mult_1_fac_2),
+          .product        (mult_1_o_w),
+          .fraction_bit_i (fraction_bit_reg)
+      );
 
-  // Adder 1: Accumulator for MAC 1
-  // Adds multiplier 1 output to partial sum (for accumulation)
-  adder #(
-      .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
-  ) adder_1 (
-      .clk_i      (clk_i),
-      .rst_ni     (rst_ni),
-      .summand_1_i(adder_1_summand_1),
-      .summand_2_i(adder_1_summand_2),
-      .sum_o      (adder_1_o_w),
-      .adder_en_i (adder_1_en)
-  );
+      // Multiplier 2: Second parallel MAC unit
+      // Multiplies weight_2 * input_activation (same iact as multiplier 1)
+      multiplier #(
+          .DATA_WIDTH_FAC1(DATA_WGHT_BITWIDTH),
+          .DATA_WIDTH_FAC2(DATA_IACT_BITWIDTH),
+          .DATA_WIDTH_PROD(DATA_PSUM_BITWIDTH)
+      ) multiplier_2 (
+          .clk_i          (clk_i),
+          .rst_ni         (rst_ni),
+          .multiplier_en_i(values_valid),
+          .factor_1       (mult_2_fac_1),
+          .factor_2       (mult_2_fac_2),
+          .product        (mult_2_o_w),
+          .fraction_bit_i (fraction_bit_reg)
+      );
 
-  // Adder 2: Accumulator for MAC 2
-  // Adds multiplier 2 output to partial sum (for accumulation)
-  adder #(
-      .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
-  ) adder_2 (
-      .clk_i      (clk_i),
-      .rst_ni     (rst_ni),
-      .summand_1_i(adder_2_summand_1),
-      .summand_2_i(adder_2_summand_2),
-      .sum_o      (adder_2_o_w),
-      .adder_en_i (adder_2_en)
-  );
+      // Adder 1: Accumulator for MAC 1
+      // Adds multiplier 1 output to partial sum (for accumulation)
+      adder #(
+          .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
+      ) adder_1 (
+          .clk_i      (clk_i),
+          .rst_ni     (rst_ni),
+          .summand_1_i(adder_1_summand_1),
+          .summand_2_i(adder_1_summand_2),
+          .sum_o      (adder_1_o_w),
+          .adder_en_i (adder_1_en)
+      );
+
+      // Adder 2: Accumulator for MAC 2
+      // Adds multiplier 2 output to partial sum (for accumulation)
+      adder #(
+          .DATA_WIDTH_SUM(DATA_PSUM_BITWIDTH)
+      ) adder_2 (
+          .clk_i      (clk_i),
+          .rst_ni     (rst_ni),
+          .summand_1_i(adder_2_summand_1),
+          .summand_2_i(adder_2_summand_2),
+          .sum_o      (adder_2_o_w),
+          .adder_en_i (adder_2_en)
+      );
+
+    end else begin : gen_dsp_mac
+      // ========================================================================
+      // DSP48 Implementation: Integrated Multiply-Accumulate Units
+      // ========================================================================
+
+      // DSP Unit 1: First parallel MAC unit with integrated DSP48 slice
+      // Performs multiply-accumulate: (weight_1 * iact) + psum in single DSP slice
+      dsp_unit #(
+          .DATA_WIDTH_FAC1(DATA_WGHT_BITWIDTH),
+          .DATA_WIDTH_FAC2(DATA_IACT_BITWIDTH),
+          .DATA_WIDTH_PROD(DATA_PSUM_BITWIDTH),
+          .DATA_WIDTH_ADDI(DATA_PSUM_BITWIDTH)
+      ) dsp_unit_1 (
+          .clk_i      (clk_i),
+          .rst_ni     (rst_ni),
+          .multi_en_i (values_valid),
+          .adder_en_i (adder_1_en),
+          .adder_sel_i(psum_select),
+          .a_in       (mult_1_fac_1),
+          .b_in       (mult_1_fac_2),
+          .c_in       (adder_1_summand_1),
+          .d_in       (psum_data_1_delay[DATA_PSUM_BITWIDTH-1:0]),
+          .p_out      (adder_1_o_w)
+      );
+
+      // DSP Unit 2: Second parallel MAC unit with integrated DSP48 slice
+      // Performs multiply-accumulate: (weight_2 * iact) + psum in single DSP slice
+      dsp_unit #(
+          .DATA_WIDTH_FAC1(DATA_WGHT_BITWIDTH),
+          .DATA_WIDTH_FAC2(DATA_IACT_BITWIDTH),
+          .DATA_WIDTH_PROD(DATA_PSUM_BITWIDTH),
+          .DATA_WIDTH_ADDI(DATA_PSUM_BITWIDTH)
+      ) dsp_unit_2 (
+          .clk_i      (clk_i),
+          .rst_ni     (rst_ni),
+          .multi_en_i (values_valid),
+          .adder_en_i (adder_2_en),
+          .adder_sel_i(psum_select),
+          .a_in       (mult_2_fac_1),
+          .b_in       (mult_2_fac_2),
+          .c_in       (adder_2_summand_1),
+          .d_in       (psum_data_2_delay[DATA_PSUM_BITWIDTH-1:0]),
+          .p_out      (adder_2_o_w)
+      );
+
+      // Note: In DSP mode, mult_1_o_w and mult_2_o_w are not used
+      // The DSP units output directly to adder_1_o_w and adder_2_o_w
+      assign mult_1_o_w = {DATA_PSUM_BITWIDTH{1'b0}};
+      assign mult_2_o_w = {DATA_PSUM_BITWIDTH{1'b0}};
+    end
+  endgenerate
 
   // Serial mode only: Adder 3 combines outputs from adders 1 and 2
+  // This is common to both USE_DSP=0 and USE_DSP=1 modes
   if (SERIAL) begin : gen_serial_adder
     // Adder 3: Combines partial sums from both MACs (serial mode only)
     adder #(
