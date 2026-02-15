@@ -22,6 +22,7 @@ The OpenEye architecture is based on a hierachical structure, with the following
     PE_cluster
     sparsity_modes
     software_integration
+    dma_regmap
     configuration
 
 
