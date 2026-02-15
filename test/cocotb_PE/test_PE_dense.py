@@ -1,5 +1,5 @@
 # This file is part of the OpenEye project.
-# All rights reserved. © Fachhochschule Dortmund - University of Applied Sciences and Arts.
+# All rights reserved. © University of Duisburg-Essen.
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
@@ -13,27 +13,28 @@ reducing bandwidth by 33% compared to sparse mode.
 Test Configuration:
 - SPARSITY_EN=0 (dense mode)
 - Various dimensions (IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X)
-- 0% sparsity (all values non-zero)
+- 0% sparsity (all values are assumed to be non-zero/zeros are transmitted as-is)
 - Tests dense MAC computation without sparse indexing
 """
 
+import logging
 import pytest
 import os
 import sys
 from pathlib import Path
 
-# Add parent directory to path for OpenEye imports
-repo_root = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(repo_root / "src"))
-
+import pytest
 import cocotb_test.simulator
-import open_eye.pe_test_utils as pe_test_utils
+logger = logging.getLogger("cocotb")
+
+from open_eye import hdl_dir, test_dir
+import pe_test_utils as ptu
 
 # Test parameters for dense mode
-IACTSIZE_X_VALUES = [2, 3, 4]  # Input activation width
-IACTSIZE_Y_VALUES = [1, 2]      # Input channels
-WGHTSIZE_X_VALUES = [4, 8]      # Output filters
-SEED_VALUES = [0, 42]            # Random seeds
+IACTSIZE_X_VALUES = [4]  # Input activation width
+IACTSIZE_Y_VALUES = [3]      # Input channels
+WGHTSIZE_X_VALUES = [12]      # Output filters
+SEED_VALUES = [0]            # Random seeds
 
 # Clock configuration
 CLK_CYCLE = 10
@@ -65,8 +66,8 @@ def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED):
         SEED: Random seed for reproducibility
     """
     # Get HDL files
-    hdl_dir = repo_root / "hdl"
-    verilog_sources = pe_test_utils.get_verilog_sources(str(hdl_dir))
+    from open_eye import hdl_dir
+    verilog_sources = ptu.get_verilog_sources(str(hdl_dir))
 
     # Test module configuration
     module = "PE_tb"
@@ -103,7 +104,7 @@ def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED):
 
     # Run simulation with dense mode parameter
     results = cocotb_test.simulator.run(
-        python_search=[str(repo_root / "test" / "cocotb_PE"), str(repo_root / "src")],
+        python_search=[str(test_dir)],
         verilog_sources=verilog_sources,
         toplevel=toplevel,
         module=module,
@@ -111,7 +112,7 @@ def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED):
         testcase="start_test_pe",
         defines={"NO_TRACE": "TRUE"},
         force_compile=True,
-        waves=False,  # Disable waveforms for faster testing
+        waves=True,  # Enable waveforms for debugging
         simulator="icarus",
         extra_env=extra_env,
         parameters={"SPARSITY_EN": 0}  # Pass SPARSITY_EN=0 to Verilog

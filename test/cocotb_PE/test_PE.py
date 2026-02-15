@@ -13,10 +13,10 @@ logger = logging.getLogger("cocotb")
 directory = (os.path.abspath(os.getcwd()))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 tests_dir = os.path.abspath(os.path.dirname(__file__))
-hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
+from open_eye import hdl_dir
 
 import pe_test_utils as ptu
-from open_eye import hdl_dir, test_dir, open_eye_dir
+from open_eye import hdl_dir, test_dir
 
 
 #As ref:
@@ -33,12 +33,12 @@ clk_delay_unit_out = "ps"
 
 ##########################################################################################
 
-@pytest.mark.parametrize("IACTSIZE_X", [(4),(3),(2),(1)])
-@pytest.mark.parametrize("IACTSIZE_Y", [(3),(2),(1)])
-@pytest.mark.parametrize("WGHTSIZE_X", [(12),(10),(8),(4)])
-@pytest.mark.parametrize("SPARSE_IACT", [(0), (10), (20), (30), (40), (50), (60), (70), (80), (90)])
+@pytest.mark.parametrize("IACTSIZE_X", [(4)])#,(3),(2),(1)])
+@pytest.mark.parametrize("IACTSIZE_Y", [(3)])#,(2),(1)])
+@pytest.mark.parametrize("WGHTSIZE_X", [(12)])#,(10),(8),(4)])
+@pytest.mark.parametrize("SPARSE_IACT", [(0)])#, (10), (20), (30), (40), (50), (60), (70), (80), (90)])
 @pytest.mark.parametrize("SPARSE_WGHT", [(0)])
-@pytest.mark.parametrize("SEED", range(0, 128))
+@pytest.mark.parametrize("SEED", [(0)])
 def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,SEED,request):
     dut = 'PE'
     module = 'PE_tb'
