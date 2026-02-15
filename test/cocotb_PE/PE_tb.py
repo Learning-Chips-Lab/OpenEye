@@ -159,6 +159,7 @@ async def start_test_pe(dut):
     except SimTimeoutError:
         dut._log.error("Test did not finish in time!")
         raise # Error if does not finish in time
+
 async def initialize_test_pe(dut):
     """
     Configures test parameters, generates test data, and launches the main test
@@ -173,12 +174,12 @@ async def initialize_test_pe(dut):
         - 1 output filter
         - No sparsity (all values are non-zero)
     """
-    # Configure test dimensions
-    global iactsize_x   # Number of input activation values (spatial dimension, C0 in Eyeriss V2 paper)
-    global iactsize_y   # Number of input channels (number of C0*U blocks in Eyeriss V2 paper, U=1 here)
+    # Configure test dimensions (Eyeriss v2 terminology from paper 1807.07928v2)
+    global iactsize_x   # Filter width (S in Eyeriss v2) - spatial dimension of sliding window
+    global iactsize_y   # Input channels per PE (C0 in Eyeriss v2)
     global sparse_iact  # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
-    global wghtsize_x   # Number of output filters (M0 in Eyeriss V2 paper)
-    global wghtsize_y   # Weights match input dimensions (iactsize_x * iactsize_y
+    global wghtsize_x   # Output channels per PE (M0 in Eyeriss v2)
+    global wghtsize_y   # Total weights per output channel = iactsize_x * iactsize_y (S * C0)
     global sparse_wght  # Weight sparsity: 0 = no sparsity, 1 = fully sparse
     global sparsity_en  # Sparsity enable: 1 = sparse mode, 0 = dense mode
 
@@ -273,7 +274,7 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
     compute_cycles = await timing_thread
 
     # Start output validation (compares against golden model)
-    #cocotb.start_soon(get_psum(dut, iacts_array, wghts_array, psum_array))
+    cocotb.start_soon(get_psum(dut, iacts_array, wghts_array, psum_array))
 
     # Wait for output to complete
     await FallingEdge(dut.psum_enable_o)
@@ -343,24 +344,30 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
     Validates PE output partial sums against a software golden model.
 
     Computes the expected multiply-accumulate results in software and compares
-    them against the hardware outputs from the PE's two parallel adders.
+    them against the hardware outputs from the PE module.
+
+    Architecture (based on Eyeriss v2 paper 1807.07928v2):
+        The PE processes a sliding window computation where:
+        - Input: C0 channels * S spatial positions = (iactsize_y * iactsize_x) activations
+        - Weights: M0 output channels * (C0 * S) weights = (wghtsize_x * wghtsize_y) matrix
+        - Output: M0 partial sums (wghtsize_x values)
+
+        For each output channel m in [0, M0):
+            psum[m] = bias[m] + sum(iact[i] * weight[i][m] for i in range(C0*S))
 
     Args:
         dut: Device Under Test
-        iacts_array: Input activations used in the test
-        wghts_array: Weights used in the test
-        psum_array: Initial bias/partial sum values
-
-    Algorithm:
-
-        - Golden model computes: result[filter] = bias[filter] + sum(iact[i] * weight[filter][i])
-        - Then validates each output from psum_out against expected values.
+        iacts_array: Input activations, shape (C0, S) = (iactsize_y, iactsize_x)
+        wghts_array: Weights, shape (C0*S, M0) = (wghtsize_y, wghtsize_x)
+        psum_array: Initial bias/partial sum values, shape (M0,) = (wghtsize_x,)
 
     Raises:
         AssertionError: If any computed partial sum doesn't match the golden model
     """
-    # Create golden model array (up to 64 output values)
-    control = np.zeros(32, dtype=int)
+    # Create golden model array sized to match the number of output filters
+    # Use max possible size to avoid overflow
+    max_outputs = max(32, wghtsize_x)
+    golden_model = np.zeros(max_outputs, dtype=int)
 
     iact = iacts_array
     wght = wghts_array
@@ -368,45 +375,71 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
 
     # Ensure arrays are at least 2D for consistent indexing
     if iact.ndim == 1:
-        iact = [iact]
+        iact = np.array([iact])
 
     if wght.ndim == 1:
-        wght = [wght]
+        wght = np.array([wght])
+
     # Initialize golden model with bias values
-    for psum_x in range(len(bias)):
-        control[psum_x] = bias[psum_x]
-        
+    for filter_idx in range(wghtsize_x):
+        golden_model[filter_idx] = bias[filter_idx]
+
     # Compute expected MAC (Multiply-ACcumulate) results
-    # For each input activation value, multiply with corresponding weights and accumulate
-    current_iact = 0
+    # Eyeriss v2 Architecture (see Fig. 15 in paper 1807.07928v2):
+    #   - C0 (iactsize_y) input channels * S (iactsize_x) filter width = C0*S total activations
+    #   - M0 (wghtsize_x) output channels
+    #   - Weight matrix shape: (C0*S, M0) = (wghtsize_y, wghtsize_x)
+    #   - Each row in wght corresponds to one position in the sliding window (one activation)
+    #   - Each column in wght corresponds to one output channel
+    #   - Formula: psum[m] = bias[m] + sum(iact[c,s] * wght[c*S+s][m]) for all c in [0,C0), s in [0,S)
 
-    for iact_y in range(len(iact)):  # For each channel
-        for iact_x in range(len(iact[iact_y])):  # For each activation in channel
-            for wght_x in range(len(wght[current_iact])):  # For each filter/output
-                # Accumulate: output[filter] += activation * weight[filter]
+    weight_row_idx = 0  # Index into weight matrix rows (ranges from 0 to C0*S-1)
 
-                control[wght_x] = control[wght_x] + (wght[current_iact][wght_x] * iact[iact_y][iact_x])
-            current_iact = current_iact + 1
-    """for output_word in range(len(control)):  # For each filter/output
-        if (control[output_word] < 0):
-            control[output_word] = control[output_word] + 2**20"""
+    for channel_idx in range(len(iact)):  # For each input channel (C0)
+        for spatial_idx in range(len(iact[channel_idx])):  # For each spatial position (S)
+            activation_value = iact[channel_idx][spatial_idx]
+
+            # Multiply this activation with all weights for this position across all output channels
+            for output_channel_idx in range(wghtsize_x):  # For each output channel (M0)
+                weight_value = wght[weight_row_idx][output_channel_idx]
+                # Accumulate: psum[m] += iact[c,s] * wght[c*S+s][m]
+                golden_model[output_channel_idx] += activation_value * weight_value
+
+            weight_row_idx += 1  # Move to next row of weights (next position in sliding window)
+
+    # Log the golden model for debugging
+    dut._log.info(f"Golden model computation complete:")
+    dut._log.info(f"  Input: C0={iactsize_y} channels * S={iactsize_x} spatial = {iactsize_y * iactsize_x} activations")
+    dut._log.info(f"  Weights: {wghtsize_y} * {wghtsize_x} (C0*S rows, M0 columns)")
+    dut._log.info(f"  Output: M0={wghtsize_x} channels")
+    dut._log.info(f"  Expected partial sums: {golden_model[:wghtsize_x]}")
+
     # Validate hardware outputs against golden model
-    print(control[0])
-    current_control = 0
+    output_idx = 0
+    num_verified = 0
+
     # Check outputs while PE is producing results (psum_enable_o is high)
     while dut.psum_enable_o.value == 1:
-        # Validate adder_1 output
-        assert dut.psum_data_o.value.to_signed() == control[current_control], (
-            "PSUM("
-            + str(dut.psum_data_o.value.to_unsigned())
-            + ") is not equal to control("
-            + str(control[current_control])
-            + "), "
-            + str(current_control + 1)
-            + ". PSUM Value"
+        hw_output = dut.psum_data_o.value.to_signed()
+        expected_output = golden_model[output_idx]
+
+        # Validate hardware output matches golden model
+        assert hw_output == expected_output, (
+            f"Output mismatch at index {output_idx}: "
+            f"hardware={hw_output}, expected={expected_output}"
         )
-        current_control = current_control + 1
+
+        output_idx += 1
+        num_verified += 1
         await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
+
+    # Verify we got the expected number of outputs
+    assert num_verified == wghtsize_x, (
+        f"Expected {wghtsize_x} outputs but received {num_verified}"
+    )
+
+    dut._log.info(f"Successfully verified {num_verified} partial sum outputs")
+        
 async def send_wght(ptp, dut, data_array):
     """
     Formats and sends weight data to the WGHT scratchpad memory.
@@ -748,8 +781,8 @@ def create_iact_wght_psum_arrays(dut):
     """
     Generates test input data with configurable dimensions and sparsity.
 
-    Creates sequential test arrays for input activations, weights, and partial sums,
-    then applies random sparsity by zeroing out a specified percentage of elements.
+    Creates random test arrays for input activations, weights, and partial sums,
+    following the Eyeriss v2 architecture for PE sliding window computation.
 
     Args:
         dut: Device Under Test (not used, kept for compatibility)
@@ -757,22 +790,20 @@ def create_iact_wght_psum_arrays(dut):
     Returns:
         Tuple of (iacts, wghts, psums):
 
-            - iacts: Input activations array, shape (iactsize_y, iactsize_x)
-            - wghts: Weights array, shape (wghtsize_y, wghtsize_x)
-            - psums: Partial sums/bias array, shape (wghtsize_x,)
+            - iacts: Input activations, shape (C0, S) = (iactsize_y, iactsize_x)
+            - wghts: Weights, shape (C0*S, M0) = (wghtsize_y, wghtsize_x)
+            - psums: Bias/partial sums, shape (M0,) = (wghtsize_x,)
 
     Data Generation:
-        - All arrays use sequential values (1, 2, 3, ...) for predictability
+        - Values are random in range [-64, -1] ∪ [1, 63] (excludes 0)
         - Random elements are zeroed based on sparsity parameters
         - This allows testing zero-skipping compression logic
 
-    Example:
-
+    Example (C0=1, S=3, M0=1):
         Returns:
-
-            - iacts: [[1, 2, 3]] (1 channel, 3 values)
-            - wghts: [[1], [2], [3]] (3 weights, 1 filter)
-            - psums: [1] (1 bias value)
+            - iacts: [[1, 2, 3]] (1 channel, 3 spatial positions)
+            - wghts: [[1], [2], [3]] (3 rows for C0*S=3 activations, 1 column for M0=1 output)
+            - psums: [1] (1 bias value for M0=1 output channel)
     """
     # Generate input activations: random values from -128 to 127, without 0
     iacts = np.random.randint(-64, 63, size=(iactsize_y, iactsize_x))

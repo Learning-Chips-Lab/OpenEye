@@ -33,12 +33,12 @@ clk_delay_unit_out = "ps"
 
 ##########################################################################################
 
-@pytest.mark.parametrize("IACTSIZE_X", [(4)])#,(3),(2),(1)])
-@pytest.mark.parametrize("IACTSIZE_Y", [(3)])#,(2),(1)])
-@pytest.mark.parametrize("WGHTSIZE_X", [(12)])#,(10),(8),(4)])
-@pytest.mark.parametrize("SPARSE_IACT", [(0)])#, (10), (20), (30), (40), (50), (60), (70), (80), (90)])
-@pytest.mark.parametrize("SPARSE_WGHT", [(0)])
-@pytest.mark.parametrize("SEED", [(0)])
+@pytest.mark.parametrize("IACTSIZE_X", [(4)])#,(3),(2),(1)]) # Filter width (S in Eyeriss v2) - spatial window dimension
+@pytest.mark.parametrize("IACTSIZE_Y", [(3)])#,(2),(1)]) # Input channels per PE (C0 in Eyeriss v2)
+@pytest.mark.parametrize("WGHTSIZE_X", [(12)])#,(10),(8),(4)]) # Output channels per PE (M0 in Eyeriss v2)
+@pytest.mark.parametrize("SPARSE_IACT", [(0)])#, (10), (20), (30), (40), (50), (60), (70), (80), (90)]) # Input activation sparsity
+@pytest.mark.parametrize("SPARSE_WGHT", [(0)]) # Weight sparsity
+@pytest.mark.parametrize("SEED", [(0)]) # Random seed
 def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,SEED,request):
     dut = 'PE'
     module = 'PE_tb'
@@ -56,7 +56,7 @@ def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,S
         module=module,
         sim_build=target_dir,
         testcase='start_test_pe',
-        defines={"NO_TRACE": "TRUE"},
+        defines={"NO_TRACE": "TRUE"},  # Disable PE.v internal dumping, use cocotb's instead
         force_compile=True,
         waves=True,
         simulator="icarus",
@@ -73,8 +73,10 @@ def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,S
                     "SPARSE_IACT" : str(SPARSE_IACT),
                     "SPARSE_WGHT" : str(SPARSE_WGHT),
                     "SEED" : str(SEED),
-                    "COCOTB_TRACE": "1"}
+                    "COCOTB_TRACE": "1",
+                    "IVERILOG_DUMPER": "fst"}  # Enable FST waveform dumping for Icarus
     )
 
 if __name__ == '__main__':
-    test_single_pe(IACTSIZE_X=6, IACTSIZE_Y=2, WGHTSIZE_X=4, SPARSE_IACT=0, SPARSE_WGHT=0, SEED=0, request=pytest.fixture(lambda: None)())
+    # Run pytest programmatically
+    pytest.main([__file__, "-v", "-s"])

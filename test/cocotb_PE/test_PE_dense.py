@@ -31,10 +31,11 @@ from open_eye import hdl_dir, test_dir
 import pe_test_utils as ptu
 
 # Test parameters for dense mode
-IACTSIZE_X_VALUES = [4]  # Input activation width
-IACTSIZE_Y_VALUES = [3]      # Input channels
-WGHTSIZE_X_VALUES = [12]      # Output filters
+IACTSIZE_X_VALUES = [4]  # Filter width (S in Eyeriss v2) - spatial window dimension
+IACTSIZE_Y_VALUES = [3]  # Input channels per PE (C0 in Eyeriss v2)
+WGHTSIZE_X_VALUES = [12] # Output channels per PE (M0 in Eyeriss v2)
 SEED_VALUES = [0]            # Random seeds
+USE_DSP_VALUES = [0, 1]      # 0=standard multiplier+adder, 1=DSP48 optimization
 
 # Clock configuration
 CLK_CYCLE = 10
@@ -49,32 +50,42 @@ CLK_DELAY_UNIT_OUTPUT = "ps"
 @pytest.mark.parametrize("IACTSIZE_Y", IACTSIZE_Y_VALUES)
 @pytest.mark.parametrize("WGHTSIZE_X", WGHTSIZE_X_VALUES)
 @pytest.mark.parametrize("SEED", SEED_VALUES)
-def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED):
+@pytest.mark.parametrize("USE_DSP", USE_DSP_VALUES)
+def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, USE_DSP):
     """
-    Test PE in dense mode (SPARSITY_EN=0).
+    Test PE in dense mode (SPARSITY_EN=0) with selectable MAC implementation.
 
     Validates:
     - Correct MAC computation without sparsity encoding
     - No overhead bits in data transmission
     - Address SPADs are excluded from synthesis
     - Linear psum addressing (no sparse offsets)
+    - Both standard (USE_DSP=0) and DSP48 (USE_DSP=1) implementations
 
     Args:
         IACTSIZE_X: Number of input activation values
         IACTSIZE_Y: Number of input channels
         WGHTSIZE_X: Number of output filters
         SEED: Random seed for reproducibility
+        USE_DSP: MAC implementation (0=standard multiplier+adder, 1=DSP48 slice)
     """
     # Get HDL files
     from open_eye import hdl_dir
     verilog_sources = ptu.get_verilog_sources(str(hdl_dir))
+
+    # Add dsp_unit.v when USE_DSP=1
+    if USE_DSP == 1:
+        dsp_unit_path = Path(hdl_dir) / "dsp_unit.v"
+        if dsp_unit_path.exists():
+            verilog_sources.append(str(dsp_unit_path))
 
     # Test module configuration
     module = "PE_tb"
     toplevel = "PE"
 
     # Create temporary directory for this test
-    test_name = f"test_dense_iact{IACTSIZE_X}x{IACTSIZE_Y}_wght{WGHTSIZE_X}_seed{SEED}"
+    dsp_mode_str = "dsp" if USE_DSP == 1 else "std"
+    test_name = f"test_dense_iact{IACTSIZE_X}x{IACTSIZE_Y}_wght{WGHTSIZE_X}_seed{SEED}_{dsp_mode_str}"
     target_dir = Path(__file__).parent / ".temp" / test_name
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -99,10 +110,13 @@ def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED):
         "SPARSE_WGHT": "0",  # 0% sparsity
 
         # Random seed
-        "SEED": str(SEED)
+        "SEED": str(SEED),
+
+        # Waveform generation for Icarus Verilog
+        "IVERILOG_DUMPER": "fst"  # Enable FST waveform dumping
     }
 
-    # Run simulation with dense mode parameter
+    # Run simulation with dense mode and USE_DSP parameters
     results = cocotb_test.simulator.run(
         python_search=[str(test_dir)],
         verilog_sources=verilog_sources,
@@ -115,7 +129,7 @@ def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED):
         waves=True,  # Enable waveforms for debugging
         simulator="icarus",
         extra_env=extra_env,
-        parameters={"SPARSITY_EN": 0}  # Pass SPARSITY_EN=0 to Verilog
+        parameters={"SPARSITY_EN": 0, "USE_DSP": USE_DSP}  # Pass both parameters to Verilog
     )
 
 
