@@ -419,19 +419,23 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
     num_verified = 0
 
     # Check outputs while PE is producing results (psum_enable_o is high)
+    all_equal = True
     while dut.psum_enable_o.value == 1:
         hw_output = dut.psum_data_o.value.to_signed()
         expected_output = golden_model[output_idx]
 
         # Validate hardware output matches golden model
-        assert hw_output == expected_output, (
+        if hw_output != expected_output:
+            dut._log.error(
             f"Output mismatch at index {output_idx}: "
-            f"hardware={hw_output}, expected={expected_output}"
-        )
+            f"hardware={hw_output}, expected={expected_output}")
+            all_equal = False
 
         output_idx += 1
         num_verified += 1
         await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
+
+    assert all_equal, "One or more outputs did not match the golden model!"
 
     # Verify we got the expected number of outputs
     assert num_verified == wghtsize_x, (

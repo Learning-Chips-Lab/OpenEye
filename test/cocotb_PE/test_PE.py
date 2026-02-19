@@ -33,18 +33,17 @@ clk_delay_unit_out = "ps"
 
 ##########################################################################################
 
-@pytest.mark.parametrize("IACTSIZE_X", [(4)])#,(3),(2),(1)]) # Filter width (S in Eyeriss v2) - spatial window dimension
+@pytest.mark.parametrize("IACTSIZE_X", [(4)])#,(3),(2),(1)]) # Number of C0xU blocks per PE (U=1 here)
 @pytest.mark.parametrize("IACTSIZE_Y", [(3)])#,(2),(1)]) # Input channels per PE (C0 in Eyeriss v2)
 @pytest.mark.parametrize("WGHTSIZE_X", [(12)])#,(10),(8),(4)]) # Output channels per PE (M0 in Eyeriss v2)
 @pytest.mark.parametrize("SPARSE_IACT", [(0)])#, (10), (20), (30), (40), (50), (60), (70), (80), (90)]) # Input activation sparsity
 @pytest.mark.parametrize("SPARSE_WGHT", [(0)]) # Weight sparsity
-@pytest.mark.parametrize("SEED", [(0)]) # Random seed
+@pytest.mark.parametrize("SEED", [0]) # Random seed
 def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,SEED,request):
-    dut = 'PE'
+    dut = 'PE_IO_debug' # Name of the top-level module (without .v extension)
     module = 'PE_tb'
     toplevel = dut
     verilog_sources = ptu.get_verilog_sources(hdl_dir)
-    print(verilog_sources)
     nodeid = request.node.nodeid.replace("::", "_").replace("/", "_").replace("[","_").replace("]","_")
     target_dir = os.path.join(test_dir, '.temp/' + nodeid)
     os.makedirs(target_dir, exist_ok=True)

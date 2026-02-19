@@ -30,6 +30,7 @@ def get_verilog_sources(hdl_dir):
     os.path.join(hdl_dir, "RAM_SP.v"),
     os.path.join(hdl_dir, "RAM_DP_generic.v"),
     os.path.join(hdl_dir, "RAM_DP_RW_generic.v"),
-    os.path.join(hdl_dir, "RAM_SP_generic.v")
+    os.path.join(hdl_dir, "RAM_SP_generic.v"),
+    os.path.join(hdl_dir, "debug", "PE_IO_debug.v")
     ]
     return verilog_sources
