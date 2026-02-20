@@ -991,588 +991,1137 @@ module PE #(
   //                  weight address range computation, and activation advance logic.
   //   SPARSITY_EN=0: Simplified dense FSM with sequential weight/iact addressing,
   //                  no zero-skipping, no overhead bits, no weight range computation.
-  generate
-  if (SPARSITY_EN) begin : gen_sparse_fsm
-  // --------------------------------------------------------------------------
-  // Sparsity-only registers (only exist when SPARSITY_EN=1)
-  // --------------------------------------------------------------------------
-  reg  [        DATA_IACT_OVERHEAD-1:0] iact_oh_delay_1;        // Pipeline delay stage 1 for overhead
-  reg  [        DATA_IACT_OVERHEAD-1:0] iact_oh_delay_2;        // Pipeline delay stage 2 for overhead
-  reg                                   next_iact;              // Flag to advance to next input activation
-  reg                                   next_iact2;             // Secondary flag for iact advancement
-  reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_current;     // Current iact address being processed
-  reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_count;       // Counter for iact addresses processed
-  reg                                   wght_addr_use_vec;      // Mux select: use vector addr or computed
-  reg  [   WGHT_ADDR_ADDR_BITWIDTH-1:0] wght_addr_vec;         // Vector-based weight address
-  reg                                   wght_data_use_vec;      // Mux select: use vector data or computed
-  reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_start;       // Start address for weight data range
-  reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_end;         // End address for weight data range
-  reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_end_pre;     // Pre-computed end for next range
-  reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_start_pre;   // Pre-computed start for next range
-  reg                                   wght_start_set;         // Flag: start address has been set
-  reg                                   wght_end_set;           // Flag: end address has been set
+    generate if (SPARSITY_EN) begin : gen_sparse_fsm
+    // --------------------------------------------------------------------------
+    // Sparsity-only registers (only exist when SPARSITY_EN=1)
+    // --------------------------------------------------------------------------
+    reg  [        DATA_IACT_OVERHEAD-1:0] iact_oh_delay_1;        // Pipeline delay stage 1 for overhead
+    reg  [        DATA_IACT_OVERHEAD-1:0] iact_oh_delay_2;        // Pipeline delay stage 2 for overhead
+    reg                                   next_iact;              // Flag to advance to next input activation
+    reg                                   next_iact2;             // Secondary flag for iact advancement
+    reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_current;     // Current iact address being processed
+    reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_count;       // Counter for iact addresses processed
+    reg                                   wght_addr_use_vec;      // Mux select: use vector addr or computed
+    reg  [   WGHT_ADDR_ADDR_BITWIDTH-1:0] wght_addr_vec;         // Vector-based weight address
+    reg                                   wght_data_use_vec;      // Mux select: use vector data or computed
+    reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_start;       // Start address for weight data range
+    reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_end;         // End address for weight data range
+    reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_end_pre;     // Pre-computed end for next range
+    reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_start_pre;   // Pre-computed start for next range
+    reg                                   wght_start_set;         // Flag: start address has been set
+    reg                                   wght_end_set;           // Flag: end address has been set
 
-  // ============================================================================
-  // SPARSE FSM (SPARSITY_EN=1)
-  // ============================================================================
-  // This is the primary FSM controlling PE operation through multiple phases:
-  // - Data loading and preparation (IDLE, LOADING states)
-  // - MAC computation with zero-skipping (CALCULATING state)
-  // - Partial sum output (WAIT_TO_SEND_PSUM, SEND_PSUM states)
-  always @(posedge clk_i, negedge rst_ni) begin
-    if (!rst_ni) begin
-      current_state_computing <= IDLE;
-      iact_addr_SPad_addr     <= 0;
-      iact_addr_SPad_en_r     <= 0;
-      iact_addr_current       <= 0;
-      iact_addr_count         <= 0;
-      iact_data_SPad_addr     <= 0;
-      iact_data_SPad_en_r     <= 0;
-      iact_data_position_reg  <= 0;
-      wght_addr_SPad_en_r     <= 0;
-      wght_addr_use_vec       <= 1;
-      wght_data_use_vec       <= 1;
-      wght_addr_vec           <= 0;
-      wght_data_vec           <= 0;
-      wght_data_start         <= 0;
-      wght_start_set          <= 0;
-      wght_data_end           <= 0;
-      wght_data_end_pre       <= 0;
-      wght_data_start_pre     <= 0;
-      wght_end_set            <= 0;
-      wght_data_SPad_en_r     <= 0;
-      psum_data_SPad_en_a_r   <= 0;
-      psum_data_SPad_en_b_r   <= 0;
-      psum_data_SPad_en_a_w   <= 0;
-      psum_data_SPad_en_b_w   <= 0;
-      iact_data_current_1     <= 0;
-      iact_data_current_2     <= 0;
-      iact_data_current_3     <= 0;
-      iact_oh_delay_1         <= 0;
-      iact_oh_delay_2         <= 0;
-      computing               <= 0;
-      fast_cycle              <= 0;
-      next_iact               <= 0;
-      next_iact2              <= 0;
-      used_psum_memory        <= 0;
-      use_psum_1              <= 0;
-      use_psum_2              <= 0;
-      adder_1_en              <= 0;
-      adder_2_en              <= 0;
-      mux_iact_ready          <= 1;
-      wght_ready_o            <= 1;
-      psum_select             <= 1;
-      psum_data_1_delay       <= 0;
-      psum_data_2_delay       <= 0;
-      psum_enable             <= 0;
-      psum_enable_2           <= 0;
-      psum_enable_o           <= 0;
-      psum_spad_addr_a_mem    <= 0;
-      psum_spad_addr_b_mem    <= 1;
-      reuse_psum_spad_a       <= 0;
-      reuse_psum_spad_b       <= 0;
-      reused_data_a           <= 0;
-      reused_data_b           <= 0;
-      values_valid            <= 0;
-      psum_spad_addr_a_delay  <= 0;
-      psum_spad_addr_b_delay  <= 1;
-      psum_spad_addr_a_w      <= 0;
-      psum_spad_addr_b_w      <= 1;
-    end else begin
-      // Normal operation: Update internal states and handle partial sum (psum) pipeline
-      if (psum_ready_i) begin
-        psum_enable <= psum_enable_i;
+    // ============================================================================
+    // SPARSE FSM (SPARSITY_EN=1)
+    // ============================================================================
+    // This is the primary FSM controlling PE operation through multiple phases:
+    // - Data loading and preparation (IDLE, LOADING states)
+    // - MAC computation with zero-skipping (CALCULATING state)
+    // - Partial sum output (WAIT_TO_SEND_PSUM, SEND_PSUM states)
+    always @(posedge clk_i, negedge rst_ni) begin
+      if (!rst_ni) begin
+        current_state_computing <= IDLE;
+        iact_addr_SPad_addr     <= 0;
+        iact_addr_SPad_en_r     <= 0;
+        iact_addr_current       <= 0;
+        iact_addr_count         <= 0;
+        iact_data_SPad_addr     <= 0;
+        iact_data_SPad_en_r     <= 0;
+        iact_data_position_reg  <= 0;
+        wght_addr_SPad_en_r     <= 0;
+        wght_addr_use_vec       <= 1;
+        wght_data_use_vec       <= 1;
+        wght_addr_vec           <= 0;
+        wght_data_vec           <= 0;
+        wght_data_start         <= 0;
+        wght_start_set          <= 0;
+        wght_data_end           <= 0;
+        wght_data_end_pre       <= 0;
+        wght_data_start_pre     <= 0;
+        wght_end_set            <= 0;
+        wght_data_SPad_en_r     <= 0;
+        psum_data_SPad_en_a_r   <= 0;
+        psum_data_SPad_en_b_r   <= 0;
+        psum_data_SPad_en_a_w   <= 0;
+        psum_data_SPad_en_b_w   <= 0;
+        iact_data_current_1     <= 0;
+        iact_data_current_2     <= 0;
+        iact_data_current_3     <= 0;
+        iact_oh_delay_1         <= 0;
+        iact_oh_delay_2         <= 0;
+        computing               <= 0;
+        fast_cycle              <= 0;
+        next_iact               <= 0;
+        next_iact2              <= 0;
+        used_psum_memory        <= 0;
+        use_psum_1              <= 0;
+        use_psum_2              <= 0;
+        adder_1_en              <= 0;
+        adder_2_en              <= 0;
+        mux_iact_ready          <= 1;
+        wght_ready_o            <= 1;
+        psum_select             <= 1;
+        psum_data_1_delay       <= 0;
+        psum_data_2_delay       <= 0;
+        psum_enable             <= 0;
+        psum_enable_2           <= 0;
+        psum_enable_o           <= 0;
+        psum_spad_addr_a_mem    <= 0;
+        psum_spad_addr_b_mem    <= 1;
+        reuse_psum_spad_a       <= 0;
+        reuse_psum_spad_b       <= 0;
+        reused_data_a           <= 0;
+        reused_data_b           <= 0;
+        values_valid            <= 0;
+        psum_spad_addr_a_delay  <= 0;
+        psum_spad_addr_b_delay  <= 1;
+        psum_spad_addr_a_w      <= 0;
+        psum_spad_addr_b_w      <= 1;
       end else begin
-        psum_enable <= 0;
-      end
-      {psum_data_2_delay, psum_data_1_delay} <= {{(TRANS_BITWIDTH_PSUM) {1'd0}}, psum_data_i};
-      if (SERIAL == 1) begin
-        psum_enable_2 <= psum_enable;
-        psum_enable_o <= psum_enable_2;
-      end else begin
-        psum_enable_o <= psum_enable;
-      end
-      iact_oh_delay_1 <= iact_data_spad_oh == 0 ? 0 : iact_data_spad_oh - 1;
-      iact_oh_delay_2 <= iact_oh_delay_1;
-      case (current_state_computing)
-        // ====================================================================
-        // IDLE State: Waiting for computation trigger or psum output request
-        // ====================================================================
-        IDLE: begin
-          // Reset control signals and prepare for next operation
-          mux_iact_ready         <= 1;
-          iact_addr_current      <= 0;
-          iact_addr_count        <= 0;
-          wght_ready_o           <= 1;
-          wght_addr_vec          <= 0;
-          wght_data_vec          <= 0;
-          wght_data_start        <= 0;
-          wght_start_set         <= 0;
-          wght_data_end          <= 0;
-          wght_data_end_pre      <= 0;
-          wght_data_start_pre    <= 0;
-          wght_end_set           <= 0;
-          //Read first values
-          fast_cycle             <= 0;
-          next_iact              <= 0;
-          next_iact2             <= 0;
-          iact_addr_SPad_addr    <= 0;
-          iact_addr_SPad_en_r    <= 0;
-          iact_data_SPad_addr    <= 0;
-          iact_data_SPad_en_r    <= 0;
-          iact_oh_delay_1        <= 0;
-          iact_oh_delay_2        <= 0;
-          wght_addr_SPad_en_r    <= 0;
-          wght_addr_use_vec      <= 1;
-          wght_data_use_vec      <= 1;
-          wght_data_SPad_en_r    <= 0;
-          psum_data_SPad_en_a_r  <= computing;
-          psum_data_SPad_en_b_r  <= computing;
-          psum_data_SPad_en_a_w  <= 0;
-          psum_data_SPad_en_b_w  <= 0;
-          computing              <= 0;
-          values_valid           <= 0;
-          psum_spad_addr_a_delay <= 0;
-          psum_spad_addr_b_delay <= 1;
-          psum_spad_addr_a_w     <= 0;
-          psum_spad_addr_b_w     <= 1;
-          psum_spad_addr_a_mem   <= 0;
-          psum_spad_addr_b_mem   <= 1;
-          adder_1_en             <= 0;
-          adder_2_en             <= 0;
-          adder_3_en             <= 0;
-          reuse_psum_spad_a      <= 0;
-          reuse_psum_spad_b      <= 0;
-          reused_data_a          <= 0;
-          reused_data_b          <= 0;
-          use_psum_1             <= 0;
-          use_psum_2             <= 0;
-          psum_select            <= 1;
-          if (SERIAL == 1) begin
-            used_psum_memory_1 <= 0;
-            used_psum_memory_2 <= 0;
-          end else begin
-            used_psum_memory <= 0;
-          end
-          /*if (data_mode_reg) begin
-            psum_select <= 0;
-            adder_1_en  <= 0;
-            adder_2_en  <= 0;
-            if (stride_reg != 0) begin
-              iact_data_position_reg <= PE_Y + PE_X * stride_reg;
+        // Normal operation: Update internal states and handle partial sum (psum) pipeline
+        if (psum_ready_i) begin
+          psum_enable <= psum_enable_i;
+        end else begin
+          psum_enable <= 0;
+        end
+        {psum_data_2_delay, psum_data_1_delay} <= {{(TRANS_BITWIDTH_PSUM) {1'd0}}, psum_data_i};
+        if (SERIAL == 1) begin
+          psum_enable_2 <= psum_enable;
+          psum_enable_o <= psum_enable_2;
+        end else begin
+          psum_enable_o <= psum_enable;
+        end
+        iact_oh_delay_1 <= iact_data_spad_oh == 0 ? 0 : iact_data_spad_oh - 1;
+        iact_oh_delay_2 <= iact_oh_delay_1;
+        case (current_state_computing)
+          // ====================================================================
+          // IDLE State: Waiting for computation trigger or psum output request
+          // ====================================================================
+          IDLE: begin
+            // Reset control signals and prepare for next operation
+            mux_iact_ready         <= 1;
+            iact_addr_current      <= 0;
+            iact_addr_count        <= 0;
+            wght_ready_o           <= 1;
+            wght_addr_vec          <= 0;
+            wght_data_vec          <= 0;
+            wght_data_start        <= 0;
+            wght_start_set         <= 0;
+            wght_data_end          <= 0;
+            wght_data_end_pre      <= 0;
+            wght_data_start_pre    <= 0;
+            wght_end_set           <= 0;
+            //Read first values
+            fast_cycle             <= 0;
+            next_iact              <= 0;
+            next_iact2             <= 0;
+            iact_addr_SPad_addr    <= 0;
+            iact_addr_SPad_en_r    <= 0;
+            iact_data_SPad_addr    <= 0;
+            iact_data_SPad_en_r    <= 0;
+            iact_oh_delay_1        <= 0;
+            iact_oh_delay_2        <= 0;
+            wght_addr_SPad_en_r    <= 0;
+            wght_addr_use_vec      <= 1;
+            wght_data_use_vec      <= 1;
+            wght_data_SPad_en_r    <= 0;
+            psum_data_SPad_en_a_r  <= computing;
+            psum_data_SPad_en_b_r  <= computing;
+            psum_data_SPad_en_a_w  <= 0;
+            psum_data_SPad_en_b_w  <= 0;
+            computing              <= 0;
+            values_valid           <= 0;
+            psum_spad_addr_a_delay <= 0;
+            psum_spad_addr_b_delay <= 1;
+            psum_spad_addr_a_w     <= 0;
+            psum_spad_addr_b_w     <= 1;
+            psum_spad_addr_a_mem   <= 0;
+            psum_spad_addr_b_mem   <= 1;
+            adder_1_en             <= 0;
+            adder_2_en             <= 0;
+            adder_3_en             <= 0;
+            reuse_psum_spad_a      <= 0;
+            reuse_psum_spad_b      <= 0;
+            reused_data_a          <= 0;
+            reused_data_b          <= 0;
+            use_psum_1             <= 0;
+            use_psum_2             <= 0;
+            psum_select            <= 1;
+            if (SERIAL == 1) begin
+              used_psum_memory_1 <= 0;
+              used_psum_memory_2 <= 0;
+            end else begin
+              used_psum_memory <= 0;
             end
-            if (iact_data_position_reg >= NUM_GLB_IACT[7:0]) begin
-              iact_data_position_reg <= iact_data_position_reg - NUM_GLB_IACT[7:0];
-            end
-            if (iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]]) begin
-              current_state_computing <= CALCULATING;
-              wght_data_SPad_en_r <= 1;
-              next_iact <= iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]];
-              if (iact_data_position_reg == 0) begin
-                iact_data_current_2 <= iact_part_1_w;
-              end else begin
-                if (iact_data_position_reg == 1) begin
-                  iact_data_current_2 <= iact_part_2_w;
+            /*if (data_mode_reg) begin
+              psum_select <= 0;
+              adder_1_en  <= 0;
+              adder_2_en  <= 0;
+              if (stride_reg != 0) begin
+                iact_data_position_reg <= PE_Y + PE_X * stride_reg;
+              end
+              if (iact_data_position_reg >= NUM_GLB_IACT[7:0]) begin
+                iact_data_position_reg <= iact_data_position_reg - NUM_GLB_IACT[7:0];
+              end
+              if (iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]]) begin
+                current_state_computing <= CALCULATING;
+                wght_data_SPad_en_r <= 1;
+                next_iact <= iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]];
+                if (iact_data_position_reg == 0) begin
+                  iact_data_current_2 <= iact_part_1_w;
                 end else begin
-                  iact_data_current_2 <= iact_part_3_w;
+                  if (iact_data_position_reg == 1) begin
+                    iact_data_current_2 <= iact_part_2_w;
+                  end else begin
+                    iact_data_current_2 <= iact_part_3_w;
+                  end
                 end
               end
-            end
-          end*/
-          // Check if external system wants to read partial sums
-          if (psum_enable_i) begin
-            current_state_computing <= SEND_PSUM;
-            adder_1_en              <= 1;
-            adder_2_en              <= 1;
-            psum_select             <= 1;
-            use_psum_1              <= 0;
-            use_psum_2              <= 0;
-            if (SERIAL == 1) begin
-              used_psum_memory_1 <= 0;
-              used_psum_memory_2 <= 0;
-            end else begin
-              used_psum_memory <= 0;
-            end
-          end
-          // Check if ready to start computation (data loaded, compute trigger, valid data)
-          if (data_set & compute_i & ((second_spad_words_iact != 0) & (second_spad_words_wght != 0))) begin
-            // Initiate computation sequence
-            current_state_computing <= LOADING_1;
-            mux_iact_ready          <= 0;
-            wght_ready_o            <= 0;
-            psum_select             <= 0;
-            iact_addr_SPad_en_r     <= 1;
-            iact_data_SPad_addr     <= 0;
-            iact_data_SPad_en_r     <= 1;
-            psum_data_SPad_en_a_r   <= 0;
-            psum_data_SPad_en_b_r   <= 0;
-            use_psum_1              <= 0;
-            use_psum_2              <= 0;
-            if (SERIAL == 1) begin
-              used_psum_memory_1 <= 0;
-              used_psum_memory_2 <= 0;
-            end else begin
-              used_psum_memory <= 0;
-            end
-            if (first_spad_iact_en_w & second_spad_iact_en_w & (second_spad_iact_en_w == 15)) begin
-              //iact_addr_max_reg <= 16;
-            end
-          end
-        end
-
-        // ====================================================================
-        // LOADING_1: Fetch first weight address and iact data
-        // ====================================================================
-        // Rationale: Initiate the weight-activation loading pipeline
-        // - Fetch the weight address from the weight address scratchpad (SPad)
-        // - Advance to the next iact data entry in the iact SPad
-        // - Setup the iact address from the max register for proper indexing
-        // Signal assignments:
-        //   wght_addr_use_vec <= 0: Don't use computed weight vector yet
-        //   wght_addr_SPad_en_r <= 1: Enable reading weight addresses
-        //   iact_data_SPad_addr + 1: Move to next iact entry
-        //   iact_addr_SPad_addr <= max-1: Set iact address for current iteration
-        //   iact_oh_delay_1 <= oh: Latch overhead bits for zero-skipping
-        LOADING_1: begin
-          current_state_computing <= LOADING_2;
-          wght_addr_use_vec       <= 0;
-          wght_addr_SPad_en_r     <= 1;
-          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          iact_addr_SPad_addr     <= iact_addr_max_reg - 1;
-          iact_oh_delay_1         <= iact_data_spad_oh;
-        end
-
-        // ====================================================================
-        // LOADING_2: Compute weight data address from weight addr SPad
-        // ====================================================================
-        // Rationale: Calculate the actual weight data address and latch iact
-        // - Use the fetched weight address to locate weight data in SPad
-        // - Latch the first iact data value from the previous cycle
-        // - Store the iact address for use in MAC operations
-        // - Disable weight address SPad enable (single cycle fetch)
-        // Signal assignments:
-        //   wght_data_SPad_en_r <= 1: Enable weight data SPad read
-        //   wght_addr_use_vec <= 1: Use the fetched address for weight lookup
-        //   wght_addr_vec <= address + 1: Pre-increment for next access
-        //   iact_data_current_1 <= payload: Capture first iact value
-        //   iact_addr_current <= fetched_addr: Store for MAC loop
-        //   Special case: If overhead bits = 0, reset to address 1
-        LOADING_2: begin
-          current_state_computing <= LOADING_3;
-          wght_data_SPad_en_r <= 1;
-          wght_addr_use_vec   <= 1;
-          wght_addr_vec       <= wght_addr_SPad_addr + 1;
-          iact_data_current_1 <= iact_data_spad_pay;
-          iact_addr_current   <= iact_addr_SPad_data_r;
-          iact_addr_SPad_en_r <= 0;
-          iact_oh_delay_1     <= iact_data_spad_oh;
-          if (iact_data_spad_oh == 0) begin
-            iact_data_SPad_addr <= 1;
-            wght_addr_vec       <= 0;
-          end
-        end
-
-        // ====================================================================
-        // LOADING_3: Determine weight data start address for zero-skipping
-        // ====================================================================
-        // Rationale: Setup the weight range for sparse computation
-        // - Determine the starting weight address based on overhead bits
-        // - Handle the zero-skipping case where no activations exist (oh=0)
-        // - Pipeline the iact data through delay registers for alignment
-        // Signal assignments:
-        //   wght_addr_use_vec <= 0: Stop using weight address vector
-        //   wght_data_use_vec <= 0: Not yet using weight data vector
-        //   iact_data_current_2 <= current_1: Shift iact pipeline
-        //   iact_data_SPad_addr + 1: Advance to next iact entry
-        //   wght_data_start <= fetched_addr: Set weight range start
-        //   Zero-case: If oh=0, set start to 0, end to fetched address
-        LOADING_3: begin
-          current_state_computing <= LOADING_4;
-          wght_addr_use_vec       <= 0;
-          wght_data_use_vec       <= 0;
-          iact_data_current_1     <= iact_data_spad_pay;
-          iact_data_current_2     <= iact_data_current_1;
-          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          iact_addr_SPad_en_r     <= 0;
-          wght_data_start         <= wght_addr_SPad_data_r;
-          //Zero-Case
-          if (iact_oh_delay_1 == 0) begin
-            wght_data_start <= 0;
-            wght_data_end   <= wght_addr_SPad_data_r;
-          end
-        end
-
-        // ====================================================================
-        // LOADING_4: Determine weight data end address for zero-skipping
-        // ====================================================================
-        // Rationale: Complete the weight range definition for the MAC loop
-        // - Determine ending weight address to define the sparse computation range
-        // - Start using weight data and addresses for MAC operations
-        // - Continue iact data pipeline advancement
-        // Signal assignments:
-        //   iact_data_SPad_addr + 1: Continue advancing iact entries
-        //   wght_addr_use_vec <= 1: Enable using computed weight addresses
-        //   wght_data_use_vec <= 1: Enable weight data SPad for MAC
-        //   wght_data_vec <= start_addr: Begin at calculated start address
-        //   wght_addr_vec + 1: Pre-increment for next weight address
-        //   Zero-case: If oh!=0, set end address from next fetched value
-        LOADING_4: begin
-          current_state_computing <= LOADING_5;
-          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          wght_addr_use_vec       <= 1;
-          wght_data_use_vec       <= 1;
-          wght_data_vec           <= wght_data_start;
-          wght_addr_vec           <= wght_addr_SPad_addr + 1;
-          iact_addr_SPad_en_r      <= 0;
-          //Zero-Case
-          if (iact_oh_delay_2 != 0) begin
-            wght_data_end <= wght_addr_SPad_data_r;
-          end
-        end
-
-        // ====================================================================
-        // LOADING_5: Final preparation, fetch next weight range, enter compute
-        // ====================================================================
-        // Rationale: Complete initialization and transition to MAC computation
-        // - Signal readiness to start multiply-accumulate operations
-        // - Prepare the next weight range addresses for seamless iteration
-        // - Finalize the iact data pipeline alignment (3-cycle delay established)
-        // - Prepare for fast cycling through weight vectors
-        // Signal assignments:
-        //   current_state_computing <= CALCULATING: Transition to MAC state
-        //   wght_start_set <= 1: Mark weight start address as valid
-        //   computing <= 1: Enable MAC operations
-        //   wght_addr_use_vec <= 1: Use weight addresses in MAC
-        //   values_valid <= 1: Data is ready if weight range is valid (end > start)
-        //   wght_data_vec + 1: Pre-increment for first MAC iteration
-        //   iact_data_current_3 <= current_2: Complete 3-cycle pipeline delay
-        //   fast_cycle <= 1: Enable fast cycling for consecutive activations
-        //   Special cases: Handle iact_addr_current==1 and zero address scenarios
-        LOADING_5: begin
-          current_state_computing <= CALCULATING;
-          wght_start_set          <= 1;
-          computing               <= 1;
-          wght_addr_use_vec       <= 1;
-          if (iact_addr_current == 1) begin
-            next_iact2 <= 1;
-          end
-          if (wght_data_end > wght_data_start) begin
-            values_valid <= 1;
-          end
-          wght_data_vec <= wght_data_vec + 1;
-          wght_data_start_pre <= wght_addr_SPad_data_r;
-          fast_cycle          <= 1;
-          iact_addr_count     <= 1;
-          iact_addr_SPad_en_r <= 0;
-          if ((iact_addr_SPad_data_r == 0) & (iact_addr_current == 0)) begin
-            iact_addr_SPad_en_r <= 1;
-          end
-          wght_addr_vec       <= iact_data_spad_oh - 1;
-          iact_data_current_1 <= iact_data_spad_pay;
-          iact_data_current_2 <= iact_data_current_1;
-          iact_data_current_3 <= iact_data_current_2;
-          iact_addr_current   <= 0;
-        end
-
-        // ====================================================================
-        // CALCULATING: Main MAC computation loop with zero-skipping
-        // ====================================================================
-        // Performs multiply-accumulate operations using:
-        // - Dual parallel multipliers (for two weight-iact pairs)
-        // - Sparse data indexing (skipping zeros via overhead bits)
-        // - Data forwarding to handle read-after-write hazards
-        // - Psum memory usage tracking to determine accumulation vs. first write
-        //
-        // MAJOR CODE BLOCKS:
-        // 1. DEFAULT SIGNAL SETUP: Initialize all control signals for normal operation
-        // 2. WEIGHT RANGE COMPUTATION: Compute start/end addresses for each activation
-        // 3. NEXT ACTIVATION TRIGGER: Determine when to move to next activation
-        // 4. DATA VALIDITY CHECK: Verify current weight vector is in valid range
-        // 5. NEXT ACTIVATION HANDLING: Update data pipeline when moving to next activation
-        // 6. READ-AFTER-WRITE FORWARDING: Detect and forward recently computed psums
-        // 7. PSUM MEMORY TRACKING: Track which psum locations have been written
-        // 8. COMPLETION CHECK: Detect end of computation for this activation
-        CALCULATING: begin
-            // ================================================================
-            // BLOCK 1: DEFAULT SIGNAL SETUP
-            // ================================================================
-            // Initialize control signals for normal MAC operation
-            // Rationale: Set defaults for all SPad enables and control flags
-            iact_addr_SPad_en_r   <= 0;            // Disable iact address reads
-            iact_data_SPad_en_r   <= !mux_iact_ready; // Enable iact data when ready
-            wght_addr_SPad_en_r   <= SPARSITY_EN;  // Enable weight address reads only in sparse mode
-            psum_data_SPad_en_a_r <= computing;    // Read psum port A when computing
-            psum_data_SPad_en_b_r <= computing;    // Read psum port B when computing
-            psum_data_SPad_en_a_w <= 0;            // Disable psum writes (default)
-            psum_data_SPad_en_b_w <= 0;            // Disable psum writes (default)
-            reuse_psum_spad_a     <= 0;            // No data forwarding (default)
-            reuse_psum_spad_b     <= 0;            // No data forwarding (default)
-            reused_data_a         <= 0;            // No forwarded data (default)
-            reused_data_b         <= 0;            // No forwarded data (default)
-            wght_addr_use_vec     <= 1;            // Use computed weight addresses
-            fast_cycle            <= 0;            // Not in fast cycling mode
-            next_iact             <= 0;            // Don't advance activation yet
-            next_iact2            <= 0;            // No dual activation
-            psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1; // Next psum A memory
-            psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2; // Next psum B memory
-
-            // ================================================================
-            // BLOCK 1b: WEIGHT VECTOR INCREMENT
-            // ================================================================
-            // Advance through weight data for current activation
-            if (wght_data_vec < (second_spad_words_wght - 1)) begin
-              wght_data_vec <= wght_data_vec + 1; // Increment weight index
-            end else begin
-              mux_iact_ready <= 1;                 // Signal ready for next activation
-            end
-
-            // ================================================================
-            // BLOCK 2: WEIGHT RANGE COMPUTATION
-            // ================================================================
-            // Compute start/end addresses for current activation's weights
-            // Rationale: Use overhead bits and weight address SPad to determine
-            // the range of weights that correspond to non-zero activations
-            if (!next_iact || fast_cycle) begin
-              if (wght_start_set) begin
-                // Weight start address already set, now compute end address
-                if (!wght_end_set) begin
-                  wght_data_end_pre <= wght_addr_SPad_data_r; // Fetch end address
-                  wght_end_set      <= 1;                      // Mark end as valid
-                end
+            end*/
+            // Check if external system wants to read partial sums
+            if (psum_enable_i) begin
+              current_state_computing <= SEND_PSUM;
+              adder_1_en              <= 1;
+              adder_2_en              <= 1;
+              psum_select             <= 1;
+              use_psum_1              <= 0;
+              use_psum_2              <= 0;
+              if (SERIAL == 1) begin
+                used_psum_memory_1 <= 0;
+                used_psum_memory_2 <= 0;
               end else begin
-                // First weight in this activation range
-                wght_data_start_pre <= wght_addr_SPad_data_r; // Fetch start address
-                wght_start_set <= 1;                           // Mark start as valid
-                // Adjust weight address vector based on overhead bits
-                if ((first_spad_words_wght - 1) > wght_addr_vec) begin
-                  wght_addr_vec <= iact_oh_delay_1; // Use overhead to index weights
-                end
+                used_psum_memory <= 0;
               end
             end
-
-            // ================================================================
-            // BLOCK 3: NEXT ACTIVATION TRIGGER
-            // ================================================================
-            // Detect when weight range is completely fetched, trigger next activation
-            // Rationale: When we've fetched all weight range data, prepare to advance
-            // to the next activation in the input sequence
-            if ((wght_data_end <= wght_data_SPad_addr + 1) && !next_iact) begin
-              wght_data_start <= wght_data_start_pre;  // Commit start address
-              wght_end_set    <= 0;                     // Clear flags for next activation
-              wght_start_set  <= 0;
-
-              if (wght_start_set) begin
-                wght_data_start <= wght_data_start_pre;
-                wght_data_vec <= wght_data_start_pre;
-              end
-
-              if (wght_end_set) begin
-                wght_data_end       <= wght_data_end_pre; // Commit end address
-                wght_data_start_pre <= wght_addr_SPad_data_r;
+            // Check if ready to start computation (data loaded, compute trigger, valid data)
+            if (data_set & compute_i & ((second_spad_words_iact != 0) & (second_spad_words_wght != 0))) begin
+              // Initiate computation sequence
+              current_state_computing <= LOADING_1;
+              mux_iact_ready          <= 0;
+              wght_ready_o            <= 0;
+              psum_select             <= 0;
+              iact_addr_SPad_en_r     <= 1;
+              iact_data_SPad_addr     <= 0;
+              iact_data_SPad_en_r     <= 1;
+              psum_data_SPad_en_a_r   <= 0;
+              psum_data_SPad_en_b_r   <= 0;
+              use_psum_1              <= 0;
+              use_psum_2              <= 0;
+              if (SERIAL == 1) begin
+                used_psum_memory_1 <= 0;
+                used_psum_memory_2 <= 0;
               end else begin
-                wght_data_end <= wght_addr_SPad_data_r;
+                used_psum_memory <= 0;
+              end
+              if (first_spad_iact_en_w & second_spad_iact_en_w & (second_spad_iact_en_w == 15)) begin
+                //iact_addr_max_reg <= 16;
+              end
+            end
+          end
+
+          // ====================================================================
+          // LOADING_1: Fetch first weight address and iact data
+          // ====================================================================
+          // Rationale: Initiate the weight-activation loading pipeline
+          // - Fetch the weight address from the weight address scratchpad (SPad)
+          // - Advance to the next iact data entry in the iact SPad
+          // - Setup the iact address from the max register for proper indexing
+          // Signal assignments:
+          //   wght_addr_use_vec <= 0: Don't use computed weight vector yet
+          //   wght_addr_SPad_en_r <= 1: Enable reading weight addresses
+          //   iact_data_SPad_addr + 1: Move to next iact entry
+          //   iact_addr_SPad_addr <= max-1: Set iact address for current iteration
+          //   iact_oh_delay_1 <= oh: Latch overhead bits for zero-skipping
+          LOADING_1: begin
+            current_state_computing <= LOADING_2;
+            wght_addr_use_vec       <= 0;
+            wght_addr_SPad_en_r     <= 1;
+            iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
+            iact_addr_SPad_addr     <= iact_addr_max_reg - 1;
+            iact_oh_delay_1         <= iact_data_spad_oh;
+          end
+
+          // ====================================================================
+          // LOADING_2: Compute weight data address from weight addr SPad
+          // ====================================================================
+          // Rationale: Calculate the actual weight data address and latch iact
+          // - Use the fetched weight address to locate weight data in SPad
+          // - Latch the first iact data value from the previous cycle
+          // - Store the iact address for use in MAC operations
+          // - Disable weight address SPad enable (single cycle fetch)
+          // Signal assignments:
+          //   wght_data_SPad_en_r <= 1: Enable weight data SPad read
+          //   wght_addr_use_vec <= 1: Use the fetched address for weight lookup
+          //   wght_addr_vec <= address + 1: Pre-increment for next access
+          //   iact_data_current_1 <= payload: Capture first iact value
+          //   iact_addr_current <= fetched_addr: Store for MAC loop
+          //   Special case: If overhead bits = 0, reset to address 1
+          LOADING_2: begin
+            current_state_computing <= LOADING_3;
+            wght_data_SPad_en_r <= 1;
+            wght_addr_use_vec   <= 1;
+            wght_addr_vec       <= wght_addr_SPad_addr + 1;
+            iact_data_current_1 <= iact_data_spad_pay;
+            iact_addr_current   <= iact_addr_SPad_data_r;
+            iact_addr_SPad_en_r <= 0;
+            iact_oh_delay_1     <= iact_data_spad_oh;
+            if (iact_data_spad_oh == 0) begin
+              iact_data_SPad_addr <= 1;
+              wght_addr_vec       <= 0;
+            end
+          end
+
+          // ====================================================================
+          // LOADING_3: Determine weight data start address for zero-skipping
+          // ====================================================================
+          // Rationale: Setup the weight range for sparse computation
+          // - Determine the starting weight address based on overhead bits
+          // - Handle the zero-skipping case where no activations exist (oh=0)
+          // - Pipeline the iact data through delay registers for alignment
+          // Signal assignments:
+          //   wght_addr_use_vec <= 0: Stop using weight address vector
+          //   wght_data_use_vec <= 0: Not yet using weight data vector
+          //   iact_data_current_2 <= current_1: Shift iact pipeline
+          //   iact_data_SPad_addr + 1: Advance to next iact entry
+          //   wght_data_start <= fetched_addr: Set weight range start
+          //   Zero-case: If oh=0, set start to 0, end to fetched address
+          LOADING_3: begin
+            current_state_computing <= LOADING_4;
+            wght_addr_use_vec       <= 0;
+            wght_data_use_vec       <= 0;
+            iact_data_current_1     <= iact_data_spad_pay;
+            iact_data_current_2     <= iact_data_current_1;
+            iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
+            iact_addr_SPad_en_r     <= 0;
+            wght_data_start         <= wght_addr_SPad_data_r;
+            //Zero-Case
+            if (iact_oh_delay_1 == 0) begin
+              wght_data_start <= 0;
+              wght_data_end   <= wght_addr_SPad_data_r;
+            end
+          end
+
+          // ====================================================================
+          // LOADING_4: Determine weight data end address for zero-skipping
+          // ====================================================================
+          // Rationale: Complete the weight range definition for the MAC loop
+          // - Determine ending weight address to define the sparse computation range
+          // - Start using weight data and addresses for MAC operations
+          // - Continue iact data pipeline advancement
+          // Signal assignments:
+          //   iact_data_SPad_addr + 1: Continue advancing iact entries
+          //   wght_addr_use_vec <= 1: Enable using computed weight addresses
+          //   wght_data_use_vec <= 1: Enable weight data SPad for MAC
+          //   wght_data_vec <= start_addr: Begin at calculated start address
+          //   wght_addr_vec + 1: Pre-increment for next weight address
+          //   Zero-case: If oh!=0, set end address from next fetched value
+          LOADING_4: begin
+            current_state_computing <= LOADING_5;
+            iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
+            wght_addr_use_vec       <= 1;
+            wght_data_use_vec       <= 1;
+            wght_data_vec           <= wght_data_start;
+            wght_addr_vec           <= wght_addr_SPad_addr + 1;
+            iact_addr_SPad_en_r      <= 0;
+            //Zero-Case
+            if (iact_oh_delay_2 != 0) begin
+              wght_data_end <= wght_addr_SPad_data_r;
+            end
+          end
+
+          // ====================================================================
+          // LOADING_5: Final preparation, fetch next weight range, enter compute
+          // ====================================================================
+          // Rationale: Complete initialization and transition to MAC computation
+          // - Signal readiness to start multiply-accumulate operations
+          // - Prepare the next weight range addresses for seamless iteration
+          // - Finalize the iact data pipeline alignment (3-cycle delay established)
+          // - Prepare for fast cycling through weight vectors
+          // Signal assignments:
+          //   current_state_computing <= CALCULATING: Transition to MAC state
+          //   wght_start_set <= 1: Mark weight start address as valid
+          //   computing <= 1: Enable MAC operations
+          //   wght_addr_use_vec <= 1: Use weight addresses in MAC
+          //   values_valid <= 1: Data is ready if weight range is valid (end > start)
+          //   wght_data_vec + 1: Pre-increment for first MAC iteration
+          //   iact_data_current_3 <= current_2: Complete 3-cycle pipeline delay
+          //   fast_cycle <= 1: Enable fast cycling for consecutive activations
+          //   Special cases: Handle iact_addr_current==1 and zero address scenarios
+          LOADING_5: begin
+            current_state_computing <= CALCULATING;
+            wght_start_set          <= 1;
+            computing               <= 1;
+            wght_addr_use_vec       <= 1;
+            if (iact_addr_current == 1) begin
+              next_iact2 <= 1;
+            end
+            if (wght_data_end > wght_data_start) begin
+              values_valid <= 1;
+            end
+            wght_data_vec <= wght_data_vec + 1;
+            wght_data_start_pre <= wght_addr_SPad_data_r;
+            fast_cycle          <= 1;
+            iact_addr_count     <= 1;
+            iact_addr_SPad_en_r <= 0;
+            if ((iact_addr_SPad_data_r == 0) & (iact_addr_current == 0)) begin
+              iact_addr_SPad_en_r <= 1;
+            end
+            wght_addr_vec       <= iact_data_spad_oh - 1;
+            iact_data_current_1 <= iact_data_spad_pay;
+            iact_data_current_2 <= iact_data_current_1;
+            iact_data_current_3 <= iact_data_current_2;
+            iact_addr_current   <= 0;
+          end
+
+          // ====================================================================
+          // CALCULATING: Main MAC computation loop with zero-skipping
+          // ====================================================================
+          // Performs multiply-accumulate operations using:
+          // - Dual parallel multipliers (for two weight-iact pairs)
+          // - Sparse data indexing (skipping zeros via overhead bits)
+          // - Data forwarding to handle read-after-write hazards
+          // - Psum memory usage tracking to determine accumulation vs. first write
+          //
+          // MAJOR CODE BLOCKS:
+          // 1. DEFAULT SIGNAL SETUP: Initialize all control signals for normal operation
+          // 2. WEIGHT RANGE COMPUTATION: Compute start/end addresses for each activation
+          // 3. NEXT ACTIVATION TRIGGER: Determine when to move to next activation
+          // 4. DATA VALIDITY CHECK: Verify current weight vector is in valid range
+          // 5. NEXT ACTIVATION HANDLING: Update data pipeline when moving to next activation
+          // 6. READ-AFTER-WRITE FORWARDING: Detect and forward recently computed psums
+          // 7. PSUM MEMORY TRACKING: Track which psum locations have been written
+          // 8. COMPLETION CHECK: Detect end of computation for this activation
+          CALCULATING: begin
+              // ================================================================
+              // BLOCK 1: DEFAULT SIGNAL SETUP
+              // ================================================================
+              // Initialize control signals for normal MAC operation
+              // Rationale: Set defaults for all SPad enables and control flags
+              iact_addr_SPad_en_r   <= 0;            // Disable iact address reads
+              iact_data_SPad_en_r   <= !mux_iact_ready; // Enable iact data when ready
+              wght_addr_SPad_en_r   <= SPARSITY_EN;  // Enable weight address reads only in sparse mode
+              psum_data_SPad_en_a_r <= computing;    // Read psum port A when computing
+              psum_data_SPad_en_b_r <= computing;    // Read psum port B when computing
+              psum_data_SPad_en_a_w <= 0;            // Disable psum writes (default)
+              psum_data_SPad_en_b_w <= 0;            // Disable psum writes (default)
+              reuse_psum_spad_a     <= 0;            // No data forwarding (default)
+              reuse_psum_spad_b     <= 0;            // No data forwarding (default)
+              reused_data_a         <= 0;            // No forwarded data (default)
+              reused_data_b         <= 0;            // No forwarded data (default)
+              wght_addr_use_vec     <= 1;            // Use computed weight addresses
+              fast_cycle            <= 0;            // Not in fast cycling mode
+              next_iact             <= 0;            // Don't advance activation yet
+              next_iact2            <= 0;            // No dual activation
+              psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1; // Next psum A memory
+              psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2; // Next psum B memory
+
+              // ================================================================
+              // BLOCK 1b: WEIGHT VECTOR INCREMENT
+              // ================================================================
+              // Advance through weight data for current activation
+              if (wght_data_vec < (second_spad_words_wght - 1)) begin
+                wght_data_vec <= wght_data_vec + 1; // Increment weight index
+              end else begin
+                mux_iact_ready <= 1;                 // Signal ready for next activation
               end
 
-              // Determine next weight address vector based on activation sparsity
-              if (iact_oh_delay_1 <= iact_oh_delay_2 + 1) begin
-                // Sequential weight addressing
+              // ================================================================
+              // BLOCK 2: WEIGHT RANGE COMPUTATION
+              // ================================================================
+              // Compute start/end addresses for current activation's weights
+              // Rationale: Use overhead bits and weight address SPad to determine
+              // the range of weights that correspond to non-zero activations
+              if (!next_iact || fast_cycle) begin
+                if (wght_start_set) begin
+                  // Weight start address already set, now compute end address
+                  if (!wght_end_set) begin
+                    wght_data_end_pre <= wght_addr_SPad_data_r; // Fetch end address
+                    wght_end_set      <= 1;                      // Mark end as valid
+                  end
+                end else begin
+                  // First weight in this activation range
+                  wght_data_start_pre <= wght_addr_SPad_data_r; // Fetch start address
+                  wght_start_set <= 1;                           // Mark start as valid
+                  // Adjust weight address vector based on overhead bits
+                  if ((first_spad_words_wght - 1) > wght_addr_vec) begin
+                    wght_addr_vec <= iact_oh_delay_1; // Use overhead to index weights
+                  end
+                end
+              end
+
+              // ================================================================
+              // BLOCK 3: NEXT ACTIVATION TRIGGER
+              // ================================================================
+              // Detect when weight range is completely fetched, trigger next activation
+              // Rationale: When we've fetched all weight range data, prepare to advance
+              // to the next activation in the input sequence
+              if ((wght_data_end <= wght_data_SPad_addr + 1) && !next_iact) begin
+                wght_data_start <= wght_data_start_pre;  // Commit start address
+                wght_end_set    <= 0;                     // Clear flags for next activation
+                wght_start_set  <= 0;
+
+                if (wght_start_set) begin
+                  wght_data_start <= wght_data_start_pre;
+                  wght_data_vec <= wght_data_start_pre;
+                end
+
+                if (wght_end_set) begin
+                  wght_data_end       <= wght_data_end_pre; // Commit end address
+                  wght_data_start_pre <= wght_addr_SPad_data_r;
+                end else begin
+                  wght_data_end <= wght_addr_SPad_data_r;
+                end
+
+                // Determine next weight address vector based on activation sparsity
+                if (iact_oh_delay_1 <= iact_oh_delay_2 + 1) begin
+                  // Sequential weight addressing
+                  if ((first_spad_words_wght - 1) > wght_addr_vec) begin
+                    wght_addr_vec <= wght_addr_vec + 1;
+                  end
+                  if (wght_end_set) begin
+                    wght_data_start_pre <= wght_data_end_pre;
+                  end else begin
+                    wght_data_start_pre <= wght_addr_SPad_data_r;
+                  end
+                end else begin
+                  // Sparse weight addressing (skip based on overhead bits)
+                  if ((first_spad_words_wght - 1) > wght_addr_vec) begin
+                    wght_addr_vec <= iact_oh_delay_1 + 1;
+                  end
+                  wght_start_set <= 0;
+                end
+
                 if ((first_spad_words_wght - 1) > wght_addr_vec) begin
                   wght_addr_vec <= wght_addr_vec + 1;
                 end
-                if (wght_end_set) begin
-                  wght_data_start_pre <= wght_data_end_pre;
+
+                // Signal transition to next activation
+                fast_cycle          <= 1;                     // Enable fast cycling
+                iact_data_SPad_addr <= iact_data_SPad_addr + 1; // Move to next iact entry
+                next_iact           <= 1;                     // Assert activation advance signal
+                iact_addr_count     <= iact_addr_count + 1;   // Increment activation counter
+              end
+
+              // ================================================================
+              // BLOCK 4: NEXT ACTIVATION HANDLING & DATA VALIDITY CHECK
+              // ================================================================
+              // Update activation data pipeline and validate current weight vector
+              // Rationale: When advancing to next activation, update the pipeline
+              // delays for proper data alignment. Also check if current weight
+              // vector falls within the valid range for MAC operations.
+              if (next_iact) begin
+                // Update iact data pipeline (3-cycle delay for SPad read latency)
+                next_iact2           <= iact_addr_SPad_en_r; // Latch enable signal
+                iact_data_current_1  <= iact_data_spad_pay;  // Read new activation
+                iact_data_current_2  <= iact_data_current_1; // Shift pipeline stage 1
+                iact_data_current_3  <= iact_data_current_2; // Shift pipeline stage 2
+                psum_spad_addr_a_mem <= 0;                   // Reset psum A memory addr
+                psum_spad_addr_b_mem <= 1;                   // Reset psum B memory addr
+                iact_addr_current    <= iact_addr_current + 1; // Increment activation index
+              end
+
+              // ================================================================
+              // BLOCK 5: WEIGHT DATA VALIDITY CHECK
+              // ================================================================
+              // Determine if current weight vector should be included in MAC
+              // Rationale: Data is valid only if current weight index is within
+              // [start, end) range. Outside this range, no MAC operation occurs.
+              values_valid <= 0;                              // Default: data is valid
+              if (wght_data_end <= wght_data_vec) begin
+                values_valid <= 1;                            // Weight vector out of range
+              end
+              // ================================================================
+              // BLOCK 6: COMPUTATION COMPLETION CHECK
+              // ================================================================
+              // Detect when all activations have been processed
+              // Rationale: When iact_addr_SPad_data_r == current+1, we've reached
+              // the end of the activation sequence. Transition to output state.
+              // Reuse Values of PSUM SPad
+              if (((iact_addr_SPad_data_r == iact_addr_current+1) | (iact_addr_count == 0)) & (wght_data_vec >= wght_data_end) | (iact_addr_count > iact_addr_SPad_data_r)) begin
+                // All activations processed, prepare for psum output
+                current_state_computing <= WAIT_TO_SEND_PSUM; // Transition state
+                wght_addr_vec           <= 0;                  // Clear weight pointer
+                wght_data_vec           <= 0;                  // Clear weight index
+                wght_ready_o            <= 1;                  // Signal ready for new data
+                mux_iact_ready          <= 1;                  // Signal ready status
+                iact_data_current_3     <= 0;                  // Clear iact pipeline
+                computing               <= 0;                  // Disable MAC operations
+                psum_data_SPad_en_a_r   <= 0;                  // Disable psum reads
+                psum_data_SPad_en_b_r   <= 0;
+                psum_data_SPad_en_a_w   <= 1;                  // Enable psum writes
+                psum_data_SPad_en_b_w   <= 1;
+                values_valid            <= 0;                  // Invalidate current data
+              end else begin
+                // Continue computation, enable psum writes
+                psum_data_SPad_en_a_w <= 1;                    // Write psum results
+                psum_data_SPad_en_b_w <= 1;
+              end
+
+              // ================================================================
+              // BLOCK 7: READ-AFTER-WRITE FORWARDING (Data Hazard Resolution)
+              // ================================================================
+              // Detect when a psum being read was just written, and forward the
+              // newly computed value instead of reading from SPad
+              // Rationale: Adders have 1-cycle latency. If we try to read a psum
+              // that's being written in the same cycle, we need to forward the
+              // result directly to avoid stalling or using stale data.
+              if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
+                // Port A read conflicts with Port A write
+                reuse_psum_spad_a <= 1;       // Enable forwarding
+                reused_data_a     <= adder_1_o_w; // Use adder 1 output
+              end
+              if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
+                // Port B read conflicts with Port B write
+                reuse_psum_spad_b <= 1;
+                reused_data_b     <= adder_2_o_w;
+              end
+              if (!SERIAL) begin
+                if (psum_spad_addr_a_r == psum_spad_addr_b_w) begin
+                  reuse_psum_spad_a <= 1;
+                  reused_data_a     <= adder_2_o_w;
+                end
+                if (psum_spad_addr_b_r == psum_spad_addr_a_w) begin
+                  reuse_psum_spad_b <= 1;
+                  reused_data_b     <= adder_1_o_w;
+                end
+              end
+              
+              // ================================================================
+              // BLOCK 8: ADDER CONTROL AND PSUM MEMORY TRACKING
+              // ================================================================
+              // Enable MAC operations and track which psum locations have been
+              // written to (to determine accumulate vs. first write)
+              // Rationale: use_psum_x signals control whether the adder
+              // accumulates with existing psum or starts fresh. Memory tracking
+              // bits indicate if a psum location already contains a value.
+              adder_1_en <= 1;                       // Enable multiplier/adder 1
+              adder_2_en <= 1;                       // Enable multiplier/adder 2
+
+              // Determine accumulation mode based on memory usage tracking
+              if (SERIAL == 1) begin
+                // Serial mode: separate tracking for each adder
+                if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
+                  // Port A psum already written before: accumulate
+                  use_psum_1 <= 1;
                 end else begin
-                  wght_data_start_pre <= wght_addr_SPad_data_r;
+                  // Port A psum is new: first write
+                  use_psum_1 <= 0;
+                  used_psum_memory_1[(psum_spad_addr_a_r)] <= 1; // Mark as used
+                end
+                if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
+                  use_psum_2 <= 1;
+                end else begin
+                  use_psum_2 <= 0;
+                  used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
                 end
               end else begin
-                // Sparse weight addressing (skip based on overhead bits)
-                if ((first_spad_words_wght - 1) > wght_addr_vec) begin
-                  wght_addr_vec <= iact_oh_delay_1 + 1;
+                // Parallel mode: shared tracking for both adders
+                if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
+                  use_psum_1 <= 1;                   // Accumulate on port A
+                end else begin
+                  use_psum_1 <= 0;                   // First write on port A
+                  used_psum_memory[(psum_spad_addr_a_r)] <= 1;
                 end
-                wght_start_set <= 0;
+                if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
+                  use_psum_2 <= 1;                   // Accumulate on port B
+                end else begin
+                  use_psum_2 <= 0;                   // First write on port B
+                  used_psum_memory[(psum_spad_addr_b_r)] <= 1;
+                end
               end
 
-              if ((first_spad_words_wght - 1) > wght_addr_vec) begin
-                wght_addr_vec <= wght_addr_vec + 1;
-              end
+              // ================================================================
+              // BLOCK 8b: PSUM ADDRESS PIPELINE
+              // ================================================================
+              // Delay psum write addresses to match adder latency
+              // Rationale: Adders have 1-cycle latency; we need to pipeline
+              // addresses through registers to write to the correct location
+              psum_spad_addr_a_delay <= psum_spad_addr_a_r; // Stage 1 delay
+              psum_spad_addr_b_delay <= psum_spad_addr_b_r;
+              psum_spad_addr_a_w     <= psum_spad_addr_a_delay; // Stage 2 delay
+              psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
+            //end
+          end
 
-              // Signal transition to next activation
-              fast_cycle          <= 1;                     // Enable fast cycling
-              iact_data_SPad_addr <= iact_data_SPad_addr + 1; // Move to next iact entry
-              next_iact           <= 1;                     // Assert activation advance signal
-              iact_addr_count     <= iact_addr_count + 1;   // Increment activation counter
-            end
+          // ====================================================================
+          // WAIT_TO_SEND_PSUM: Computation complete, wait for output enable
+          // ====================================================================
+          // Disables computation, prepares for partial sum output
+          // Waits for psum_enable_i signal to begin streaming results
+          WAIT_TO_SEND_PSUM: begin
+            // Disable SPad reads for iact and wght (computation done)
+            iact_addr_SPad_addr   <= 0;
+            iact_addr_SPad_en_r   <= 0;
 
-            // ================================================================
-            // BLOCK 4: NEXT ACTIVATION HANDLING & DATA VALIDITY CHECK
-            // ================================================================
-            // Update activation data pipeline and validate current weight vector
-            // Rationale: When advancing to next activation, update the pipeline
-            // delays for proper data alignment. Also check if current weight
-            // vector falls within the valid range for MAC operations.
-            if (next_iact) begin
-              // Update iact data pipeline (3-cycle delay for SPad read latency)
-              next_iact2           <= iact_addr_SPad_en_r; // Latch enable signal
-              iact_data_current_1  <= iact_data_spad_pay;  // Read new activation
-              iact_data_current_2  <= iact_data_current_1; // Shift pipeline stage 1
-              iact_data_current_3  <= iact_data_current_2; // Shift pipeline stage 2
-              psum_spad_addr_a_mem <= 0;                   // Reset psum A memory addr
-              psum_spad_addr_b_mem <= 1;                   // Reset psum B memory addr
-              iact_addr_current    <= iact_addr_current + 1; // Increment activation index
-            end
+            iact_data_SPad_addr   <= 0;
+            iact_data_SPad_en_r   <= 0;
 
-            // ================================================================
-            // BLOCK 5: WEIGHT DATA VALIDITY CHECK
-            // ================================================================
-            // Determine if current weight vector should be included in MAC
-            // Rationale: Data is valid only if current weight index is within
-            // [start, end) range. Outside this range, no MAC operation occurs.
-            values_valid <= 0;                              // Default: data is valid
-            if (wght_data_end <= wght_data_vec) begin
-              values_valid <= 1;                            // Weight vector out of range
+            wght_addr_SPad_en_r   <= 0;
+            wght_data_SPad_en_r   <= 0;
+
+            psum_data_SPad_en_a_r <= 0;
+            psum_data_SPad_en_b_r <= 0;
+            psum_data_SPad_en_a_w <= 1;
+            if (!data_mode_reg) begin
+              psum_data_SPad_en_b_w <= 1;
             end
-            // ================================================================
-            // BLOCK 6: COMPUTATION COMPLETION CHECK
-            // ================================================================
-            // Detect when all activations have been processed
-            // Rationale: When iact_addr_SPad_data_r == current+1, we've reached
-            // the end of the activation sequence. Transition to output state.
-            // Reuse Values of PSUM SPad
-            if (((iact_addr_SPad_data_r == iact_addr_current+1) | (iact_addr_count == 0)) & (wght_data_vec >= wght_data_end) | (iact_addr_count > iact_addr_SPad_data_r)) begin
-              // All activations processed, prepare for psum output
-              current_state_computing <= WAIT_TO_SEND_PSUM; // Transition state
-              wght_addr_vec           <= 0;                  // Clear weight pointer
-              wght_data_vec           <= 0;                  // Clear weight index
-              wght_ready_o            <= 1;                  // Signal ready for new data
-              mux_iact_ready          <= 1;                  // Signal ready status
-              iact_data_current_3     <= 0;                  // Clear iact pipeline
-              computing               <= 0;                  // Disable MAC operations
-              psum_data_SPad_en_a_r   <= 0;                  // Disable psum reads
-              psum_data_SPad_en_b_r   <= 0;
-              psum_data_SPad_en_a_w   <= 1;                  // Enable psum writes
-              psum_data_SPad_en_b_w   <= 1;
-              values_valid            <= 0;                  // Invalidate current data
+            psum_spad_addr_a_mem <= 0;
+            if (SERIAL == 1) begin
+              psum_spad_addr_b_mem <= 0;
             end else begin
-              // Continue computation, enable psum writes
-              psum_data_SPad_en_a_w <= 1;                    // Write psum results
+              psum_spad_addr_b_mem <= 1;
+            end
+            psum_spad_addr_a_delay <= psum_spad_addr_a_r;
+            psum_spad_addr_b_delay <= psum_spad_addr_b_r;
+            psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
+            psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
+            adder_1_en             <= computing;
+            adder_2_en             <= computing;
+
+            reuse_psum_spad_a      <= 0;
+            reuse_psum_spad_b      <= 0;
+            reused_data_a          <= 0;
+            reused_data_b          <= 0;
+
+            //Reuse Values of PSUM SPad
+            if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
+              reuse_psum_spad_a <= 1;
+              reused_data_a     <= adder_1_o_w;
+            end
+            if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
+              reuse_psum_spad_b <= 1;
+              reused_data_b     <= adder_2_o_w;
+            end
+            if (psum_spad_addr_a_r == psum_spad_addr_b_w) begin
+              reuse_psum_spad_a <= 1;
+              reused_data_a     <= adder_2_o_w;
+            end
+            if (psum_spad_addr_b_r == psum_spad_addr_a_w) begin
+              reuse_psum_spad_b <= 1;
+              reused_data_b     <= adder_1_o_w;
+            end
+
+            if (psum_select) begin
+              psum_data_SPad_en_a_w <= 0;
+              psum_data_SPad_en_b_w <= 0;
+              psum_spad_addr_a_mem  <= 0;
+              if (SERIAL) begin
+                psum_spad_addr_b_mem <= 0;
+              end else begin
+                psum_spad_addr_b_mem <= 1;
+              end
+              psum_spad_addr_a_w <= 2;
+              psum_spad_addr_b_w <= 3;
+            end
+            if (psum_enable_i) begin
+              adder_1_en              <= 1;
+              adder_2_en              <= 1;
+              current_state_computing <= SEND_PSUM;
+              psum_data_SPad_en_a_w   <= 1;
+              psum_data_SPad_en_b_w   <= 1;
+              psum_spad_addr_a_w      <= psum_spad_addr_a_r;
+              psum_spad_addr_b_w      <= psum_spad_addr_b_r;
+              if (SERIAL) begin
+                psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
+                psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
+                if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
+                  use_psum_1                               <= 1;
+                  used_psum_memory_1[(psum_spad_addr_a_r)] <= 0;
+                end else begin
+                  use_psum_1 <= 0;
+                end
+                if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
+                  use_psum_2                               <= 1;
+                  used_psum_memory_2[(psum_spad_addr_b_r)] <= 0;
+                end else begin
+                  use_psum_2 <= 0;
+                end
+              end else begin
+                psum_spad_addr_a_mem <= psum_spad_addr_a_r + 2;
+                psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
+                if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
+                  use_psum_1                             <= 1;
+                  used_psum_memory[(psum_spad_addr_a_r)] <= 0;
+                end else begin
+                  use_psum_1 <= 0;
+                end
+                if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
+                  use_psum_2                             <= 1;
+                  used_psum_memory[(psum_spad_addr_b_r)] <= 0;
+                end else begin
+                  use_psum_2 <= 0;
+                end
+              end
+            end else begin
+              if (!data_mode_reg) begin
+                if (SERIAL == 1) begin
+                  if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
+                    use_psum_1 <= 1;
+                  end else begin
+                    use_psum_1 <= 0;
+                    //used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
+                  end
+                  if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
+                    use_psum_2 <= 1;
+                  end else begin
+                    use_psum_2 <= 0;
+                    //used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
+                  end
+                end else begin
+                  if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
+                    use_psum_1 <= 1;
+                  end else begin
+                    use_psum_1 <= 0;
+                    used_psum_memory[(psum_spad_addr_a_r)] <= 1;
+                  end
+                  if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
+                    use_psum_2 <= 1;
+                  end else begin
+                    use_psum_2 <= 0;
+                    used_psum_memory[(psum_spad_addr_b_r)] <= 1;
+                  end
+                end
+              end
+            end
+            computing   <= 0;
+            psum_select <= !computing;
+          end
+
+          // ====================================================================
+          // SEND_PSUM: Stream partial sum results to output
+          // ====================================================================
+          // Reads psum values from SPad memory and outputs them
+          // Clears usage bitmap as values are sent
+          // Returns to IDLE when psum_enable_i deasserts
+          SEND_PSUM: begin
+            psum_spad_addr_a_w <= psum_spad_addr_a_r;
+            psum_spad_addr_b_w <= psum_spad_addr_b_r;
+            adder_1_en         <= 1;
+            adder_2_en         <= 1;
+            psum_select        <= !computing;
+            // When psum output completes, return to IDLE
+            if (!psum_enable_i) begin
+              current_state_computing <= IDLE;
+              adder_1_en              <= 1;
+              adder_2_en              <= 1;
+            end
+            if (SERIAL == 1) begin
+              psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
+              psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
+              adder_3_en           <= 1;
+              if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
+                use_psum_1                               <= 1;
+                used_psum_memory_1[(psum_spad_addr_a_r)] <= 0;
+              end else begin
+                use_psum_1 <= 0;
+              end
+              if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
+                use_psum_2                               <= 1;
+                used_psum_memory_2[(psum_spad_addr_b_r)] <= 0;
+              end else begin
+                use_psum_2 <= 0;
+              end
+            end else begin
+              psum_spad_addr_a_mem <= psum_spad_addr_a_r + 2;
+              psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
+              if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
+                use_psum_1                             <= 1;
+                used_psum_memory[(psum_spad_addr_a_r)] <= 0;
+              end else begin
+                use_psum_1 <= 0;
+              end
+              if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
+                use_psum_2                             <= 1;
+                used_psum_memory[(psum_spad_addr_b_r)] <= 0;
+              end else begin
+                use_psum_2 <= 0;
+              end
+            end
+          end
+          default: begin
+          end
+        endcase
+      end
+    end
+  end else begin : gen_dense_fsm
+    // ============================================================================
+    // DENSE FSM (SPARSITY_EN=0)
+    // ============================================================================
+    // Simplified FSM for dense (non-sparse) computation:
+    // - No weight address SPad needed (weights stored densely)
+    // - No overhead-bit pipeline (iact_oh_delay_*, iact_data_spad_oh unused)
+    // - No weight range computation (all weights valid)
+    // - No zero-skipping (next_iact/next_iact2/values_valid unused)
+    // - Sequential addressing: iact and weight SPads are read in order
+    // - Loop termination: when all iact data words processed
+    always @(posedge clk_i, negedge rst_ni) begin
+      if (!rst_ni) begin
+        current_state_computing <= IDLE;
+        iact_addr_SPad_addr     <= 0;
+        iact_addr_SPad_en_r     <= 0;
+        iact_data_SPad_addr     <= 0;
+        iact_data_SPad_en_r     <= 0;
+        iact_data_position_reg  <= 0;
+        wght_addr_SPad_en_r     <= 0;
+        wght_data_vec           <= 0;
+        wght_data_SPad_en_r     <= 0;
+        psum_data_SPad_en_a_r   <= 0;
+        psum_data_SPad_en_b_r   <= 0;
+        psum_data_SPad_en_a_w   <= 0;
+        psum_data_SPad_en_b_w   <= 0;
+        iact_data_current_1     <= 0;
+        iact_data_current_2     <= 0;
+        iact_data_current_3     <= 0;
+        computing               <= 0;
+        fast_cycle              <= 0;
+        used_psum_memory        <= 0;
+        use_psum_1              <= 0;
+        use_psum_2              <= 0;
+        adder_1_en              <= 0;
+        adder_2_en              <= 0;
+        mux_iact_ready          <= 1;
+        wght_ready_o            <= 1;
+        psum_select             <= 1;
+        psum_data_1_delay       <= 0;
+        psum_data_2_delay       <= 0;
+        psum_enable             <= 0;
+        psum_enable_2           <= 0;
+        psum_enable_o           <= 0;
+        psum_spad_addr_a_mem    <= 0;
+        psum_spad_addr_b_mem    <= 1;
+        reuse_psum_spad_a       <= 0;
+        reuse_psum_spad_b       <= 0;
+        reused_data_a           <= 0;
+        reused_data_b           <= 0;
+        psum_spad_addr_a_delay  <= 0;
+        psum_spad_addr_b_delay  <= 1;
+        psum_spad_addr_a_w      <= 0;
+        psum_spad_addr_b_w      <= 1;
+        // Serial-mode psum memory
+        used_psum_memory_1      <= 0;
+        used_psum_memory_2      <= 0;
+      end else begin
+        // Psum pipeline and external psum input handling (identical to sparse FSM)
+        if (psum_ready_i) begin
+          psum_enable <= psum_enable_i;
+        end else begin
+          psum_enable <= 0;
+        end
+        {psum_data_2_delay, psum_data_1_delay} <= {{(TRANS_BITWIDTH_PSUM) {1'd0}}, psum_data_i};
+        if (SERIAL == 1) begin
+          psum_enable_2 <= psum_enable;
+          psum_enable_o <= psum_enable_2;
+        end else begin
+          psum_enable_o <= psum_enable;
+        end
+        case (current_state_computing)
+          // ==================================================================
+          // IDLE: Wait for compute trigger or psum read request
+          // ==================================================================
+          IDLE: begin
+            mux_iact_ready         <= 1;
+            wght_ready_o           <= 1;
+            fast_cycle             <= 0;
+            iact_addr_SPad_addr    <= 0;
+            iact_addr_SPad_en_r    <= 0;
+            iact_data_SPad_addr    <= 0;
+            iact_data_SPad_en_r    <= 0;
+            wght_addr_SPad_en_r    <= 0;
+            wght_data_vec          <= 0;
+            wght_data_SPad_en_r    <= 0;
+            psum_data_SPad_en_a_r  <= computing;
+            psum_data_SPad_en_b_r  <= computing;
+            psum_data_SPad_en_a_w  <= 0;
+            psum_data_SPad_en_b_w  <= 0;
+            computing              <= 0;
+            psum_spad_addr_a_delay <= 0;
+            psum_spad_addr_b_delay <= 1;
+            psum_spad_addr_a_w     <= 0;
+            psum_spad_addr_b_w     <= 1;
+            psum_spad_addr_a_mem   <= 0;
+            psum_spad_addr_b_mem   <= 1;
+            adder_1_en             <= 0;
+            adder_2_en             <= 0;
+            adder_3_en             <= 0;
+            reuse_psum_spad_a      <= 0;
+            reuse_psum_spad_b      <= 0;
+            reused_data_a          <= 0;
+            reused_data_b          <= 0;
+            use_psum_1             <= 0;
+            use_psum_2             <= 0;
+            psum_select            <= 1;
+            if (SERIAL == 1) begin
+              used_psum_memory_1 <= 0;
+              used_psum_memory_2 <= 0;
+            end else begin
+              used_psum_memory <= 0;
+            end
+            // Psum read-out request
+            if (psum_enable_i) begin
+              current_state_computing <= SEND_PSUM;
+              adder_1_en              <= 1;
+              adder_2_en              <= 1;
+              psum_select             <= 1;
+              use_psum_1              <= 0;
+              use_psum_2              <= 0;
+              if (SERIAL == 1) begin
+                used_psum_memory_1 <= 0;
+                used_psum_memory_2 <= 0;
+              end else begin
+                used_psum_memory <= 0;
+              end
+            end
+            // Start computation when both iact and wght data are loaded
+            if (data_set & compute_i & ((second_spad_words_iact != 0) & (second_spad_words_wght != 0))) begin
+              current_state_computing <= LOADING_1;
+              mux_iact_ready          <= 0;
+              wght_ready_o            <= 0;
+              psum_select             <= 0;
+              iact_data_SPad_addr     <= 0;
+              iact_data_SPad_en_r     <= 1;
+              wght_data_vec           <= 0;
+              wght_data_SPad_en_r     <= 1;
+              psum_data_SPad_en_a_r   <= 0;
+              psum_data_SPad_en_b_r   <= 0;
+              use_psum_1              <= 0;
+              use_psum_2              <= 0;
+              if (SERIAL == 1) begin
+                used_psum_memory_1 <= 0;
+                used_psum_memory_2 <= 0;
+              end else begin
+                used_psum_memory <= 0;
+              end
+            end
+          end
+
+          // ==================================================================
+          // LOADING_1..5: Pipeline fill — 5 cycles to fill iact/wght data path
+          // ==================================================================
+          // In dense mode, we don't need to fetch weight addresses from a
+          // separate SPad. We simply start reading iact and wght data SPads
+          // sequentially and fill the 3-stage iact pipeline.
+          LOADING_1: begin
+            current_state_computing <= LOADING_2;
+            iact_data_current_1     <= iact_data_spad_pay;
+            iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
+            wght_data_vec           <= wght_data_vec + 1;
+          end
+
+          LOADING_2: begin
+            current_state_computing <= LOADING_3;
+            iact_data_current_1     <= iact_data_spad_pay;
+            iact_data_current_2     <= iact_data_current_1;
+            iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
+            wght_data_vec           <= wght_data_vec + 1;
+          end
+
+          LOADING_3: begin
+            current_state_computing <= LOADING_4;
+            iact_data_current_1     <= iact_data_spad_pay;
+            iact_data_current_2     <= iact_data_current_1;
+            iact_data_current_3     <= iact_data_current_2;
+            iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
+            wght_data_vec           <= wght_data_vec + 1;
+          end
+
+          LOADING_4: begin
+            current_state_computing <= LOADING_5;
+            iact_data_current_1     <= iact_data_spad_pay;
+            iact_data_current_2     <= iact_data_current_1;
+            iact_data_current_3     <= iact_data_current_2;
+            iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
+            wght_data_vec           <= wght_data_vec + 1;
+          end
+
+          LOADING_5: begin
+            current_state_computing <= CALCULATING;
+            computing               <= 1;
+            iact_data_current_1     <= iact_data_spad_pay;
+            iact_data_current_2     <= iact_data_current_1;
+            iact_data_current_3     <= iact_data_current_2;
+            iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
+            wght_data_vec           <= wght_data_vec + 1;
+          end
+
+          // ==================================================================
+          // CALCULATING: Main dense MAC loop
+          // ==================================================================
+          // All weights are valid (no zero-skipping). Sequential addressing:
+          // - iact: one new activation per PARALLEL_MACS weight pairs
+          // - wght: increment by 1 each cycle (both MACs fed from wght_data_vec)
+          // Completion: when wght_data_vec wraps through all weight entries
+          CALCULATING: begin
+            // ---------------------------------------------------------------
+            // Default signal setup
+            // ---------------------------------------------------------------
+            iact_addr_SPad_en_r   <= 0;
+            iact_data_SPad_en_r   <= !mux_iact_ready;
+            wght_addr_SPad_en_r   <= 0;           // No weight addr SPad in dense mode
+            psum_data_SPad_en_a_r <= computing;
+            psum_data_SPad_en_b_r <= computing;
+            psum_data_SPad_en_a_w <= 0;
+            psum_data_SPad_en_b_w <= 0;
+            reuse_psum_spad_a     <= 0;
+            reuse_psum_spad_b     <= 0;
+            reused_data_a         <= 0;
+            reused_data_b         <= 0;
+            fast_cycle            <= 0;
+            psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1;
+            psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
+
+            // ---------------------------------------------------------------
+            // Weight vector increment (sequential, no range computation)
+            // ---------------------------------------------------------------
+            if (wght_data_vec < (second_spad_words_wght - 1)) begin
+              wght_data_vec <= wght_data_vec + 1;
+            end else begin
+              wght_data_vec  <= 0;
+              mux_iact_ready <= 1;
+            end
+
+            // ---------------------------------------------------------------
+            // Iact pipeline advance (every PARALLEL_MACS weight steps)
+            // One new iact value feeds both multipliers simultaneously.
+            // In dense mode the iact pipeline shifts every cycle because
+            // each iact pairs with PARALLEL_MACS weight values. When all
+            // weights for the current iact have been consumed, advance iact.
+            // ---------------------------------------------------------------
+            if (mux_iact_ready) begin
+              iact_data_current_1 <= iact_data_spad_pay;
+              iact_data_current_2 <= iact_data_current_1;
+              iact_data_current_3 <= iact_data_current_2;
+              iact_data_SPad_addr <= iact_data_SPad_addr + 1;
+              mux_iact_ready      <= 0;
+              psum_spad_addr_a_mem <= 0;
+              psum_spad_addr_b_mem <= 1;
+            end
+
+            // ---------------------------------------------------------------
+            // Completion: all iact data words processed
+            // ---------------------------------------------------------------
+            if (iact_data_SPad_addr >= second_spad_words_iact) begin
+              current_state_computing <= WAIT_TO_SEND_PSUM;
+              wght_ready_o            <= 1;
+              mux_iact_ready          <= 1;
+              iact_data_current_3     <= 0;
+              computing               <= 0;
+              psum_data_SPad_en_a_r   <= 0;
+              psum_data_SPad_en_b_r   <= 0;
+              psum_data_SPad_en_a_w   <= 1;
+              psum_data_SPad_en_b_w   <= 1;
+            end else begin
+              psum_data_SPad_en_a_w <= 1;
               psum_data_SPad_en_b_w <= 1;
             end
 
-            // ================================================================
-            // BLOCK 7: READ-AFTER-WRITE FORWARDING (Data Hazard Resolution)
-            // ================================================================
-            // Detect when a psum being read was just written, and forward the
-            // newly computed value instead of reading from SPad
-            // Rationale: Adders have 1-cycle latency. If we try to read a psum
-            // that's being written in the same cycle, we need to forward the
-            // result directly to avoid stalling or using stale data.
+            // ---------------------------------------------------------------
+            // Read-after-write forwarding (identical to sparse FSM)
+            // ---------------------------------------------------------------
             if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
-              // Port A read conflicts with Port A write
-              reuse_psum_spad_a <= 1;       // Enable forwarding
-              reused_data_a     <= adder_1_o_w; // Use adder 1 output
+              reuse_psum_spad_a <= 1;
+              reused_data_a     <= adder_1_o_w;
             end
             if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
-              // Port B read conflicts with Port B write
               reuse_psum_spad_b <= 1;
               reused_data_b     <= adder_2_o_w;
             end
@@ -1586,28 +2135,18 @@ module PE #(
                 reused_data_b     <= adder_1_o_w;
               end
             end
-            
-            // ================================================================
-            // BLOCK 8: ADDER CONTROL AND PSUM MEMORY TRACKING
-            // ================================================================
-            // Enable MAC operations and track which psum locations have been
-            // written to (to determine accumulate vs. first write)
-            // Rationale: use_psum_x signals control whether the adder
-            // accumulates with existing psum or starts fresh. Memory tracking
-            // bits indicate if a psum location already contains a value.
-            adder_1_en <= 1;                       // Enable multiplier/adder 1
-            adder_2_en <= 1;                       // Enable multiplier/adder 2
 
-            // Determine accumulation mode based on memory usage tracking
+            // ---------------------------------------------------------------
+            // Adder enable and psum memory tracking (identical to sparse FSM)
+            // ---------------------------------------------------------------
+            adder_1_en <= 1;
+            adder_2_en <= 1;
             if (SERIAL == 1) begin
-              // Serial mode: separate tracking for each adder
               if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
-                // Port A psum already written before: accumulate
                 use_psum_1 <= 1;
               end else begin
-                // Port A psum is new: first write
                 use_psum_1 <= 0;
-                used_psum_memory_1[(psum_spad_addr_a_r)] <= 1; // Mark as used
+                used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
               end
               if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
                 use_psum_2 <= 1;
@@ -1616,517 +2155,69 @@ module PE #(
                 used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
               end
             end else begin
-              // Parallel mode: shared tracking for both adders
               if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
-                use_psum_1 <= 1;                   // Accumulate on port A
+                use_psum_1 <= 1;
               end else begin
-                use_psum_1 <= 0;                   // First write on port A
+                use_psum_1 <= 0;
                 used_psum_memory[(psum_spad_addr_a_r)] <= 1;
               end
               if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
-                use_psum_2 <= 1;                   // Accumulate on port B
+                use_psum_2 <= 1;
               end else begin
-                use_psum_2 <= 0;                   // First write on port B
+                use_psum_2 <= 0;
                 used_psum_memory[(psum_spad_addr_b_r)] <= 1;
               end
             end
 
-            // ================================================================
-            // BLOCK 8b: PSUM ADDRESS PIPELINE
-            // ================================================================
-            // Delay psum write addresses to match adder latency
-            // Rationale: Adders have 1-cycle latency; we need to pipeline
-            // addresses through registers to write to the correct location
-            psum_spad_addr_a_delay <= psum_spad_addr_a_r; // Stage 1 delay
+            // ---------------------------------------------------------------
+            // Psum address pipeline (identical to sparse FSM)
+            // ---------------------------------------------------------------
+            psum_spad_addr_a_delay <= psum_spad_addr_a_r;
             psum_spad_addr_b_delay <= psum_spad_addr_b_r;
-            psum_spad_addr_a_w     <= psum_spad_addr_a_delay; // Stage 2 delay
+            psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
             psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
-          //end
-        end
-
-        // ====================================================================
-        // WAIT_TO_SEND_PSUM: Computation complete, wait for output enable
-        // ====================================================================
-        // Disables computation, prepares for partial sum output
-        // Waits for psum_enable_i signal to begin streaming results
-        WAIT_TO_SEND_PSUM: begin
-          // Disable SPad reads for iact and wght (computation done)
-          iact_addr_SPad_addr   <= 0;
-          iact_addr_SPad_en_r   <= 0;
-
-          iact_data_SPad_addr   <= 0;
-          iact_data_SPad_en_r   <= 0;
-
-          wght_addr_SPad_en_r   <= 0;
-          wght_data_SPad_en_r   <= 0;
-
-          psum_data_SPad_en_a_r <= 0;
-          psum_data_SPad_en_b_r <= 0;
-          psum_data_SPad_en_a_w <= 1;
-          if (!data_mode_reg) begin
-            psum_data_SPad_en_b_w <= 1;
-          end
-          psum_spad_addr_a_mem <= 0;
-          if (SERIAL == 1) begin
-            psum_spad_addr_b_mem <= 0;
-          end else begin
-            psum_spad_addr_b_mem <= 1;
-          end
-          psum_spad_addr_a_delay <= psum_spad_addr_a_r;
-          psum_spad_addr_b_delay <= psum_spad_addr_b_r;
-          psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
-          psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
-          adder_1_en             <= computing;
-          adder_2_en             <= computing;
-
-          reuse_psum_spad_a      <= 0;
-          reuse_psum_spad_b      <= 0;
-          reused_data_a          <= 0;
-          reused_data_b          <= 0;
-
-          //Reuse Values of PSUM SPad
-          if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
-            reuse_psum_spad_a <= 1;
-            reused_data_a     <= adder_1_o_w;
-          end
-          if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
-            reuse_psum_spad_b <= 1;
-            reused_data_b     <= adder_2_o_w;
-          end
-          if (psum_spad_addr_a_r == psum_spad_addr_b_w) begin
-            reuse_psum_spad_a <= 1;
-            reused_data_a     <= adder_2_o_w;
-          end
-          if (psum_spad_addr_b_r == psum_spad_addr_a_w) begin
-            reuse_psum_spad_b <= 1;
-            reused_data_b     <= adder_1_o_w;
           end
 
-          if (psum_select) begin
-            psum_data_SPad_en_a_w <= 0;
-            psum_data_SPad_en_b_w <= 0;
-            psum_spad_addr_a_mem  <= 0;
-            if (SERIAL) begin
+          // ==================================================================
+          // WAIT_TO_SEND_PSUM: Computation done, wait for output enable
+          // ==================================================================
+          WAIT_TO_SEND_PSUM: begin
+            iact_addr_SPad_addr   <= 0;
+            iact_addr_SPad_en_r   <= 0;
+            iact_data_SPad_addr   <= 0;
+            iact_data_SPad_en_r   <= 0;
+            wght_addr_SPad_en_r   <= 0;
+            wght_data_SPad_en_r   <= 0;
+            psum_data_SPad_en_a_r <= 0;
+            psum_data_SPad_en_b_r <= 0;
+            psum_data_SPad_en_a_w <= 1;
+            if (!data_mode_reg) begin
+              psum_data_SPad_en_b_w <= 1;
+            end
+            psum_spad_addr_a_mem <= 0;
+            if (SERIAL == 1) begin
               psum_spad_addr_b_mem <= 0;
             end else begin
               psum_spad_addr_b_mem <= 1;
             end
-            psum_spad_addr_a_w <= 2;
-            psum_spad_addr_b_w <= 3;
-          end
-          if (psum_enable_i) begin
-            adder_1_en              <= 1;
-            adder_2_en              <= 1;
-            current_state_computing <= SEND_PSUM;
-            psum_data_SPad_en_a_w   <= 1;
-            psum_data_SPad_en_b_w   <= 1;
-            psum_spad_addr_a_w      <= psum_spad_addr_a_r;
-            psum_spad_addr_b_w      <= psum_spad_addr_b_r;
-            if (SERIAL) begin
-              psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
-              psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
-              if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
-                use_psum_1                               <= 1;
-                used_psum_memory_1[(psum_spad_addr_a_r)] <= 0;
-              end else begin
-                use_psum_1 <= 0;
-              end
-              if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
-                use_psum_2                               <= 1;
-                used_psum_memory_2[(psum_spad_addr_b_r)] <= 0;
-              end else begin
-                use_psum_2 <= 0;
-              end
-            end else begin
-              psum_spad_addr_a_mem <= psum_spad_addr_a_r + 2;
-              psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
-              if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
-                use_psum_1                             <= 1;
-                used_psum_memory[(psum_spad_addr_a_r)] <= 0;
-              end else begin
-                use_psum_1 <= 0;
-              end
-              if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
-                use_psum_2                             <= 1;
-                used_psum_memory[(psum_spad_addr_b_r)] <= 0;
-              end else begin
-                use_psum_2 <= 0;
-              end
+            psum_spad_addr_a_delay <= psum_spad_addr_a_r;
+            psum_spad_addr_b_delay <= psum_spad_addr_b_r;
+            psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
+            psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
+            adder_1_en             <= computing;
+            adder_2_en             <= computing;
+            reuse_psum_spad_a      <= 0;
+            reuse_psum_spad_b      <= 0;
+            reused_data_a          <= 0;
+            reused_data_b          <= 0;
+            if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
+              reuse_psum_spad_a <= 1;
+              reused_data_a     <= adder_1_o_w;
             end
-          end else begin
-            if (!data_mode_reg) begin
-              if (SERIAL == 1) begin
-                if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
-                  use_psum_1 <= 1;
-                end else begin
-                  use_psum_1 <= 0;
-                  //used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
-                end
-                if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
-                  use_psum_2 <= 1;
-                end else begin
-                  use_psum_2 <= 0;
-                  //used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
-                end
-              end else begin
-                if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
-                  use_psum_1 <= 1;
-                end else begin
-                  use_psum_1 <= 0;
-                  used_psum_memory[(psum_spad_addr_a_r)] <= 1;
-                end
-                if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
-                  use_psum_2 <= 1;
-                end else begin
-                  use_psum_2 <= 0;
-                  used_psum_memory[(psum_spad_addr_b_r)] <= 1;
-                end
-              end
+            if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
+              reuse_psum_spad_b <= 1;
+              reused_data_b     <= adder_2_o_w;
             end
-          end
-          computing   <= 0;
-          psum_select <= !computing;
-        end
-
-        // ====================================================================
-        // SEND_PSUM: Stream partial sum results to output
-        // ====================================================================
-        // Reads psum values from SPad memory and outputs them
-        // Clears usage bitmap as values are sent
-        // Returns to IDLE when psum_enable_i deasserts
-        SEND_PSUM: begin
-          psum_spad_addr_a_w <= psum_spad_addr_a_r;
-          psum_spad_addr_b_w <= psum_spad_addr_b_r;
-          adder_1_en         <= 1;
-          adder_2_en         <= 1;
-          psum_select        <= !computing;
-          // When psum output completes, return to IDLE
-          if (!psum_enable_i) begin
-            current_state_computing <= IDLE;
-            adder_1_en              <= 1;
-            adder_2_en              <= 1;
-          end
-          if (SERIAL == 1) begin
-            psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
-            psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
-            adder_3_en           <= 1;
-            if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
-              use_psum_1                               <= 1;
-              used_psum_memory_1[(psum_spad_addr_a_r)] <= 0;
-            end else begin
-              use_psum_1 <= 0;
-            end
-            if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
-              use_psum_2                               <= 1;
-              used_psum_memory_2[(psum_spad_addr_b_r)] <= 0;
-            end else begin
-              use_psum_2 <= 0;
-            end
-          end else begin
-            psum_spad_addr_a_mem <= psum_spad_addr_a_r + 2;
-            psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
-            if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
-              use_psum_1                             <= 1;
-              used_psum_memory[(psum_spad_addr_a_r)] <= 0;
-            end else begin
-              use_psum_1 <= 0;
-            end
-            if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
-              use_psum_2                             <= 1;
-              used_psum_memory[(psum_spad_addr_b_r)] <= 0;
-            end else begin
-              use_psum_2 <= 0;
-            end
-          end
-        end
-        default: begin
-        end
-      endcase
-    end
-  end
-  end else begin : gen_dense_fsm
-  // ============================================================================
-  // DENSE FSM (SPARSITY_EN=0)
-  // ============================================================================
-  // Simplified FSM for dense (non-sparse) computation:
-  // - No weight address SPad needed (weights stored densely)
-  // - No overhead-bit pipeline (iact_oh_delay_*, iact_data_spad_oh unused)
-  // - No weight range computation (all weights valid)
-  // - No zero-skipping (next_iact/next_iact2/values_valid unused)
-  // - Sequential addressing: iact and weight SPads are read in order
-  // - Loop termination: when all iact data words processed
-  always @(posedge clk_i, negedge rst_ni) begin
-    if (!rst_ni) begin
-      current_state_computing <= IDLE;
-      iact_addr_SPad_addr     <= 0;
-      iact_addr_SPad_en_r     <= 0;
-      iact_data_SPad_addr     <= 0;
-      iact_data_SPad_en_r     <= 0;
-      iact_data_position_reg  <= 0;
-      wght_addr_SPad_en_r     <= 0;
-      wght_data_vec           <= 0;
-      wght_data_SPad_en_r     <= 0;
-      psum_data_SPad_en_a_r   <= 0;
-      psum_data_SPad_en_b_r   <= 0;
-      psum_data_SPad_en_a_w   <= 0;
-      psum_data_SPad_en_b_w   <= 0;
-      iact_data_current_1     <= 0;
-      iact_data_current_2     <= 0;
-      iact_data_current_3     <= 0;
-      computing               <= 0;
-      fast_cycle              <= 0;
-      used_psum_memory        <= 0;
-      use_psum_1              <= 0;
-      use_psum_2              <= 0;
-      adder_1_en              <= 0;
-      adder_2_en              <= 0;
-      mux_iact_ready          <= 1;
-      wght_ready_o            <= 1;
-      psum_select             <= 1;
-      psum_data_1_delay       <= 0;
-      psum_data_2_delay       <= 0;
-      psum_enable             <= 0;
-      psum_enable_2           <= 0;
-      psum_enable_o           <= 0;
-      psum_spad_addr_a_mem    <= 0;
-      psum_spad_addr_b_mem    <= 1;
-      reuse_psum_spad_a       <= 0;
-      reuse_psum_spad_b       <= 0;
-      reused_data_a           <= 0;
-      reused_data_b           <= 0;
-      psum_spad_addr_a_delay  <= 0;
-      psum_spad_addr_b_delay  <= 1;
-      psum_spad_addr_a_w      <= 0;
-      psum_spad_addr_b_w      <= 1;
-      // Serial-mode psum memory
-      used_psum_memory_1      <= 0;
-      used_psum_memory_2      <= 0;
-    end else begin
-      // Psum pipeline and external psum input handling (identical to sparse FSM)
-      if (psum_ready_i) begin
-        psum_enable <= psum_enable_i;
-      end else begin
-        psum_enable <= 0;
-      end
-      {psum_data_2_delay, psum_data_1_delay} <= {{(TRANS_BITWIDTH_PSUM) {1'd0}}, psum_data_i};
-      if (SERIAL == 1) begin
-        psum_enable_2 <= psum_enable;
-        psum_enable_o <= psum_enable_2;
-      end else begin
-        psum_enable_o <= psum_enable;
-      end
-      case (current_state_computing)
-        // ==================================================================
-        // IDLE: Wait for compute trigger or psum read request
-        // ==================================================================
-        IDLE: begin
-          mux_iact_ready         <= 1;
-          wght_ready_o           <= 1;
-          fast_cycle             <= 0;
-          iact_addr_SPad_addr    <= 0;
-          iact_addr_SPad_en_r    <= 0;
-          iact_data_SPad_addr    <= 0;
-          iact_data_SPad_en_r    <= 0;
-          wght_addr_SPad_en_r    <= 0;
-          wght_data_vec          <= 0;
-          wght_data_SPad_en_r    <= 0;
-          psum_data_SPad_en_a_r  <= computing;
-          psum_data_SPad_en_b_r  <= computing;
-          psum_data_SPad_en_a_w  <= 0;
-          psum_data_SPad_en_b_w  <= 0;
-          computing              <= 0;
-          psum_spad_addr_a_delay <= 0;
-          psum_spad_addr_b_delay <= 1;
-          psum_spad_addr_a_w     <= 0;
-          psum_spad_addr_b_w     <= 1;
-          psum_spad_addr_a_mem   <= 0;
-          psum_spad_addr_b_mem   <= 1;
-          adder_1_en             <= 0;
-          adder_2_en             <= 0;
-          adder_3_en             <= 0;
-          reuse_psum_spad_a      <= 0;
-          reuse_psum_spad_b      <= 0;
-          reused_data_a          <= 0;
-          reused_data_b          <= 0;
-          use_psum_1             <= 0;
-          use_psum_2             <= 0;
-          psum_select            <= 1;
-          if (SERIAL == 1) begin
-            used_psum_memory_1 <= 0;
-            used_psum_memory_2 <= 0;
-          end else begin
-            used_psum_memory <= 0;
-          end
-          // Psum read-out request
-          if (psum_enable_i) begin
-            current_state_computing <= SEND_PSUM;
-            adder_1_en              <= 1;
-            adder_2_en              <= 1;
-            psum_select             <= 1;
-            use_psum_1              <= 0;
-            use_psum_2              <= 0;
-            if (SERIAL == 1) begin
-              used_psum_memory_1 <= 0;
-              used_psum_memory_2 <= 0;
-            end else begin
-              used_psum_memory <= 0;
-            end
-          end
-          // Start computation when both iact and wght data are loaded
-          if (data_set & compute_i & ((second_spad_words_iact != 0) & (second_spad_words_wght != 0))) begin
-            current_state_computing <= LOADING_1;
-            mux_iact_ready          <= 0;
-            wght_ready_o            <= 0;
-            psum_select             <= 0;
-            iact_data_SPad_addr     <= 0;
-            iact_data_SPad_en_r     <= 1;
-            wght_data_vec           <= 0;
-            wght_data_SPad_en_r     <= 1;
-            psum_data_SPad_en_a_r   <= 0;
-            psum_data_SPad_en_b_r   <= 0;
-            use_psum_1              <= 0;
-            use_psum_2              <= 0;
-            if (SERIAL == 1) begin
-              used_psum_memory_1 <= 0;
-              used_psum_memory_2 <= 0;
-            end else begin
-              used_psum_memory <= 0;
-            end
-          end
-        end
-
-        // ==================================================================
-        // LOADING_1..5: Pipeline fill — 5 cycles to fill iact/wght data path
-        // ==================================================================
-        // In dense mode, we don't need to fetch weight addresses from a
-        // separate SPad. We simply start reading iact and wght data SPads
-        // sequentially and fill the 3-stage iact pipeline.
-        LOADING_1: begin
-          current_state_computing <= LOADING_2;
-          iact_data_current_1     <= iact_data_spad_pay;
-          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          wght_data_vec           <= wght_data_vec + 1;
-        end
-
-        LOADING_2: begin
-          current_state_computing <= LOADING_3;
-          iact_data_current_1     <= iact_data_spad_pay;
-          iact_data_current_2     <= iact_data_current_1;
-          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          wght_data_vec           <= wght_data_vec + 1;
-        end
-
-        LOADING_3: begin
-          current_state_computing <= LOADING_4;
-          iact_data_current_1     <= iact_data_spad_pay;
-          iact_data_current_2     <= iact_data_current_1;
-          iact_data_current_3     <= iact_data_current_2;
-          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          wght_data_vec           <= wght_data_vec + 1;
-        end
-
-        LOADING_4: begin
-          current_state_computing <= LOADING_5;
-          iact_data_current_1     <= iact_data_spad_pay;
-          iact_data_current_2     <= iact_data_current_1;
-          iact_data_current_3     <= iact_data_current_2;
-          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          wght_data_vec           <= wght_data_vec + 1;
-        end
-
-        LOADING_5: begin
-          current_state_computing <= CALCULATING;
-          computing               <= 1;
-          iact_data_current_1     <= iact_data_spad_pay;
-          iact_data_current_2     <= iact_data_current_1;
-          iact_data_current_3     <= iact_data_current_2;
-          iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
-          wght_data_vec           <= wght_data_vec + 1;
-        end
-
-        // ==================================================================
-        // CALCULATING: Main dense MAC loop
-        // ==================================================================
-        // All weights are valid (no zero-skipping). Sequential addressing:
-        // - iact: one new activation per PARALLEL_MACS weight pairs
-        // - wght: increment by 1 each cycle (both MACs fed from wght_data_vec)
-        // Completion: when wght_data_vec wraps through all weight entries
-        CALCULATING: begin
-          // ---------------------------------------------------------------
-          // Default signal setup
-          // ---------------------------------------------------------------
-          iact_addr_SPad_en_r   <= 0;
-          iact_data_SPad_en_r   <= !mux_iact_ready;
-          wght_addr_SPad_en_r   <= 0;           // No weight addr SPad in dense mode
-          psum_data_SPad_en_a_r <= computing;
-          psum_data_SPad_en_b_r <= computing;
-          psum_data_SPad_en_a_w <= 0;
-          psum_data_SPad_en_b_w <= 0;
-          reuse_psum_spad_a     <= 0;
-          reuse_psum_spad_b     <= 0;
-          reused_data_a         <= 0;
-          reused_data_b         <= 0;
-          fast_cycle            <= 0;
-          psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1;
-          psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
-
-          // ---------------------------------------------------------------
-          // Weight vector increment (sequential, no range computation)
-          // ---------------------------------------------------------------
-          if (wght_data_vec < (second_spad_words_wght - 1)) begin
-            wght_data_vec <= wght_data_vec + 1;
-          end else begin
-            wght_data_vec  <= 0;
-            mux_iact_ready <= 1;
-          end
-
-          // ---------------------------------------------------------------
-          // Iact pipeline advance (every PARALLEL_MACS weight steps)
-          // One new iact value feeds both multipliers simultaneously.
-          // In dense mode the iact pipeline shifts every cycle because
-          // each iact pairs with PARALLEL_MACS weight values. When all
-          // weights for the current iact have been consumed, advance iact.
-          // ---------------------------------------------------------------
-          if (mux_iact_ready) begin
-            iact_data_current_1 <= iact_data_spad_pay;
-            iact_data_current_2 <= iact_data_current_1;
-            iact_data_current_3 <= iact_data_current_2;
-            iact_data_SPad_addr <= iact_data_SPad_addr + 1;
-            mux_iact_ready      <= 0;
-            psum_spad_addr_a_mem <= 0;
-            psum_spad_addr_b_mem <= 1;
-          end
-
-          // ---------------------------------------------------------------
-          // Completion: all iact data words processed
-          // ---------------------------------------------------------------
-          if (iact_data_SPad_addr >= second_spad_words_iact) begin
-            current_state_computing <= WAIT_TO_SEND_PSUM;
-            wght_ready_o            <= 1;
-            mux_iact_ready          <= 1;
-            iact_data_current_3     <= 0;
-            computing               <= 0;
-            psum_data_SPad_en_a_r   <= 0;
-            psum_data_SPad_en_b_r   <= 0;
-            psum_data_SPad_en_a_w   <= 1;
-            psum_data_SPad_en_b_w   <= 1;
-          end else begin
-            psum_data_SPad_en_a_w <= 1;
-            psum_data_SPad_en_b_w <= 1;
-          end
-
-          // ---------------------------------------------------------------
-          // Read-after-write forwarding (identical to sparse FSM)
-          // ---------------------------------------------------------------
-          if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
-            reuse_psum_spad_a <= 1;
-            reused_data_a     <= adder_1_o_w;
-          end
-          if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
-            reuse_psum_spad_b <= 1;
-            reused_data_b     <= adder_2_o_w;
-          end
-          if (!SERIAL) begin
             if (psum_spad_addr_a_r == psum_spad_addr_b_w) begin
               reuse_psum_spad_a <= 1;
               reused_data_a     <= adder_2_o_w;
@@ -2135,121 +2226,108 @@ module PE #(
               reuse_psum_spad_b <= 1;
               reused_data_b     <= adder_1_o_w;
             end
+            if (psum_select) begin
+              psum_data_SPad_en_a_w <= 0;
+              psum_data_SPad_en_b_w <= 0;
+              psum_spad_addr_a_mem  <= 0;
+              if (SERIAL) begin
+                psum_spad_addr_b_mem <= 0;
+              end else begin
+                psum_spad_addr_b_mem <= 1;
+              end
+              psum_spad_addr_a_w <= 2;
+              psum_spad_addr_b_w <= 3;
+            end
+            if (psum_enable_i) begin
+              adder_1_en              <= 1;
+              adder_2_en              <= 1;
+              current_state_computing <= SEND_PSUM;
+              psum_data_SPad_en_a_w   <= 1;
+              psum_data_SPad_en_b_w   <= 1;
+              psum_spad_addr_a_w      <= psum_spad_addr_a_r;
+              psum_spad_addr_b_w      <= psum_spad_addr_b_r;
+              if (SERIAL) begin
+                psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
+                psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
+                if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
+                  use_psum_1                               <= 1;
+                  used_psum_memory_1[(psum_spad_addr_a_r)] <= 0;
+                end else begin
+                  use_psum_1 <= 0;
+                end
+                if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
+                  use_psum_2                               <= 1;
+                  used_psum_memory_2[(psum_spad_addr_b_r)] <= 0;
+                end else begin
+                  use_psum_2 <= 0;
+                end
+              end else begin
+                psum_spad_addr_a_mem <= psum_spad_addr_a_r + 2;
+                psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
+                if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
+                  use_psum_1                             <= 1;
+                  used_psum_memory[(psum_spad_addr_a_r)] <= 0;
+                end else begin
+                  use_psum_1 <= 0;
+                end
+                if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
+                  use_psum_2                             <= 1;
+                  used_psum_memory[(psum_spad_addr_b_r)] <= 0;
+                end else begin
+                  use_psum_2 <= 0;
+                end
+              end
+            end else begin
+              if (!data_mode_reg) begin
+                if (SERIAL == 1) begin
+                  if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
+                    use_psum_1 <= 1;
+                  end else begin
+                    use_psum_1 <= 0;
+                  end
+                  if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
+                    use_psum_2 <= 1;
+                  end else begin
+                    use_psum_2 <= 0;
+                  end
+                end else begin
+                  if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
+                    use_psum_1 <= 1;
+                  end else begin
+                    use_psum_1 <= 0;
+                    used_psum_memory[(psum_spad_addr_a_r)] <= 1;
+                  end
+                  if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
+                    use_psum_2 <= 1;
+                  end else begin
+                    use_psum_2 <= 0;
+                    used_psum_memory[(psum_spad_addr_b_r)] <= 1;
+                  end
+                end
+              end
+            end
+            computing   <= 0;
+            psum_select <= !computing;
           end
 
-          // ---------------------------------------------------------------
-          // Adder enable and psum memory tracking (identical to sparse FSM)
-          // ---------------------------------------------------------------
-          adder_1_en <= 1;
-          adder_2_en <= 1;
-          if (SERIAL == 1) begin
-            if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
-              use_psum_1 <= 1;
-            end else begin
-              use_psum_1 <= 0;
-              used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
+          // ==================================================================
+          // SEND_PSUM: Stream results to output (identical to sparse FSM)
+          // ==================================================================
+          SEND_PSUM: begin
+            psum_spad_addr_a_w <= psum_spad_addr_a_r;
+            psum_spad_addr_b_w <= psum_spad_addr_b_r;
+            adder_1_en         <= 1;
+            adder_2_en         <= 1;
+            psum_select        <= !computing;
+            if (!psum_enable_i) begin
+              current_state_computing <= IDLE;
+              adder_1_en              <= 1;
+              adder_2_en              <= 1;
             end
-            if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
-              use_psum_2 <= 1;
-            end else begin
-              use_psum_2 <= 0;
-              used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
-            end
-          end else begin
-            if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
-              use_psum_1 <= 1;
-            end else begin
-              use_psum_1 <= 0;
-              used_psum_memory[(psum_spad_addr_a_r)] <= 1;
-            end
-            if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
-              use_psum_2 <= 1;
-            end else begin
-              use_psum_2 <= 0;
-              used_psum_memory[(psum_spad_addr_b_r)] <= 1;
-            end
-          end
-
-          // ---------------------------------------------------------------
-          // Psum address pipeline (identical to sparse FSM)
-          // ---------------------------------------------------------------
-          psum_spad_addr_a_delay <= psum_spad_addr_a_r;
-          psum_spad_addr_b_delay <= psum_spad_addr_b_r;
-          psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
-          psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
-        end
-
-        // ==================================================================
-        // WAIT_TO_SEND_PSUM: Computation done, wait for output enable
-        // ==================================================================
-        WAIT_TO_SEND_PSUM: begin
-          iact_addr_SPad_addr   <= 0;
-          iact_addr_SPad_en_r   <= 0;
-          iact_data_SPad_addr   <= 0;
-          iact_data_SPad_en_r   <= 0;
-          wght_addr_SPad_en_r   <= 0;
-          wght_data_SPad_en_r   <= 0;
-          psum_data_SPad_en_a_r <= 0;
-          psum_data_SPad_en_b_r <= 0;
-          psum_data_SPad_en_a_w <= 1;
-          if (!data_mode_reg) begin
-            psum_data_SPad_en_b_w <= 1;
-          end
-          psum_spad_addr_a_mem <= 0;
-          if (SERIAL == 1) begin
-            psum_spad_addr_b_mem <= 0;
-          end else begin
-            psum_spad_addr_b_mem <= 1;
-          end
-          psum_spad_addr_a_delay <= psum_spad_addr_a_r;
-          psum_spad_addr_b_delay <= psum_spad_addr_b_r;
-          psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
-          psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
-          adder_1_en             <= computing;
-          adder_2_en             <= computing;
-          reuse_psum_spad_a      <= 0;
-          reuse_psum_spad_b      <= 0;
-          reused_data_a          <= 0;
-          reused_data_b          <= 0;
-          if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
-            reuse_psum_spad_a <= 1;
-            reused_data_a     <= adder_1_o_w;
-          end
-          if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
-            reuse_psum_spad_b <= 1;
-            reused_data_b     <= adder_2_o_w;
-          end
-          if (psum_spad_addr_a_r == psum_spad_addr_b_w) begin
-            reuse_psum_spad_a <= 1;
-            reused_data_a     <= adder_2_o_w;
-          end
-          if (psum_spad_addr_b_r == psum_spad_addr_a_w) begin
-            reuse_psum_spad_b <= 1;
-            reused_data_b     <= adder_1_o_w;
-          end
-          if (psum_select) begin
-            psum_data_SPad_en_a_w <= 0;
-            psum_data_SPad_en_b_w <= 0;
-            psum_spad_addr_a_mem  <= 0;
-            if (SERIAL) begin
-              psum_spad_addr_b_mem <= 0;
-            end else begin
-              psum_spad_addr_b_mem <= 1;
-            end
-            psum_spad_addr_a_w <= 2;
-            psum_spad_addr_b_w <= 3;
-          end
-          if (psum_enable_i) begin
-            adder_1_en              <= 1;
-            adder_2_en              <= 1;
-            current_state_computing <= SEND_PSUM;
-            psum_data_SPad_en_a_w   <= 1;
-            psum_data_SPad_en_b_w   <= 1;
-            psum_spad_addr_a_w      <= psum_spad_addr_a_r;
-            psum_spad_addr_b_w      <= psum_spad_addr_b_r;
-            if (SERIAL) begin
+            if (SERIAL == 1) begin
               psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
               psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
+              adder_3_en           <= 1;
               if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
                 use_psum_1                               <= 1;
                 used_psum_memory_1[(psum_spad_addr_a_r)] <= 0;
@@ -2278,91 +2356,12 @@ module PE #(
                 use_psum_2 <= 0;
               end
             end
-          end else begin
-            if (!data_mode_reg) begin
-              if (SERIAL == 1) begin
-                if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
-                  use_psum_1 <= 1;
-                end else begin
-                  use_psum_1 <= 0;
-                end
-                if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
-                  use_psum_2 <= 1;
-                end else begin
-                  use_psum_2 <= 0;
-                end
-              end else begin
-                if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
-                  use_psum_1 <= 1;
-                end else begin
-                  use_psum_1 <= 0;
-                  used_psum_memory[(psum_spad_addr_a_r)] <= 1;
-                end
-                if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
-                  use_psum_2 <= 1;
-                end else begin
-                  use_psum_2 <= 0;
-                  used_psum_memory[(psum_spad_addr_b_r)] <= 1;
-                end
-              end
-            end
           end
-          computing   <= 0;
-          psum_select <= !computing;
-        end
-
-        // ==================================================================
-        // SEND_PSUM: Stream results to output (identical to sparse FSM)
-        // ==================================================================
-        SEND_PSUM: begin
-          psum_spad_addr_a_w <= psum_spad_addr_a_r;
-          psum_spad_addr_b_w <= psum_spad_addr_b_r;
-          adder_1_en         <= 1;
-          adder_2_en         <= 1;
-          psum_select        <= !computing;
-          if (!psum_enable_i) begin
-            current_state_computing <= IDLE;
-            adder_1_en              <= 1;
-            adder_2_en              <= 1;
+          default: begin
           end
-          if (SERIAL == 1) begin
-            psum_spad_addr_a_mem <= psum_spad_addr_a_r + 1;
-            psum_spad_addr_b_mem <= psum_spad_addr_b_r + 1;
-            adder_3_en           <= 1;
-            if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
-              use_psum_1                               <= 1;
-              used_psum_memory_1[(psum_spad_addr_a_r)] <= 0;
-            end else begin
-              use_psum_1 <= 0;
-            end
-            if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
-              use_psum_2                               <= 1;
-              used_psum_memory_2[(psum_spad_addr_b_r)] <= 0;
-            end else begin
-              use_psum_2 <= 0;
-            end
-          end else begin
-            psum_spad_addr_a_mem <= psum_spad_addr_a_r + 2;
-            psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
-            if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
-              use_psum_1                             <= 1;
-              used_psum_memory[(psum_spad_addr_a_r)] <= 0;
-            end else begin
-              use_psum_1 <= 0;
-            end
-            if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
-              use_psum_2                             <= 1;
-              used_psum_memory[(psum_spad_addr_b_r)] <= 0;
-            end else begin
-              use_psum_2 <= 0;
-            end
-          end
-        end
-        default: begin
-        end
-      endcase
+        endcase
+      end
     end
-  end
   end endgenerate // gen_sparse_fsm / gen_dense_fsm
 
   // ============================================================================
