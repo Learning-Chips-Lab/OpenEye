@@ -298,3 +298,7 @@ synth_*
 # demo data
 doc/demo_notebooks/backup/*
 doc/demo_notebooks/mnist_pytorch_cocotb/*
+
+# other files
+paper/*
+literature/*
