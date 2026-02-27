@@ -139,7 +139,7 @@ module data_pipeline_wght #(
   reg         [                              7:0] overhead_pos;
   wire        [                              1:0] missingvalue;
   wire        [  $clog2(FIRST_SPAD_ADDR+1)-1 : 0] filters_w;
-  wire        [                           23 : 0] premade_spad_2_output;
+  wire        [           SECOND_SPAD_DATA-1 : 0] premade_spad_2_output;
   wire        [                            3 : 0] overhead_output;
   wire        [                            3 : 0] overhead_next_word;
 
@@ -153,7 +153,11 @@ module data_pipeline_wght #(
   end
   assign overhead_w = input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH] + input_words_w[1][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH];
   assign overhead_next_word = input_words_w[0][11:8];
-  assign premade_spad_2_output = {data_storage_2[23:12],overhead_output,data_storage_2[7:0]};
+  if (SPARSITY_EN) begin
+    assign premade_spad_2_output = {data_storage_2[23:12],overhead_output,data_storage_2[7:0]};
+  end else begin
+    assign premade_spad_2_output = data_storage_2;
+  end
   assign overhead_output = (data_storage_2[11:8]!= 0) & overhead_delay_reg + data_storage_2[11:8] >= filters_w ? data_storage_2[11:8] + overhead_delay_reg - filters_w - over_ending: data_storage_2[11:8];
 
 
