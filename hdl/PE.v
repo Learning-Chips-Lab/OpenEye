@@ -1857,6 +1857,8 @@ module PE #(
 
     reg  [          IACT_ADDR_DATA-1 : 0] iact_channel;     // Current iact address being processed
     reg  [          IACT_ADDR_DATA-1 : 0] wght_filter;     // Current iact address being processed
+    reg                                   computing_1;              // Flag indicating active computation
+    reg                                   computing_2;              // Flag indicating active computation
     always @(posedge clk_i, negedge rst_ni) begin
       if (!rst_ni) begin
         current_state_computing <= IDLE;
@@ -1874,6 +1876,8 @@ module PE #(
         psum_data_SPad_en_b_w   <= 0;
         iact_data_current_3     <= 0;
         computing               <= 0;
+        computing_1             <= 0;
+        computing_2             <= 0;
         fast_cycle              <= 0;
         used_psum_memory        <= 0;
         use_psum_1              <= 0;
@@ -1938,6 +1942,8 @@ module PE #(
             psum_data_SPad_en_a_w  <= 0;
             psum_data_SPad_en_b_w  <= 0;
             computing              <= 0;
+            computing_1            <= 0;
+            computing_2            <= 0;
             psum_spad_addr_a_delay <= 0;
             psum_spad_addr_b_delay <= 1;
             psum_spad_addr_a_w     <= 0;
@@ -2027,6 +2033,8 @@ module PE #(
             // Default signal setup
             // ---------------------------------------------------------------
             computing             <= 1;
+            computing_1           <= 1;
+            computing_2           <= 1;
             iact_data_current_3   <= iact_data_spad_pay;
             iact_addr_SPad_en_r   <= 0;
             iact_data_SPad_en_r   <= !mux_iact_ready;
@@ -2081,9 +2089,6 @@ module PE #(
                 current_state_computing <= WAIT_TO_SEND_PSUM;
                 wght_ready_o            <= 1;
                 mux_iact_ready          <= 1;
-                computing               <= 0;
-                psum_data_SPad_en_a_r   <= 0;
-                psum_data_SPad_en_b_r   <= 0;
                 psum_data_SPad_en_a_w   <= 1;
                 psum_data_SPad_en_b_w   <= 1;
               end else begin
@@ -2096,27 +2101,6 @@ module PE #(
             if (wght_filter == 2) begin
               psum_spad_addr_a_mem <= 0;
               psum_spad_addr_b_mem <= 1;
-            end
-            // ---------------------------------------------------------------
-            // Read-after-write forwarding (identical to sparse FSM)
-            // ---------------------------------------------------------------
-            if (psum_spad_addr_a_r == psum_spad_addr_a_w) begin
-              reuse_psum_spad_a <= 1;
-              reused_data_a     <= adder_1_o_w;
-            end
-            if (psum_spad_addr_b_r == psum_spad_addr_b_w) begin
-              reuse_psum_spad_b <= 1;
-              reused_data_b     <= adder_2_o_w;
-            end
-            if (!SERIAL) begin
-              if (psum_spad_addr_a_r == psum_spad_addr_b_w) begin
-                reuse_psum_spad_a <= 1;
-                reused_data_a     <= adder_2_o_w;
-              end
-              if (psum_spad_addr_b_r == psum_spad_addr_a_w) begin
-                reuse_psum_spad_b <= 1;
-                reused_data_b     <= adder_1_o_w;
-              end
             end
 
             // ---------------------------------------------------------------
@@ -2165,30 +2149,42 @@ module PE #(
           // WAIT_TO_SEND_PSUM: Computation done, wait for output enable
           // ==================================================================
           WAIT_TO_SEND_PSUM: begin
-            iact_addr_SPad_addr   <= 0;
+            computing             <= 0;
+            computing_1           <= computing;
+            computing_2           <= computing_1;
+            iact_addr_SPad_addr   <= computing;
             iact_addr_SPad_en_r   <= 0;
             iact_data_SPad_addr   <= 0;
             iact_data_SPad_en_r   <= 0;
             wght_addr_SPad_en_r   <= 0;
             wght_data_SPad_en_r   <= 0;
-            psum_data_SPad_en_a_r <= 0;
-            psum_data_SPad_en_b_r <= 0;
+            psum_data_SPad_en_a_r <= computing;
+            psum_data_SPad_en_b_r <= computing;
             psum_data_SPad_en_a_w <= 1;
             if (!data_mode_reg) begin
               psum_data_SPad_en_b_w <= 1;
             end
-            psum_spad_addr_a_mem <= 0;
-            if (SERIAL == 1) begin
-              psum_spad_addr_b_mem <= 0;
+            if (computing) begin
+              psum_spad_addr_a_mem <= psum_spad_addr_a_mem + 2;
+              psum_spad_addr_b_mem <= psum_spad_addr_b_mem + 2;
             end else begin
-              psum_spad_addr_b_mem <= 1;
+              psum_spad_addr_a_mem <= 0;
+              if (SERIAL == 1) begin
+                psum_spad_addr_b_mem <= 0;
+              end else begin
+                psum_spad_addr_b_mem <= 1;
+              end
             end
             psum_spad_addr_a_delay <= psum_spad_addr_a_r;
             psum_spad_addr_b_delay <= psum_spad_addr_b_r;
-            psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
-            psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
-            adder_1_en             <= computing;
-            adder_2_en             <= computing;
+            psum_spad_addr_a_w     <= 2;
+            psum_spad_addr_b_w     <= 3;
+            if (computing_2) begin
+              psum_spad_addr_a_w     <= psum_spad_addr_a_delay;
+              psum_spad_addr_b_w     <= psum_spad_addr_b_delay;
+            end
+            adder_1_en             <= values_valid;
+            adder_2_en             <= values_valid;
             reuse_psum_spad_a      <= 0;
             reuse_psum_spad_b      <= 0;
             reused_data_a          <= 0;
@@ -2218,8 +2214,6 @@ module PE #(
               end else begin
                 psum_spad_addr_b_mem <= 1;
               end
-              psum_spad_addr_a_w  <= 2;
-              psum_spad_addr_b_w  <= 3;
               iact_data_current_3 <= 0;
               values_valid        <= 0;
             end
@@ -2291,8 +2285,7 @@ module PE #(
                 end
               end
             end
-            computing   <= 0;
-            psum_select <= !computing;
+            psum_select <= !computing_1;
           end
 
           // ==================================================================
