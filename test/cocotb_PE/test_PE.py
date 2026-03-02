@@ -72,8 +72,9 @@ def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,S
                     "SPARSE_IACT" : str(SPARSE_IACT),
                     "SPARSE_WGHT" : str(SPARSE_WGHT),
                     "SEED" : str(SEED),
+                    "SPARSITY_EN": "1",
                     "COCOTB_TRACE": "1",
-                    "IVERILOG_DUMPER": "fst"}  # Enable FST waveform dumping for Icarus
+                    "IVERILOG_DUMPER": "fst"},  # Enable FST waveform dumping for Icarus
     )
 
 if __name__ == '__main__':
