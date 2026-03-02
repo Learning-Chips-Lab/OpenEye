@@ -366,7 +366,7 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
     """
     # Create golden model array sized to match the number of output filters
     # Use max possible size to avoid overflow
-    max_outputs = max(32, wghtsize_x)
+    max_outputs = wghtsize_x
     golden_model = np.zeros(max_outputs, dtype=int)
 
     iact = iacts_array
@@ -533,7 +533,7 @@ async def send_bias(ptp, dut, data_array):
         ptp,
         spad_data,
         dut.psum_data_i,
-        int(dut.PSUM_ADDR.value),  # Convert LogicArray to int
+        wghtsize_x,  # Convert LogicArray to int
         int(dut.TRANS_BITWIDTH_PSUM.value),  # Convert LogicArray to int
         int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
         False,  # Sequential mode
