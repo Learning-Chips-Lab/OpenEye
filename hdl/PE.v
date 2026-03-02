@@ -61,7 +61,7 @@
 /// 1. Configuration Phase:
 ///    - Parameter streaming: Receives stride, filter count, channel count via data_stream_i
 ///    - FSM states: FIRST_PARAMS -> SECOND_PARAMS -> THIRD_PARAMS -> FOURTH_PARAMS
-///    - Configures operational parameters: stride_reg, filters_reg, channel_reg, iact_addr_max_reg
+///    - Configures operational parameters: stride_reg, filters_reg_M0, channel_reg_C0, iact_addr_max_reg
 ///
 /// 2. Memory Loading Phase:
 ///    - Input activations and weights are loaded into respective SPad memories via data pipelines
@@ -689,7 +689,7 @@ module PE #(
   reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_vec;         // Weight data SPad address
 
   // Word counters from data pipeline modules (indicating amount of valid data loaded)
-  wire [                         3 : 0] first_spad_words_iact;  // # of words in iact addr SPad
+  wire [                         3 : 0] first_spad_words_iact_S;  // # of words in iact addr SPad, in Eyeriss-Paper referenced as S
   wire [                         4 : 0] second_spad_words_iact; // # of words in iact data SPad
   wire [                         4 : 0] first_spad_words_wght;  // # of words in wght addr SPad
   wire [                         6 : 0] second_spad_words_wght; // # of words in wght data SPad
@@ -697,8 +697,8 @@ module PE #(
   // Computation control and configuration registers
   // [SPARSITY_EN=1 only] Weight data validity flag (always true in dense mode)
   reg                                   values_valid;           // Flag: current values are valid (not zero)
-  reg  [                         4 : 0] filters_reg;            // Number of filters configured
-  reg  [                         3 : 0] channel_reg;            // Number of channels configured
+  reg  [                         4 : 0] filters_reg_M0;            // Number of filters configured, in Eyeriss-Paper referenced as M0
+  reg  [                         3 : 0] channel_reg_C0;            // Number of channels configured, in Eyeriss-Paper referenced as C0
   wire                                  psum_data_SPad_en_a_w_i;// Internal write enable port A
   wire                                  psum_data_SPad_en_b_w_i;// Internal write enable port B
   reg                                   data_mode_reg;          // Data mode configuration
@@ -908,8 +908,8 @@ module PE #(
       wght_addr_max_reg       <= 0;
       iact_addr_max_reg       <= 0;
       iact_x_line_repetitions <= 0;
-      filters_reg             <= 0;
-      channel_reg             <= 0;
+      filters_reg_M0          <= 0;
+      channel_reg_C0          <= 0;
     end else begin
       case (current_state_stream)
         FIRST_PARAMS: begin
@@ -925,8 +925,8 @@ module PE #(
           // Receive second set: filter count, channel count
           if (enable_stream_i) begin
             current_state_stream <= THIRD_PARAMS;
-            filters_reg          <= data_stream_i[8:4];     // Number of filters
-            channel_reg          <= data_stream_i[3:0];     // Number of channels
+            filters_reg_M0          <= data_stream_i[8:4];     // Number of filters
+            channel_reg_C0          <= data_stream_i[3:0];     // Number of channels
           end else begin
             current_state_stream <= FIRST_PARAMS;           // Timeout: restart
           end
@@ -2014,7 +2014,7 @@ module PE #(
           LOADING_1: begin
             current_state_computing <= CALCULATING;
             iact_data_current_3     <= iact_data_spad_pay;
-            if (0 >=  filters_reg - PARALLEL_MACS) begin
+            if (0 >=  filters_reg_M0 - PARALLEL_MACS) begin
               iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
             end else begin
               wght_filter <= wght_filter + PARALLEL_MACS;
@@ -2080,11 +2080,11 @@ module PE #(
             // ---------------------------------------------------------------
 
             wght_filter <= wght_filter + PARALLEL_MACS;
-            if (wght_filter >= filters_reg - PARALLEL_MACS) begin
+            if (wght_filter >= filters_reg_M0 - PARALLEL_MACS) begin
               wght_filter          <= 0;
               iact_channel         <= iact_channel + 1;
               iact_data_SPad_addr  <= iact_data_SPad_addr + 1;
-              if (((channel_reg * first_spad_words_iact) - 1 == iact_channel )) begin
+              if (((channel_reg_C0 * first_spad_words_iact_S) - 1 == iact_channel )) begin
                 iact_channel            <= 0;
                 current_state_computing <= WAIT_TO_SEND_PSUM;
                 wght_ready_o            <= 1;
@@ -2515,7 +2515,7 @@ module PE #(
       .enable_i(wght_enable_i),
 
       .first_spad_words_o (first_spad_words_wght),
-      .first_spad_max_i   (filters_reg),
+      .first_spad_max_i   (filters_reg_M0),
       .second_spad_words_o(second_spad_words_wght),
 
       .first_spad_addr_o(first_spad_wght_addr_w),
@@ -2547,8 +2547,8 @@ module PE #(
       .enable_i                  (mux_iact_b_o_w),
       .iact_x_line_repetitions_i (iact_x_line_repetitions),
 
-      .first_spad_words_o        (first_spad_words_iact),
-      .first_spad_max_i          (channel_reg),
+      .first_spad_words_o        (first_spad_words_iact_S),
+      .first_spad_max_i          (channel_reg_C0),
       .second_spad_words_o       (second_spad_words_iact),
 
       .first_spad_addr_o         (first_spad_iact_addr_w),
