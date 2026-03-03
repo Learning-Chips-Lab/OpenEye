@@ -183,9 +183,9 @@ async def initialize_test_pe(dut):
     global sparse_wght  # Weight sparsity: 0 = no sparsity, 1 = fully sparse
     global sparsity_en  # Sparsity enable: 1 = sparse mode, 0 = dense mode
 
-    iactsize_x = int(os.environ["IACTSIZE_X"])
-    iactsize_y = int(os.environ["IACTSIZE_Y"])
-    wghtsize_x = int(os.environ["WGHTSIZE_X"])
+    iactsize_x = int(os.environ["U"])
+    iactsize_y = int(os.environ["C0"])
+    wghtsize_x = int(os.environ["M0"])
     # if the SPARSE_IACT/WGHT values are floats between 0 and 1, we will use these,
     # if they are integers between 0 and 100, we will use these as percentages and convert
     # them to floats, accordingly

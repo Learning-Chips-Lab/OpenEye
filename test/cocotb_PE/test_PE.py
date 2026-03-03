@@ -33,13 +33,13 @@ clk_delay_unit_out = "ps"
 
 ##########################################################################################
 
-@pytest.mark.parametrize("IACTSIZE_X", [(4)])#,(3),(2),(1)]) # Number of C0xU blocks per PE (U=1 here)
-@pytest.mark.parametrize("IACTSIZE_Y", [(3)])#,(2),(1)]) # Input channels per PE (C0 in Eyeriss v2)
-@pytest.mark.parametrize("WGHTSIZE_X", [(12)])#,(10),(8),(4)]) # Output channels per PE (M0 in Eyeriss v2)
+@pytest.mark.parametrize("U", [(4)])#,(3),(2),(1)]) # Number of U blocks per PE (U=1 here)
+@pytest.mark.parametrize("C0", [(3)])#,(2),(1)]) # Input channels per PE (C0 in Eyeriss v2)
+@pytest.mark.parametrize("M0", [(12)])#,(10),(8),(4)]) # Output channels per PE (M0 in Eyeriss v2)
 @pytest.mark.parametrize("SPARSE_IACT", [(0)])#, (10), (20), (30), (40), (50), (60), (70), (80), (90)]) # Input activation sparsity
 @pytest.mark.parametrize("SPARSE_WGHT", [(0)]) # Weight sparsity
 @pytest.mark.parametrize("SEED", [0]) # Random seed
-def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,SEED,request):
+def test_single_pe(U, C0, M0, SPARSE_IACT,SPARSE_WGHT,SEED,request):
     dut = 'PE_IO_debug' # Name of the top-level module (without .v extension)
     module = 'PE_tb'
     toplevel = dut
@@ -65,10 +65,10 @@ def test_single_pe(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,S
                     "CLOCK_DELAY_UNIT_INPUT" : clk_delay_unit_in,
                     "CLOCK_DELAY_OUTPUT" : str(clk_delay_out),
                     "CLOCK_DELAY_UNIT_OUTPUT" : clk_delay_unit_out,
-                    "IACTSIZE_X" : str(IACTSIZE_X),
-                    "IACTSIZE_Y" : str(IACTSIZE_Y),
-                    "WGHTSIZE_X" : str(WGHTSIZE_X),
-                    "WGHTSIZE_Y" : str(IACTSIZE_X*IACTSIZE_Y),
+                    "U" : str(U),
+                    "C0" : str(C0),
+                    "M0" : str(M0),
+                    "WGHTSIZE_Y" : str(U*C0),
                     "SPARSE_IACT" : str(SPARSE_IACT),
                     "SPARSE_WGHT" : str(SPARSE_WGHT),
                     "SEED" : str(SEED),

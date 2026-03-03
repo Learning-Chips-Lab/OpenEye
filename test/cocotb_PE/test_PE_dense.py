@@ -12,7 +12,7 @@ reducing bandwidth by 33% compared to sparse mode.
 
 Test Configuration:
 - SPARSITY_EN=0 (dense mode)
-- Various dimensions (IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X)
+- Various dimensions (U, C0, M0)
 - 0% sparsity (all values are assumed to be non-zero/zeros are transmitted as-is)
 - Tests dense MAC computation without sparse indexing
 """
@@ -31,9 +31,9 @@ from open_eye import hdl_dir, test_dir
 import pe_test_utils as ptu
 
 # Test parameters for dense mode
-IACTSIZE_X_VALUES = [4]  # Filter width (S in Eyeriss v2) - spatial window dimension
-IACTSIZE_Y_VALUES = [3]  # Input channels per PE (C0 in Eyeriss v2)
-WGHTSIZE_X_VALUES = [12] # Output channels per PE (M0 in Eyeriss v2)
+U_VALUES = [4]  # Filter width (S in Eyeriss v2) - spatial window dimension
+C0_VALUES = [3]  # Input channels per PE (C0 in Eyeriss v2)
+M0_VALUES = [12] # Output channels per PE (M0 in Eyeriss v2)
 SEED_VALUES = [0]            # Random seeds
 USE_DSP_VALUES = [0, 1]      # 0=standard multiplier+adder, 1=DSP48 optimization
 
@@ -46,12 +46,12 @@ CLK_DELAY_OUTPUT = 100
 CLK_DELAY_UNIT_OUTPUT = "ps"
 
 
-@pytest.mark.parametrize("IACTSIZE_X", IACTSIZE_X_VALUES)
-@pytest.mark.parametrize("IACTSIZE_Y", IACTSIZE_Y_VALUES)
-@pytest.mark.parametrize("WGHTSIZE_X", WGHTSIZE_X_VALUES)
+@pytest.mark.parametrize("U", U_VALUES)
+@pytest.mark.parametrize("C0", C0_VALUES)
+@pytest.mark.parametrize("M0", M0_VALUES)
 @pytest.mark.parametrize("SEED", SEED_VALUES)
 @pytest.mark.parametrize("USE_DSP", USE_DSP_VALUES)
-def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, USE_DSP):
+def test_pe_dense_mode(U, C0, M0, SEED, USE_DSP):
     """
     Test PE in dense mode (SPARSITY_EN=0) with selectable MAC implementation.
 
@@ -63,9 +63,9 @@ def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, USE_DSP):
     - Both standard (USE_DSP=0) and DSP48 (USE_DSP=1) implementations
 
     Args:
-        IACTSIZE_X: Number of input activation values
-        IACTSIZE_Y: Number of input channels
-        WGHTSIZE_X: Number of output filters
+        U: Number of input activation values
+        C0: Number of input channels
+        M0: Number of output filters
         SEED: Random seed for reproducibility
         USE_DSP: MAC implementation (0=standard multiplier+adder, 1=DSP48 slice)
     """
@@ -85,7 +85,7 @@ def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, USE_DSP):
 
     # Create temporary directory for this test
     dsp_mode_str = "dsp" if USE_DSP == 1 else "std"
-    test_name = f"test_dense_iact{IACTSIZE_X}x{IACTSIZE_Y}_wght{WGHTSIZE_X}_seed{SEED}_{dsp_mode_str}"
+    test_name = f"test_dense_iact{U}x{C0}_wght{M0}_seed{SEED}_{dsp_mode_str}"
     target_dir = Path(__file__).parent / ".temp" / test_name
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -100,9 +100,9 @@ def test_pe_dense_mode(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, USE_DSP):
         "CLOCK_DELAY_UNIT_OUTPUT": CLK_DELAY_UNIT_OUTPUT,
 
         # Test dimensions
-        "IACTSIZE_X": str(IACTSIZE_X),
-        "IACTSIZE_Y": str(IACTSIZE_Y),
-        "WGHTSIZE_X": str(WGHTSIZE_X),
+        "U": str(U),
+        "C0": str(C0),
+        "M0": str(M0),
 
         # Dense mode configuration
         "SPARSITY_EN": "0",  # *** DENSE MODE ***
