@@ -3,7 +3,7 @@
 | ![OpenEyeLogo](doc/figures/open_eye_logo.png) | **Open-Source Hardware Accelerator for Efficient Neural Network Inference** |
 | - | - |
 
-OpenEye is an open-source DNN inference accelerator originally developed at [FH Dortmund – University of Applied Sciences and Arts](https://www.fh-dortmund.de) and continued since March 2025 at the [University of Duisburg-Essen, Embedded Systems group](https://www.uni-due.de/ebs/).
+OpenEye is an open-source DNN inference accelerator originally developed at [FH Dortmund – University of Applied Sciences and Arts](https://www.fh-dortmund.de) and continued since March 2025 at the [University of Duisburg-Essen, Electronic Components and Circuits](https://www.uni-due.de/ebs/) group.
 It takes the ideas of [EyerissV2](https://arxiv.org/pdf/1807.07928) and makes them fully open, parameterizable, and FPGA-deployable — implementing a sparse, scalable systolic array for INT8 convolutions, depthwise convolutions, and fully-connected layers.
 
 Where EyerissV2 is a fixed research chip, **OpenEye is designed to be resized at elaboration time**: cluster count, PEs per cluster, scratchpad depths, data widths, and router modes are all top-level parameters. This means you can target anything from a small edge FPGA to a large ASIC without touching a single line of RTL logic.
