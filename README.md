@@ -3,8 +3,10 @@
 | ![OpenEyeLogo](doc/figures/open_eye_logo.png) | **Open-Source Hardware Accelerator for Efficient Neural Network Inference** |
 | - | - |
 
-OpenEye is an open-source DNN inference accelerator developed at [FH Dortmund – University of Applied Sciences and Arts](https://www.fh-dortmund.de).
-It is inspired by [EyerissV2](https://arxiv.org/pdf/1807.07928) and implements a sparse, scalable systolic array for INT8 convolutions, depthwise convolutions, and fully-connected layers — suitable for both FPGA deployment and ASIC tape-out.
+OpenEye is an open-source DNN inference accelerator originally developed at [FH Dortmund – University of Applied Sciences and Arts](https://www.fh-dortmund.de) and continued since March 2025 at the [University of Duisburg-Essen, Embedded Systems group](https://www.uni-due.de/ebs/).
+It takes the ideas of [EyerissV2](https://arxiv.org/pdf/1807.07928) and makes them fully open, parameterizable, and FPGA-deployable — implementing a sparse, scalable systolic array for INT8 convolutions, depthwise convolutions, and fully-connected layers.
+
+Where EyerissV2 is a fixed research chip, **OpenEye is designed to be resized at elaboration time**: cluster count, PEs per cluster, scratchpad depths, data widths, and router modes are all top-level parameters. This means you can target anything from a small edge FPGA to a large ASIC without touching a single line of RTL logic.
 
 ---
 
@@ -14,7 +16,7 @@ It is inspired by [EyerissV2](https://arxiv.org/pdf/1807.07928) and implements a
 - **Sparsity exploitation** at every level of the hierarchy: zero weights and zero activations are skipped, reducing power and latency
 - **Row-Stationary Dataflow** for maximum data reuse and minimal off-chip bandwidth
 - **On-chip 2×2 max-pooling** applied directly after the convolution
-- **Scalable array** — the number of PE clusters and PEs per cluster is fully parameterizable; default configuration is 2 cluster columns × 8 cluster rows = 16 clusters, each with 4×3 = 12 PEs (192 PEs total)
+- **Fully parameterizable array** — cluster count, PEs per cluster, scratchpad depths, data widths, and router modes are all top-level Verilog parameters; no RTL changes needed to resize the accelerator
 - **FPGA and ASIC targets** — `OpenEye_FPGA.v` wraps the ASIC compute core `OpenEye_Parallel.v` with DMA burst interfaces and block-RAM buffers for real FPGA deployment
 - **Full end-to-end toolchain** — from a TFLite/Keras model through quantization, layer compilation, DMA stream generation, RTL simulation, and result verification, all from Python/CocoTB
 
@@ -26,6 +28,7 @@ It is inspired by [EyerissV2](https://arxiv.org/pdf/1807.07928) and implements a
 |---|---|
 | Data types | INT8 activations & weights, 20-bit psum accumulator |
 | Default array size | 2 × 8 clusters, 12 PEs/cluster → 192 PEs |
+| **Array scalability** | `CLUSTER_COLUMNS`, `CLUSTER_ROWS`, `NUM_GLB_PSUM`, `NUM_GLB_WGHT` are all top-level parameters — change them without touching RTL logic |
 | Dataflow | Row-Stationary |
 | Sparsity | Structural sparsity on both iact and wght |
 | On-chip pooling | 2×2 max-pooling |
@@ -33,6 +36,23 @@ It is inspired by [EyerissV2](https://arxiv.org/pdf/1807.07928) and implements a
 | Quantization | Per-filter affine: `q = (mant × (psum + offset)) >>> exp` |
 | HDL | Verilog (SystemVerilog-compatible subset) |
 | License | Solderpad Hardware License v2.1 (SHL-2.1) |
+
+### Scalability vs. EyerissV2
+
+EyerissV2 introduced the concept of a hierarchical, reconfigurable PE array — but as a fabricated ASIC its dimensions are fixed.
+OpenEye exposes the same architectural knobs as compile-time Verilog parameters:
+
+| Parameter | What it controls | Example values |
+|---|---|---|
+| `CLUSTER_COLUMNS` | Width of the cluster grid | 1, 2, 4 … |
+| `CLUSTER_ROWS` | Height of the cluster grid | 2, 4, 8 … |
+| `NUM_GLB_WGHT` | PE rows per cluster (= weight GLBs) | 3, 4, 6 … |
+| `NUM_GLB_PSUM` | PE columns per cluster (= psum GLBs) | 4, 8 … |
+| `IACT_PER_PE` / `WGHT_PER_PE` / `PSUM_PER_PE` | Scratchpad depths | tune to fit target BRAM |
+| `SERIAL` / `PARALLEL_MACS` | Serial vs. parallel MAC inside each PE | 1 / 2, 4 … |
+| `SPARSITY_EN` | Enable or disable sparse encoding | 0 or 1 |
+
+Because all routing, buffering, address generation, and DMA logic is derived from these parameters via `generate` blocks and `localparam` arithmetic, you get a correctly wired accelerator of any size after a single re-elaboration — no manual wiring, no RTL edits.
 
 ---
 
