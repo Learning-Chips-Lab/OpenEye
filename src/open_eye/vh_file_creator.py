@@ -1,5 +1,5 @@
 # This file is part of the OpenEye project.
-# All rights reserved. © Fachhochschule Dortmund - University of Applied Sciences and Arts.
+# © Fachhochschule Dortmund – University of Applied Sciences and Arts (until 2025), Universität Duisburg-Essen (since 2025).
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 

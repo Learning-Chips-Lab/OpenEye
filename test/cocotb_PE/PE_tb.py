@@ -1,5 +1,5 @@
 # This file is part of the OpenEye project.
-# All rights reserved. © Fachhochschule Dortmund - University of Applied Sciences and Arts.
+# © Fachhochschule Dortmund – University of Applied Sciences and Arts (until 2025), Universität Duisburg-Essen (since 2025).
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
@@ -84,9 +84,9 @@ def log_computation_time(elapsed_cycles, csv_filename="computation_times.csv"):
         csv_filename: Path to output CSV file (default: "computation_times.csv" in current directory)
 
     CSV Columns:
-        - iactsize_x: Number of input activation values
-        - iactsize_y: Number of input channels
-        - wghtsize_x: Number of output filters
+        - B: Number of input activation values
+        - C0: Number of input channels
+        - M0: Number of output filters
         - sparse_iact: Input activation sparsity (0-1)
         - sparse_wght: Weight sparsity (0-1)
         - elapsed_cycles: Clock cycles from compute to first psum
@@ -106,7 +106,7 @@ def log_computation_time(elapsed_cycles, csv_filename="computation_times.csv"):
     file_exists = csv_path.exists()
 
     with open(csv_path, mode='a', newline='') as csvfile:
-        fieldnames = ['iactsize_x', 'iactsize_y', 'wghtsize_x', 'sparse_iact', 'sparse_wght', 'elapsed_cycles', 'elapsed_time_ns']
+        fieldnames = ['B', 'C0', 'M0', 'sparse_iact', 'sparse_wght', 'elapsed_cycles', 'elapsed_time_ns']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         # Write header if file is new
@@ -115,9 +115,9 @@ def log_computation_time(elapsed_cycles, csv_filename="computation_times.csv"):
 
         # Write the data row
         writer.writerow({
-            'iactsize_x': iactsize_x,
-            'iactsize_y': iactsize_y,
-            'wghtsize_x': wghtsize_x,
+            'B': B,
+            'C0': C0,
+            'M0': M0,
             'sparse_iact': sparse_iact,
             'sparse_wght': sparse_wght,
             'elapsed_cycles': elapsed_cycles,
@@ -125,11 +125,11 @@ def log_computation_time(elapsed_cycles, csv_filename="computation_times.csv"):
         })
 
 # Dimensions for PE initiliazed as globals
-iactsize_x = 0  # Number of input activation values (spatial dimension)
-iactsize_y = 0  # Number of input channels
+B = 0  # Number of input activation values (spatial dimension)
+C0 = 0  # Number of input channels
 sparse_iact = 0 # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
-wghtsize_x = 0  # Number of output filters
-wghtsize_y = 0  # Weights match input dimensions
+M0 = 0  # Number of output filters
+C0S = 0  # Weights match input dimensions
 sparse_wght = 0 # Weight sparsity: 0 = no sparsity, 1 = fully sparse
 sparsity_en = 1 # Sparsity enable: 1 = sparse mode (default), 0 = dense mode
 
@@ -175,17 +175,17 @@ async def initialize_test_pe(dut):
         - No sparsity (all values are non-zero)
     """
     # Configure test dimensions (Eyeriss v2 terminology from paper 1807.07928v2)
-    global iactsize_x   # Filter width (S in Eyeriss v2) - spatial dimension of sliding window
-    global iactsize_y   # Input channels per PE (C0 in Eyeriss v2)
+    global B   # Input blocks - spatial dimension of sliding window
+    global C0   # Input channels per PE
     global sparse_iact  # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
-    global wghtsize_x   # Output channels per PE (M0 in Eyeriss v2)
-    global wghtsize_y   # Total weights per output channel = iactsize_x * iactsize_y (S * C0)
+    global M0   # Output channels per PE (M0 in Eyeriss v2)
+    global C0S   # Total weights per output channel = S * C0
     global sparse_wght  # Weight sparsity: 0 = no sparsity, 1 = fully sparse
     global sparsity_en  # Sparsity enable: 1 = sparse mode, 0 = dense mode
 
-    iactsize_x = int(os.environ["U"])
-    iactsize_y = int(os.environ["C0"])
-    wghtsize_x = int(os.environ["M0"])
+    B = int(os.environ["B"])
+    C0 = int(os.environ["C0"])
+    M0 = int(os.environ["M0"])
     # if the SPARSE_IACT/WGHT values are floats between 0 and 1, we will use these,
     # if they are integers between 0 and 100, we will use these as percentages and convert
     # them to floats, accordingly
@@ -193,7 +193,7 @@ async def initialize_test_pe(dut):
     sparse_wght = float(os.environ["SPARSE_WGHT"]) / 100 if float(os.environ["SPARSE_WGHT"]) > 1 else float(os.environ["SPARSE_WGHT"])
     sparsity_en = int(os.environ.get("SPARSITY_EN", "1"))  # Default to 1 (sparse mode)
     np.random.seed(int(os.environ["SEED"]))
-    wghtsize_y = iactsize_x * iactsize_y
+    C0S = B * C0
 
     # Initialize timing parameters from environment variables
     ptp = timing_parameters.PortTimingParameters()
@@ -329,7 +329,7 @@ async def send_iact(ptp, dut, data_array):
         ptp,
         spad_data,
         dut.iact_data_i,
-        iactsize_y*iactsize_x,  # Total elements
+        C0*B,  # Total elements
         int(dut.TRANS_BITWIDTH_IACT.value),  # Convert LogicArray to int
         int(dut.IACT_DATA_DATA.value),  # Convert LogicArray to int
         False,  # Sequential mode
@@ -348,25 +348,25 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
 
     Architecture (based on Eyeriss v2 paper 1807.07928v2):
         The PE processes a sliding window computation where:
-        - Input: C0 channels * S spatial positions = (iactsize_y * iactsize_x) activations
-        - Weights: M0 output channels * (C0 * S) weights = (wghtsize_x * wghtsize_y) matrix
-        - Output: M0 partial sums (wghtsize_x values)
+        - Input: C0 channels * B spatial positions => C0 * B activations
+        - Weights: M0 output channels * (C0 * B) weights = (M0 * C0S) matrix
+        - Output: M0 partial sums (M0 values)
 
         For each output channel m in [0, M0):
             psum[m] = bias[m] + sum(iact[i] * weight[i][m] for i in range(C0*S))
 
     Args:
         dut: Device Under Test
-        iacts_array: Input activations, shape (C0, S) = (iactsize_y, iactsize_x)
-        wghts_array: Weights, shape (C0*S, M0) = (wghtsize_y, wghtsize_x)
-        psum_array: Initial bias/partial sum values, shape (M0,) = (wghtsize_x,)
+        iacts_array: Input activations, shape (C0, S) = (C0, B)
+        wghts_array: Weights, shape (C0*S, M0) = (C0S, M0)
+        psum_array: Initial bias/partial sum values, shape (M0,) = (M0,)
 
     Raises:
         AssertionError: If any computed partial sum doesn't match the golden model
     """
     # Create golden model array sized to match the number of output filters
     # Use max possible size to avoid overflow
-    max_outputs = wghtsize_x
+    max_outputs = M0
     golden_model = np.zeros(max_outputs, dtype=int)
 
     iact = iacts_array
@@ -381,26 +381,26 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
         wght = np.array([wght])
 
     # Initialize golden model with bias values
-    for filter_idx in range(wghtsize_x):
+    for filter_idx in range(M0):
         golden_model[filter_idx] = bias[filter_idx]
 
     # Compute expected MAC (Multiply-ACcumulate) results
     # Eyeriss v2 Architecture (see Fig. 15 in paper 1807.07928v2):
-    #   - C0 (iactsize_y) input channels * S (iactsize_x) filter width = C0*S total activations
-    #   - M0 (wghtsize_x) output channels
-    #   - Weight matrix shape: (C0*S, M0) = (wghtsize_y, wghtsize_x)
+    #   - C0 input channels * S spatial positions = C0 * B total activations
+    #   - M0 output channels
+    #   - Weight matrix shape: (C0*S, M0) = (C0S, M0)
     #   - Each row in wght corresponds to one position in the sliding window (one activation)
     #   - Each column in wght corresponds to one output channel
-    #   - Formula: psum[m] = bias[m] + sum(iact[c,s] * wght[c*S+s][m]) for all c in [0,C0), s in [0,S)
+    #   - Formula: psum[m] = bias[m] + sum(iact[c,s] * wght[c*S+s][m]) for all c in [0,C0), s in [0,B)
 
-    weight_row_idx = 0  # Index into weight matrix rows (ranges from 0 to C0*S-1)
+    weight_row_idx = 0  # Index into weight matrix rows (ranges from 0 to C0*B-1)
 
     for channel_idx in range(len(iact)):  # For each input channel (C0)
         for spatial_idx in range(len(iact[channel_idx])):  # For each spatial position (S)
             activation_value = iact[channel_idx][spatial_idx]
 
             # Multiply this activation with all weights for this position across all output channels
-            for output_channel_idx in range(wghtsize_x):  # For each output channel (M0)
+            for output_channel_idx in range(M0):  # For each output channel (M0)
                 weight_value = wght[weight_row_idx][output_channel_idx]
                 # Accumulate: psum[m] += iact[c,s] * wght[c*S+s][m]
                 golden_model[output_channel_idx] += activation_value * weight_value
@@ -409,10 +409,10 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
 
     # Log the golden model for debugging
     dut._log.info(f"Golden model computation complete:")
-    dut._log.info(f"  Input: C0={iactsize_y} channels * S={iactsize_x} spatial = {iactsize_y * iactsize_x} activations")
-    dut._log.info(f"  Weights: {wghtsize_y} * {wghtsize_x} (C0*S rows, M0 columns)")
-    dut._log.info(f"  Output: M0={wghtsize_x} channels")
-    dut._log.info(f"  Expected partial sums: {golden_model[:wghtsize_x]}")
+    dut._log.info(f"  Input: C0={C0} channels * S={B} spatial = {C0 * B} activations")
+    dut._log.info(f"  Weights: {C0S} * {M0} (C0*S rows, M0 columns)")
+    dut._log.info(f"  Output: M0={M0} channels")
+    dut._log.info(f"  Expected partial sums: {golden_model[:M0]}")
 
     # Validate hardware outputs against golden model
     output_idx = 0
@@ -438,8 +438,8 @@ async def get_psum(dut, iacts_array, wghts_array, psum_array):
     assert all_equal, "One or more outputs did not match the golden model!"
 
     # Verify we got the expected number of outputs
-    assert num_verified == wghtsize_x, (
-        f"Expected {wghtsize_x} outputs but received {num_verified}"
+    assert num_verified == M0, (
+        f"Expected {M0} outputs but received {num_verified}"
     )
 
     dut._log.info(f"Successfully verified {num_verified} partial sum outputs")
@@ -533,7 +533,7 @@ async def send_bias(ptp, dut, data_array):
         ptp,
         spad_data,
         dut.psum_data_i,
-        wghtsize_x,  # Convert LogicArray to int
+        M0,  # Convert LogicArray to int
         int(dut.TRANS_BITWIDTH_PSUM.value),  # Convert LogicArray to int
         int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
         False,  # Sequential mode
@@ -548,10 +548,10 @@ async def send_bias(ptp, dut, data_array):
 async def send_data_params(ptp, dut):
     # List all needed parameters
     stride_reg = 1
-    wght_addr_max_reg = (iactsize_x * iactsize_y) + 2
-    filters_reg_i = wghtsize_x
-    channel_reg_i = iactsize_y
-    iact_addr_max_i = iactsize_x
+    wght_addr_max_reg = (B * C0) + 2
+    filters_reg_i = M0
+    channel_reg_i = C0
+    iact_addr_max_i = B
 
     data_reg_i =  0
     # Enable the params reading
@@ -794,9 +794,9 @@ def create_iact_wght_psum_arrays(dut):
     Returns:
         Tuple of (iacts, wghts, psums):
 
-            - iacts: Input activations, shape (C0, S) = (iactsize_y, iactsize_x)
-            - wghts: Weights, shape (C0*S, M0) = (wghtsize_y, wghtsize_x)
-            - psums: Bias/partial sums, shape (M0,) = (wghtsize_x,)
+            - iacts: Input activations, shape (C0, S) = (C0, B)
+            - wghts: Weights, shape (C0*S, M0) = (C0S, M0)
+            - psums: Bias/partial sums, shape (M0,) = (M0,)
 
     Data Generation:
         - Values are random in range [-64, -1] ∪ [1, 63] (excludes 0)
@@ -810,7 +810,7 @@ def create_iact_wght_psum_arrays(dut):
             - psums: [1] (1 bias value for M0=1 output channel)
     """
     # Generate input activations: random values from -128 to 127, without 0
-    iacts = np.random.randint(-64, 63, size=(iactsize_y, iactsize_x))
+    iacts = np.random.randint(-64, 63, size=(C0, B))
     iacts[iacts >= 0] += 1
     # Apply random sparsity to activations
     # Choose random indices to zero out (sparse_iact fraction of total)
@@ -820,10 +820,10 @@ def create_iact_wght_psum_arrays(dut):
     # Zero out selected elements (convert flat index to 2D coordinates)
     # indices = [] #Manual override option
     for x in range(len(indices)):
-        iacts[int(indices[x] / iactsize_x)][int(indices[x] % iactsize_x)] = 0
+        iacts[int(indices[x] / B)][int(indices[x] % B)] = 0
 
     # Generate weights: random values from -128 to 127, without 0
-    wghts = np.random.randint(-64, 63, size=(wghtsize_y, wghtsize_x))
+    wghts = np.random.randint(-64, 63, size=(C0S, M0))
     wghts[wghts >= 0] += 1
 
     # Apply random sparsity to weights
@@ -833,7 +833,7 @@ def create_iact_wght_psum_arrays(dut):
 
     # Zero out selected weight elements
     for x in range(len(indices)):
-        wghts[int(indices[x] / wghtsize_x)][int(indices[x] % wghtsize_x)] = 0
+        wghts[int(indices[x] / M0)][int(indices[x] % M0)] = 0
 
     print(wghts)
     array = []
@@ -851,6 +851,6 @@ def create_iact_wght_psum_arrays(dut):
     # wghts[indices] = 0 #Alternative: direct indexing (may not work with 2D reshape)
 
     # Generate partial sums/bias: sequential values from 1 to (number of filters)
-    psums = np.arange(1, wghtsize_x + 1, 1)
+    psums = np.arange(1, M0 + 1, 1)
 
     return iacts, wghts, psums
