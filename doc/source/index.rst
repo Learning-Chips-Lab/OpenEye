@@ -50,6 +50,7 @@ Contents
 
    tutorial/index
    architecture/index
+   fpga/index
    verilog/index
    test/index
 
