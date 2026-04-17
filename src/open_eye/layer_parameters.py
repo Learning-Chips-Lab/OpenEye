@@ -236,6 +236,8 @@ class LayerParameters(object):
         self.single_cluster_computation = 0    # Cluster computation mode
         self.iact_size_x = 1                   # Input activation width
         self.iact_size_y = 1                   # Input activation height
+        self.psum_size_x = 1                   # Input activation width
+        self.psum_size_y = 1                   # Input activation height
 
         # === Transmission Count Defaults ===
         self.iact_transmissions_pe = 1         # Activation transmissions (PE level)
@@ -270,6 +272,10 @@ class LayerParameters(object):
         self.y_lines_per_calculation = 1       # Y lines per computation cycle
         self.iact_x_line_repetitions = 1       # Cycles needed for computing a single x iact line
         self.different_kernels_per_calculation = 1 # Kernels per cycle
+        self.buffer_cycles_for_x_iact = 1      # Needed repetitions in IACT GLB to cycle to one line
+        self.start_param_array = 1             # Representation of 1s and 0s for every cycle to write into the clusters
+        self.limit_increase = 0                # Amound of Iact Clusters, that switch their addresses in one writing cycle
+        self.initial_upper_limit = 0           # 
 
         # === FPGA-Specific Parameters ===
         self.needed_standing_cycles = 0    # FPGA standing/idle cycles
@@ -452,7 +458,10 @@ class LayerParameters(object):
             # If output width doesn't evenly divide by PEs_X, some PEs will be unused
             if(((self.output_shape[1]) % amount_of_psum_per_cycle) != 0):
                 # Calculate padding needed to align to PE arrays
-                self.add_up = amount_of_psum_per_cycle - ((self.output_shape[1] * self.different_kernels_per_calculation) % amount_of_psum_per_cycle)
+                if (self.different_kernels_per_calculation == 1) :
+                    self.add_up = (amount_of_psum_per_cycle - ((self.output_shape[1]) % amount_of_psum_per_cycle))
+                else:
+                    self.add_up = 8 - (self.output_shape[1] % 8)
                 #if ((self.output_shape[1] % (params.PEs_X)) != 0):
                 #    self.add_up = (params.PEs_X)- (self.output_shape[1] % params.PEs_X)
                 x_count       = 0
@@ -597,6 +606,8 @@ class LayerParameters(object):
         # Store input activation dimensions
         self.iact_size_x = self.input_shape[1]
         self.iact_size_y = self.input_shape[2]
+        self.psum_size_x = self.output_shape[1]
+        self.psum_size_y = self.output_shape[2]
         self.channels = self.input_shape[3]
 
     def choose_iact_location(self, layer_number, max_layers):
@@ -649,7 +660,7 @@ class LayerParameters(object):
             - Power-of-2 alignment for efficient addressing
         """
         # Simple case: all channels fit in PE memory
-        if((self.input_shape[3]*self.kernel_size[0])<params.Iacts_per_PE):
+        if((self.input_shape[3]*self.kernel_size[1])<params.Iacts_per_PE):
             self.used_channels = math.floor(self.input_shape[3])
         else:
             self.used_channels = 8
@@ -665,7 +676,7 @@ class LayerParameters(object):
             self.used_channels = 6  # Hardcoded override
         else:
             # Large kernel case: limit channels and round down to power of 2
-            self.used_channels = 16//self.kernel_size[0]
+            self.used_channels = 16//self.kernel_size[1]
             self.used_channels = 1 << (self.used_channels.bit_length() - 1)  # Round down to 2^n
             if (self.used_channels == 0) :
                 assert False
@@ -959,7 +970,10 @@ class LayerParameters(object):
         # Set X-line buffer size for sliding window (kernel height + input height - 1)
         self.iact_x_lines = self.kernel_size[1] + self.iact_size_y - 1
         # Update standing cycles based on channel packing
-        self.needed_standing_cycles = ((self.used_channels + 1) // 2) * self.needed_Iact_writes * self.iact_x_line_repetitions
+        if (self.iact_x_line_repetitions == 1) :
+            self.needed_standing_cycles = ((self.used_channels + 1) // 2) * self.needed_Iact_writes
+        else :
+            self.needed_standing_cycles = 4 #Ändern
 
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         """Compute all configuration parameters for a Conv2D layer.
@@ -1025,13 +1039,13 @@ class LayerParameters(object):
                 self.diff_iact_layer_next_layer = 1
 
         # Total activations per PE = kernel height * channels per iteration
-        self.used_iact_per_PE = self.kernel_size[0] * self.used_channels
+        self.used_iact_per_PE = self.kernel_size[1] * self.used_channels
 
         # === Phase 5: Calculate transmission requirements ===
         self.calculate_pe_transmissions(params)
 
         # Calculate PE usage in Y dimension
-        self.used_PEs_Y = self.kernel_size[1]*self.kernel_per_pe_cluster
+        self.used_PEs_Y = self.kernel_size[0]*self.kernel_per_pe_cluster
         used_PEs_per_clm = self.used_PEs_Y/params.PEs_Y
         self.ceil_used_PE_per_clm = math.ceil(used_PEs_per_clm)
 
@@ -1078,7 +1092,29 @@ class LayerParameters(object):
         self.psum_storage_cycles = self.diff_iact_layer * self.used_Y_cluster
         if (self.choose_iact_storage_output) :
             self.psum_storage_cycles = self.diff_iact_layer
-        self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*math.ceil((self.used_channels*(self.kernel_size[0]+self.iact_size_y-1)/2))
+        self.buffer_cycles_for_x_iact = math.ceil(self.iact_size_x/((params.RAM_CELLS*8)//4))
+        if (self.buffer_cycles_for_x_iact == 1):
+            self.needed_iact_buffer_words = self.needed_Iact_writes*math.ceil((self.used_channels*(self.kernel_size[1]+self.iact_size_y-1)/2))
+        else:
+            self.needed_iact_buffer_words = self.needed_Iact_writes*math.ceil((self.used_channels/2))
+        if (self.buffer_cycles_for_x_iact == 1) :
+            self.start_param_array = (1 << math.ceil((self.different_kernels_per_calculation * self.y_lines_per_calculation * math.ceil(self.iact_size_x / params.NUM_GLB_PSUM)))) - 1
+        else:
+            self.start_param_array = (1 << math.ceil((1+params.Clusters_X*params.Clusters_Y*params.PEs_X)/(params.RAM_CELLS*2))) - 1
+
+        # Calculated the limit of iact buffers that need activations
+        if (self.used_channels == 1) :
+            self.limit_increase <= math.floor((self.iact_size_x*2)/(2*4))
+            self.initial_upper_limit = self.limit_increase
+        else :
+            if (self.buffer_cycles_for_x_iact == 1) :
+                self.limit_increase = math.floor((self.iact_size_x*self.used_channels)/(2*4*2))
+                self.initial_upper_limit = self.limit_increase
+            else :
+                self.limit_increase = math.floor((self.iact_size_x*self.used_channels)/(2*4*2*self.buffer_cycles_for_x_iact))
+                self.limit_increase = 4
+                self.initial_upper_limit = 2
+
 
         # === Phase 9: Finalize calculations ===
         self.calculate_needed_refreshes_mx(params)
@@ -1348,7 +1384,7 @@ class LayerParameters(object):
         #self.needed_wght_transmissions = self.wght_transmissions_pe * self.wght_transmissions_glb
         self.needed_iact_transmissions = self.iact_transmissions_pe * self.iact_transmissions_glb
         self.Used_refreshes = self.iact_transmissions_pe * self.wght_transmissions_pe * self.psum_transmissions_pe
-        
+
         self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_Bit_AXI/2)/params.IACT_WOH_Bitwidth))
         logger.debug("Refreshes: " + str(self.Used_refreshes))
         logger.debug("Used complete new descriptions: " + str(self.Used_refreshes))
@@ -1371,6 +1407,7 @@ class LayerParameters(object):
         self.psum_storage_cycles = self.needed_wght_transmissions
         if (params.Clusters_Y == 1) :
             self.psum_delay = 5
+        self.limit_increase = int((params.NUM_GLB_WGHT*self.used_channels)/8)
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))

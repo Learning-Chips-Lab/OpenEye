@@ -337,8 +337,8 @@ def write_weight_file(layer_params, layer_number, dram):
         for c in range(layer_params.input_shape[3]):
             for f in range(layer_params.filters):
                 wght_ref[c][f] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_' + str(c) + '_' + str(f) + '.csv')
-                for x in range(layer_params.kernel_size[0]):
-                    for y in range(layer_params.kernel_size[1]):
+                for y in range(layer_params.kernel_size[1]):
+                    for x in range(layer_params.kernel_size[0]):
                         wght_ref[c][f].write(str(dram.weights[layer_number][c][f][y][x]).rjust(5) + ";")
                     wght_ref[c][f].write("\n")
                 wght_ref[c][f].close()
@@ -371,7 +371,7 @@ def write_iact_file(layer_params, layer_number, dram):
                         ((y >= 0) & (y < layer_params.input_shape[2]))):
                         iact_ref[c].write(str(int(dram.fmap[layer_number][c][x][y])).rjust(5) + ";")
                     else:
-                        iact_ref[c].write(str(1).rjust(5) + ";")
+                        iact_ref[c].write(str(0).rjust(5) + ";")
                 iact_ref[c].write("\n")
             iact_ref[c].close()
 
@@ -524,7 +524,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
             y_cor = les.y_start
             for cl_y in range(params.Clusters_Y) :
                 for cl_x in range(params.Clusters_X) :
-                    if (x_cor >= layer_params.iact_size_x) :
+                    if (x_cor >= layer_params.psum_size_x) :
                         if (kernel_counter < layer_params.different_kernels_per_calculation - 1) :
                             kernel_counter = kernel_counter + 1
                             x_cor = les.x_start
@@ -534,7 +534,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                         for counter in range(params.PARALLEL_MACS) :
                                 array.append((x_cor,y_cor,filter))
                                 if (kernel_counter < layer_params.different_kernels_per_calculation) :
-                                    if((x_cor < layer_params.iact_size_x) & (y_cor < layer_params.iact_size_y)) :
+                                    if((x_cor < layer_params.psum_size_x) & (y_cor < layer_params.psum_size_y)) :
                                         if (counter == 0):
                                             partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
                                         else:
@@ -543,7 +543,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                         file_dma_ref.write(partial_result_a + partial_result_b + "\n")
             filter = filter + 1
         if ((filter >= layer_params.filters)) :
-            if (x_cor >= layer_params.iact_size_x) :
+            if (x_cor >= layer_params.psum_size_x) :
                 les.x_start = 0
             else :
                 les.x_start = x_cor
@@ -694,7 +694,7 @@ def calculate_conv_results_mp(f, layer_number, layer_params, serial, dram, calcu
                                 if((((x + j * layer_params.strideX) >= 0) & ((x + j * layer_params.strideX) < (layer_params.output_shape[1] * layer_params.strideX))) & \
                                 (((y + i * layer_params.strideY) >= 0) & ((y + i * layer_params.strideY) < (layer_params.output_shape[2] * layer_params.strideY)))):
                                     calculated_results[j][i] = int(calculated_results[j][i] + \
-                                                                    dram.weights[layer_number][c][f][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)] * \
+                                                                    dram.weights[layer_number][c][f][y + math.floor((layer_params.kernel_size[1]-1)/2)][x + math.floor(layer_params.kernel_size[0]/2)] * \
                                                                     dram.fmap[layer_number][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
                                 else:
                                     if (serial) :
@@ -844,4 +844,4 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
     elif "Dense" in str(current_layer_params.layer_name):
         for f in range(len(ref_output)):  
             dram[f] = ref_output[f]
-    return dram       
+    return dram

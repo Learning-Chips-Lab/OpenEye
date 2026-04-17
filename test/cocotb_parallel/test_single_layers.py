@@ -35,7 +35,8 @@ clk_delay_unit_out = "ps"
 
 @pytest.mark.parametrize("NUM_FILTERS", [(8)])#, 11, 32, 33, 63])
 @pytest.mark.parametrize("STRIDE", [(1)])#, (2,2)])
-@pytest.mark.parametrize("KERNEL_SIZE", [(3)])
+@pytest.mark.parametrize("KERNEL_SIZE_X", [(3)])
+@pytest.mark.parametrize("KERNEL_SIZE_Y", [(3)])
 @pytest.mark.parametrize("INPUT_SIZE", [(32)])
 @pytest.mark.parametrize("INPUT_CHANNELS", [(4)])#, 4, 8])
 @pytest.mark.parametrize("USE_SPARSE_IACTS", [(0)])
@@ -44,7 +45,7 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("CLUSTER_ROWS", [(4)])
 @pytest.mark.parametrize("LOGGER_LEVEL", [(0)])
 
-def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE, INPUT_CHANNELS, \
+def test_single_conv_layer(NUM_FILTERS, STRIDE, KERNEL_SIZE_X, KERNEL_SIZE_Y, INPUT_SIZE, INPUT_CHANNELS, \
 USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL, CLUSTER_ROWS):
     layer = "Convolution"
     dut = 'OpenEye_Parallel'
@@ -73,7 +74,8 @@ USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL, CLUSTER_ROW
                     ,"LAYER" : layer
                     ,"NUM_FILTERS" : str(NUM_FILTERS)
                     ,"STRIDE" : str(STRIDE)
-                    ,"KERNEL_SIZE" : str(KERNEL_SIZE)
+                    ,"KERNEL_SIZE_X" : str(KERNEL_SIZE_X)
+                    ,"KERNEL_SIZE_Y" : str(KERNEL_SIZE_Y)
                     ,"INPUT_SIZE" : str(INPUT_SIZE)
                     ,"INPUT_CHANNELS" : str(INPUT_CHANNELS)
                     ,"USE_SPARSE_IACTS" : str(USE_SPARSE_IACTS)
@@ -84,10 +86,11 @@ USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES, LOGGER_LEVEL, CLUSTER_ROW
     )
     
 @pytest.mark.parametrize("STRIDE", [(1)])#, (2,2)])
-@pytest.mark.parametrize("KERNEL_SIZE", [(7)])
+@pytest.mark.parametrize("KERNEL_SIZE_X", [(7)])
+@pytest.mark.parametrize("KERNEL_SIZE_Y", [(7)])
 @pytest.mark.parametrize("INPUT_SIZE", [(7)])
 @pytest.mark.parametrize("INPUT_CHANNELS", [(10)])#, 4, 8])
-def test_single_pool_layer(STRIDE,KERNEL_SIZE,INPUT_SIZE,INPUT_CHANNELS):
+def test_single_pool_layer(STRIDE,KERNEL_SIZE_X,KERNEL_SIZE_Y,INPUT_SIZE,INPUT_CHANNELS):
     layer = "Pooling"
     dut = 'OpenEye_Parallel'
     module = 'OpenEye_Parallel_tb'
@@ -114,16 +117,18 @@ def test_single_pool_layer(STRIDE,KERNEL_SIZE,INPUT_SIZE,INPUT_CHANNELS):
                     ,"CLOCK_DELAY_UNIT_OUTPUT" : clk_delay_unit_out
                     ,"LAYER" : layer
                     ,"STRIDE" : str(STRIDE)
-                    ,"KERNEL_SIZE" : str(KERNEL_SIZE)
+                    ,"KERNEL_SIZE_X" : str(KERNEL_SIZE_X)
+                    ,"KERNEL_SIZE_Y" : str(KERNEL_SIZE_Y)
                     ,"INPUT_SIZE" : str(INPUT_SIZE)
                     ,"INPUT_CHANNELS" : str(INPUT_CHANNELS)}
     )
 
 @pytest.mark.parametrize("STRIDE", [(1)])#, (2,2)])
-@pytest.mark.parametrize("KERNEL_SIZE", [(3)])
+@pytest.mark.parametrize("KERNEL_SIZE_X", [(3)])
+@pytest.mark.parametrize("KERNEL_SIZE_Y", [(3)])
 @pytest.mark.parametrize("INPUT_SIZE", [(32)])
 @pytest.mark.parametrize("INPUT_CHANNELS", [(4),(8)])#, 4, 8])
-def test_depthwise_conv_layer(STRIDE,KERNEL_SIZE,INPUT_SIZE,INPUT_CHANNELS):
+def test_depthwise_conv_layer(STRIDE,KERNEL_SIZE_X,KERNEL_SIZE_Y,INPUT_SIZE,INPUT_CHANNELS):
     NUM_FILTERS = 1
     layer = "Depthwise_Convolution"
     dut = 'OpenEye_Parallel'
@@ -152,7 +157,8 @@ def test_depthwise_conv_layer(STRIDE,KERNEL_SIZE,INPUT_SIZE,INPUT_CHANNELS):
                     ,"LAYER" : layer
                     ,"NUM_FILTERS" : str(NUM_FILTERS)
                     ,"STRIDE" : str(STRIDE)
-                    ,"KERNEL_SIZE" : str(KERNEL_SIZE)
+                    ,"KERNEL_SIZE_X" : str(KERNEL_SIZE_X)
+                    ,"KERNEL_SIZE_Y" : str(KERNEL_SIZE_Y)
                     ,"INPUT_SIZE" : str(INPUT_SIZE)
                     ,"INPUT_CHANNELS" : str(INPUT_CHANNELS)}
     )

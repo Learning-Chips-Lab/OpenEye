@@ -69,6 +69,9 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
         txt_file.write(f"parameter NUM_GLB_IACT  = {openeye_parameter.NUM_GLB_IACT},\n")
         txt_file.write(f"parameter NUM_GLB_PSUM  = {openeye_parameter.NUM_GLB_PSUM},\n")
         txt_file.write(f"parameter NUM_GLB_WGHT = {openeye_parameter.NUM_GLB_WGHT},\n")
+        txt_file.write(f"parameter RAM_CELLS = {openeye_parameter.RAM_CELLS},\n")
+        txt_file.write(f"parameter BRANCHES = {openeye_parameter.BRANCHES},\n")
+        
 
 
 def create_vh_file_from_envvars(

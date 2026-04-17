@@ -11,6 +11,7 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/PE.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/adder.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/data_pipeline_wght.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/data_pipeline_iact.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/dsp_unit.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/multiplier.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/mux2.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/mux_iact.v)
@@ -44,9 +45,9 @@ export LOGGER_LEVEL=0    #Enables Logger Debug Mode
 
 export IACTSIZE_X=3
 export IACTSIZE_Y=4
-export WGHTSIZE_X=10
+export WGHTSIZE_X=6
 export SPARSE_IACT=20
-export SPARSE_WGHT=50
+export SPARSE_WGHT=20
 export SEED = 42
 
 export

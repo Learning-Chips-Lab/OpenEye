@@ -162,6 +162,12 @@ class OpenEyeParameters(object):
             self.NUM_GLB_PSUM = 4  # Default: 4 global PSUM buffers per cluster
             self.PEs_X = 4         # Default: 4 PEs horizontally per cluster
 
+        # Number of global IACT RAM buffers
+        try:
+            self.RAM_CELLS = int(os.getenv("RAM_CELLS"))
+        except:
+            self.RAM_CELLS = 4  # Default: 4 global PSUM buffers per cluster
+
         # Number of global weight buffers and vertical PEs per cluster
         # NUM_GLB_WGHT corresponds to PEs_Y since weights are distributed vertically
         # Can be overridden by NUM_GLB_WGHT environment variable
@@ -171,6 +177,12 @@ class OpenEyeParameters(object):
         except:
             self.NUM_GLB_WGHT = 3  # Default: 3 global WGHT buffers per cluster
             self.PEs_Y = 3         # Default: 3 PEs vertically per cluster
+
+        # Number of possible branches in one single net
+        try:
+            self.BRANCHES = int(os.getenv("BRANCHES"))
+        except:
+            self.BRANCHES = 2  # Default: 3 global WGHT buffers per cluster
 
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode

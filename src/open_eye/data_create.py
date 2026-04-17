@@ -11,7 +11,7 @@ import math
 
 logger = logging.getLogger("cocotb")
 
-def create_layer(layer_mode, filters, kernelsize, inputsize_x, inputsize_y, strides, channels, outputsize):
+def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inputsize_y, strides, channels, outputsize):
     """Create a TensorFlow/Keras neural network layer based on the specified configuration.
 
     Constructs a Keras Sequential model containing the requested layer type with the
@@ -48,17 +48,53 @@ def create_layer(layer_mode, filters, kernelsize, inputsize_x, inputsize_y, stri
     model = tf.keras.models.Sequential()
     match layer_mode:
         case "Convolution":
-            model.add(tf.keras.layers.Conv2D(filters, (kernelsize, kernelsize), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
-            #model.add(tf.keras.layers.Conv2D(filters, (kernelsize, kernelsize), padding="SAME", input_shape=(inputsize_x, inputsize_y, filters), strides = strides))
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
+            #model.add(tf.keras.layers.Flatten())
+            #model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
+            #model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="SAME", input_shape=(inputsize_x, inputsize_y, filters), strides = strides))
 
         case "Depthwise_Convolution":
-            model.add(tf.keras.layers.DepthwiseConv2D((kernelsize, kernelsize), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
+            model.add(tf.keras.layers.DepthwiseConv2D((kernelsize_x, kernelsize_y), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "FC":
-            model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=outputsize, use_bias = True))
+            model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=26, use_bias = True))
+            model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
+        case "MNIST":
+            channels = 16
+            x_axis = 128
+            y_axis = 4
+            filters = 16
+            pool_x_axis = 2
+            pool_y_axis = 2
+            
+            model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
+            """
+            model.add(tf.keras.layers.MaxPooling2D(pool_size = (pool_x_axis, pool_y_axis), strides=(pool_x_axis,pool_y_axis), padding="valid"))
+            
+            channels = filters
+            x_axis   = math.ceil(x_axis/pool_x_axis)
+            y_axis   = math.ceil(y_axis/pool_y_axis)
+            filters  = 32
+            
+            model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
+            
+            model.add(tf.keras.layers.MaxPooling2D(pool_size = (pool_x_axis, pool_y_axis), strides=(pool_x_axis,pool_y_axis), padding="valid"))
+            
+            channels = filters
+            x_axis   = math.ceil(x_axis/pool_x_axis)
+            y_axis   = math.ceil(y_axis/pool_y_axis)
+            filters  = 32
+            model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
+            
+            model.add(tf.keras.layers.Flatten())
+            output_size  = 32
+            model.add(tf.keras.layers.Dense(units=output_size, use_bias = True))
+            output_size  = 10
+            model.add(tf.keras.layers.Dense(units=output_size, use_bias = True))
+            """
         case "Pooling":
             channels = 4
             x_axis = 14
-            y_axis = 14
+            y_axis = 6
             filters = 32
             model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
             

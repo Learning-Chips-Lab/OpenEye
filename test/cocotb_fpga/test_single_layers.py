@@ -35,7 +35,8 @@ clk_delay_unit_out = "ps"
 
 @pytest.mark.parametrize("NUM_FILTERS", [16])
 @pytest.mark.parametrize("STRIDE", [1])
-@pytest.mark.parametrize("KERNEL_SIZE", [3])
+@pytest.mark.parametrize("KERNEL_SIZE_X", [3])
+@pytest.mark.parametrize("KERNEL_SIZE_Y", [3])
 @pytest.mark.parametrize("INPUT_SIZE_X", [32])
 @pytest.mark.parametrize("INPUT_SIZE_Y", [1])
 @pytest.mark.parametrize("INPUT_CHANNELS", [4])
@@ -48,7 +49,7 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("NUM_GLB_WGHT", [4,3])
 @pytest.mark.parametrize("LOGGER_LEVEL", [0])
 def test_single_conv_layer(
-    NUM_FILTERS, STRIDE, KERNEL_SIZE, INPUT_SIZE_X, INPUT_SIZE_Y, INPUT_CHANNELS,
+    NUM_FILTERS, STRIDE, KERNEL_SIZE_X, KERNEL_SIZE_Y, INPUT_SIZE_X, INPUT_SIZE_Y, INPUT_CHANNELS,
     USE_SPARSE_IACTS, USE_SPARSE_WGHTS, USE_RANDOM_VALUES,
     CLUSTER_ROWS, NUM_GLB_IACT, NUM_GLB_PSUM, NUM_GLB_WGHT, LOGGER_LEVEL,
     request
@@ -96,7 +97,8 @@ def test_single_conv_layer(
             "LAYER": layer,
             "NUM_FILTERS": str(NUM_FILTERS),
             "STRIDE": str(STRIDE),
-            "KERNEL_SIZE": str(KERNEL_SIZE),
+            "KERNEL_SIZE_X": str(KERNEL_SIZE_X),
+            "KERNEL_SIZE_Y": str(KERNEL_SIZE_Y),
             "INPUT_SIZE_X": str(INPUT_SIZE_X),
             "INPUT_SIZE_Y": str(INPUT_SIZE_Y),
             "INPUT_CHANNELS": str(INPUT_CHANNELS),
@@ -117,7 +119,7 @@ def test_single_conv_layer(
     
 
 if __name__ == '__main__':
-    test_single_conv_layer(NUM_FILTERS=16, STRIDE=1, KERNEL_SIZE=3, INPUT_SIZE_X=32, INPUT_SIZE_Y=1,
+    test_single_conv_layer(NUM_FILTERS=16, STRIDE=1, KERNEL_SIZE_X=3, KERNEL_SIZE_Y=3, INPUT_SIZE_X=32, INPUT_SIZE_Y=1,
         INPUT_CHANNELS=4, USE_SPARSE_IACTS=0, USE_SPARSE_WGHTS=0, USE_RANDOM_VALUES=1,
         CLUSTER_ROWS=4, NUM_GLB_IACT=1, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3, LOGGER_LEVEL=0,
         request=pytest.fixture(lambda: None)()

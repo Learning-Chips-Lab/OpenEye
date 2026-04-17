@@ -188,7 +188,7 @@ module OpenEye_Parallel #(
     input      [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                                          3:0] needed_iact_cycles_i,
     input      [                    $clog2(PSUM_PER_PE+1)-1:0] filters_i,
-    input      [                                          7:0] iact_size_x_i,
+    input      [                                         11:0] iact_size_x_i,
     input      [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_addr_len_i,
     input      [               $clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_i,
     input      [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i,
@@ -200,7 +200,8 @@ module OpenEye_Parallel #(
     input      [                                          2:0] stride_y_i,
     input      [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i,
     input      [                                          3:0] iact_x_line_repetitions_i,
-    input      [                                          3:0] kernel_size_i,
+    input      [                                          5:0] kernel_size_x_i,
+    input      [                                          3:0] kernel_size_y_i,
     input      [                             CLUSTERS*PES-1:0] compute_mask_i,
     input      [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i,
     input      [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_choose_i,
@@ -420,7 +421,7 @@ module OpenEye_Parallel #(
         end
         THIRD_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{4{1'd0}},iact_x_line_repetitions_reg,{kernel_size_i}};
+          data_stream_reg        <= {{4{1'd0}},iact_x_line_repetitions_reg,{kernel_size_y_i}};
           fsm_transmission_state <= IDLE_TRANSMI;
         end
         default: begin

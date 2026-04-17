@@ -60,9 +60,10 @@ export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
 export INPUT_CHANNELS=4
 export NUM_FILTERS=8
-export KERNEL_SIZE=3
-export INPUT_SIZE=16
-export OUTPUT_SIZE=256
+export KERNEL_SIZE_X=3
+export KERNEL_SIZE_Y=3
+export INPUT_SIZE=32
+export OUTPUT_SIZE=10
 export STRIDE=1
 #Amout of parallel MACs
 export PARALLEL_MACS=2

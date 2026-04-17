@@ -132,7 +132,6 @@ class ConvMapper(LayerMapper):
         # Convert bitmap to binary string (reversed for hardware consumption)
         total_bits = params.Clusters_X * params.Clusters_Y * params.PEs_Y * params.PEs_X
         bitstring = format(computing_pes, f"0{total_bits}b")[::-1]
-
         # === REGISTER PACKING ===
         # Pack all layer configuration parameters into hardware register format
         # Uses pack_registers() utility from regmap_pack module
@@ -146,7 +145,8 @@ class ConvMapper(LayerMapper):
         "skipPsum_reg": layer_params.skipPsum,
         "psum_delay_reg": layer_params.psum_delay,
         "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
-        "kernel_size": layer_params.kernel_size[1],
+        "kernel_size_x": layer_params.kernel_size[0],
+        "kernel_size_y": layer_params.kernel_size[1],
         "x_lines_reg": layer_params.iact_x_lines,
         "needed_wght_cycles_reg": math.ceil(layer_params.filters/(layer_params.used_psum_per_PE * layer_params.different_kernels_per_calculation)),
         "needed_cycles_reg": math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer),
@@ -167,17 +167,21 @@ class ConvMapper(LayerMapper):
         "iact_channels_per_pe_next_layer": layer_params.diff_iact_layer_next_layer,
         "needed_psum_storage_cycles_reg": layer_params.psum_storage_cycles,
         "iact_channel_max_cycles": layer_params.diff_iact_layer,
-        "input_activations_reg": layer_params.used_iact_per_PE,
-        "filters_reg": layer_params.used_psum_per_PE,
+        "input_activations": layer_params.used_iact_per_PE,
+        "filters": layer_params.used_psum_per_PE,
         "needed_x_cls_reg": layer_params.used_X_cluster,
         "needed_y_cls_reg": layer_params.used_Y_cluster,
         "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
         "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
         "iact_addr_len_reg": layer_params.used_iact_addr_per_PE,
         "send_data_out": layer_params.send_values_out,
-        "needed_iact_buffer_words_reg": layer_params.needed_iact_buffer_words,
+        "needed_iact_buffer_words": layer_params.needed_iact_buffer_words,
         "add_up_reg":layer_params.add_up,
-        "iact_x_line_repetitions_reg":layer_params.iact_x_line_repetitions
+        "iact_x_line_repetitions_reg":layer_params.iact_x_line_repetitions,
+        "buffer_cycles_for_x_iact" : layer_params.buffer_cycles_for_x_iact,
+        "start_param_array" : layer_params.start_param_array,
+        "limit_increase" : layer_params.limit_increase,
+        "initial_upper_limit": layer_params.initial_upper_limit
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===

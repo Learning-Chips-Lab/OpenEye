@@ -8,14 +8,15 @@ registers:
   - {name: skipPsum_reg, width: 1}
   - {name: psum_delay_reg, width: 4}
   - {name: kernel_per_pe_cluster_reg, width: 4}
-  - {name: kernel_size, width: 4}
+  - {name: kernel_size_x, width: 6}
+  - {name: kernel_size_y, width: 4}
   - {name: x_lines_reg, width: 8}
   - {name: needed_wght_cycles_reg, width: 8}
   - {name: needed_cycles_reg, width: 18}
   - {name: iact_converter_buffer_addr_max_cycles, width: 8}
   - {name: iact_channels_per_pe, width: 8}
   - {name: fc_size_reg, width: 12}
-  - {name: iact_size_x, width: 8}
+  - {name: iact_size_x, width: 12}
   - {name: iact_size_y, width: 8}
   - {name: iact_needed_cycles, width: 11}
   - {name: kernels_per_calc, width: 5}
@@ -24,22 +25,30 @@ registers:
   - {name: store_in_psum, width: 1}
   - {name: max_pooling, width: 1}
   - {name: fully_connected_layer, width: 1}
-  - {name: choose_iact_buffer_output, width: 1}
-  - {name: choose_iact_buffer_input, width: 1}
+  - {name: choose_iact_buffer_output, width: ceil(log2(int(BRANCHES)))}
+  - {name: choose_iact_buffer_input, width: ceil(log2(int(BRANCHES)))}
   - {name: iact_channels_per_pe_next_layer, width: 4}
   - {name: needed_psum_storage_cycles_reg, width: 8}
   - {name: iact_channel_max_cycles, width: 8}
-  - {name: input_activations_reg, width: 5}
-  - {name: filters_reg, width: 6}
+  - {name: input_activations, width: 5}
+  - {name: filters, width: 6}
   - {name: needed_x_cls_reg, width: 2}
   - {name: needed_y_cls_reg, width: ceil(log2(int(CLUSTER_ROWS)+1))}
   - {name: needed_iact_cycles_reg, width: 4}
   - {name: wght_addr_len_reg, width: 5}
   - {name: iact_addr_len_reg, width: 4}
   - {name: send_data_out, width: 1}
-  - {name: needed_iact_buffer_words_reg, width: 13}
+  - {name: needed_iact_buffer_words, width: 13}
   - {name: add_up_reg, width: 3}
   - {name: iact_x_line_repetitions_reg, width: 8}
+  - {name: buffer_cycles_for_x_iact, width: 8}
+  - {name: start_param_array, width: int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)}
+  - {name: limit_increase, width: 8}
+  - {name: initial_upper_limit, width: 8}
+
+
+
+
   
   
   

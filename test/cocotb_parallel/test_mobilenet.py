@@ -128,7 +128,8 @@ def test_mobilnet(LAYER_NUMBER):
                     ,"LAYER" : layer_type
                     ,"NUM_FILTERS" : str(num_filters)
                     ,"STRIDE" : str(stride)
-                    ,"KERNEL_SIZE" : str(kernel_size)
+                    ,"KERNEL_SIZE_X" : str(kernel_size_x)
+                    ,"KERNEL_SIZE_Y" : str(kernel_size_y)
                     ,"INPUT_SIZE" : str(input_size)
                     ,"INPUT_CHANNELS" : str(input_channels)
                     }

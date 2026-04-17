@@ -86,14 +86,14 @@ class DRAMContents(object):
             if "Depthwise" in str(layer_parameters[i].layer_name):
                 # Depthwise Conv: separate kernel per input channel
                 # Shape: [input_channels][kernel_height][kernel_width]
-                dram_weights.append([[[0 for l in range(layer_parameters[i].kernel_size[1])]
-                                    for k in range(layer_parameters[i].kernel_size[0])]
+                dram_weights.append([[[0 for l in range(layer_parameters[i].kernel_size[0])]
+                                    for k in range(layer_parameters[i].kernel_size[1])]
                                     for j in range(layer_parameters[i].input_shape[3])])
             elif "Conv" in str(layer_parameters[i].layer_name):
                 # Standard Conv2D: full kernel for each input-output channel pair
                 # Shape: [input_channels][output_filters][kernel_height][kernel_width]
-                dram_weights.append([[[[0 for m in range(layer_parameters[i].kernel_size[1])]
-                                    for l in range(layer_parameters[i].kernel_size[0])]
+                dram_weights.append([[[[0 for m in range(layer_parameters[i].kernel_size[0])]
+                                    for l in range(layer_parameters[i].kernel_size[1])]
                                     for k in range(layer_parameters[i].filters)]
                                     for j in range(layer_parameters[i].input_shape[3])])
             elif "Dense" in str(layer_parameters[i].layer_name):
@@ -207,17 +207,17 @@ class DRAMContents(object):
                 # Iterate: input_channels -> output_filters -> kernel_height -> kernel_width
                 for c in range(layer_parameters[l].input_shape[3]):
                     for f in range(layer_parameters[l].filters):
-                        for x in range(layer_parameters[l].kernel_size[0]):
-                            for y in range(layer_parameters[l].kernel_size[1]):
+                        for y in range(layer_parameters[l].kernel_size[1]):
+                            for x in range(layer_parameters[l].kernel_size[0]):
                                 # Quantize weight to INT8
-                                self.weights[l][c][f][x][y] = int(math.floor(float(127*model[l].weights[0][x][y][c][f])))
+                                self.weights[l][c][f][y][x] = int(math.floor(float(127*model[l].weights[0][x][y][c][f])))
                                 # Apply sparsity pattern if requested: zero out elements where sum of indices is even
                                 if (sparse_wghts & (((c+f+x+y) % 2) == 0)):
-                                    self.weights[l][c][f][x][y] = 0
+                                    self.weights[l][c][f][y][x] = 0
                                 else:
                                     # Replace zeros with random -1 or 1
-                                    if (self.weights[l][c][f][x][y] == 0):
-                                        self.weights[l][c][f][x][y] = int(np.random.choice([-1, 1]))
+                                    if (self.weights[l][c][f][y][x] == 0):
+                                        self.weights[l][c][f][y][x] = int(np.random.choice([-1, 1]))
             elif "Dense" in str(layer_parameters[l].layer_name):
                 # Load Dense (fully connected) layer weights
                 # Note: Uses random weights instead of model weights

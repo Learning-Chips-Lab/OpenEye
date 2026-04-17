@@ -141,7 +141,8 @@ This simulates one convolutional layer (28×28 input, 32 filters, 3×3 kernel, s
 ```makefile
 export LAYER=Convolution      # or FC, Depthwise_Convolution, Pooling
 export NUM_FILTERS=32
-export KERNEL_SIZE=3
+export KERNEL_SIZE_X=3
+export KERNEL_SIZE_Y=3
 export INPUT_SIZE_X=28
 export INPUT_SIZE_Y=28
 export STRIDE=1

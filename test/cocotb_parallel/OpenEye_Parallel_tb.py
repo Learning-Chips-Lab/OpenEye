@@ -74,9 +74,10 @@ async def single_layer_test(dut):
         filters = 1
 
     try:
-        kernelsize = int((os.getenv("KERNEL_SIZE")))
+        kernelsize_x = int((os.getenv("KERNEL_SIZE_X")))
+        kernelsize_y = int((os.getenv("KERNEL_SIZE_Y")))
     except:
-        logger.debug("KERNEL_SIZE not set")
+        logger.debug("KERNEL_SIZE_X and KERNEL_SIZE_Y not set")
 
     try:
         inputsize = int((os.getenv("INPUT_SIZE")))

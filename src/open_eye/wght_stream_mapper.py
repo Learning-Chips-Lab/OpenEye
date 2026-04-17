@@ -665,7 +665,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                 if(channel != 1 + int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)):
                     try:
                         # Load weight from DRAM: dram[channel][filter][kernel_row][kernel_x]
-                        spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][0] = dram[channel][filters][kernel_row][kernel_x]
+                        spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][0] = dram[channel][filters][kernel_x][kernel_row]
                         if (spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][0] == 0):
                             overhead_counter = overhead_counter + 1
                         else:

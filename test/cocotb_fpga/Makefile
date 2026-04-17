@@ -56,7 +56,7 @@ TOPLEVEL = OpenEye_FPGA
 
 # MODULE is the basename of the Python test file
 MODULE = OpenEye_FPGA_tb
-TESTCASE = single_layer_test
+TESTCASE = start_test_fpga
 export COCOTB_TRACE=1
 export IVERILOG_DUMPER=fst
 export CLOCK_LEN=10
@@ -71,16 +71,18 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 
 #export LAYER=FC
+#export LAYER=MNIST
 export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
 #export LAYER=Pooling
-export NUM_FILTERS=32
-export KERNEL_SIZE=3
-export INPUT_SIZE_X=28
-export INPUT_SIZE_Y=28
+export NUM_FILTERS=16
+export KERNEL_SIZE_X=3
+export KERNEL_SIZE_Y=3
+export INPUT_SIZE_X=16
+export INPUT_SIZE_Y=1
 export STRIDE=1
-export INPUT_CHANNELS=1
-export OUTPUT_SIZE=10
+export INPUT_CHANNELS=4
+export OUTPUT_SIZE=32
 #Amout of parallel MACs
 export PARALLEL_MACS=2
 export USE_RANDOM_VALUES=1
@@ -106,7 +108,10 @@ export NUM_GLB_PSUM=4
 
 #Set number of Cluster rows need at least to be 2 COLUMNS
 export CLUSTER_COLUMNS=2
-export CLUSTER_ROWS=8
+export CLUSTER_ROWS=2
+
+#Amoutn of Iact RAM STORAGES
+export RAM_CELLS=8
 
 #Number of Words per PE
 export IACT_PER_PE=16
@@ -116,6 +121,7 @@ export PE_WGHT_ADDR_ADDR=16
 export PSUM_PER_PE=32
 
 export ONLY_FILES=0
+export BRANCHES=2
 
 export
 run:

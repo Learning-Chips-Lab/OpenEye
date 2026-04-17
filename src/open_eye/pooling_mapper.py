@@ -148,7 +148,7 @@ class PoolingMapper(LayerMapper):
         "iact_channels_per_pe_next_layer": layer_params.diff_iact_layer_next_layer,
         "needed_psum_storage_cycles_reg": 0,#layer_params.psum_storage_cycles
         "iact_channel_max_cycles": layer_params.diff_iact_layer,
-        "input_activations_reg": layer_params.used_iact_per_PE,
+        "input_activations": layer_params.used_iact_per_PE,
         "filters_reg": layer_params.used_psum_per_PE,
         "needed_x_cls_reg": layer_params.used_X_cluster,
         "needed_y_cls_reg": layer_params.used_Y_cluster,

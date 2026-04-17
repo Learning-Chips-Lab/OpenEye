@@ -93,7 +93,8 @@ def envvars_to_vars():
     only_files = gtu.load_env_to_variable("ONLY_FILES", 0)
     layer_mode = gtu.load_env_to_variable("LAYER", "Convolution")
     filters = gtu.load_env_to_variable("NUM_FILTERS", 4)
-    kernelsize = gtu.load_env_to_variable("KERNEL_SIZE", 3)
+    kernelsize_x = gtu.load_env_to_variable("KERNEL_SIZE_X", 3)
+    kernelsize_y = gtu.load_env_to_variable("KERNEL_SIZE_Y", 3)
     inputsize_x = gtu.load_env_to_variable("INPUT_SIZE_X", 64)
     inputsize_y = gtu.load_env_to_variable("INPUT_SIZE_Y", 1)
     outputsize = gtu.load_env_to_variable("OUTPUT_SIZE", 1)
@@ -101,7 +102,7 @@ def envvars_to_vars():
     channels = gtu.load_env_to_variable("INPUT_CHANNELS", 4)
     sparse_iacts = gtu.load_env_to_variable("USE_SPARSE_IACTS", 0)
     sparse_wghts = gtu.load_env_to_variable("USE_SPARSE_WEIGHTS", 0)
-    return only_files, layer_mode, filters, kernelsize, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts
+    return only_files, layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts
 
 #@cocotb.test()
 async def model_test(dut):
@@ -110,10 +111,9 @@ async def model_test(dut):
     Load a trained DNN model (in TFLite format) 
     and simulate the execution using the OpenEye FPGA wrapper.
     """
-    only_files, layer_mode, filters, kernelsize, \
+    only_files, layer_mode, filters, kernelsize_x, kernelsize_y, \
     inputsize_x, inputsize_y, outputsize, strides, \
     channels, sparse_iacts, sparse_wghts = envvars_to_vars()
-
     layer_es = les.LayerExecutionState()
     serial = 1
     clk_cycle = int(os.environ["CLOCK_LEN"])
@@ -156,7 +156,8 @@ async def single_layer_test(dut):
     Simulate a single layer using the OpenEye FPGA wrapper.
     """
 
-    only_files, layer_mode, filters, kernelsize, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts = envvars_to_vars()
+    only_files, layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts = envvars_to_vars()
+
 
 
     try:
@@ -186,7 +187,7 @@ async def single_layer_test(dut):
 
     #Here If-Condition test, wether use model or single Layer
     if(use_random):
-        model = data_create.create_layer(layer_mode, filters, kernelsize, inputsize_x, inputsize_y, strides, channels, outputsize)
+        model = data_create.create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inputsize_y, strides, channels, outputsize)
     else:
         model = tflite2model.create_model_from_tflite(use_random)
     #load_model_function
@@ -256,9 +257,9 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                             elif("Pooling" in str(layer_parameters[layer_number].layer_name)):
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
-                            """if(logging.DEBUG >= log_level):
+                            if(logging.DEBUG >= log_level):
                                 assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
-                                                        'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')"""
+                                                        'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
                             assert tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
                         else :
                             await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
