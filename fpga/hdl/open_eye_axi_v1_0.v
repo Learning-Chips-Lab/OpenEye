@@ -5,13 +5,13 @@
 	(
 
 		// Users to add parameters here
-		parameter integer CLUSTER_ROWS	= 4,
+		parameter integer CLUSTER_ROWS	= 2,
 		parameter integer NUM_GLB_IACT	= 3,
 		parameter integer NUM_GLB_WGHT	= 3,
-		parameter integer NUM_GLB_PSUM	= 3,
+		parameter integer NUM_GLB_PSUM	= 4,
 		parameter integer RAM_CELLS     = 8,
 		parameter integer BUFFER_WIDTH  = 10,
-		parameter integer BRANCHES     	= 2,
+		parameter integer BRANCHES     	= 1,
 
 		// User parameters ends
 		// Do not modify the parameters beyond this line
