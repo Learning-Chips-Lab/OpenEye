@@ -273,7 +273,7 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     #   words = [0x123456789ABCDEF0, ...]
     #   values = unpack_registers(words)  # {'wght_cycles_reg': 9, ...}
 
-    with open(PYTHON_OUT, "w") as pf:
+    with open(PYTHON_OUT, "w+") as pf:
         pf.write("# Auto-generated from {}\n".format(YAML_FILE))
         pf.write(f"DMA_BITWIDTH = {dma_bitwidth}\n")
         pf.write(f"TRANSMISSIONS = {num_transmissions}\n\n")
@@ -347,7 +347,7 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     #   wght_cycles_reg <= dma_data_i[PARAMETER_POS_0_0 + 7 : PARAMETER_POS_0_0];
     #                                     ↑ this evaluates to [7:0]
 
-    with open(DMA_STORAGE_OUT, "w") as dv:
+    with open(DMA_STORAGE_OUT, "w+") as dv:
         dv.write("// Auto-generated from {}\n".format(YAML_FILE))
         dv.write("//\n")
         dv.write("// DMA Storage Module - Receives and unpacks layer configuration parameters\n")
