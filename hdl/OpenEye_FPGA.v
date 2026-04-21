@@ -96,12 +96,13 @@
 module OpenEye_FPGA #(
     //Set parameters
   `ifdef USE_INTERNAL_PARAMS
-      parameter CLUSTER_ROWS  = 8,
+      parameter CLUSTER_ROWS  = 2,
       parameter NUM_GLB_IACT  = 3,
       parameter NUM_GLB_PSUM  = 4,
       parameter NUM_GLB_WGHT  = 3,
-      parameter RAM_CELLS     = 16,
-      parameter BRANCHES      = 2,
+      parameter RAM_CELLS     = 8,
+      parameter BRANCHES      = 1,
+      parameter BUFFER_WIDTH  = 10,
   `else
     `include "parameters.vh"
       // Defaultvalues
@@ -149,8 +150,7 @@ module OpenEye_FPGA #(
 
     parameter DMA_BITWIDTH  = 64,
 
-    parameter BUFFER_WIDTH = 12,
-    parameter BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR = BUFFER_WIDTH + 1,
+    parameter BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR = BUFFER_WIDTH,
     parameter real FSM_IACT_RTR_CCLS_A = (CLUSTERS * NUM_GLB_IACT),
     parameter real FSM_IACT_RTR_CCLS_B = DMA_BITWIDTH / ROUTER_MODES_IACT,
     parameter real FSM_IACT_RTR_CCLS = FSM_IACT_RTR_CCLS_A / FSM_IACT_RTR_CCLS_B,
@@ -175,9 +175,8 @@ module OpenEye_FPGA #(
     parameter BITWIDTH_IACT = TRANS_BITWIDTH_IACT / 2,
 
     //Storage RAMs
-    parameter RAM_CELLS_CLOG2 = $clog2(RAM_CELLS),
-    parameter BRANCHES_WIDTH = 10,
-    parameter RAM_CELLS_ADDR_WIDTH = $clog2(BRANCHES) + BRANCHES_WIDTH,
+    parameter BRANCHES_CLOG = $clog2(BRANCHES),
+    parameter BRANCHES_WIDTH = BUFFER_WIDTH - BRANCHES_CLOG,
     parameter RAM_CELLS_WORD_BITWIDTH = 64,
 
     //Enable Traces for unpacked arrays
@@ -195,7 +194,7 @@ module OpenEye_FPGA #(
     //DEBUG OUTPUT IACT
     output                                debug_iact_we,
     output                                debug_iact_re,
-    output  [RAM_CELLS_ADDR_WIDTH-1:0]    debug_iact_addr,
+    output  [BUFFER_WIDTH-1:0]            debug_iact_addr,
     output  [RAM_CELLS_WORD_BITWIDTH-1:0] debug_iact_data_i,
     output  [RAM_CELLS_WORD_BITWIDTH-1:0] debug_iact_data_o,
 
@@ -382,9 +381,9 @@ reg [1023:0] fst_path;
   // -----------------------------------------------------------------------
   reg wght_buffer_SP_en_r;                                          // Read enable for the weight staging RAM.
   reg wght_buffer_SP_en_w;                                          // Write enable for the weight staging RAM.
-  reg [BUFFER_WIDTH:0] wght_buffer_SP_wr_addr;                      // Write-address pointer; incremented each time a full weight row is assembled.
-  reg [BUFFER_WIDTH:0] wght_buffer_SP_rd_addr;                      // Read-address pointer; incremented each clock during the send phase.
-  reg [BUFFER_WIDTH:0] wght_buffer_SP_rd_addr_storage;              // Saved read address to rewind to the start of the current weight block after each channel batch.
+  reg [BUFFER_WIDTH-1:0] wght_buffer_SP_wr_addr;                      // Write-address pointer; incremented each time a full weight row is assembled.
+  reg [BUFFER_WIDTH-1:0] wght_buffer_SP_rd_addr;                      // Read-address pointer; incremented each clock during the send phase.
+  reg [BUFFER_WIDTH-1:0] wght_buffer_SP_rd_addr_storage;              // Saved read address to rewind to the start of the current weight block after each channel batch.
   reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_w;  // Write-data bus: assembled from pairs of DMA words, one row per cycle.
   wire [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_SP_data_r; // Read-data bus; directly assigned to wght_data_i_w → OpenEye_Parallel.
 
@@ -411,9 +410,9 @@ reg [1023:0] fst_path;
   // Used during GET_IACT to distribute incoming DMA words across the 32
   // double-buffer cells in a round-robin fashion.
   // -----------------------------------------------------------------------
-  reg [RAM_CELLS_ADDR_WIDTH-2:0] current_buffer_addr; // Current word address within a cell; all cells share the same address (they are written in lock-step).
-  reg [ 7:0] current_buffer_n;   // Index of the cell currently being written (0–31); increments each DMA word, wraps at RAM_CELLS.
-  reg [ 7:0] current_buffer_n_1; // One-cycle delayed current_buffer_n; used to update buffer_SP_addr_reg one cycle after the write.
+  reg [BUFFER_WIDTH-2:0] current_buffer_addr; // Current word address within a cell; all cells share the same address (they are written in lock-step).
+  reg [$clog2(RAM_CELLS)-1:0] current_buffer_n;   // Index of the cell currently being written (0–31); increments each DMA word, wraps at RAM_CELLS.
+  reg [$clog2(RAM_CELLS)-1:0] current_buffer_n_1; // One-cycle delayed current_buffer_n; used to update buffer_SP_addr_reg one cycle after the write.
   wire [11:0] iact_size_x;       // Feature map width in pixels (from dma_storage).
   wire [ 7:0] iact_size_y;       // Feature map height in pixels (from dma_storage).
   reg [11:0] iact_channels;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
@@ -432,13 +431,13 @@ reg [1023:0] fst_path;
   // -----------------------------------------------------------------------
   reg buffer_SP_en_r_reg[RAM_CELLS-1:0];                        // Per-cell read-enable; driven high for all cells during CONVERT_IACT and MAXPOOLING_READ.
   reg buffer_SP_en_w_reg[RAM_CELLS-1:0];                        // Per-cell write-enable; set selectively during GET_IACT, RECEIVE_PSUMS_TO_IACT, MAXPOOLING_SEND.
-  reg [$clog2(BRANCHES)-1:0] choose_iact_buffer;                                       // Selects the active half of the double-buffer (address MSB); toggled between layers via choose_iact_buffer_input/output.
-  wire [$clog2(BRANCHES)-1:0] choose_iact_buffer_input;                                // Value choose_iact_buffer should take when the host is loading new activations (from dma_storage).
-  wire [$clog2(BRANCHES)-1:0] choose_iact_buffer_output;                               // Value choose_iact_buffer should take when psums are being written back as activations (from dma_storage).
+  reg [BRANCHES_CLOG == 0 ? 0 : BRANCHES_CLOG-1:0] choose_iact_buffer;                                       // Selects the active half of the double-buffer (address MSB); toggled between layers via choose_iact_buffer_input/output.
+  wire [BRANCHES_CLOG == 0 ? 0 : BRANCHES_CLOG-1:0] choose_iact_buffer_input;                                // Value choose_iact_buffer should take when the host is loading new activations (from dma_storage).
+  wire [BRANCHES_CLOG == 0 ? 0 : BRANCHES_CLOG-1:0] choose_iact_buffer_output;                               // Value choose_iact_buffer should take when psums are being written back as activations (from dma_storage).
   wire fully_connected_layer;                                   // When 1: layer is a fully-connected (FC) layer; modifies iact packing and weight/psum addressing (from dma_storage).
   wire max_pooling;                                             // When 1: skip compute; instead run a 2×2 max-pool on the iact buffer (from dma_storage).
-  reg [         BRANCHES_WIDTH-1:0] buffer_SP_addr_reg      [RAM_CELLS-1:0]; // Per-cell read/write address; advanced by the sliding-window logic in CONVERT_IACT.
-  reg [   RAM_CELLS_ADDR_WIDTH-2:0] buffer_SP_addr_temp_reg [RAM_CELLS-1:0]; // Saved address snapshot used to restart a cell's address in MAXPOOLING_SEND.
+  reg [           BUFFER_WIDTH-1:0] buffer_SP_addr_reg      [RAM_CELLS-1:0]; // Per-cell read/write address; advanced by the sliding-window logic in CONVERT_IACT.
+  reg [           BUFFER_WIDTH-1:0] buffer_SP_addr_temp_reg [RAM_CELLS-1:0]; // Saved address snapshot used to restart a cell's address in MAXPOOLING_SEND.
   reg [RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w_reg    [RAM_CELLS-1:0]; // Per-cell write-data; loaded from DMA in GET_IACT or from quantized psums in RECEIVE_PSUMS_TO_IACT.
 
   // -----------------------------------------------------------------------
@@ -1251,7 +1250,7 @@ reg [1023:0] fst_path;
   //#######################
   wire                                           buffer_SP_en_r   [RAM_CELLS-1:0]; // Per-cell read enable from FSM or converter.
   wire                                           buffer_SP_en_w   [RAM_CELLS-1:0]; // Per-cell write enable from FSM or converter.
-  wire [                     BRANCHES_WIDTH-1:0] buffer_SP_addr   [RAM_CELLS-1:0]; // Per-cell address (half-width; MSB is buffer_select).
+  wire [                       BUFFER_WIDTH-1:0] buffer_SP_addr   [RAM_CELLS-1:0]; // Per-cell address (half-width; MSB is buffer_select).
   wire [            RAM_CELLS_WORD_BITWIDTH-1:0] buffer_SP_data_w [RAM_CELLS-1:0]; // Per-cell write data (64 bits).
   wire [2*RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r_w;               // Packed read data from all cells (2× wide for both halves).
   wire [  RAM_CELLS_WORD_BITWIDTH*RAM_CELLS-1:0] buffer_SP_data_r;                 // Active-half read data: unpacked from buffer_SP_data_r_w.
@@ -1758,10 +1757,10 @@ reg [1023:0] fst_path;
             current_buffer_n   <= current_buffer_n + 1;
             current_buffer_n_1 <= current_buffer_n;
             // get iact params
-            buffer_SP_en_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]]   <= 1;
-            buffer_SP_data_w_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]] <= data_dma_i_reg;
-            buffer_SP_addr_reg[current_buffer_n_1[RAM_CELLS_CLOG2-1:0]] <= current_buffer_addr;
-            current_buffer_addr                                         <= buffer_SP_addr_reg[current_buffer_n[RAM_CELLS_CLOG2-1:0]] + 1;
+            buffer_SP_en_w_reg[current_buffer_n]   <= 1;
+            buffer_SP_data_w_reg[current_buffer_n] <= data_dma_i_reg;
+            buffer_SP_addr_reg[current_buffer_n_1] <= current_buffer_addr;
+            current_buffer_addr                    <= buffer_SP_addr_reg[current_buffer_n] + 1;
             if (current_buffer_n == RAM_CELLS - 1) begin
               current_buffer_n <= 0;
             end
@@ -3731,7 +3730,7 @@ reg [1023:0] fst_path;
   for (k_gen = 0; k_gen < RAM_CELLS; k_gen=k_gen+1) begin : gen_RAM_wires
     assign buffer_SP_en_r[k_gen] = buffer_SP_en_r_reg[k_gen];
     assign buffer_SP_en_w[k_gen] = buffer_SP_en_w_reg[k_gen];
-    assign buffer_SP_addr[k_gen] = buffer_SP_addr_reg[k_gen];
+    assign buffer_SP_addr[k_gen] = BRANCHES != 1 ? {choose_iact_buffer,buffer_SP_addr_reg[k_gen]} : buffer_SP_addr_reg[k_gen];
     assign buffer_SP_data_w[k_gen] = buffer_SP_data_w_reg[k_gen];
     assign buffer_SP_data_r =   buffer_SP_data_r_w[0+:RAM_CELLS_WORD_BITWIDTH*RAM_CELLS];
   end
@@ -3791,7 +3790,7 @@ reg [1023:0] fst_path;
     // -------------------------------------------------------------------
     // BUFFER_A: Iact Double-Buffer (32 × RAM_SP)
     // Instantiates RAM_CELLS (32) single-port SRAMs, each 64 bits wide
-    // and RAM_CELLS_ADDR_WIDTH deep.  The MSB of addr_i is choose_iact_buffer,
+    // and BUFFER_WIDTH deep.  The MSB of addr_i is choose_iact_buffer,
     // implementing ping/pong double-buffering: the host writes into one half
     // while the converters read from the other.
     // Pipelined=1 means the read data appears one cycle after rd_en_i.
@@ -3799,13 +3798,13 @@ reg [1023:0] fst_path;
     for (j_gen = 0; j_gen < RAM_CELLS; j_gen=j_gen+1) begin : BUFFER_A
         RAM_SP #(
             .DataWidth(RAM_CELLS_WORD_BITWIDTH),
-            .AddrWidth(RAM_CELLS_ADDR_WIDTH),
+            .AddrWidth(BUFFER_WIDTH),
             .Pipelined(1)
         ) iact_converter_buffer_SP (
             .clk_i(clk_i),
             .rd_en_i(buffer_SP_en_r[j_gen] & !buffer_SP_en_w[j_gen]),
             .wr_en_i(buffer_SP_en_w[j_gen]),
-            .addr_i({choose_iact_buffer,buffer_SP_addr[j_gen]}),
+            .addr_i(buffer_SP_addr[j_gen]),
             .data_i(buffer_SP_data_w[j_gen]),
             .data_o(buffer_SP_data_r_w[j_gen*RAM_CELLS_WORD_BITWIDTH+:RAM_CELLS_WORD_BITWIDTH])
         );
@@ -3898,7 +3897,7 @@ reg [1023:0] fst_path;
     // -------------------------------------------------------------------
     RAM_SP #(
         .DataWidth(TRANS_BITWIDTH_WGHT * CLUSTERS * NUM_GLB_WGHT),
-        .AddrWidth(BUFFER_WIDTH + 1),
+        .AddrWidth(BUFFER_WIDTH),
         .Pipelined(1)
     ) wght_buffer_SP (
         .clk_i  (clk_i),

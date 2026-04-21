@@ -103,10 +103,10 @@ def eval_width(width, ctx):
     2
     """
     if isinstance(width, int):
-        return width
+        return max(width,1)
     elif isinstance(width, str):
         # Evaluate expression with restricted builtins (for security)
-        return int(eval(width, {"__builtins__": {}}, ctx))
+        return max(int(eval(width, {"__builtins__": {}}, ctx)),1)
     else:
         raise TypeError("Invalid width type")
 

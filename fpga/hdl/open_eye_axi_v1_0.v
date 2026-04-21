@@ -9,6 +9,9 @@
 		parameter integer NUM_GLB_IACT	= 3,
 		parameter integer NUM_GLB_WGHT	= 3,
 		parameter integer NUM_GLB_PSUM	= 3,
+		parameter integer RAM_CELLS     = 8,
+		parameter integer BUFFER_WIDTH  = 10,
+		parameter integer BRANCHES     	= 2,
 
 		// User parameters ends
 		// Do not modify the parameters beyond this line
@@ -108,7 +111,10 @@
 	.CLUSTER_ROWS(CLUSTER_ROWS),
 	.NUM_GLB_IACT(NUM_GLB_IACT),
 	.NUM_GLB_WGHT(NUM_GLB_WGHT),
-	.NUM_GLB_PSUM(NUM_GLB_PSUM)
+	.NUM_GLB_PSUM(NUM_GLB_PSUM),
+	.RAM_CELLS(RAM_CELLS),
+	.BUFFER_WIDTH(BUFFER_WIDTH),
+	.BRANCHES(BRANCHES)
 	
     ) open_eye_wrapper_inst (
         .clk_i          (clk),
