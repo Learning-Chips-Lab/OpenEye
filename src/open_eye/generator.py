@@ -225,7 +225,7 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     #   wght_cycles_reg <= dma_data_i[PARAMETER_POS_0_0 + 7 : PARAMETER_POS_0_0];
     #                                    ↑ extracts bits [7:0]
 
-    with open(VERILOG_PARAMS_OUT, "w") as vf:
+    with open(VERILOG_PARAMS_OUT, "w+") as vf:
         # Header guard
         vf.write("`ifndef REGMAP_PARAMS_VH\n`define REGMAP_PARAMS_VH\n\n")
         vf.write("// Auto-generated from {}\n\n".format(YAML_FILE))
