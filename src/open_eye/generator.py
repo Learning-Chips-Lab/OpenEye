@@ -135,11 +135,13 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     # ------------------------------------------------------------
     if output_vh_path is None:
         output_vh_path = os.path.join(os.path.dirname(regmap_yaml_path), "include")
-
+    Path(output_vh_path).mkdir(parents=True, exist_ok=True)
     if output_v_path is None:
         output_v_path = os.path.join(os.path.dirname(regmap_yaml_path))
+    Path(output_v_path).mkdir(parents=True, exist_ok=True)
     if output_py_path is None:
         output_py_path = Path(__file__).resolve().parent
+    Path(output_py_path).mkdir(parents=True, exist_ok=True)
 
     YAML_FILE = os.path.join(regmap_yaml_path, "regmap.yaml")
     VERILOG_PARAMS_OUT = os.path.join(output_vh_path, "regmap_params.vh")
