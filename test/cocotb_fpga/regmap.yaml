@@ -45,6 +45,7 @@ registers:
   - {name: start_param_array, width: int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)}
   - {name: limit_increase, width: 8}
   - {name: initial_upper_limit, width: 8}
+  - {name: iteration_for_kernels, width: 4}
 
 
 

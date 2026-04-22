@@ -1266,7 +1266,7 @@ reg [1023:0] fst_path;
   reg [7:0] psum_sending_counter;        // Counts GLB positions within a single cluster during result streaming.
   reg [3:0] sending_clusters;            // Column-cluster index being read in PSUM_SEND_RESULTS.
   reg [3:0] sending_cluster_rows;        // Row-cluster index being read in PSUM_SEND_RESULTS.
-  reg [3:0] iteration_for_kernels_reg;   // Tracks which kernel group is currently being output (multi-kernel layers).
+  wire [3:0] iteration_for_kernels;   // Tracks which kernel group is currently being output (multi-kernel layers).
   reg [11:0] pcb_1;  // Composite psum buffer address word, stage 1: {sending_clusters, psum_cycle_buffer_1}.
   reg [11:0] pcb_2;  // Composite psum buffer address word, stage 2: {sending_clusters, psum_cycle_buffer_2}.
   reg [11:0] pcb_3;  // Composite psum buffer address word, stage 3: {sending_clusters, psum_cycle_buffer_3}.
@@ -3007,7 +3007,6 @@ reg [1023:0] fst_path;
       last_data                   <= 0;
       last_data_o                 <= 0;
       current_filter              <= 0;
-      iteration_for_kernels_reg   <= 0;
       psum_cycle_buffer_1         <= 0;
       psum_cycle_buffer_2         <= 0;
       psum_cycle_buffer_3         <= 0;
@@ -3348,7 +3347,7 @@ reg [1023:0] fst_path;
         // Path B — send_data_out == 0 (psums are fed to next layer):
         //   After 2 cycles (fsm_psum_cycle >= 2):
         //   If store_in_psum == 0 (quantize + write back to iact buffer):
-        //     Computes iteration_for_kernels_reg and sending_clusters /
+        //     Computes iteration_for_kernels and sending_clusters /
         //     sending_cluster_rows (depends on CLUSTER_COLUMNS * NUM_GLB_PSUM
         //     vs. 8 threshold).
         //     Resets psum pipeline buffers (psum_cycle_buffer_1..4, pcb_1..3,
@@ -3372,8 +3371,6 @@ reg [1023:0] fst_path;
             if (fsm_psum_cycle >= 2) begin
               if (store_in_psum == 0) begin
                 fsm_psum_current_state    <= SEND_PSUM_TO_IACT;
-
-                iteration_for_kernels_reg <= (iact_channels_per_pe_next_layer+kernels_per_calc-1) / kernels_per_calc;
                 psum_sending_counter      <= 0;
                 if (CLUSTER_COLUMNS * NUM_GLB_PSUM < 8) begin
                   sending_clusters     <= 2 * CLUSTER_COLUMNS * NUM_GLB_PSUM;
@@ -3631,9 +3628,9 @@ reg [1023:0] fst_path;
                   psum_cycle_buffer_4 <= psum_cycle_buffer_4 + 1;
                   if (psum_cycle_buffer_4 == kernels_per_calc - 1 | (iact_channels_per_pe_next_layer == 4)) begin
                     psum_cycle_buffer_4 <= 0;
-                    pcb_1               <= pcb_3 + iteration_for_kernels_reg;
-                    pcb_2               <= pcb_3 + iteration_for_kernels_reg;
-                    pcb_3               <= pcb_3 + iteration_for_kernels_reg;
+                    pcb_1               <= pcb_3 + iteration_for_kernels;
+                    pcb_2               <= pcb_3 + iteration_for_kernels;
+                    pcb_3               <= pcb_3 + iteration_for_kernels;
                   end
                 end
               end
@@ -4020,7 +4017,8 @@ reg [1023:0] fst_path;
         .buffer_cycles_for_x_iact(buffer_cycles_for_x_iact),
         .start_param_array(start_param_array),
         .limit_increase(limit_increase),
-        .initial_upper_limit(initial_upper_limit)
+        .initial_upper_limit(initial_upper_limit),
+        .iteration_for_kernels(iteration_for_kernels)
     );
 
 

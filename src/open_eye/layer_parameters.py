@@ -258,6 +258,7 @@ class LayerParameters(object):
         self.store_in_psum = 0                 # Store in psum memory flag
         self.limit_increase = 0                # Amount of Iact Storages, that incrase adresses
         self.limit_increase_mod = 0            # Module amount of Iact Storages, that incrase adresses
+        self.iteration_for_kernels = 1         # Amount of iterations per kernel
 
         # === Control Flags ===
         self.send_values_out = 1               # Send outputs to DRAM
@@ -1115,6 +1116,7 @@ class LayerParameters(object):
                 self.limit_increase = 4
                 self.initial_upper_limit = 2
 
+        self.iteration_for_kernels = math.ceil(self.diff_iact_layer_next_layer / self.different_kernels_per_calculation)
 
         # === Phase 9: Finalize calculations ===
         self.calculate_needed_refreshes_mx(params)
@@ -1408,6 +1410,7 @@ class LayerParameters(object):
         if (params.Clusters_Y == 1) :
             self.psum_delay = 5
         self.limit_increase = int((params.NUM_GLB_WGHT*self.used_channels)/8)
+        self.iteration_for_kernels = math.ceil(self.diff_iact_layer_next_layer / self.different_kernels_per_calculation)
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))
