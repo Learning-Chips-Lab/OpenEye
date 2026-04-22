@@ -172,7 +172,8 @@ class DenseMapper(LayerMapper):
             "start_param_array" : layer_params.start_param_array,
             "limit_increase" : layer_params.limit_increase,
             "initial_upper_limit": layer_params.initial_upper_limit,
-            "iteration_for_kernels": layer_params.iteration_for_kernels
+            "iteration_for_kernels": layer_params.iteration_for_kernels,
+            "fsm_psum_limit": layer_params.fsm_psum_limit
             })
             """
             # === DMA Line 1: Main configuration parameters ===

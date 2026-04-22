@@ -345,7 +345,7 @@ reg [1023:0] fst_path;
   wire [7:0] iact_x_line_repetitions;                  // How many times each iact x-line is reused across cluster columns (from dma_storage).
   wire [7:0] buffer_cycles_for_x_iact;                 // How many times the Iact GLBs need to cycle for a given iact_x_size.
   reg [7:0] iact_x_with_add_up;                        // iact_size_x + add_up; precomputed at GET_ROUTER_CONFIG for repeated use.
-  reg [16:0] fsm_psum_limit;                           // Total fsm_psum_cycle count before SEND_PSUM_TO_IACT returns to PSUM_IDLE.
+  wire [16:0] fsm_psum_limit;                          // Total fsm_psum_cycle count before SEND_PSUM_TO_IACT returns to PSUM_IDLE.
   reg early_stream_start;                              // Set when the host sends data before ready_dma_o has gone high; delays processing by one cycle.
 
   // -----------------------------------------------------------------------
@@ -1490,7 +1490,6 @@ reg [1023:0] fst_path;
       select_ram_counter                    <= 0;
       ram_counter_storage                   <= 0;
       iact_x_with_add_up                    <= 0;
-      fsm_psum_limit                        <= 0;
       //new iact regs
       iact_converter_max_cycles             <= 0;
       min_standing_cycles                   <= 0;
@@ -1684,8 +1683,6 @@ reg [1023:0] fst_path;
         // While enable_dma_i_reg: counts fsm_cycle over the expected router
         // word count (FSM_CEIL_IACT_RTR_CCLS + WGHT + PSUM - 1).
         // On the last word:
-        // - Computes fsm_psum_limit (how many SEND_PSUM_TO_IACT cycles
-        //   will be needed; simpler formula for FC layers).
         // - Clears fsm_cycle, deasserts status_reg_enable_reg.
         // - Transitions: GET_IACT normally; GET_WGHT if skipIact; GET_OFFSET
         //   if max_pooling (no iact load needed, jump straight to pooling).
@@ -1706,10 +1703,6 @@ reg [1023:0] fst_path;
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
             if(fsm_cycle == FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS + FSM_CEIL_PSUM_RTR_CCLS - 1) begin
-                fsm_psum_limit <= ((iact_x_with_add_up * PSUM_TO_IACT_CYCLES * kernels_per_calc * needed_wght_cycles_reg * filters * iact_size_y)/8)+ 12;
-              if (fully_connected_layer) begin
-                fsm_psum_limit <= filters + 3;
-              end
               fsm_cycle             <= 0;
               fsm_last_state        <= GET_ROUTER_CONFIG;
               status_reg_enable_reg <= 0;
@@ -3984,7 +3977,7 @@ reg [1023:0] fst_path;
         .kernel_size_x(kernel_size_x),
         .kernel_size_y(kernel_size_y),
         .x_lines_reg(x_lines_reg),
-        .needed_wght_cycles_reg(needed_wght_cycles_reg),
+        .needed_wght_cycles(needed_wght_cycles_reg),
         .needed_cycles_reg(needed_cycles_reg),
         .iact_converter_buffer_addr_max_cycles(iact_converter_buffer_addr_max_cycles),
         .iact_channels_per_pe(iact_channels_per_pe),
@@ -4018,7 +4011,8 @@ reg [1023:0] fst_path;
         .start_param_array(start_param_array),
         .limit_increase(limit_increase),
         .initial_upper_limit(initial_upper_limit),
-        .iteration_for_kernels(iteration_for_kernels)
+        .iteration_for_kernels(iteration_for_kernels),
+        .fsm_psum_limit(fsm_psum_limit)
     );
 
 
