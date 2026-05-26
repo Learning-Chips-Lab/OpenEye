@@ -1923,7 +1923,7 @@ reg [1023:0] fst_path;
               buffer_SP_en_r_reg[a] <= 1;
             end
           end
-          if (fsm_cycle == 16 - 1) begin
+          if ((fsm_cycle == 16 - 1) & enable_dma_i_reg) begin	//SVEN EDIT!!!
             fsm_cycle         <= 0;
             fsm_last_state    <= GET_QUANTIZE;
             fsm_current_state <= GET_OFFSET;
@@ -1971,7 +1971,7 @@ reg [1023:0] fst_path;
             select_ram_counter  <= 0;
             ram_counter_storage <= 0;
           end
-          if (fsm_cycle == 4 - 1) begin
+          if ((fsm_cycle == 4 - 1) & enable_dma_i_reg) begin	//SVEN EDIT!!!
             fsm_cycle         <= 0;
             ready_dma_o       <= 0;
             fsm_last_state    <= GET_OFFSET;
