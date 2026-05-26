@@ -472,8 +472,10 @@ module PE #(
 
     parameter integer PARALLEL_MACS = 2,
 
-    parameter integer SPARSITY_EN = 1,  // 1=sparse mode (default), 0=dense mode
-    parameter integer USE_DSP     = 0,  // 0=standard multiplier+adder (default), 1=DSP48 slice optimization
+    parameter integer SPARSITY_EN      = 1,  // 1=sparse mode (default), 0=dense mode
+    parameter integer USE_DSP          = 0,  // 0=standard multiplier+adder (default), 1=DSP48 slice optimization
+    // Approach 3: when 1, expose horizontal iact pass-through ports for systolic GEMM dataflow
+    parameter integer SYSTOLIC_GEMM_EN = 0,
 
     parameter integer DATA_IACT_BITWIDTH     = 8,
     parameter integer DATA_WGHT_BITWIDTH     = 8,
@@ -537,7 +539,15 @@ module PE #(
     input                                             psum_ready_i,
     input                                             compute_i,
     input                                             enable_stream_i,
-    input      [                                11:0] data_stream_i
+    input      [                                11:0] data_stream_i,
+    // Approach 3: horizontal iact pass-through for systolic GEMM
+    // Active only when SYSTOLIC_GEMM_EN=1; otherwise tied to 0 / ignored
+    input      [         DATA_IACT_BITWIDTH-1:0]      iact_pass_data_i,
+    input                                             iact_pass_enable_i,
+    output                                            iact_pass_ready_o,
+    output     [         DATA_IACT_BITWIDTH-1:0]      iact_pass_data_o,
+    output                                            iact_pass_enable_o,
+    input                                             iact_pass_ready_i
 );
 
   // ============================================================================
@@ -710,6 +720,10 @@ module PE #(
   reg  [                           1:0] current_state_stream;   // Config stream state
   reg  [                           7:0] iact_data_position_reg; // Position in iact data
 
+  // Approach 3: systolic pass-through (reg when SYSTOLIC_GEMM_EN=1, wire otherwise)
+  reg  [         DATA_IACT_BITWIDTH-1:0] iact_pass_data_reg;    // Registered iact value to forward
+  reg                                    iact_pass_enable_reg;   // Registered enable to forward
+
   // Input activation data partitioning (splitting bus into 3 parts)
   wire [        DATA_IACT_BITWIDTH-1:0] iact_part_1_w;         // Bits [7:0] of iact bus
   wire [        DATA_IACT_BITWIDTH-1:0] iact_part_2_w;         // Bits [15:8] of iact bus
@@ -737,6 +751,42 @@ module PE #(
     end
   end
 `endif
+
+  // ============================================================================
+  // Approach 3: Systolic iact pass-through logic
+  // ============================================================================
+  // When SYSTOLIC_GEMM_EN=1, each PE registers the incoming iact value and
+  // forwards it one cycle later to the next PE in the same row.  The PE also
+  // captures iact_pass_data_i into iact_data_current_3 so the standard MAC
+  // pipeline uses the streamed value rather than the local SPad.
+  generate
+    if (SYSTOLIC_GEMM_EN) begin : gen_systolic_pass
+      // One pipeline register: accept → hold for one cycle → forward
+      always @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+          iact_pass_data_reg   <= {DATA_IACT_BITWIDTH{1'b0}};
+          iact_pass_enable_reg <= 1'b0;
+        end else begin
+          iact_pass_data_reg   <= iact_pass_data_i;
+          iact_pass_enable_reg <= iact_pass_enable_i;
+        end
+      end
+      // Outputs: forward delayed value downstream
+      assign iact_pass_data_o   = iact_pass_data_reg;
+      assign iact_pass_enable_o = iact_pass_enable_reg;
+      // Always ready to accept (single-register, no backpressure in this dataflow)
+      assign iact_pass_ready_o  = 1'b1;
+    end else begin : gen_no_systolic_pass
+      // Tie off all outputs when feature is disabled; drive regs to avoid X
+      initial begin
+        iact_pass_data_reg   = {DATA_IACT_BITWIDTH{1'b0}};
+        iact_pass_enable_reg = 1'b0;
+      end
+      assign iact_pass_data_o   = {DATA_IACT_BITWIDTH{1'b0}};
+      assign iact_pass_enable_o = 1'b0;
+      assign iact_pass_ready_o  = 1'b0;
+    end
+  endgenerate
 
   // ============================================================================
   // FSM State Definitions
@@ -825,10 +875,12 @@ module PE #(
   endgenerate
 
   // Multiplier inputs: weights go to factor 1, iact goes to factor 2
+  // Approach 3: in systolic mode use the pass-through value instead of the SPad pipeline
   assign mult_1_fac_1 = wght_data_spad_pay_1;
   assign mult_2_fac_1 = wght_data_spad_pay_2;
-  assign mult_1_fac_2 = iact_data_current_3;  // Both multipliers use same iact value
-  assign mult_2_fac_2 = iact_data_current_3;
+  // Approach 3: in systolic mode use the pass-through value instead of the SPad pipeline
+  assign mult_1_fac_2 = (SYSTOLIC_GEMM_EN && iact_pass_enable_i) ? iact_pass_data_i : iact_data_current_3;
+  assign mult_2_fac_2 = (SYSTOLIC_GEMM_EN && iact_pass_enable_i) ? iact_pass_data_i : iact_data_current_3;
 
   // Data forwarding/bypass detection logic (detects read-after-write hazards)
   // These signals indicate when the data being read is the same location just written

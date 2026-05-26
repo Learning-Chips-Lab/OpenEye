@@ -93,6 +93,20 @@
 ///   iact_choose_i       - Input activation routing control
 ///                        [($clog2(NUM_GLB_IACT+1)*PES)-1:0]
 ///   psum_choose_i       - Partial sum routing control [PE_COLUMNS-1:0]
+///   gemm_mode_i         - GEMM mode enable: when 1, iact_select for each PE is
+///                         overridden so that PE row j uses GLB bank j, turning
+///                         the cluster into an output-stationary matrix multiplier.
+///                         When 0, existing conv behaviour is preserved.
+///
+/// Systolic GEMM Interface (Approach 3 – requires SYSTOLIC_GEMM_EN=1):
+///   iact_pass_data_i    - Horizontal iact pass-through input per row
+///                         [DATA_IACT_BITWIDTH*PE_ROWS-1:0]
+///   iact_pass_enable_i  - Valid signals for pass-through input [PE_ROWS-1:0]
+///   iact_pass_ready_o   - Ready signals for pass-through input [PE_ROWS-1:0]
+///   iact_pass_data_o    - Horizontal iact pass-through output per row
+///                         [DATA_IACT_BITWIDTH*PE_ROWS-1:0]
+///   iact_pass_enable_o  - Valid signals for pass-through output [PE_ROWS-1:0]
+///   iact_pass_ready_i   - Ready signals for pass-through output [PE_ROWS-1:0]
 ///
 /// Input Activation Interface:
 ///   pe_iact_data        - Input activation data bus
@@ -133,6 +147,8 @@ module PE_cluster #(
     parameter  PARALLEL_MACS          = 2,
     parameter  TOP_CLUSTER            = 1,
     parameter  SPARSITY_EN            = 1,  // 1=sparse mode (default), 0=dense mode
+    // Approach 3: set to 1 to add horizontal iact pass-through ports for systolic GEMM
+    parameter  SYSTOLIC_GEMM_EN       = 0,
     parameter  DATA_IACT_BITWIDTH     = 8,
     parameter  DATA_PSUM_BITWIDTH     = 20,
     parameter  DATA_WGHT_BITWIDTH     = 8,
@@ -157,6 +173,8 @@ module PE_cluster #(
     input [       $clog2(NUM_GLB_IACT+1)*PES-1:0] iact_choose_i,
     input [                       PE_COLUMNS-1:0] psum_choose_i,
     input [                              PES-1:0] compute_i,
+    // Approach 2: GEMM mode — row j uses GLB bank j for iact instead of iact_choose_i
+    input                                         gemm_mode_i,
 
     input  [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] pe_iact_data,
     input  [                    NUM_GLB_IACT-1:0] pe_iact_enable,
@@ -183,7 +201,15 @@ module PE_cluster #(
     output [                      PE_COLUMNS-1:0] pe_router_psum_enable_o,
 
     input                                         enable_stream_i,
-    input  [                              12-1:0] data_stream_i
+    input  [                              12-1:0] data_stream_i,
+
+    // Approach 3: horizontal iact pass-through for systolic GEMM (active when SYSTOLIC_GEMM_EN=1)
+    input  [   DATA_IACT_BITWIDTH*PE_ROWS-1:0]   iact_pass_data_i,
+    input  [                      PE_ROWS-1:0]   iact_pass_enable_i,
+    output [                      PE_ROWS-1:0]   iact_pass_ready_o,
+    output [   DATA_IACT_BITWIDTH*PE_ROWS-1:0]   iact_pass_data_o,
+    output [                      PE_ROWS-1:0]   iact_pass_enable_o,
+    input  [                      PE_ROWS-1:0]   iact_pass_ready_i
 );
 
   ///#######################
@@ -247,11 +273,25 @@ module PE_cluster #(
         wire                             psum_ready_o_w;
         wire [         NUM_GLB_IACT-1:0] iact_ready_o_w;
         wire                             wght_ready_o_w;
+        // Approach 3: horizontal iact pass-through wires within each row
+        wire [DATA_IACT_BITWIDTH-1:0]    iact_pass_data_i_w;
+        wire                             iact_pass_enable_i_w;
+        wire                             iact_pass_ready_i_w;
+        wire [DATA_IACT_BITWIDTH-1:0]    iact_pass_data_o_w;
+        wire                             iact_pass_enable_o_w;
+        wire                             iact_pass_ready_o_w;
+        // Approach 2: in GEMM mode override iact_select so row j → GLB bank j
+        wire [$clog2(NUM_GLB_IACT+1)-1:0] iact_sel_w;
+        assign iact_sel_w = gemm_mode_i
+            ? j[$clog2(NUM_GLB_IACT+1)-1:0]
+            : iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(NUM_GLB_IACT+1)-1
+                            :(i+j*PE_COLUMNS)*$clog2(NUM_GLB_IACT+1)];
         PE #(
             .IS_TOPLEVEL           (0),
             .SERIAL                (SERIAL),
             .PARALLEL_MACS         (PARALLEL_MACS),
             .SPARSITY_EN           (SPARSITY_EN),
+            .SYSTOLIC_GEMM_EN      (SYSTOLIC_GEMM_EN),
             .PE_X                  (i),
             .PE_Y                  (j),
             .DATA_IACT_BITWIDTH    (DATA_IACT_BITWIDTH),
@@ -270,11 +310,7 @@ module PE_cluster #(
         ) pe (
             .clk_i(clk_i),
             .rst_ni(rst_nw),
-            .iact_select_i(iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(
-                NUM_GLB_IACT+1
-            )-1:(i+j*PE_COLUMNS)*$clog2(
-                NUM_GLB_IACT+1
-            )]),
+            .iact_select_i(iact_sel_w),
             .compute_i(compute_i[i+j*PE_COLUMNS]),
 
             .iact_data_i  (pe_iact_data),
@@ -292,9 +328,53 @@ module PE_cluster #(
             .psum_enable_o  (psum_enable_o_w),
             .psum_ready_i   (psum_ready_i_w),
             .enable_stream_i(enable_stream_i),
-            .data_stream_i  (data_stream_i)
+            .data_stream_i  (data_stream_i),
+            // Approach 3 systolic pass-through
+            .iact_pass_data_i  (iact_pass_data_i_w),
+            .iact_pass_enable_i(iact_pass_enable_i_w),
+            .iact_pass_ready_o (iact_pass_ready_o_w),
+            .iact_pass_data_o  (iact_pass_data_o_w),
+            .iact_pass_enable_o(iact_pass_enable_o_w),
+            .iact_pass_ready_i (iact_pass_ready_i_w)
         );
       end
+    end
+
+    // Approach 3: wire horizontal iact pass-through chains along each row
+    // Column 0 of each row connects to the cluster-level input ports.
+    // Each subsequent column receives the output of the previous column.
+    // The final column's output appears on the cluster-level output ports.
+    for (j = 0; j < PE_ROWS; j = j + 1) begin : gen_iact_pass_row
+      for (i = 0; i < PE_COLUMNS; i = i + 1) begin : gen_iact_pass_col
+        if (SYSTOLIC_GEMM_EN) begin : gen_systolic_wire
+          // Broadcast mode: all columns in a row receive the same iact_pass signal
+          // directly from the cluster input (no horizontal chaining).
+          // This ensures all PEs in a row multiply with the same iact value
+          // simultaneously, which is required for correct GEMM operation when
+          // weights are shared across columns.
+          assign gen_X[i].gen_Y[j].iact_pass_data_i_w   = iact_pass_data_i[(j+1)*DATA_IACT_BITWIDTH-1:j*DATA_IACT_BITWIDTH];
+          assign gen_X[i].gen_Y[j].iact_pass_enable_i_w = iact_pass_enable_i[j];
+          assign gen_X[i].gen_Y[j].iact_pass_ready_i_w  = iact_pass_ready_i[j];
+          if (i == 0) begin : gen_pass_first_col
+            assign iact_pass_ready_o[j] = gen_X[i].gen_Y[j].iact_pass_ready_o_w;
+          end
+          if (i == PE_COLUMNS - 1) begin : gen_pass_last_col
+            assign iact_pass_data_o[(j+1)*DATA_IACT_BITWIDTH-1:j*DATA_IACT_BITWIDTH] = gen_X[i].gen_Y[j].iact_pass_data_o_w;
+            assign iact_pass_enable_o[j] = gen_X[i].gen_Y[j].iact_pass_enable_o_w;
+          end
+        end else begin : gen_no_systolic
+          // Tie off pass-through wires when SYSTOLIC_GEMM_EN=0
+          assign gen_X[i].gen_Y[j].iact_pass_data_i_w   = {DATA_IACT_BITWIDTH{1'b0}};
+          assign gen_X[i].gen_Y[j].iact_pass_enable_i_w = 1'b0;
+          assign gen_X[i].gen_Y[j].iact_pass_ready_i_w  = 1'b0;
+        end
+      end
+    end
+    // When SYSTOLIC_GEMM_EN=0 tie off cluster-level outputs
+    if (!SYSTOLIC_GEMM_EN) begin : gen_no_systolic_ports
+      assign iact_pass_data_o   = {(DATA_IACT_BITWIDTH*PE_ROWS){1'b0}};
+      assign iact_pass_enable_o = {PE_ROWS{1'b0}};
+      assign iact_pass_ready_o  = {PE_ROWS{1'b0}};
     end
 
     // MUX and DEMUX for PSUM Signals
