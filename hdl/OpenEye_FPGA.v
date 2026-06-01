@@ -87,9 +87,9 @@
 ///   data_dma_i             - Data Port In
 ///   enable_dma_i           - Enable Port In
 ///
-///   ready_dma_i            - Ready Port Out
-///   data_dma_o             - Data Port In
-///   enable_dma_o           - Enable Port In
+///   ready_dma_i            - Ready Port In
+///   data_dma_o             - Data Port Out
+///   enable_dma_o           - Enable Port Out
 ///   last_data_o            - Signals the last output data word
 ///                 
 
@@ -227,7 +227,6 @@ module OpenEye_FPGA #(
     output reg last_data_o
 
 );
-reg last_data; // Internal version of last_data_o; set in PSUM_SEND_RESULTS, forwarded to last_data_o one cycle later.
 
   //#######################
   // Reset Synchronization
@@ -334,7 +333,6 @@ reg [1023:0] fst_path;
   reg [$clog2(NUM_GLB_IACT)-1:0] fsm_iact_r;           // Current iact GLB index during iact loading (unused after refactor but kept for compatibility).
   reg [$clog2(NUM_GLB_WGHT)-1:0] fsm_wght_r;           // Current weight GLB index; increments each DMA word in GET_WGHT, wraps at NUM_GLB_WGHT.
   reg [$clog2(NUM_GLB_PSUM)-1:0] fsm_psum_r;           // Current psum GLB index during psum output; used by PSUM FSM.
-  reg [$clog2(NUM_GLB_PSUM)-1:0] fsm_psum_r_q;         // One-cycle delayed fsm_psum_r; compensates for the pipelined RAM read in PSUM_SEND_RESULTS.
   reg results_ready;                                   // Local flag (combinatorial inside always block): AND of all active psum_enable_o or psum_ready_o signals.
   reg [19:0] finished_cycles_iact;                     // Count of completed iact delivery iterations; used as address base in MAXPOOLING_SEND.
   reg [19:0] finished_cycles_psum;                     // Count of completed psum output passes; determines when last_data fires.
@@ -1293,9 +1291,7 @@ reg [1023:0] fst_path;
 
   // --- PSUM FSM cluster sweep pointers ---
   reg [$clog2(CLUSTER_COLUMNS)-1:0]   fsm_x_cl_psum;      // Column-cluster index during result sweep.
-  reg [$clog2(CLUSTER_COLUMNS)-1:0]   fsm_x_cl_psum_q;    // Qualified (delayed) column index; used for buffer read addressing.
   reg [$clog2(CLUSTER_ROWS+1)-1:0]    fsm_y_cl_psum;      // Row-cluster index during result sweep.
-  reg [$clog2(CLUSTER_ROWS+1)-1:0]    fsm_y_cl_psum_q;    // Qualified (delayed) row index.
   reg [$clog2(CLUSTER_ROWS+1)-1:0]    fsm_y_cl_psum_delay1; // 1-cycle delayed fsm_y_cl_psum (pipeline alignment).
   reg [$clog2(CLUSTER_ROWS+1)-1:0]    fsm_y_cl_psum_delay2; // 2-cycle delayed fsm_y_cl_psum.
   reg [$clog2(CLUSTER_ROWS+1)-1:0]    fsm_y_cl_psum_delay3; // 3-cycle delayed fsm_y_cl_psum.
@@ -2463,7 +2459,7 @@ reg [1023:0] fst_path;
             end
           end
           fsm_cycle <= fsm_cycle + 1;
-          if (last_data_o) begin
+          if (last_data_o & enable_dma_o & ready_dma_i) begin
             fsm_last_state        <= WAIT_FOR_RESULTS;
             fsm_current_state     <= GET_PARAMETERS;
             send_data_reg         <= 0;
@@ -2988,16 +2984,12 @@ reg [1023:0] fst_path;
       last_data_reg               <= 0;
       psum_to_iact_state          <= 0;
       fsm_x_cl_psum               <= 0;
-      fsm_x_cl_psum_q             <= 0;
       fsm_y_cl_psum               <= 0;
-      fsm_y_cl_psum_q             <= 0;
       fsm_psum_r                  <= 0;
-      fsm_psum_r_q                <= 0;
       fsm_y_cl_psum_delay1        <= 0;
       fsm_y_cl_psum_delay2        <= 0;
       fsm_y_cl_psum_delay3        <= 0;
       psum_buffer_SP_en_r         <= 0;
-      last_data                   <= 0;
       last_data_o                 <= 0;
       current_filter              <= 0;
       psum_cycle_buffer_1         <= 0;
@@ -3048,7 +3040,6 @@ reg [1023:0] fst_path;
         // -------------------------------------------------------------------
         PSUM_IDLE: begin
           enable_dma_o         <= 0;
-          last_data            <= 0;
           last_data_o          <= 0;
           psum_buffer_SP_en_w  <= 0;
           psum_enable_i_reg    <= 0;
@@ -3395,12 +3386,14 @@ reg [1023:0] fst_path;
         // Streams all accumulated psum values from psum_buffer_SP to the
         // host via the DMA output interface (data_dma_o / enable_dma_o).
         //
-        // Pipeline structure (3-stage qualified read):
+        // Pipeline structure:
+		//   Cycle 0:	upon entering the state, first data words are loaded to
+		//				psum_buffer_SP_data_r
         //   Cycle N:   set psum_buffer_SP_en_r for (cc, cr, g) and
-        //              advance its addr_array[cc][cr][g] by 1.
+        //              advance its addr_array[cc][cr][g] by 1 and
+		//				copy first word to data_dma_o
         //   Cycle N+1: data appears at psum_buffer_SP_data_r (pipelined RAM).
-        //   Cycle N+1: latch _q copies (fsm_psum_r_q, fsm_x/y_cl_psum_q).
-        //   Cycle N+1: drive data_dma_o from the qualified read slice.
+		//	 NOTE: Cycles only count if ready_dma_i==1 
         //
         // Sweep order (innermost to outermost):
         //   fsm_psum_r (0..NUM_GLB_PSUM/2-1) per (cc, cr) pair.
@@ -3408,26 +3401,19 @@ reg [1023:0] fst_path;
         //   fsm_y_cl_psum (0..CLUSTER_ROWS-1).
         //   fsm_psum_cycle (0..needed_wght_cycles * filters * output_cycles - 1).
         //
-        // enable_dma_o: asserted if any of the sweep counters is non-zero
-        //   AND ready_dma_i is high (back-pressure from host).
+        // enable_dma_o: asserted after entering the state, concurrent with first data word
         //
-        // last_data set when fsm_psum_cycle reaches its maximum;
-        // last_data_o registered one cycle later.
-        // On last_data_o: clears all state, transitions to PSUM_IDLE.
+        // last_data_o set when fsm_psum_cycle reaches its maximum;
+        // On last_data_o (AND ready): clears all state, transitions to PSUM_IDLE.
         //
         // FC mode: fsm_psum_r wraps after a single step (one word per cluster).
         // -------------------------------------------------------------------
-        PSUM_SEND_RESULTS: begin
+		PSUM_SEND_RESULTS: begin
           psum_buffer_SP_en_r <= 0;
-          fsm_psum_r_q <= fsm_psum_r;
-          fsm_x_cl_psum_q <= fsm_x_cl_psum;
-          fsm_y_cl_psum_q <= fsm_y_cl_psum;
-          last_data_o     <= last_data;
-          if (ready_dma_i == 1) begin
-            if (fsm_psum_r | fsm_x_cl_psum | fsm_y_cl_psum | fsm_psum_cycle) begin
-              enable_dma_o <= 1;
-            end
-            data_dma_o   <= psum_buffer_SP_data_r[fsm_x_cl_psum_q*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl_psum_q*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r_q*PARALLEL_MACS*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM * PARALLEL_MACS];
+		  enable_dma_o <= 1;	//set enable_dma_o upon entering the state
+		 
+          if ((ready_dma_i == 1)|(psum_buffer_SP_en_r == {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}})) begin
+			data_dma_o   <= psum_buffer_SP_data_r[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_y_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+fsm_psum_r*PARALLEL_MACS*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM * PARALLEL_MACS];
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
@@ -3458,14 +3444,13 @@ reg [1023:0] fst_path;
                       end
                     end
                     psum_buffer_SP_en_r <= 0;
-                    last_data           <= 1;
+                    last_data_o         <= 1;
                   end
                 end
               end
             end
             if (last_data_o) begin
               psum_buffer_SP_en_r    <= 0;
-              last_data              <= 0;
               last_data_o            <= 0;
               enable_dma_o           <= 0;
               last_data_reg          <= 0;
@@ -3476,8 +3461,8 @@ reg [1023:0] fst_path;
               fsm_y_cl_psum          <= 0;
               fsm_x_cl_psum          <= 0;
             end
-          end
-        end
+		  end
+		end
         // -------------------------------------------------------------------
         // SEND_PSUM_TO_IACT
         // Reads psum values from psum_buffer_SP, applies per-filter
