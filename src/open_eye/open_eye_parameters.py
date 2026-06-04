@@ -178,11 +178,17 @@ class OpenEyeParameters(object):
             self.NUM_GLB_WGHT = 3  # Default: 3 global WGHT buffers per cluster
             self.PEs_Y = 3         # Default: 3 PEs vertically per cluster
 
+        # Number of Width of GLBs
+        try:
+            self.BUFFER_WIDTH = int(os.getenv("BUFFER_WIDTH"))
+        except:
+            self.BUFFER_WIDTH = 10
+
         # Number of possible branches in one single net
         try:
             self.BRANCHES = int(os.getenv("BRANCHES"))
         except:
-            self.BRANCHES = 2  # Default: 3 global WGHT buffers per cluster
+            self.BRANCHES = 2  
 
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode

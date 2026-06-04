@@ -121,7 +121,8 @@ export PE_WGHT_ADDR_ADDR=16
 export PSUM_PER_PE=32
 
 export ONLY_FILES=0
-export BRANCHES=2
+export BRANCHES=1
+export BUFFER_WIDTH=10
 
 export
 run:

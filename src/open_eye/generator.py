@@ -103,10 +103,10 @@ def eval_width(width, ctx):
     2
     """
     if isinstance(width, int):
-        return width
+        return max(width,1)
     elif isinstance(width, str):
         # Evaluate expression with restricted builtins (for security)
-        return int(eval(width, {"__builtins__": {}}, ctx))
+        return max(int(eval(width, {"__builtins__": {}}, ctx)),1)
     else:
         raise TypeError("Invalid width type")
 
@@ -135,11 +135,13 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     # ------------------------------------------------------------
     if output_vh_path is None:
         output_vh_path = os.path.join(os.path.dirname(regmap_yaml_path), "include")
-
+    Path(output_vh_path).mkdir(parents=True, exist_ok=True)
     if output_v_path is None:
         output_v_path = os.path.join(os.path.dirname(regmap_yaml_path))
+    Path(output_v_path).mkdir(parents=True, exist_ok=True)
     if output_py_path is None:
         output_py_path = Path(__file__).resolve().parent
+    Path(output_py_path).mkdir(parents=True, exist_ok=True)
 
     YAML_FILE = os.path.join(regmap_yaml_path, "regmap.yaml")
     VERILOG_PARAMS_OUT = os.path.join(output_vh_path, "regmap_params.vh")
@@ -225,7 +227,7 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     #   wght_cycles_reg <= dma_data_i[PARAMETER_POS_0_0 + 7 : PARAMETER_POS_0_0];
     #                                    ↑ extracts bits [7:0]
 
-    with open(VERILOG_PARAMS_OUT, "w") as vf:
+    with open(VERILOG_PARAMS_OUT, "w+") as vf:
         # Header guard
         vf.write("`ifndef REGMAP_PARAMS_VH\n`define REGMAP_PARAMS_VH\n\n")
         vf.write("// Auto-generated from {}\n\n".format(YAML_FILE))
@@ -273,7 +275,7 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     #   words = [0x123456789ABCDEF0, ...]
     #   values = unpack_registers(words)  # {'wght_cycles_reg': 9, ...}
 
-    with open(PYTHON_OUT, "w") as pf:
+    with open(PYTHON_OUT, "w+") as pf:
         pf.write("# Auto-generated from {}\n".format(YAML_FILE))
         pf.write(f"DMA_BITWIDTH = {dma_bitwidth}\n")
         pf.write(f"TRANSMISSIONS = {num_transmissions}\n\n")
@@ -347,7 +349,7 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     #   wght_cycles_reg <= dma_data_i[PARAMETER_POS_0_0 + 7 : PARAMETER_POS_0_0];
     #                                     ↑ this evaluates to [7:0]
 
-    with open(DMA_STORAGE_OUT, "w") as dv:
+    with open(DMA_STORAGE_OUT, "w+") as dv:
         dv.write("// Auto-generated from {}\n".format(YAML_FILE))
         dv.write("//\n")
         dv.write("// DMA Storage Module - Receives and unpacks layer configuration parameters\n")
