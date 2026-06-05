@@ -22,9 +22,11 @@ from open_eye import hdl_dir, test_dir
 # ---------------------------------------------------------------------------
 # Parameter sweep
 # ---------------------------------------------------------------------------
-B_VALUES    = [4]    # spatial window size (iact values per channel)
-C0_VALUES   = [3]    # input channels
-M0_VALUES   = [12]   # output filters
+# Dimensions chosen so N*M0 fits the weight SPad (default WGHT_DATA_ADDR=96):
+#   N = B*C0 contraction terms, M0 output channels, N*M0 weights total.
+B_VALUES    = [2, 4]   # spatial window size (iact values per channel)
+C0_VALUES   = [1, 3]   # input channels  -> N = B*C0
+M0_VALUES   = [1, 6]   # output filters  -> N*M0 <= 96 required
 SEED_VALUES = [0, 42]
 
 CLK_CYCLE        = 10

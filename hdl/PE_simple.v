@@ -6,9 +6,25 @@
 `timescale 1ns / 1ps
 
 // Simplified PE with the same interface as PE.v.
-// Sparsity is removed; pipeline is simplified to IDLE -> LOADING_1 -> CALCULATING ->
-// WAIT_TO_SEND_PSUM -> SEND_PSUM.  One MAC per cycle, single-ported psum SPad.
-// SYSTOLIC_GEMM_EN overrides iact source from pass-through when iact_pass_enable_i is high.
+//
+// Sparsity is removed.  PE_simple computes the same dense GEMM as PE.v:
+//
+//     for m in 0..M0-1:
+//         psum[m] = bias[m] + sum_i( iact[i] * wght[i*M0 + m] )   for i in 0..N-1
+//
+//   * N  = number of input activations (iact_addr_max_reg + 1)
+//   * M0 = number of output channels  (filters_reg_M0)
+//   * Weights are stored row-major: weight for contraction index i and output
+//     channel m lives at flat weight-SPad address (i*M0 + m).
+//   * bias[m] is streamed in via psum_data_i during the SEND_PSUM phase and is
+//     added to the accumulated psum before it is driven out on psum_data_o,
+//     exactly as PE.v folds in the upstream partial sum.
+//
+// One MAC per cycle, single-ported psum SPad.  FSM:
+//   IDLE -> LOADING_1 -> CALCULATING -> WAIT_TO_SEND_PSUM -> SEND_PSUM
+//
+// SYSTOLIC_GEMM_EN overrides the iact source from the pass-through input when
+// iact_pass_enable_i is high.
 
 module PE_simple #(
 
@@ -81,7 +97,7 @@ module PE_simple #(
     input                                              psum_enable_i,
     output                                             psum_ready_o,
     output     [              TRANS_BITWIDTH_PSUM-1:0] psum_data_o,
-    output reg                                         psum_enable_o,
+    output                                             psum_enable_o,
     input                                              psum_ready_i,
     input                                              compute_i,
     input                                              enable_stream_i,
@@ -114,7 +130,8 @@ module PE_simple #(
   // Scratch-pad memories (simple Verilog arrays)
   // =========================================================================
   reg [DATA_IACT_BITWIDTH-1:0]  iact_data_spad [0:IACT_DATA_ADDR-1];
-  reg [WGHT_DATA_DATA-1:0]      wght_data_spad [0:WGHT_DATA_ADDR-1];
+  // Weights stored one per address (loader unpacks the PARALLEL_MACS lanes).
+  reg [DATA_WGHT_BITWIDTH-1:0]  wght_data_spad [0:WGHT_DATA_ADDR-1];
   reg [DATA_PSUM_BITWIDTH-1:0]  psum_spad      [0:PSUM_ADDR-1];
 
   // =========================================================================
@@ -144,9 +161,8 @@ module PE_simple #(
   // =========================================================================
   // Iact SPad loading
   // =========================================================================
-  // 24-bit bus carries up to VALUES_OF_IACTS bytes; unpack sequentially.
+  // One activation per transfer: the low DATA_IACT_BITWIDTH bits of the bus.
   reg [IACT_DATA_ADDR_BITWIDTH-1:0] iact_spad_waddr;
-  reg [7:0]                          iact_bus_pos;   // byte position within current bus word
   reg                                iact_ready_r;
   reg [IACT_DATA_ADDR_BITWIDTH-1:0]  iact_load_cnt;
 
@@ -168,37 +184,27 @@ module PE_simple #(
   always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       iact_spad_waddr <= 0;
-      iact_bus_pos    <= 0;
       iact_load_cnt   <= 0;
       iact_set        <= 0;
       iact_ready_r    <= 1;
     end else begin
       if (current_state_computing == IDLE && !iact_set) begin
         if (sel_iact_enable && iact_ready_r) begin
-          iact_data_spad[iact_spad_waddr] <=
-            sel_iact_data[iact_bus_pos*DATA_IACT_BITWIDTH +: DATA_IACT_BITWIDTH];
+          iact_data_spad[iact_spad_waddr] <= sel_iact_data[DATA_IACT_BITWIDTH-1:0];
           iact_spad_waddr <= iact_spad_waddr + 1;
           iact_load_cnt   <= iact_load_cnt + 1;
 
           if (iact_load_cnt == iact_addr_max_reg) begin
             iact_set     <= 1;
             iact_ready_r <= 0;
-            iact_bus_pos <= 0;
-          end else if (iact_bus_pos == VALUES_OF_IACTS - 1) begin
-            iact_bus_pos <= 0;
-          end else begin
-            iact_bus_pos <= iact_bus_pos + 1;
           end
         end
-      end else if (current_state_computing == IDLE && iact_set) begin
-        // Waiting for wght_set and compute_i — nothing to do
       end
 
       // Reset after psum send completes (going back to IDLE for next layer)
       if (current_state_computing == SEND_PSUM && !psum_enable_i) begin
         iact_set        <= 0;
         iact_spad_waddr <= 0;
-        iact_bus_pos    <= 0;
         iact_load_cnt   <= 0;
         iact_ready_r    <= 1;
       end
@@ -209,9 +215,12 @@ module PE_simple #(
   // Weight SPad loading
   // =========================================================================
   // Each TRANS_BITWIDTH_WGHT word packs PARALLEL_MACS * DATA_WGHT_BITWIDTH bits.
+  // The PARALLEL_MACS lanes are unpacked into consecutive SPad addresses so that
+  // wght_data_spad[k] holds the k-th weight in row-major (i*M0 + m) order.
   reg [WGHT_DATA_ADDR_BITWIDTH-1:0] wght_spad_waddr;
-  reg [WGHT_DATA_ADDR_BITWIDTH-1:0] wght_load_cnt;
+  reg [WGHT_DATA_ADDR_BITWIDTH-1:0] wght_load_cnt;   // counts received words
 
+  integer wl;
   always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       wght_spad_waddr <= 0;
@@ -221,8 +230,11 @@ module PE_simple #(
     end else begin
       if (current_state_computing == IDLE && !wght_set) begin
         if (wght_enable_i && wght_ready_o) begin
-          wght_data_spad[wght_spad_waddr] <= wght_data_i[WGHT_DATA_DATA-1:0];
-          wght_spad_waddr <= wght_spad_waddr + 1;
+          for (wl = 0; wl < PARALLEL_MACS; wl = wl + 1) begin
+            wght_data_spad[wght_spad_waddr + wl] <=
+              wght_data_i[wl*DATA_WGHT_BITWIDTH +: DATA_WGHT_BITWIDTH];
+          end
+          wght_spad_waddr <= wght_spad_waddr + PARALLEL_MACS;
           wght_load_cnt   <= wght_load_cnt + 1;
           if (wght_load_cnt == wght_addr_max_reg) begin
             wght_set     <= 1;
@@ -284,11 +296,15 @@ module PE_simple #(
   // =========================================================================
   // Compute FSM + MAC datapath
   // =========================================================================
-  reg [IACT_DATA_ADDR_BITWIDTH-1:0] iact_addr_cur;
-  reg [WGHT_DATA_ADDR_BITWIDTH-1:0] wght_addr_cur;
-  reg [PSUM_ADDR_BITWIDTH-1:0]      psum_send_addr;
+  // Nested loop: outer over contraction index i (0..iact_addr_max_reg),
+  //              inner over output channel m (0..filters_reg_M0-1).
+  // Each cycle issues one MAC: psum[m] += iact[i] * wght[i*M0 + m].
+  reg [IACT_DATA_ADDR_BITWIDTH-1:0] i_idx;        // contraction index
+  reg [4:0]                          m_idx;        // output-channel index
+  reg [WGHT_DATA_ADDR_BITWIDTH-1:0]  wght_flat;    // i*M0 + m, running pointer
+  reg [PSUM_ADDR_BITWIDTH-1:0]       psum_send_addr;
 
-  // One-cycle pipeline: read data from SPad this cycle, compute MAC next cycle.
+  // One-cycle pipeline: read operands this cycle, accumulate next cycle.
   reg [DATA_IACT_BITWIDTH-1:0]  iact_val_pipe;
   reg [DATA_WGHT_BITWIDTH-1:0]  wght_val_pipe;
   reg [PSUM_ADDR_BITWIDTH-1:0]  psum_wr_addr;
@@ -297,10 +313,10 @@ module PE_simple #(
   // iact source mux: systolic pass-through or SPad
   wire [DATA_IACT_BITWIDTH-1:0] iact_src =
       (SYSTOLIC_GEMM_EN && iact_pass_enable_i) ? iact_pass_data_i
-                                               : iact_data_spad[iact_addr_cur];
+                                               : iact_data_spad[i_idx];
 
-  // Weight source: lower DATA_WGHT_BITWIDTH bits of the packed word
-  wire [DATA_WGHT_BITWIDTH-1:0] wght_src = wght_data_spad[wght_addr_cur][DATA_WGHT_BITWIDTH-1:0];
+  // Weight source: flat row-major address
+  wire [DATA_WGHT_BITWIDTH-1:0] wght_src = wght_data_spad[wght_flat];
 
   // Accumulated psum (read-then-add)
   wire [DATA_PSUM_BITWIDTH-1:0] psum_cur = psum_spad[psum_wr_addr];
@@ -310,23 +326,24 @@ module PE_simple #(
   wire signed [DATA_WGHT_BITWIDTH-1:0]  wght_signed = $signed(wght_val_pipe);
   wire signed [DATA_PSUM_BITWIDTH-1:0]  mac_out     = iact_signed * wght_signed;
 
+  wire [4:0] m_max = (filters_reg_M0 == 0) ? 5'd0 : filters_reg_M0 - 5'd1;
+
   integer p;
   always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       current_state_computing <= IDLE;
-      iact_addr_cur   <= 0;
-      wght_addr_cur   <= 0;
-      psum_send_addr  <= 0;
-      mac_valid       <= 0;
-      psum_enable_o   <= 0;
-      iact_val_pipe   <= 0;
-      wght_val_pipe   <= 0;
-      psum_wr_addr    <= 0;
+      i_idx          <= 0;
+      m_idx          <= 0;
+      wght_flat      <= 0;
+      psum_send_addr <= 0;
+      mac_valid      <= 0;
+      iact_val_pipe  <= 0;
+      wght_val_pipe  <= 0;
+      psum_wr_addr   <= 0;
       for (p = 0; p < PSUM_ADDR; p = p + 1)
         psum_spad[p] <= 0;
     end else begin
       mac_valid     <= 0;
-      psum_enable_o <= 0;
 
       // Commit previous MAC result into psum SPad
       if (mac_valid) begin
@@ -341,47 +358,55 @@ module PE_simple #(
             // Zero psum SPad before a new compute pass
             for (p = 0; p < PSUM_ADDR; p = p + 1)
               psum_spad[p] <= 0;
-            iact_addr_cur <= 0;
-            wght_addr_cur <= 0;
+            i_idx     <= 0;
+            m_idx     <= 0;
+            wght_flat <= 0;
             current_state_computing <= LOADING_1;
           end
         end
 
         // -------------------------------------------------------------------
-        // LOADING_1: latch first iact/wght so the pipeline has valid data
-        //            in CALCULATING on the following cycle.
+        // LOADING_1: latch first iact/wght so CALCULATING has valid operands.
         LOADING_1: begin
           iact_val_pipe <= iact_src;
           wght_val_pipe <= wght_src;
-          psum_wr_addr  <= iact_addr_cur % PSUM_ADDR;
+          psum_wr_addr  <= m_idx;
           mac_valid     <= 1;
+          // advance to the next (i,m) pair
+          if (m_idx == m_max) begin
+            m_idx     <= 0;
+            i_idx     <= i_idx + 1;
+          end else begin
+            m_idx     <= m_idx + 1;
+          end
+          wght_flat <= wght_flat + 1;
           current_state_computing <= CALCULATING;
         end
 
         // -------------------------------------------------------------------
         CALCULATING: begin
-          // mac_valid from previous cycle already wrote to psum_spad above.
-          // Advance pointers and latch next values.
-          if (iact_addr_cur == iact_addr_max_reg) begin
-            // Last element was just latched and will fire as mac_valid next cycle.
-            iact_val_pipe <= iact_src;
-            wght_val_pipe <= wght_src;
-            psum_wr_addr  <= iact_addr_cur % PSUM_ADDR;
-            mac_valid     <= 1;
+          // Latch operands for the pair selected last cycle and fire a MAC.
+          iact_val_pipe <= iact_src;
+          wght_val_pipe <= wght_src;
+          psum_wr_addr  <= m_idx;
+          mac_valid     <= 1;
+
+          if (i_idx == iact_addr_max_reg && m_idx == m_max) begin
+            // Last (i,m) pair just latched; it commits next cycle.
             current_state_computing <= WAIT_TO_SEND_PSUM;
+          end else if (m_idx == m_max) begin
+            m_idx     <= 0;
+            i_idx     <= i_idx + 1;
+            wght_flat <= wght_flat + 1;
           end else begin
-            iact_addr_cur <= iact_addr_cur + 1;
-            wght_addr_cur <= wght_addr_cur + 1;
-            iact_val_pipe <= iact_src;
-            wght_val_pipe <= wght_src;
-            psum_wr_addr  <= iact_addr_cur % PSUM_ADDR;
-            mac_valid     <= 1;
+            m_idx     <= m_idx + 1;
+            wght_flat <= wght_flat + 1;
           end
         end
 
         // -------------------------------------------------------------------
-        // WAIT_TO_SEND_PSUM: final mac_valid will commit via top-of-always.
-        //                    Wait for psum_enable_i from upstream PE.
+        // WAIT_TO_SEND_PSUM: final mac_valid commits via top-of-always.
+        //                    Wait for psum_enable_i from upstream / controller.
         WAIT_TO_SEND_PSUM: begin
           psum_send_addr <= 0;
           if (psum_enable_i)
@@ -389,15 +414,12 @@ module PE_simple #(
         end
 
         // -------------------------------------------------------------------
+        // SEND_PSUM: psum_enable_o is driven combinationally below.  Advance
+        //            the readout address on each accepted handshake; the last
+        //            address (m_max) returns to IDLE once accepted.
         SEND_PSUM: begin
-          psum_enable_o <= 1;
           if (psum_ready_i) begin
-            if (!psum_enable_i) begin
-              // Upstream deasserted — stop sending and go back to IDLE
-              psum_enable_o <= 0;
-              current_state_computing <= IDLE;
-            end else if (psum_send_addr == PSUM_ADDR - 1) begin
-              psum_enable_o <= 0;
+            if (psum_send_addr == m_max) begin
               current_state_computing <= IDLE;
             end else begin
               psum_send_addr <= psum_send_addr + 1;
@@ -411,7 +433,7 @@ module PE_simple #(
   end
 
   // =========================================================================
-  // Psum output: add incoming partial sum from upstream PE
+  // Psum output: add incoming bias/partial sum from upstream PE
   // =========================================================================
   wire [DATA_PSUM_BITWIDTH-1:0] psum_local = psum_spad[psum_send_addr];
   wire [DATA_PSUM_BITWIDTH-1:0] psum_accum = psum_local + psum_data_i[DATA_PSUM_BITWIDTH-1:0];
@@ -419,6 +441,9 @@ module PE_simple #(
   assign psum_data_o  = {{(TRANS_BITWIDTH_PSUM-DATA_PSUM_BITWIDTH){1'b0}}, psum_accum};
   assign psum_ready_o = (current_state_computing == WAIT_TO_SEND_PSUM ||
                          current_state_computing == SEND_PSUM);
+  // Valid throughout SEND_PSUM; combinational so it tracks psum_send_addr/
+  // psum_data_o in the same cycle (no registered one-cycle skew on readout).
+  assign psum_enable_o = (current_state_computing == SEND_PSUM);
 
   // =========================================================================
   // Systolic iact pass-through

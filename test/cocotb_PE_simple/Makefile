@@ -15,10 +15,10 @@ export CLOCK_DELAY_UNIT_INPUT  = ps
 export CLOCK_DELAY_OUTPUT = 100
 export CLOCK_DELAY_UNIT_OUTPUT = ps
 
-# Test dimensions
+# Test dimensions (N = B*C0 contraction terms, M0 outputs; N*M0 <= WGHT_DATA_ADDR)
 export B    = 4   # spatial window (iact per channel)
-export C0   = 3   # input channels
-export M0   = 12  # output filters
+export C0   = 3   # input channels  -> N = 12
+export M0   = 6   # output filters  -> N*M0 = 72 <= 96
 export SEED = 42
 
 export
