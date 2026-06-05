@@ -6,10 +6,13 @@
 """
 Approach 1 – GEMM via existing conv dataflow (zero RTL changes).
 
-Maps C = A × B onto PE_cluster by software-routing iact_choose_i so that
-every PE in row j receives GLB bank j.  This is identical to the normal
-conv test except iact_choose_i is set to a fixed GEMM pattern and
-gemm_mode_i is held low.
+Maps C = A × B onto PE_cluster by reusing the standard conv dataflow with
+gemm_mode_i held low.  The iact GLB-bank routing is driven by send_iact()
+(imported from PE_cluster_tb) exactly as in the conv test, and the same
+reference model in get_psum() validates the result.  No RTL changes and no
+custom iact_choose_i override are needed: the conv routing already realises
+the desired row->bank mapping, and overriding iact_choose_i before send_iact
+had no effect because send_iact reprograms it while streaming.
 
 All SPad packing, parameter streaming and output collection reuse the
 existing PE_cluster_tb helpers exactly.
@@ -18,6 +21,16 @@ existing PE_cluster_tb helpers exactly.
 import math
 import os
 import sys
+
+# Provide sane defaults so importing PE_cluster_tb (which reads these at
+# import time) does not crash when this module is imported by the host
+# interpreter (e.g. the __main__ runner) before the simulator sets them.
+os.environ.setdefault("CLOCK_LEN", "10")
+os.environ.setdefault("CLOCK_UNIT", "ns")
+os.environ.setdefault("CLOCK_DELAY_INPUT", "100")
+os.environ.setdefault("CLOCK_DELAY_UNIT_INPUT", "ps")
+os.environ.setdefault("CLOCK_DELAY_OUTPUT", "100")
+os.environ.setdefault("CLOCK_DELAY_UNIT_OUTPUT", "ps")
 
 import numpy as np
 import cocotb
@@ -49,23 +62,6 @@ sparse_wght = 0
 pe_iact_cycles = 0
 
 
-def _gemm_iact_choose(dut):
-    """
-    Build iact_choose_i value for GEMM mode:
-    every PE in row j is assigned to GLB bank j.
-    With NUM_GLB_IACT=3 and PE_ROWS=3 this means bank 0→row0, 1→row1, 2→row2.
-    """
-    pe_columns = int(dut.PE_COLUMNS.value)
-    pe_rows    = int(dut.PE_ROWS.value)
-    sel_width  = math.ceil(math.log2(int(dut.NUM_GLB_IACT.value) + 1))
-    val = 0
-    for i in range(pe_columns):
-        for j in range(pe_rows):
-            pe_idx = i + j * pe_columns
-            val   |= (j & ((1 << sel_width) - 1)) << (pe_idx * sel_width)
-    return val
-
-
 # ────────────────────────────────────────────────────────────────────────────
 # Reuse send_iact / send_wght / send_bias / get_psum / generate_spad from
 # PE_cluster_tb verbatim – just import them from there.
@@ -86,9 +82,8 @@ async def start_test_gemm_approach1(dut):
     """
     Approach 1 GEMM test.
 
-    Uses the existing conv dataflow with iact_choose_i set so that
-    PE row j reads from GLB bank j.  gemm_mode_i is held low.
-    No RTL changes are needed.
+    Uses the existing conv dataflow (iact_choose_i driven by send_iact) with
+    gemm_mode_i held low.  No RTL changes are needed.
     """
     timeout_time = 40000
     timeout_unit = "ns"
@@ -136,10 +131,9 @@ async def _run_gemm_approach1(dut):
 
     await pctu.reset_all_signals(ptp, dut)
 
-    # Approach 1: keep gemm_mode_i low; route via iact_choose_i instead
+    # Approach 1: keep gemm_mode_i low.  iact_choose_i is driven by send_iact
+    # (the standard conv routing); no separate override is applied here.
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.gemm_mode_i, 0))
-    cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.iact_choose_i,
-                                                _gemm_iact_choose(dut)))
 
     # Also initialise new systolic ports (tied off; SYSTOLIC_GEMM_EN=0)
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.iact_pass_data_i,   0))
@@ -172,10 +166,16 @@ async def _run_gemm_approach1(dut):
     while int(dut.pe_router_psum_enable_o.value) != col_mask:
         await Timer(clk_cycle, unit=clk_cycle_unit)
 
-    cocotb.start_soon(get_psum(ptp, dut, iacts, wghts, psums))
+    # Await get_psum so its internal PSUM-vs-reference assertion is actually
+    # enforced.  Launching it with start_soon and never awaiting it (as the
+    # original conv test does) lets the test pass even when PSUMs are wrong,
+    # because cocotb ignores exceptions raised by orphaned coroutines.
+    get_psum_thread = cocotb.start_soon(get_psum(ptp, dut, iacts, wghts, psums))
 
     while int(dut.pe_router_psum_enable_o.value) != 0:
         await Timer(clk_cycle, unit=clk_cycle_unit)
+
+    await get_psum_thread
 
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"
 

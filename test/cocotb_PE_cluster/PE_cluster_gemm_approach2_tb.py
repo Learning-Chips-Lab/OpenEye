@@ -142,10 +142,14 @@ async def _run_gemm_approach2(dut):
     while int(dut.pe_router_psum_enable_o.value) != col_mask:
         await Timer(clk_cycle, unit=clk_cycle_unit)
 
-    cocotb.start_soon(get_psum(ptp, dut, iacts, wghts, psums))
+    # Await get_psum so its PSUM-vs-reference assertion is actually enforced
+    # (an orphaned start_soon would let the test pass even on a mismatch).
+    get_psum_thread = cocotb.start_soon(get_psum(ptp, dut, iacts, wghts, psums))
 
     while int(dut.pe_router_psum_enable_o.value) != 0:
         await Timer(clk_cycle, unit=clk_cycle_unit)
+
+    await get_psum_thread
 
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"
 
