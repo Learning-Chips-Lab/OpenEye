@@ -143,7 +143,7 @@ class ConvMapper(LayerMapper):
         "skipIact_reg": layer_params.skipIact,
         "skipWght_reg": layer_params.skipWght,
         "skipPsum_reg": layer_params.skipPsum,
-        "psum_delay_reg": layer_params.psum_delay,
+        "psum_q": layer_params.psum_delay,
         "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
         "kernel_size_x": layer_params.kernel_size[0],
         "kernel_size_y": layer_params.kernel_size[1],
