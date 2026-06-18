@@ -138,7 +138,7 @@ class DenseMapper(LayerMapper):
             "kernel_size_x": 1,
             "kernel_size_y": 1,
             "x_lines_reg": layer_params.iact_x_lines,
-            "needed_wght_cycles_reg": 1,
+            "needed_wght_cycles": 1,
             "needed_cycles_reg": layer_params.needed_refreshes_mx[layer_repetition][0],
             "iact_converter_buffer_addr_max_cycles": layer_params.needed_standing_cycles,
             "iact_channels_per_pe": layer_params.used_iact_per_PE,
@@ -173,62 +173,12 @@ class DenseMapper(LayerMapper):
             "limit_increase" : layer_params.limit_increase,
             "initial_upper_limit": layer_params.initial_upper_limit,
             "iteration_for_kernels": layer_params.iteration_for_kernels,
-            "fsm_psum_limit": layer_params.fsm_psum_limit
+            "fsm_psum_limit": layer_params.fsm_psum_limit,
+            "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
+            "iact_converter_max_cycles": layer.params.iact_converter_max_cycles,
+            "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write
             })
-            """
-            # === DMA Line 1: Main configuration parameters ===
-            # Bit packing: combine multiple parameters into a single 64-bit word
-            dma_line = params.data_mode + ((layer_params.realfactor) << 1)      # bits 0-5: data mode and precision
-            dma_line = dma_line + (params.autofunction << 6)                    # bit 6: auto-function enable
-            dma_line = dma_line + (params.poolingmode << 7)                     # bit 7: pooling mode
-            # Note: bits 8-15 reserved for refresh count (commented out)
-            dma_line = dma_line + (layer_params.used_X_cluster << 16)           # bits 16-17: active X clusters
-            dma_line = dma_line + (layer_params.used_Y_cluster << 18)           # bits 18-21: active Y clusters
-            dma_line = dma_line + (layer_params.needed_Iact_writes << 22)       # bits 22-25: iact writes needed
-            dma_line = dma_line + (layer_params.used_psum_per_PE << 26)         # bits 26-31: psum values per PE
-            dma_line = dma_line + (layer_params.used_iact_addr_per_PE << 32)    # bits 32-35: iact addresses per PE
-            dma_line = dma_line + (layer_params.used_wght_addr_per_PE << 36)    # bits 36-40: weight addresses per PE
-            dma_line = dma_line + (layer_params.used_iact_per_PE << 41)         # bits 41-45: iact values per PE
-            dma_line = dma_line + (layer_params.send_values_out << 46)          # bits 46+: enable output transmission
-            dma_storage.append(dma_line)
-
-            # === DMA Line 2: Stride, skip flags, and transmission parameters ===
-            dma_line = 0
-            dma_line = dma_line + (layer_params.needed_wght_transmissions)      # bits 0-9: weight transmissions needed
-            dma_line = dma_line + (layer_params.strideY << 10)                  # bits 10-13: stride Y (also includes X)
-            dma_line = dma_line + (layer_params.skipIact << 14)                 # bit 14: skip iact loading flag
-            dma_line = dma_line + (layer_params.skipWght << 15)                 # bit 15: skip weight loading flag
-            dma_line = dma_line + (layer_params.skipPsum << 16)                 # bit 16: skip psum/bias loading flag
-            dma_line = dma_line + (layer_params.psum_delay << 17)               # bits 17-20: psum accumulation delay
-            dma_line = dma_line + (layer_params.kernel_per_pe_cluster << 21)    # bits 21-24: kernels per PE cluster
-            # Note: bits 25-28 reserved for kernel size (commented out)
-            dma_line = dma_line + (layer_params.iact_x_lines << 29)             # bits 29-36: input feature map X lines
-            dma_line = dma_line + (math.ceil(layer_params.filters/16) << 37)    # bits 37+: filter count (16-aligned)
-            dma_storage.append(dma_line)
-
-            # === DMA Line 3: Input dimensions and streaming parameters ===
-            # Using bitwise OR for clarity in this packed word
-            dma_line = (layer_params.needed_standing_cycles << 56) | \
-                       (layer_params.used_channels << 48) | \
-                       (layer_params.iact_size_y << 32) | \
-                       (layer_params.iact_size_x << 16) | \
-                       layer_params.iact_stream_cycles
-            dma_storage.append(dma_line)
-
-            # === DMA Line 4: Layer control and storage selection ===
-            dma_line = 0
-            dma_line = math.ceil(layer_params.diff_iact_layer)                              # bits 0-7: iact layer difference
-            dma_line = dma_line + math.ceil(layer_params.diff_iact_layer_next_layer << 8)   # bits 8-15: next layer iact diff
-            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_input << 16)   # bit 16: input storage bank
-            dma_line = dma_line + math.ceil(layer_params.choose_iact_storage_output << 17)  # bit 17: output storage bank
-            dma_line = dma_line + math.ceil(layer_params.fully_connected << 18)             # bit 18: fully connected flag
-            dma_line = dma_line + math.ceil(layer_params.max_pooling << 19)                 # bit 19: max pooling flag
-            dma_line = dma_line + math.ceil(layer_params.store_in_psum << 20)               # bit 20: store in psum buffer
-            dma_line = dma_line + math.ceil(layer_params.output_cycles << 21)               # bits 21-28: output cycles
-            dma_line = dma_line + math.ceil(layer_params.y_lines_per_calculation << 29)     # bits 29-32: Y lines per calc
-            dma_line = dma_line + math.ceil(layer_params.different_kernels_per_calculation << 33)  # bits 33+: kernels per calc
-            dma_storage.append(dma_line)"""
-
+            
         # === SERIAL MODE: DMA TRANSMISSION ===
         if (params.SERIAL):
             # Use modern register packing approach (commented code above is legacy)
@@ -526,7 +476,7 @@ class DenseMapper(LayerMapper):
             for cl_y in range(params.Clusters_Y):
                 for router in range(params.Psum_Routers):
                     # Determine routing mode based on PE usage pattern
-                    if((layer_params.ceil_used_PE_per_clm == 1) | (params.Clusters_Y==1)):
+                    if((layer_params.used_Y_cluster == 1) | (params.Clusters_Y==1)):
                         # Single PE per cluster: direct output (no accumulation chain)
                         if(params.SERIAL):
                             line = line + (4 << (params.Psum_Router_Bits * router_cycle))

@@ -323,7 +323,7 @@ class DwPsumStreamMapper(PsumStreamMapper):
             layer_params: Depthwise layer parameters including:
                 - filters: Number of output channels (matches input channels)
                 - used_psum_per_PE: Partial sums allocated per PE
-                - ceil_used_PE_per_clm: Number of PEs used per column
+                - used_Y_cluster: Number of PEs used per column
             layer_repetition (int): Current layer repetition index
             dram_layer_content (list): Bias values from DRAM for this depthwise layer
 
@@ -348,7 +348,7 @@ class DwPsumStreamMapper(PsumStreamMapper):
                   for unused clusters, populated list for active clusters at column starts.
 
         Note:
-            - Only clusters at column boundaries (cl_y % ceil_used_PE_per_clm == 0) are used
+            - Only clusters at column boundaries (cl_y % used_Y_cluster == 0) are used
             - Storage size is ceil(filters/2) to account for dual-channel processing
             - Partial sums initialized to 0 for depthwise layers
 
@@ -359,7 +359,7 @@ class DwPsumStreamMapper(PsumStreamMapper):
 
         for part_data_num in range(num_entries):
             # Only initialize partial sums for clusters at PE column boundaries
-            if((cl_y % self.layer_params.ceil_used_PE_per_clm) == 0):
+            if((cl_y % self.layer_params.used_Y_cluster) == 0):
                 # Initialize partial sums to zero up to the PE allocation limit
                 if(part_data_num < self.layer_params.used_psum_per_PE):
                     storage.append(0)

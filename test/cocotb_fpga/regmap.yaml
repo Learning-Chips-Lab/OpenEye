@@ -12,7 +12,7 @@ registers:
   - {name: kernel_size_y, width: 4}
   - {name: x_lines_reg, width: 8}
   - {name: needed_wght_cycles, width: 8}
-  - {name: needed_cycles_reg, width: 18}
+  - {name: needed_cycles, width: 18}
   - {name: iact_converter_buffer_addr_max_cycles, width: 8}
   - {name: iact_channels_per_pe, width: 8}
   - {name: fc_size_reg, width: 12}
@@ -47,6 +47,12 @@ registers:
   - {name: initial_upper_limit, width: 8}
   - {name: iteration_for_kernels, width: 4}
   - {name: fsm_psum_limit, width: 17}
+  - {name: cluster_per_conv_cycle, width: ceil(log2((int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS))+1))}
+  - {name: iact_converter_max_cycles, width: 8}
+  - {name: iact_buffer_words_per_write, width: 12}
+
+
+
 
 
 

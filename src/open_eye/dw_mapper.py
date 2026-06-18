@@ -245,14 +245,14 @@ class DWMapper(LayerMapper):
                         # Multi Y-cluster case: configure routing chain
                         if(layer_params.used_PEs_Y > 1):
                             # First cluster in chain: receive and use
-                            if((cl_y % layer_params.ceil_used_PE_per_clm) == 0):
+                            if((cl_y % layer_params.used_Y_cluster) == 0):
                                 if(params.SERIAL):
                                     line = line + (9 << (params.Iact_Router_Bits * router_cycle))
                                 else:
                                     storage[cl_x][cl_y][router] = 9
                             else:
                                 # Last cluster in chain: pass through
-                                if((cl_y % layer_params.ceil_used_PE_per_clm) + 1 == layer_params.ceil_used_PE_per_clm):
+                                if((cl_y % layer_params.used_Y_cluster) + 1 == layer_params.used_Y_cluster):
                                     if(params.SERIAL):
                                         line = line + (33 << (params.Iact_Router_Bits * router_cycle))
                                     else:

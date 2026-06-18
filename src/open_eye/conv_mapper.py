@@ -149,8 +149,8 @@ class ConvMapper(LayerMapper):
         "kernel_size_y": layer_params.kernel_size[1],
         "x_lines_reg": layer_params.iact_x_lines,
         "needed_wght_cycles": layer_params.needed_wght_cycles,
-        "needed_cycles_reg": math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.diff_iact_layer),
-        "iact_converter_buffer_addr_max_cycles": layer_params.needed_standing_cycles,
+        "needed_cycles": layer_params.needed_cycles,
+        "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
         "iact_channels_per_pe": layer_params.used_channels,
         "fc_size_reg": 0,
         "iact_size_x":layer_params.iact_size_x,
@@ -183,7 +183,10 @@ class ConvMapper(LayerMapper):
         "limit_increase" : layer_params.limit_increase,
         "initial_upper_limit": layer_params.initial_upper_limit,
         "iteration_for_kernels": layer_params.iteration_for_kernels,
-        "fsm_psum_limit": layer_params.fsm_psum_limit
+        "fsm_psum_limit": layer_params.fsm_psum_limit,
+        "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
+        "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
+        "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===
@@ -449,7 +452,7 @@ class ConvMapper(LayerMapper):
         for cl_x in range(params.Clusters_X):
             for cl_y in range(params.Clusters_Y):
                 for router in range(params.Psum_Routers):
-                    if((layer_params.ceil_used_PE_per_clm == 1)):
+                    if((layer_params.used_Y_cluster == 1)):
                         if(params.SERIAL):
                             if (((cl_y * params.Clusters_X) + cl_x) * params.PEs_X < (layer_params.iact_size_x + layer_params.add_up) * layer_params.different_kernels_per_calculation) :
                                 line = line + (4 << (params.Psum_Router_Bits * router_cycle))

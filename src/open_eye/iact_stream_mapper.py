@@ -1047,7 +1047,7 @@ class DwIactStreamMapper(IactStreamMapper):
                         channel = cl_y + ((self.layer_repetition * params.Clusters_Y))
                     case _:
                         iact_temp_pos_x = int(((cl_x * params.PEs_X * layer_params.strideX) + \
-                        ((cl_y / layer_params.ceil_used_PE_per_clm) * params.PEs_X * params.Clusters_X * layer_params.strideX) + \
+                        ((cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X * layer_params.strideX) + \
                         ((words_in_storage) % layer_params.kernel_size[1]) ) % \
                         ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
                         (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
@@ -1055,8 +1055,8 @@ class DwIactStreamMapper(IactStreamMapper):
 
                         iact_temp_pos_y = \
                         int(iact_cycle + (layer_params.strideY * math.floor( \
-                        ((((cl_y / layer_params.ceil_used_PE_per_clm) * params.PEs_X * params.Clusters_X) + \
-                        ((cl_y % layer_params.ceil_used_PE_per_clm) * params.Clusters_X * params.PEs_X) + \
+                        ((((cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
+                        ((cl_y % layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X) + \
                         (cl_x * params.PEs_X) + \
                         cycle * params.PEs_X * params.Clusters) * \
                         layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideY)))) - \

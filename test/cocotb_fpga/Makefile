@@ -75,11 +75,11 @@ export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 export LAYER=Convolution
 #export LAYER=Depthwise_Convolution
 #export LAYER=Pooling
-export NUM_FILTERS=16
+export NUM_FILTERS=8
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=16
-export INPUT_SIZE_Y=1
+export INPUT_SIZE_X=64
+export INPUT_SIZE_Y=8
 export STRIDE=1
 export INPUT_CHANNELS=4
 export OUTPUT_SIZE=32
@@ -102,16 +102,16 @@ export TRANS_BITWIDTH_WGHT=24
 export TRANS_BITWIDTH_PSUM=20
 
 #Set Number of Router Clusters per Instance
-export NUM_GLB_IACT=3
+export NUM_GLB_IACT=1
 export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
 #Set number of Cluster rows need at least to be 2 COLUMNS
 export CLUSTER_COLUMNS=2
-export CLUSTER_ROWS=2
+export CLUSTER_ROWS=4
 
 #Amoutn of Iact RAM STORAGES
-export RAM_CELLS=8
+export RAM_CELLS=32
 
 #Number of Words per PE
 export IACT_PER_PE=16
