@@ -33,8 +33,8 @@ Given this YAML specification::
     dma_bitwidth: 64
     registers:
       - {name: wght_cycles_reg, width: 8}
-      - {name: stride_x_reg, width: 3}
-      - {name: stride_y_reg, width: 3}
+      - {name: stride_x, width: 3}
+      - {name: stride_y, width: 3}
 
 The generator produces:
 - Verilog parameters defining bit positions (0, 8, 11, ...)

@@ -189,6 +189,11 @@ class OpenEyeParameters(object):
             self.BRANCHES = int(os.getenv("BRANCHES"))
         except:
             self.BRANCHES = 2  
+        # Number of possible branches in one single net
+        try:
+            self.QUANT_AMOUNT = int(os.getenv("QUANT_AMOUNT"))
+        except:
+            self.QUANT_AMOUNT = 32  
 
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode
@@ -280,6 +285,7 @@ class OpenEyeParameters(object):
         self.Iact_Router_Bits = 6      # Activation router config: 6 bits (64 modes)
         self.Wght_Router_Bits = 1      # Weight router config: 1 bit (2 modes)
         self.Psum_Router_Bits = 3      # Partial sum router config: 3 bits (8 modes)
+
 
 
 

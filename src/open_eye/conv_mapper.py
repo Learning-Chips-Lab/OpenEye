@@ -186,7 +186,8 @@ class ConvMapper(LayerMapper):
         "fsm_psum_limit": layer_params.fsm_psum_limit,
         "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
         "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
-        "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write
+        "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
+        "test_reg": 0
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===
@@ -257,7 +258,7 @@ class ConvMapper(LayerMapper):
         """
         dma_line = 0
         dma_storage = []
-        for f in range(math.ceil(16)):
+        for f in range(math.ceil(1024/2)):
             dma_line = 0
             dma_line = dma_line + (layer_params.quantize[2*f][0] << 0)
             dma_line = dma_line + (layer_params.quantize[2*f][1] << 25)

@@ -141,7 +141,7 @@ async def start_test_fpga(dut):
     """
     global logger
     await setup_file_logging()
-    timeout_time = 1500000
+    timeout_time = 15000000
     timeout_unit = 'ns'
 
     try:
@@ -189,7 +189,22 @@ async def single_layer_test(dut):
     if(use_random):
         model = data_create.create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inputsize_y, strides, channels, outputsize)
     else:
-        model = tflite2model.create_model_from_tflite(use_random)
+        #model = tflite2model.create_model_from_tflite(use_random)
+
+        base_model = tf.keras.applications.MobileNet(
+            input_shape=(128, 128, 3),
+            alpha=0.50,
+            include_top=True,
+            weights='imagenet'
+        )
+
+        converter = tf.lite.TFLiteConverter.from_keras_model(base_model)
+        converter.optimizations = [tf.lite.Optimize.DEFAULT]
+
+        model = converter.convert()
+        print("Klappt!")
+        for layer_number, layer in reversed(list(enumerate(base_model.layers))):
+            print(layer)
     #load_model_function
     trunc_model = truncate_model(model)
     await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, trunc_model)
@@ -219,6 +234,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
 
     # Process the layers of the model one after another
     max_layers = len(model)
+    print(max_layers)
     layer_parameters = [0 for _ in range(len(model))]
     for layer_number, layer in reversed(list(enumerate(model))):
         layer_parameters[max_layers - layer_number - 1] = lp.LayerParameters(layer_parameters, layer, openeye_parameter, layer_number, max_layers)

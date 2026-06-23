@@ -139,8 +139,8 @@ class DenseMapper(LayerMapper):
             "kernel_size_y": 1,
             "x_lines_reg": layer_params.iact_x_lines,
             "needed_wght_cycles": 1,
-            "needed_cycles_reg": layer_params.needed_refreshes_mx[layer_repetition][0],
-            "iact_converter_buffer_addr_max_cycles": layer_params.needed_standing_cycles,
+            "needed_cycles": layer_params.needed_refreshes_mx[layer_repetition][0],
+            "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
             "iact_channels_per_pe": layer_params.used_iact_per_PE,
             "fc_size_reg": layer_params.iact_size_x,
             "iact_size_x": 1,
@@ -175,8 +175,9 @@ class DenseMapper(LayerMapper):
             "iteration_for_kernels": layer_params.iteration_for_kernels,
             "fsm_psum_limit": layer_params.fsm_psum_limit,
             "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
-            "iact_converter_max_cycles": layer.params.iact_converter_max_cycles,
-            "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write
+            "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
+            "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
+            "test_reg": 0
             })
             
         # === SERIAL MODE: DMA TRANSMISSION ===
@@ -252,7 +253,7 @@ class DenseMapper(LayerMapper):
 
         # Pack quantization parameters: 2 parameter pairs per DMA word
         # Each parameter is [scale_factor, zero_point] for quantization
-        for f in range(math.ceil(16)):
+        for f in range(math.ceil(512)):
             dma_line = 0
             # First quantization pair: scale and zero-point
             dma_line = dma_line + (layer_params.quantize[2*f][0] << 0)      # bits 0-24: first scale factor

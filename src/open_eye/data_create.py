@@ -109,7 +109,6 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             y_axis   = math.ceil(y_axis/pool_y_axis)
             filters  = 32
             model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
-
         case _:
             logger.error("Layer not detected!")
 

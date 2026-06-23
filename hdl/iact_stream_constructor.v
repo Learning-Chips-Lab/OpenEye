@@ -223,9 +223,9 @@ module iact_stream_constructor #(
             ram_rd_en                  <= 0;
             current_iact_cycle_mod_reg <= 0;
             current_iact_cycle_reg     <= 0;
-            rd_addr_1_inc              <= (1 + ram_rd_addr + (iact_size_y_i - 1) * ((iact_channels_i + 1)/2) * needed_iact_router_cycles_reg);
+            rd_addr_1_inc              <= (iact_size_y_i + padding_y * 2)*needed_iact_router_cycles_reg*((iact_channels_i + 1)/2);
             rd_addr_2_inc              <= 0;
-            rd_addr_3_inc              <= needed_iact_router_cycles_reg * (iact_size_y_i + padding_y * 2) * ((iact_channels_i + 1)/2);
+            rd_addr_3_inc              <= needed_iact_channel_cycles_i * needed_iact_router_cycles_reg * (iact_size_y_i + padding_y * 2) * ((iact_channels_i + 1)/2);
             rd_addr_4_inc              <= needed_iact_router_cycles_reg * ((iact_channels_i + 1)/2) * (y_lines_per_calc) * stride_y_i;
             if (fsm_current_state == WRITE_TO_MEMORY) begin
               rd_addr_1                  <= rd_addr_1_inc;
@@ -346,13 +346,12 @@ module iact_stream_constructor #(
                 rd_addr_1            <= rd_addr_1 + rd_addr_1_inc;
                 ram_rd_addr          <= rd_addr_1;
                 iact_channel_counter <= iact_channel_counter + 1;
-                if (iact_channel_counter == needed_iact_channel_cycles_i - 1) begin
+                if (iact_channel_counter == needed_iact_channel_cycles_i - 1 | fully_connected_i) begin
                   iact_channel_counter <= 0;
-                  x_line_counter       <= 0;
                   rd_addr_1            <= rd_addr_2 + rd_addr_1_inc;
                   ram_rd_addr          <= rd_addr_2;
                   wght_counter         <= wght_counter + 1;
-                  if (wght_counter == needed_wght_cycles_i - 1) begin
+                  if (wght_counter == needed_wght_cycles_i - 1 | fully_connected_i) begin
                     wght_counter   <= 0;
                     rd_addr_1      <= rd_addr_3 + rd_addr_1_inc;
                     rd_addr_2      <= rd_addr_3 + rd_addr_2_inc;
@@ -371,7 +370,7 @@ module iact_stream_constructor #(
                         rd_addr_4 <= rd_addr_4 + rd_addr_4_inc;
                       end
                       finished_y_lines <= finished_y_lines + 1;
-                      if (finished_y_lines == iact_size_y_i - 1) begin
+                      if (finished_y_lines == iact_size_y_i - 1 & !fully_connected_i) begin
                         finished_y_lines <= 0;
                         ram_rd_addr      <= 0;
                         rd_addr_1        <= 0;
@@ -563,7 +562,7 @@ module iact_stream_constructor #(
             transmission_amount_y_line <= (padding_y + ((iact_size_y_i+1)/2)) * needed_iact_router_cycles_reg;
             iacts_in_one_trans  <= ((iact_channels_i+1) / WORDS_PER_CYCLE);
             if (fully_connected_i) begin
-              iacts_in_one_trans  <= ((iact_channels_i+2) / WORDS_PER_CYCLE);
+              iacts_in_one_trans  <= ((iact_channels_i+1) / WORDS_PER_CYCLE);
               if ((iact_channels_i <= WORDS_PER_CYCLE)) begin
                 x_cycle <= 0;
               end
@@ -665,7 +664,7 @@ module iact_stream_constructor #(
             for (r = 0; r < NUM_GLB_IACT; r=r+1) begin
               for (w = 0; w < WORDS_PER_CYCLE; w=w+1) begin
                 if (fully_connected_i) begin
-                  byte_var = w + (((channels * PE_Y) + x_reg[r]) * iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2;
+                  byte_var = w + (((channels * PE_Y) + r) * iact_channels_i) + (byte_var_pre_calc/(2/WORDS_PER_CYCLE))* 2;
                   ram_var  = (byte_var  / 8);
                 end else begin
                   ram_var = iact_channels_i == 1 ? w : 0;
@@ -689,17 +688,22 @@ module iact_stream_constructor #(
                 (- w > (y_reg * iact_channels_i)) |
                 ((iact_channels_i * (iact_size_y_i)) <= w + (y_reg * iact_channels_i))
                 )) & !fully_connected_i) |
-                (((2 * byte_var_pre_calc) + w + (((channels * NUM_GLB_IACT) + r) * iact_channels_i) >= fc_size_i) & fully_connected_i)) begin
+                (((2 * byte_var_pre_calc) + w + (((channels * NUM_GLB_IACT) + r) * CLUSTER_ROWS) >= fc_size_i) & fully_connected_i)) begin
                   mem_data_payload_reg[r][w] <= 0;
                 end else begin
                   mem_data_payload_reg[r][w] <= storage_w[ram_var[$clog2(RAM_CELLS)-1:0]][byte_var[$clog2(IACT_WORDS_IN_RAM)-1:0]];
                 end
               end
             end
+            if (fsm_cycle == (needed_iact_buffer_words_i - 2) & (stride_x_i == 1)) begin //Change, works just for MobielNetV1 with stride.
+              y                 <= y - iact_size_y_i + 1;
+            end
             if (fsm_cycle == (needed_iact_buffer_words_i - 1)) begin
               fsm_cycle         <= 0;
-              //y                 <= y - wght_size_y - iact_size_y_i + 1; Ändern, hier muss ein if hin, Kondition unklar, wahrscheinlich irgendwas Richtung Overflow von X
               channels          <= channels + iact_channels_i;
+              if (fully_connected_i) begin
+                channels          <= channels + CLUSTER_ROWS;
+              end
               current_cycle     <= current_cycle + 1;
               address_storage   <= ram_wr_addr + 1;
               address_storage   <= wr_addr_2 - 1;

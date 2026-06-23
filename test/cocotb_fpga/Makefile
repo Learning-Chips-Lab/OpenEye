@@ -73,19 +73,19 @@ export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 #export LAYER=FC
 #export LAYER=MNIST
 export LAYER=Convolution
-#export LAYER=Depthwise_Convolution
+#export LAYER=MobileNetV1
 #export LAYER=Pooling
-export NUM_FILTERS=8
-export KERNEL_SIZE_X=3
-export KERNEL_SIZE_Y=3
+export NUM_FILTERS=16
+export KERNEL_SIZE_X=1
+export KERNEL_SIZE_Y=1
 export INPUT_SIZE_X=64
-export INPUT_SIZE_Y=8
+export INPUT_SIZE_Y=6
 export STRIDE=1
-export INPUT_CHANNELS=4
+export INPUT_CHANNELS=12
 export OUTPUT_SIZE=32
 #Amout of parallel MACs
 export PARALLEL_MACS=2
-export USE_RANDOM_VALUES=1
+export USE_RANDOM_VALUES=0
 export USE_SPARSE_IACTS=0
 export USE_SPARSE_WEIGHTS=0
 
@@ -102,7 +102,7 @@ export TRANS_BITWIDTH_WGHT=24
 export TRANS_BITWIDTH_PSUM=20
 
 #Set Number of Router Clusters per Instance
-export NUM_GLB_IACT=1
+export NUM_GLB_IACT=3
 export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
@@ -122,7 +122,8 @@ export PSUM_PER_PE=32
 
 export ONLY_FILES=0
 export BRANCHES=1
-export BUFFER_WIDTH=10
+export BUFFER_WIDTH=12
+export QUANT_AMOUNT=1024
 
 export
 run:

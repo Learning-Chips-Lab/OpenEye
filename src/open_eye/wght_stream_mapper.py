@@ -634,10 +634,9 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         start_current_repetition = int((math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.needed_wght_transmissions) * filters_per_calculation)
 
         # Adjust filter start based on cluster allocation
-        amount_of_used_clusters = math.ceil((layer_params.used_Y_cluster*layer_params.iact_size_x)/ params.PEs_X)
+        amount_of_used_clusters = math.ceil((layer_params.used_Y_cluster*math.ceil(layer_params.iact_size_x/layer_params.strideX))/ params.PEs_X)
         channel_offset_in_calculation = (2 * cl_y + cl_x) // amount_of_used_clusters
         start_current_repetition = start_current_repetition + channel_offset_in_calculation
-
         # Handle different cluster computation modes
         match layer_params.single_cluster_computation:
             case 1:

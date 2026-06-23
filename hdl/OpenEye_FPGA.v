@@ -103,6 +103,7 @@ module OpenEye_FPGA #(
       parameter RAM_CELLS     = 8,
       parameter BRANCHES      = 1,
       parameter BUFFER_WIDTH  = 10,
+      parameter QUANT_AMOUNT  = 32,
   `else
     `include "parameters.vh"
       // Defaultvalues
@@ -182,6 +183,7 @@ module OpenEye_FPGA #(
 
     //Enable Traces for unpacked arrays
     parameter UNPACKED_TRACES_ENABLED = 1,
+
 
     localparam IACT_WORDS_IN_RAM = RAM_CELLS_WORD_BITWIDTH / DATA_IACT_BITWIDTH,
     localparam WORDS_PER_CYCLE   = 2,
@@ -804,7 +806,7 @@ reg [1023:0] fst_path;
             if ((((iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS * stride_x_reg)) * iact_x_line_repetitions) >= iact_size_x * needed_y_cls_reg)
              | (fully_connected_layer)) begin
               iact_converter_x <= 0;
-              if (((iact_converter_x + NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x) & (!fully_connected_layer) & (kernels_per_calc != 1)) begin
+              if (((iact_converter_x + NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x) & (!fully_connected_layer) & (kernels_per_calc != 1) & (stride_x_reg * NUM_GLB_PSUM[7:0] < iact_size_x)) begin
                 iact_converter_x <= NUM_GLB_PSUM[7:0] * stride_x_reg;
               end
               fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
@@ -1004,10 +1006,10 @@ reg [1023:0] fst_path;
             end
           end
         end
+        conv_array_reg <= (conv_array_reg<<cluster_per_conv_cycle | conv_array_reg>>(CLUSTERS-cluster_per_conv_cycle));
         if (fully_connected_layer) begin
           conv_array_reg <= (conv_array_reg<<2 | conv_array_reg>>(CLUSTERS-2));
         end
-        conv_array_reg <= (conv_array_reg<<cluster_per_conv_cycle | conv_array_reg>>(CLUSTERS-cluster_per_conv_cycle));
       end
       if (reset_cycle) begin
         conv_array_reg <= 0;
@@ -1239,9 +1241,9 @@ reg [1023:0] fst_path;
   // Quantization formula applied in SEND_PSUM_TO_IACT state:
   //   q[f] = (quant_mant[f] * (psum + quant_offset[f])) >>> quant_exp[f]
   // Result is clamped to signed 8-bit before writing back to the iact buffer.
-  reg [ 7:0] quant_offset [31:0]; // Per-filter zero-point offset (8-bit, added to raw psum).
-  reg [ 6:0] quant_exp    [31:0]; // Per-filter right-shift exponent (7-bit; applied after multiply).
-  reg [24:0] quant_mant   [31:0]; // Per-filter scale mantissa (25-bit; multiplied with shifted psum).
+  reg [ 7:0] quant_offset [QUANT_AMOUNT-1:0]; // Per-filter zero-point offset (8-bit, added to raw psum).
+  reg [ 6:0] quant_exp    [QUANT_AMOUNT-1:0]; // Per-filter right-shift exponent (7-bit; applied after multiply).
+  reg [24:0] quant_mant   [QUANT_AMOUNT-1:0]; // Per-filter scale mantissa (25-bit; multiplied with shifted psum).
 
   //#######################
   // Wires: Iact Buffer Interface (iact_stream_constructor → RAM_SP cells)
@@ -1478,7 +1480,7 @@ reg [1023:0] fst_path;
       current_buffer_addr                   <= 0;
       iact_channels                         <= 0;
       iact_channels_counter                 <= 0;
-      reset_cycle                       <= 0;
+      reset_cycle                           <= 0;
       select_ram_counter                    <= 0;
       ram_counter_storage                   <= 0;
       iact_x_with_add_up                    <= 0;
@@ -1503,7 +1505,7 @@ reg [1023:0] fst_path;
         pooling_stage_3[a] <= 0;
       end
       pooling_stage_4 <= 0;
-      for (a = 0; a < 32; a = a + 1) begin
+      for (a = 0; a < QUANT_AMOUNT; a = a + 1) begin
         quant_offset[a] <= 0;
         quant_exp[a]    <= 0;
         quant_mant[a]   <= 0;
@@ -1593,7 +1595,7 @@ reg [1023:0] fst_path;
             pooling_stage_3[a] <= -128;
           end
           pooling_stage_4 <= -128;
-          for (a = 0; a < 32; a = a + 1) begin
+          for (a = 0; a < QUANT_AMOUNT; a = a + 1) begin
             quant_offset[a] <= 0;
             quant_exp[a]    <= 0;
             quant_mant[a]   <= 0;
@@ -1605,46 +1607,21 @@ reg [1023:0] fst_path;
             end else begin
               early_stream_start <= 0;
               if (!early_stream_start) begin
-                fsm_cycle       <= fsm_cycle + 1;
+                fsm_cycle   <= fsm_cycle + 1;
                 reset_cycle <= 0;
-                dma_data_i      <= data_dma_i_reg;
-                case (fsm_cycle)
-                  32'd0: begin
-                    write_dma_addr  <= write_dma_addr + 1;
-                    write_dma_en    <= 1;
-                  end
-                  32'd1: begin
-                    write_dma_addr  <= write_dma_addr + 1;
-                    write_dma_en    <= 1;
-                  end
-                  32'd2: begin
+                dma_data_i  <= data_dma_i_reg;
+                padding_x   <= (kernel_size_x-1)/2;
+                padding_y   <= (kernel_size_y-1)/2;
+                if (fsm_cycle < (TRANSMISSIONS+1)) begin
                     write_dma_addr <= write_dma_addr + 1;
                     write_dma_en   <= 1;
-                  end
-                  32'd3: begin
-                    write_dma_addr <= write_dma_addr + 1;
-                    write_dma_en   <= 1;
-                    padding_x      <= (kernel_size_x-1)/2;
-                    padding_y      <= (kernel_size_y-1)/2;
-                  end
-                  32'd4: begin
-                    write_dma_addr <= write_dma_addr + 1;
-                    write_dma_en   <= 1;
-                  end
-                  32'd5: begin
-                    write_dma_addr <= write_dma_addr + 1;
-                    write_dma_en   <= 1;
-                  end
-                  default: begin
-
-                  end
-                endcase
+                end
                 for (a = 0; a < PES * CLUSTERS; a = a + 1) begin
-                  if (fsm_cycle >= 6 & (((fsm_cycle - 6) * DMA_BITWIDTH <= a) & ((fsm_cycle - 4) * DMA_BITWIDTH > a))) begin
+                  if (fsm_cycle >= (TRANSMISSIONS+1) & (((fsm_cycle - (TRANSMISSIONS+1)) * DMA_BITWIDTH <= a) & ((fsm_cycle - 4) * DMA_BITWIDTH > a))) begin
                     compute_mask_reg[a] <= data_dma_i_reg[a%DMA_BITWIDTH];
                   end
                 end
-                if (fsm_cycle == (6 + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
+                if (fsm_cycle == ((TRANSMISSIONS+1) + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
                   choose_iact_buffer <= choose_iact_buffer_input;
                   fsm_last_state     <= GET_PARAMETERS;
                   fsm_current_state  <= GET_ROUTER_CONFIG;
@@ -1863,7 +1840,7 @@ reg [1023:0] fst_path;
             overhang_delay         <= 0;
             if (fully_connected_layer) begin
               overhang_discrepancy <= ((iact_size_x*iact_channels_per_pe*NUM_GLB_WGHT)%(WORDS_PER_CYCLE[7:0]*4));
-              overhang             <= 0;
+              overhang             <= 4;
             end
             fsm_cycle <= 0;
           end
@@ -1906,7 +1883,7 @@ reg [1023:0] fst_path;
               buffer_SP_en_r_reg[a] <= 1;
             end
           end
-          if ((fsm_cycle == 16 - 1) & enable_dma_i_reg) begin	//SVEN EDIT!!!
+          if ((fsm_cycle == (QUANT_AMOUNT/2) - 1) & enable_dma_i_reg) begin
             fsm_cycle         <= 0;
             fsm_last_state    <= GET_QUANTIZE;
             fsm_current_state <= GET_OFFSET;
@@ -2003,15 +1980,11 @@ reg [1023:0] fst_path;
             for (a = 0; a < RAM_CELLS; a=a+1) begin
               buffer_SP_en_r_reg[a] <= 1;
             end
+            for (a = 0; a < RAM_CELLS; a=a+1) begin
+              buffer_SP_addr_reg[a] <= ~0;
+            end
             if ((iact_channels == 1) | (kernel_size_x == 1)) begin
               past_padding <= 1;
-              for (a = 0; a < RAM_CELLS; a=a+1) begin
-                buffer_SP_addr_reg[a] <= 0;
-              end
-            end else begin
-              for (a = 0; a < RAM_CELLS; a=a+1) begin
-                buffer_SP_addr_reg[a] <= ~0;
-              end
             end
           end
         end
@@ -2058,38 +2031,43 @@ reg [1023:0] fst_path;
           if ((select_ram_counter >= (iact_converter_buffer_addr_max_cycles) - 1)) begin  
             select_ram_counter <= 0;
           end
-          if ((iact_converter_cycles > (padding_y * buffer_cycles_for_x_iact * iact_x_line_repetitions) - 1)) begin // Lower bound
-            past_padding <= 1;
-            if ((iact_converter_buffer_addr_cycles >= (iact_converter_buffer_addr_max_cycles) - 1) | iact_buffer_next_addr) begin
-              if (past_padding == 1) begin
-                for (a = 0; a < RAM_CELLS; a=a+1) begin
-                  if (buffer_SP_addr_upper_limit > buffer_SP_addr_lower_limit | (limit_increase == 0)) begin
-                    if (((a >= buffer_SP_addr_lower_limit) & (a < buffer_SP_addr_upper_limit))) begin
-                      buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
-                    end
-                  end else begin
-                    if (((a >= buffer_SP_addr_lower_limit) | (a < buffer_SP_addr_upper_limit))) begin
-                      buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
-                    end
-                  end
-                end
-                buffer_SP_addr_upper_limit <= ((buffer_SP_addr_upper_limit + limit_increase + overhang)%RAM_CELLS);
-                buffer_SP_addr_lower_limit <= buffer_SP_addr_upper_limit;
-                overhang                   <= 0;
-                overhang_delay             <= overhang;
-                overhang_counter           <= overhang_counter + overhang_discrepancy;
-                if (overhang_counter + overhang_discrepancy >= (WORDS_PER_CYCLE[7:0]*4)) begin
-                  overhang_counter <= overhang_counter + overhang_discrepancy - (WORDS_PER_CYCLE[7:0]*4);
-                  overhang         <= 1;
-                end
-              end
-            end
-          end
-          iact_converter_enc_enable    <= 0;
           iact_converter_params_enable <= 0;
+          iact_converter_enc_enable    <= 0;
           if (iact_buffer_next_addr) begin
             iact_converter_enc_enable <= 1;
             select_ram_counter        <= 0;
+            /*if (buffer_cycles_for_x_iact == 1) begin
+              past_padding <= 0;
+            end*/
+          end
+          if ((iact_converter_cycles + 1 > (padding_y * buffer_cycles_for_x_iact * iact_x_line_repetitions))) begin // Lower bound
+            if ((iact_converter_cycles < ((padding_y+iact_size_y) * buffer_cycles_for_x_iact * iact_x_line_repetitions))) begin // Upper bound
+              past_padding <= 1;
+              if ((iact_converter_buffer_addr_cycles >= (iact_converter_buffer_addr_max_cycles) - 1) | iact_buffer_next_addr) begin
+                if (past_padding == 1) begin
+                  for (a = 0; a < RAM_CELLS; a=a+1) begin
+                    if ((buffer_SP_addr_upper_limit > buffer_SP_addr_lower_limit) | (limit_increase == 0) | fully_connected_layer) begin
+                      if (((a >= buffer_SP_addr_lower_limit) & (a < buffer_SP_addr_upper_limit))) begin
+                        buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
+                      end
+                    end else begin
+                      if (((a >= buffer_SP_addr_lower_limit) | (a < buffer_SP_addr_upper_limit))) begin
+                        buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
+                      end
+                    end
+                  end
+                  buffer_SP_addr_upper_limit <= ((buffer_SP_addr_upper_limit + limit_increase + overhang)%RAM_CELLS);
+                  buffer_SP_addr_lower_limit <= buffer_SP_addr_upper_limit;
+                  overhang                   <= 0;
+                  overhang_delay             <= overhang;
+                  overhang_counter           <= overhang_counter + overhang_discrepancy;
+                  if (overhang_counter + overhang_discrepancy >= (WORDS_PER_CYCLE[7:0]*4)) begin
+                    overhang_counter <= overhang_counter + overhang_discrepancy - (WORDS_PER_CYCLE[7:0]*4);
+                    overhang         <= 1;
+                  end
+                end
+              end
+            end
           end
           iact_converter_buffer_addr_cycles <= iact_converter_buffer_addr_cycles + 1;
           if (iact_converter_buffer_addr_cycles == (iact_converter_buffer_addr_max_cycles - 1)) begin
@@ -3398,7 +3376,6 @@ reg [1023:0] fst_path;
           psum_buffer_SP_en_r <= 0;
           fsm_psum_r_q        <= fsm_psum_r;
           fsm_x_cl_psum_q     <= fsm_x_cl_psum;
-          fsm_y_cl_psum_q1    <= fsm_y_cl_psum;
           if (ready_dma_i == 1) begin
             if (fsm_psum_r | fsm_x_cl_psum | fsm_y_cl_psum | fsm_psum_cycle) begin
               enable_dma_o <= 1;
@@ -3434,15 +3411,14 @@ reg [1023:0] fst_path;
                       end
                     end
                     psum_buffer_SP_en_r <= 0;
-                    last_data_o         <= 1;
+                    last_data_reg       <= 1;
                   end
                 end
               end
             end
-            if (last_data_o) begin
+            if (last_data_reg) begin
               psum_buffer_SP_en_r    <= 0;
-              last_data_o            <= 0;
-              enable_dma_o           <= 0;
+              last_data_o            <= 1;
               last_data_reg          <= 0;
               finished_cycles_psum   <= 0;
               fsm_psum_last_state    <= PSUM_SEND_RESULTS;
