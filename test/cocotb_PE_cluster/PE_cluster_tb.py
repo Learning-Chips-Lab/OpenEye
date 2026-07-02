@@ -286,6 +286,16 @@ def check_psum(captured, control, pe_columns):
 
 async def send_wght(ptp, dut, data_array):
     global signals_dict
+    # PE_simple.v reads weights densely: PARALLEL_MACS lanes packed at
+    # DATA_WGHT_BITWIDTH granularity, every weight present (no zero-skip and no
+    # sparse overhead bits). PE.v (sparse) packs at DATA_WGHT_BITWIDTH +
+    # DATA_WGHT_IGNORE_ZEROS and compresses zeros. Branch the packing to match.
+    if pctu.use_pe_simple():
+        wght_offset  = int(dut.DATA_WGHT_BITWIDTH.value)
+        ignore_zeros = False
+    else:
+        wght_offset  = int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value)
+        ignore_zeros = True
     spad_data = [0 for _ in range(int(dut.PE_ROWS.value))]
     for glb_cluster in range(int(dut.PE_ROWS.value)):
         spad_data[glb_cluster] = generate_spad(
@@ -294,8 +304,8 @@ async def send_wght(ptp, dut, data_array):
             int(dut.WGHT_DATA_WORDS.value),  # Convert LogicArray to int
             int(dut.DATA_WGHT_BITWIDTH.value),  # Convert LogicArray to int
             False,  # Packed mode (not SISD)
-            int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value),  # Convert to int
-            True  # Ignore zeros
+            wght_offset,
+            ignore_zeros
         )
     wght_transmission = []
     for glb_cluster in range(int(dut.PE_ROWS.value)):

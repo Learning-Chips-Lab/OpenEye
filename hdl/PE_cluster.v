@@ -5,6 +5,17 @@
 
 `timescale 1ns / 1ps
 
+// Selects which Processing Element implementation the cluster instantiates.
+// Defaults to the sparsity-capable PE.v. Define USE_PE_SIMPLE (e.g.
+// `+define+USE_PE_SIMPLE` or cocotb `defines={"USE_PE_SIMPLE": 1}`) to build the
+// cluster from the dense-only PE_simple.v. Both modules expose an identical port
+// list, so only the instantiated module name changes.
+`ifdef USE_PE_SIMPLE
+  `define PE_MODULE PE_simple
+`else
+  `define PE_MODULE PE
+`endif
+
 /// Module: PE_cluster
 ///
 /// The PE_cluster module implements a configurable 2D array of Processing Elements (PEs) in the 
@@ -286,7 +297,7 @@ module PE_cluster #(
             ? j[$clog2(NUM_GLB_IACT+1)-1:0]
             : iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(NUM_GLB_IACT+1)-1
                             :(i+j*PE_COLUMNS)*$clog2(NUM_GLB_IACT+1)];
-        PE #(
+        `PE_MODULE #(
             .IS_TOPLEVEL           (0),
             .SERIAL                (SERIAL),
             .PARALLEL_MACS         (PARALLEL_MACS),
