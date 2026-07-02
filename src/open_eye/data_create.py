@@ -2,12 +2,13 @@
 # © Fachhochschule Dortmund – University of Applied Sciences and Arts (until 2025), Universität Duisburg-Essen (since 2025).
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
-import tensorflow as tf
 import logging
 import subprocess
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import tempfile
 import math
+import tensorflow as tf
 
 logger = logging.getLogger("cocotb")
 
@@ -56,8 +57,9 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
         case "Depthwise_Convolution":
             model.add(tf.keras.layers.DepthwiseConv2D((kernelsize_x, kernelsize_y), padding="SAME", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "FC":
-            model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=26, use_bias = True))
-            model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
+            #model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=26, use_bias = True))
+            #model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
+            model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=outputsize, use_bias = True))
         case "MNIST":
             channels = 16
             x_axis = 128
@@ -107,7 +109,6 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             y_axis   = math.ceil(y_axis/pool_y_axis)
             filters  = 32
             model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="SAME", input_shape=(x_axis, y_axis, channels), strides = strides))
-
         case _:
             logger.error("Layer not detected!")
 

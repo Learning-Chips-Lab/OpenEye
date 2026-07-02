@@ -72,6 +72,7 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
         txt_file.write(f"parameter RAM_CELLS = {openeye_parameter.RAM_CELLS},\n")
         txt_file.write(f"parameter BUFFER_WIDTH = {openeye_parameter.BUFFER_WIDTH},\n")
         txt_file.write(f"parameter BRANCHES = {openeye_parameter.BRANCHES},\n")
+        txt_file.write(f"parameter QUANT_AMOUNT = {openeye_parameter.QUANT_AMOUNT},\n")
         
 
 

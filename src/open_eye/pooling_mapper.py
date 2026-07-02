@@ -409,7 +409,7 @@ class PoolingMapper(LayerMapper):
             for cl_y in range(params.Clusters_Y):
                 for router in range(params.Psum_Routers):
                     # Case 1: Single PE per column - use local handling only
-                    if((layer_params.ceil_used_PE_per_clm == 1)):
+                    if((layer_params.used_Y_cluster == 1)):
                         if(params.SERIAL):
                             line = line + (4 << (params.Psum_Router_Bits * router_cycle))
                         else:

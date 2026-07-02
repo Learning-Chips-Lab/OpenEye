@@ -464,7 +464,6 @@ def collect_results(layer_number, layer_params, dram, serial):
             for i in range(layer_params.output_shape[2]):
                 for f in range(layer_params.output_shape[3]):
                     calculated_results[f][j][i] = int(calculated_results[f][j][i] + int(dram.bias[layer_number][f]))
-
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
@@ -522,7 +521,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
             kernel_counter = 0
             x_cor = les.x_start
             y_cor = les.y_start
-            for cl_y in range(params.Clusters_Y) :
+            for cl_y in range(params.Clusters_Y//layer_params.used_Y_cluster) :
                 for cl_x in range(params.Clusters_X) :
                     if (x_cor >= layer_params.psum_size_x) :
                         if (kernel_counter < layer_params.different_kernels_per_calculation - 1) :
@@ -691,8 +690,8 @@ def calculate_conv_results_mp(f, layer_number, layer_params, serial, dram, calcu
                     for x in range(0 - math.floor(layer_params.kernel_size[0]/2),math.ceil(layer_params.kernel_size[0]/2)):
                         for c in range(layer_params.input_shape[3]):
                             for y in range(0 - math.floor(layer_params.kernel_size[1]/2),math.ceil(layer_params.kernel_size[1]/2)):
-                                if((((x + j * layer_params.strideX) >= 0) & ((x + j * layer_params.strideX) < (layer_params.output_shape[1] * layer_params.strideX))) & \
-                                (((y + i * layer_params.strideY) >= 0) & ((y + i * layer_params.strideY) < (layer_params.output_shape[2] * layer_params.strideY)))):
+                                if((((x + j * layer_params.strideX) >= 0) & ((x + j * layer_params.strideX) < (layer_params.input_shape[1]))) & \
+                                (((y + i * layer_params.strideY) >= 0) & ((y + i * layer_params.strideY) < (layer_params.input_shape[2])))):
                                     calculated_results[j][i] = int(calculated_results[j][i] + \
                                                                     dram.weights[layer_number][c][f][y + math.floor((layer_params.kernel_size[1]-1)/2)][x + math.floor(layer_params.kernel_size[0]/2)] * \
                                                                     dram.fmap[layer_number][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])

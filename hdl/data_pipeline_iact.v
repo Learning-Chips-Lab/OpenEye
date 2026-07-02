@@ -539,7 +539,7 @@ module data_pipeline_iact #(
         cycle_counter              <= 0;
 
         // Uneven-line handling (only for non-FC layers where lines don't fill full words)
-        if (first_spad_max_i < 4) begin
+        if (first_spad_max_i < 2) begin
           uneven_counter <= uneven_counter + 1;
           if (uneven_counter == iact_x_line_repetitions_i - 1) begin
             uneven_counter <= 0;
