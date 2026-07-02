@@ -121,12 +121,6 @@ def test_pe_cluster_gemm_approach1(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, PE_
 # ---------------------------------------------------------------------------
 # Approach 2 – gemm_mode_i flag
 # ---------------------------------------------------------------------------
-# Pre-existing failure on this branch: the gemm_mode_i datapath in PE.v does not
-# yet produce correct PSUMs (independent of the PE-variant work). Marked xfail so
-# a full run stays green and the known gap is explicit rather than silent.
-@pytest.mark.xfail(reason="gemm_mode_i PE.v datapath produces incorrect PSUMs "
-                          "(pre-existing, unrelated to PE_simple support)",
-                   strict=False)
 @pytest.mark.parametrize("PE_MODULE",  PE_VARIANTS_DEFAULT)
 @pytest.mark.parametrize("IACTSIZE_X", [4])
 @pytest.mark.parametrize("IACTSIZE_Y", [1])

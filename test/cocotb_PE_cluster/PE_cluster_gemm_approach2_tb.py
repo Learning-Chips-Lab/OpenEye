@@ -7,11 +7,26 @@
 Approach 2 – GEMM mode flag (moderate RTL change).
 
 Sets gemm_mode_i=1, which causes PE_cluster to internally override
-iact_select for each PE so that row j reads from GLB bank j.
-iact_choose_i is left at 0 and ignored by the hardware.
+iact_select for each PE so that row j reads from GLB bank j.  The
+iact_choose_i pattern driven by send_iact is ignored by the hardware,
+which this test implicitly verifies.
 
-All SPad packing, parameter streaming and output collection are reused
-from PE_cluster_tb unchanged.
+Dataflow (differs from the conv test):
+  - One load phase (pe_iact_cycles=1): bank j carries exactly one iact
+    vector, which lands in every PE of row j.  The conv test's second
+    load phase must not be sent — in GEMM mode every row listens to its
+    bank permanently, so a second phase would append foreign data to the
+    iact SPads and corrupt them.
+  - Weights stay per-row as in conv: wght[j] has shape (K, N).
+  - The vertical psum drain sums over rows, so column i emits
+      out[i][n] = bias[i][n] + sum_j sum_k wght[j][k][n] * iact[j][k]
+    i.e. a (1 x J*K) . (J*K x N) GEMV whose inner dimension is split
+    across the PE rows.  All columns compute the same GEMV and differ
+    only in their bias, because the iact banks are broadcast to every
+    column — that is inherent to the gemm_mode_i datapath.
+
+SPad packing, parameter streaming and psum capture are reused from
+PE_cluster_tb; only the reference model is gemm-specific.
 """
 
 import math
@@ -33,7 +48,8 @@ from PE_cluster_tb import (
     send_iact,
     send_wght,
     send_bias,
-    get_psum,
+    capture_psums,
+    check_psum,
     create_iact_wght_psum_arrays,
 )
 
@@ -82,10 +98,13 @@ async def _run_gemm_approach2(dut):
     sparse_wght = int(os.environ.get("SPARSE_WGHT", "0"))
     np.random.seed(int(os.environ.get("SEED", "42")))
 
-    pe_iact_cycles = math.ceil(
-        (int(dut.PE_ROWS.value) + int(dut.PE_COLUMNS.value) - 1)
-        / int(dut.NUM_GLB_IACT.value)
-    )
+    # GEMM mode: one load phase only.  Row j reads bank j for the whole test,
+    # so exactly NUM_GLB_IACT (== PE_ROWS) iact vectors are sent, one per bank.
+    # (The conv test's ceil((ROWS+COLS-1)/NUM_GLB_IACT) phases would double-
+    # load every SPad because gemm rows cannot be de-selected between phases.)
+    assert int(dut.NUM_GLB_IACT.value) == int(dut.PE_ROWS.value), \
+        "Approach 2 assumes one GLB iact bank per PE row"
+    pe_iact_cycles = 1
     wghtsize_y = iactsize_x * iactsize_y
 
     # Propagate globals into PE_cluster_tb module namespace so its helpers work
@@ -142,15 +161,22 @@ async def _run_gemm_approach2(dut):
     while int(dut.pe_router_psum_enable_o.value) != col_mask:
         await Timer(clk_cycle, unit=clk_cycle_unit)
 
-    # Await get_psum so its PSUM-vs-reference assertion is actually enforced
-    # (an orphaned start_soon would let the test pass even on a mismatch).
-    get_psum_thread = cocotb.start_soon(get_psum(ptp, dut, iacts, wghts, psums))
+    captured = await capture_psums(dut, ptp)
 
-    while int(dut.pe_router_psum_enable_o.value) != 0:
-        await Timer(clk_cycle, unit=clk_cycle_unit)
+    # GEMM-mode reference: PE(i,j) uses iact bank j (not the conv diagonal
+    # iact[i+j]), and the vertical drain sums the rows of each column.
+    pe_columns = int(dut.PE_COLUMNS.value)
+    pe_rows    = int(dut.PE_ROWS.value)
+    control = np.zeros((pe_columns, int(dut.PSUM_WORDS.value) * 2), dtype=int)
+    for col in range(pe_columns):
+        control[col, :wghtsize_x] = psums[col]
+        for j in range(pe_rows):
+            iact_vec = iacts[j].flatten()
+            for k in range(wghtsize_y):
+                control[col, :wghtsize_x] += wghts[j][k] * iact_vec[k]
 
-    await get_psum_thread
-
+    assert check_psum(captured, control, pe_columns) == 0, \
+        "Outcoming Partial Sums are not equal to Calculated data!"
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"
 
 
