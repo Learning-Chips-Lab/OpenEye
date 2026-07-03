@@ -234,7 +234,6 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
 
     # Process the layers of the model one after another
     max_layers = len(model)
-    print(max_layers)
     layer_parameters = [0 for _ in range(len(model))]
     for layer_number, layer in reversed(list(enumerate(model))):
         layer_parameters[max_layers - layer_number - 1] = lp.LayerParameters(layer_parameters, layer, openeye_parameter, layer_number, max_layers)
@@ -246,7 +245,6 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     test_amount = 1
     for _ in range(test_amount) :
         for layer_number, layer in enumerate(model):
-            # TODO: After refactoring LayerParameters, it is nicer to use the constructor 
             time_printer.timestamp("Layer parameters created. ", logger)
             calculated_results = tum.collect_results(layer_number, layer_parameters[layer_number], dram, openeye_parameter.SERIAL)
             output_order = tum.make_ref(openeye_parameter, layer_parameters[layer_number], layer_number, dram, calculated_results)
@@ -274,7 +272,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                             elif("Pooling" in str(layer_parameters[layer_number].layer_name)):
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                             if(logging.DEBUG >= log_level):
-                                assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
+                                assert gtu.check_results(openeye_parameter, 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                                         'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
                             assert tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
                         else :
@@ -291,6 +289,5 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                         if (layer_parameters[layer_number].layer_name != "Pooling") :
                             slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
 
-                
     if (only_files == 0) :
         assert dut.rst_ni.value == 1, "rst_ni is not 1!"
