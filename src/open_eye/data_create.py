@@ -66,37 +66,30 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             #model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=outputsize, use_bias = True))
         case "MNIST":
             channels = 16
-            x_axis = 128
-            y_axis = 4
+            x_axis = 28
+            y_axis = 28
+            channels = 4
             filters = 16
             pool_x_axis = 2
             pool_y_axis = 2
             
             model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="same", input_shape=(x_axis, y_axis, channels), strides = strides))
-            """
             model.add(tf.keras.layers.MaxPooling2D(pool_size = (pool_x_axis, pool_y_axis), strides=(pool_x_axis,pool_y_axis), padding="valid"))
-            
-            channels = filters
-            x_axis   = math.ceil(x_axis/pool_x_axis)
-            y_axis   = math.ceil(y_axis/pool_y_axis)
-            filters  = 32
-            
-            model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="same", input_shape=(x_axis, y_axis, channels), strides = strides))
-            
-            model.add(tf.keras.layers.MaxPooling2D(pool_size = (pool_x_axis, pool_y_axis), strides=(pool_x_axis,pool_y_axis), padding="valid"))
-            
             channels = filters
             x_axis   = math.ceil(x_axis/pool_x_axis)
             y_axis   = math.ceil(y_axis/pool_y_axis)
             filters  = 32
             model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="same", input_shape=(x_axis, y_axis, channels), strides = strides))
-            
+            model.add(tf.keras.layers.MaxPooling2D(pool_size = (pool_x_axis, pool_y_axis), strides=(pool_x_axis,pool_y_axis), padding="valid"))
+            channels = filters
+            x_axis   = math.ceil(x_axis/pool_x_axis)
+            y_axis   = math.ceil(y_axis/pool_y_axis)
+            filters  = 32
+            model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="same", input_shape=(x_axis, y_axis, channels), strides = strides))
             model.add(tf.keras.layers.Flatten())
-            output_size  = 32
-            model.add(tf.keras.layers.Dense(units=output_size, use_bias = True))
             output_size  = 10
             model.add(tf.keras.layers.Dense(units=output_size, use_bias = True))
-            """
+            
         case "Pooling":
             channels = 4
             x_axis = 14
