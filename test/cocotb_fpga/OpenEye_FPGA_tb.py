@@ -101,7 +101,10 @@ def envvars_to_vars():
     strides = gtu.load_env_to_variable("STRIDE", 1),gtu.load_env_to_variable("STRIDE", 1)
     channels = gtu.load_env_to_variable("INPUT_CHANNELS", 4)
     sparse_iacts = gtu.load_env_to_variable("USE_SPARSE_IACTS", 0)
-    sparse_wghts = gtu.load_env_to_variable("USE_SPARSE_WEIGHTS", 0)
+    # Runners set USE_SPARSE_WGHTS; keep USE_SPARSE_WEIGHTS as fallback for
+    # older callers.
+    sparse_wghts = gtu.load_env_to_variable(
+        "USE_SPARSE_WGHTS", gtu.load_env_to_variable("USE_SPARSE_WEIGHTS", 0))
     return only_files, layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts
 
 #@cocotb.test()
@@ -254,7 +257,15 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                 time_printer.timestamp("Reference data created. ", logger)
             dram_layer_content = [dram.fmap[layer_number], dram.weights[layer_number], dram.bias[layer_number]]
             time_printer.timestamp("Start creating stream. " , logger)
-            stream = tum.write_stream(openeye_parameter, layer_parameters[layer_number], dram_layer_content, sparse_iacts, sparse_wghts)
+            # Sparsity is realized in the DRAM data (write_initial_data_to_dram
+            # zeroes ~50% of iacts/wghts when the flags are set). The serial DMA
+            # streams must stay on the standard path: iacts are sent as raw
+            # pixels (the hardware iact_stream_constructor derives the sparse
+            # stream), and the conv weight mapper always emits the
+            # overhead-encoded (zero-compressed) SPad format. The mappers'
+            # sparse_data=1 re-encoding only applies to the parallel-port flow
+            # and is incompatible with the serial conv weight SPad layout.
+            stream = tum.write_stream(openeye_parameter, layer_parameters[layer_number], dram_layer_content, 0, 0)
             time_printer.timestamp("Streams set. " , logger)
             for _ in range(1):
                 for layer_repetition in range(layer_parameters[layer_number].needed_total_transmissions):
