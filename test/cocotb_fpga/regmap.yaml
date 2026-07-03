@@ -18,6 +18,8 @@ registers:
   - {name: fc_size_reg, width: 12}
   - {name: iact_size_x, width: 12}
   - {name: iact_size_y, width: 8}
+  - {name: psum_size_x, width: 12}
+  - {name: psum_size_y, width: 8}
   - {name: iact_needed_cycles, width: 11}
   - {name: kernels_per_calc, width: 5}
   - {name: y_lines_per_calc, width: 4}
@@ -50,6 +52,7 @@ registers:
   - {name: cluster_per_conv_cycle, width: ceil(log2((int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS))+1))}
   - {name: iact_converter_max_cycles, width: 8}
   - {name: iact_buffer_words_per_write, width: 12}
+  - {name: pooling_mode, width: 1}
   - {name: test_reg, width: 20}
 
 

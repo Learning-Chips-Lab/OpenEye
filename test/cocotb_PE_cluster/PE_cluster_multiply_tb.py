@@ -452,9 +452,9 @@ async def send_bias(dut, params, data_array):
                 data_array[glb_cluster],
                 params.Psums_per_PE,
                 params.Psums_per_PE,
-                params.PSUM_Bitwidth,
+                params.DATA_PSUM_BITWIDTH,
                 False,
-                params.PSUM_Bitwidth,
+                params.DATA_PSUM_BITWIDTH,
                 False,
                 False
             )
@@ -469,7 +469,7 @@ async def send_bias(dut, params, data_array):
                     signals_dict["pe_router_psum_data_i"][glb_cluster],
                     signals_dict["pe_router_psum_enable_i"][glb_cluster],
                     math.ceil(params.Psums_per_PE/params.PARALLEL_MACS),
-                    params.PSUM_Bitwidth * 2,
+                    params.DATA_PSUM_BITWIDTH * 2,
                     params.PSUM_Trans_Bitwidth,
                     False,
                     "PSUM_" + str(glb_cluster)

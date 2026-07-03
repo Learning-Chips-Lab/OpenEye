@@ -638,12 +638,12 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                     for x_cluster in reversed(range(oep.Clusters_X)):
                         for router in reversed(range(oep.NUM_GLB_PSUM)):
                             if(layer_parameters.computing_mx[oep.Clusters_X-x_cluster-1][oep.Clusters_Y-y_cluster-1][0][oep.NUM_GLB_PSUM-router-1]== 1):
-                                lower_limit = (x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * 40 + y_cluster * oep.NUM_GLB_PSUM * 40 + router * 40)
-                                upper_limit = lower_limit + 39
+                                lower_limit = (x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * self.PSUM_Trans_Bitwidth + y_cluster * oep.NUM_GLB_PSUM * self.PSUM_Trans_Bitwidth + router * self.PSUM_Trans_Bitwidth)
+                                upper_limit = lower_limit + oep.DATA_PSUM_BITWIDTH
                                 outputvalue = dut.psum_data_o.value[lower_limit:upper_limit]
                                 if(logging.DEBUG >= login_level):
-                                    txt_file.write(bin(outputvalue)[2:].zfill(40) + "\n")
-                                for i in range(2):
+                                    txt_file.write(bin(outputvalue)[2:].zfill(self.PSUM_Trans_Bitwidth) + "\n")
+                                for i in range(self.PARALLEL_MACS):
                                     try:
                                         f = output_order[layer_repetition][les.current_position][0]
                                         x = output_order[layer_repetition][les.current_position][1]
@@ -654,9 +654,9 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                                     if(logging.DEBUG >= login_level):
                                         storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
                                     try:
-                                        dram.fmap[layer_number + 1][f][x][y] = int(dut.psum_data_o.value[lower_limit+20*(1-i):upper_limit-20*i])
-                                        if (dram.fmap[layer_number + 1][f][x][y] >= 2**19) :
-                                            dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**20
+                                        dram.fmap[layer_number + 1][f][x][y] = int(dut.psum_data_o.value[lower_limit+oep.DATA_PSUM_BITWIDTH*(1-i):upper_limit-oep.DATA_PSUM_BITWIDTH*i])
+                                        if (dram.fmap[layer_number + 1][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
+                                            dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
                                     except:
                                         pass
                 await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
@@ -686,44 +686,52 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
         values_per_transmission = math.ceil(layer_parameters.different_kernels_per_calculation*used_clusters_per_calc/2)
         transmissions_per_cycle = (oep.Clusters_Y * oep.Clusters_X * oep.PEs_X)//2
         current_cycle = 0
+        read_data = 1
+        chance = 30
         while (dut.enable_dma_o.value == 1):
-
-            if(logging.DEBUG >= login_level):
-                try:
-                    txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(40) + "\n")
-                except:
-                    txt_file.close()
-                    storage_file.close()
-                    logger.error("Error writing output txt-file")
-                    raise Exception("X detected.")
-            if (current_cycle < values_per_transmission):
-                for i in range(2):
-                    if(logging.DEBUG >= login_level):
-                        storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
+            if (read_data):
+                if(logging.DEBUG >= login_level):
                     try:
-                        dram.fmap[layer_number + 1][f][x][y] = int(dut.data_dma_o.value[19+20*i:20*i])
-                        if (dram.fmap[layer_number + 1][f][x][y] >= 2**19):
-                            dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**20
+                        txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(oep.PSUM_Trans_Bitwidth) + "\n")
                     except:
-                        pass
-                    x = x + 1
-                if (current_cycle % math.ceil(oep.PEs_X/2) == math.ceil(oep.PEs_X/2) - 1):
-                    if(x >= layer_parameters.iact_size_x):
-                        x = 0
-                        f = f + 1
-                        if(f == layer_parameters.filters):
-                            f = 0
-                            y = y + 1
-                            if(y >= layer_parameters.iact_size_y):
-                                y = 0
-            else:
-                for i in range(2):
-                    if(logging.DEBUG >= login_level):
-                        storage_file.write("Empty storage line." + "\n")
-            current_cycle = current_cycle + 1
-            if (current_cycle == transmissions_per_cycle):
-                current_cycle = 0
+                        txt_file.close()
+                        storage_file.close()
+                        logger.error("Error writing output txt-file")
+                        raise Exception("X detected.")
+                if (current_cycle < values_per_transmission):
+                    for i in range(2):
+                        if(logging.DEBUG >= login_level):
+                            storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
+                        try:
+                            dram.fmap[layer_number + 1][f][x][y] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH*(i+1)-1:oep.DATA_PSUM_BITWIDTH*i])
+                            if (dram.fmap[layer_number + 1][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)):
+                                dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
+                        except:
+                            pass
+                        x = x + 1
+                    if (current_cycle % math.ceil(oep.PEs_X/2) == math.ceil(oep.PEs_X/2) - 1):
+                        if(x >= layer_parameters.iact_size_x):
+                            x = 0
+                            f = f + 1
+                            if(f == layer_parameters.filters):
+                                f = 0
+                                y = y + 1
+                                if(y >= layer_parameters.iact_size_y):
+                                    y = 0
+                else:
+                    for i in range(2):
+                        if(logging.DEBUG >= login_level):
+                            storage_file.write("Empty storage line." + "\n")
+                current_cycle = current_cycle + 1
+                if (current_cycle == transmissions_per_cycle):
+                    current_cycle = 0
 
+            if random.randint(1, 100) <= chance:
+                read_data = 1
+                cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
+            else:
+                read_data = 0
+                cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
@@ -794,12 +802,12 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
             for x_cluster in reversed(range(oep.Clusters_X)):
                 for router in reversed(range(oep.NUM_GLB_PSUM)):
                     if(layer_parameters.computing_mx[oep.Clusters_X-x_cluster-1][oep.Clusters_Y-y_cluster-1][0][oep.NUM_GLB_PSUM-router-1]== 1):
-                        lower_limit = (x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * 40 + y_cluster * oep.NUM_GLB_PSUM * 40 + router * 40)
-                        upper_limit = lower_limit + 39
+                        lower_limit = (x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * self.PSUM_Trans_Bitwidth + y_cluster * oep.NUM_GLB_PSUM * self.PSUM_Trans_Bitwidth + router * self.PSUM_Trans_Bitwidth)
+                        upper_limit = lower_limit + self.PSUM_Trans_Bitwidth - 1
                         outputvalue = dut.psum_data_o.value[lower_limit:upper_limit]
 
                         if(logging.DEBUG >= login_level):
-                            txt_file.write(bin(outputvalue)[2:].zfill(40) + "\n")
+                            txt_file.write(bin(outputvalue)[2:].zfill(self.PSUM_Trans_Bitwidth) + "\n")
                         for i in range(2):
                             try:
                                 f = output_order[layer_repetition][les.current_position][0]
@@ -811,9 +819,9 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
                             if(logging.DEBUG >= login_level):
                                 storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
                             try:
-                                dram.fmap[layer_number + 1][f][x][y] = int(dut.psum_data_o.value[lower_limit+20*(1-i):upper_limit-20*i])
-                                if (dram.fmap[layer_number + 1][f][x][y] >= 2**19) :
-                                    dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**20
+                                dram.fmap[layer_number + 1][f][x][y] = int(dut.psum_data_o.value[lower_limit+oep.DATA_PSUM_BITWIDTH*(1-i):upper_limit-oep.DATA_PSUM_BITWIDTH*i])
+                                if (dram.fmap[layer_number + 1][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
+                                    dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
                             except:
                                 pass
 
@@ -882,13 +890,13 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
     while (dut.enable_dma_o.value == 1):
 
         if(logging.DEBUG >= login_level):
-            txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(40) + "\n")
+            txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(oep.PSUM_Trans_Bitwidth) + "\n")
         if(logging.DEBUG >= login_level):
             storage_file.write("f: " + str(f) + "\n")
         try:
-            dram.fmap[layer_number + 1][f] = int(dut.data_dma_o.value[19:0])
-            if (dram.fmap[layer_number + 1][f] >= 2**19) :
-                dram.fmap[layer_number + 1][f] = dram.fmap[layer_number + 1][f] - 2**20
+            dram.fmap[layer_number + 1][f] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH-1:0])
+            if (dram.fmap[layer_number + 1][f] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
+                dram.fmap[layer_number + 1][f] = dram.fmap[layer_number + 1][f] - 2**oep.DATA_PSUM_BITWIDTH
         except:
             pass
         if (f < cluster_offset) :

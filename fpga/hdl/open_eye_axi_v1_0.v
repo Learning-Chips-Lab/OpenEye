@@ -114,7 +114,9 @@
 	.NUM_GLB_PSUM(NUM_GLB_PSUM),
 	.RAM_CELLS(RAM_CELLS),
 	.BUFFER_WIDTH(BUFFER_WIDTH),
-	.BRANCHES(BRANCHES)
+	.BRANCHES(BRANCHES),
+    .BUFFER_WIDTH(BUFFER_WIDTH),
+    .QUANT_AMOUNT(QUANT_AMOUNT)
 	
     ) open_eye_wrapper_inst (
         .clk_i          (clk),

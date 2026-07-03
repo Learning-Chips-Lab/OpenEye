@@ -95,7 +95,7 @@ def open_or_create_file(filepath):
     open_file = open(filename, 'w')
     return open_file
 
-def check_results(file_1,file_2):
+def check_results(params, file_1,file_2):
     # Open the two files in read-only mode
     with open(file_1, 'r') as f1, open(file_2, 'r') as f2:
         # Read the contents of the two files into two lists
@@ -105,14 +105,14 @@ def check_results(file_1,file_2):
     # Compare the two lists line by line and print any differences
     for i, (line1, line2) in enumerate(zip(lines1, lines2)) :
         if line1 != line2:
-            if (line1.strip() != "0000000000000000000000000000000000000000") :
+            if (int(line1.strip()) != 0) :
                 logger.error(f'Difference found at line {i + 1}:')
-                line1_first = line1.strip()[:20]
-                line1_second = line1.strip()[20:]
-                line2_first = line2.strip()[:20]
-                line2_second = line2.strip()[20:]
-                logger.error(f'ReferenceData: {line1.strip()}' + "   " + str(twos_complement(line1_first, 20)) + " " + str(twos_complement(line1_second, 20)))
-                logger.error(f'Output Stream: {line2.strip()}' + "   " + str(twos_complement(line2_first, 20)) + " " + str(twos_complement(line2_second, 20)))
+                line1_first = line1.strip()[:params.DATA_PSUM_BITWIDTH]
+                line1_second = line1.strip()[params.DATA_PSUM_BITWIDTH:]
+                line2_first = line2.strip()[:params.DATA_PSUM_BITWIDTH]
+                line2_second = line2.strip()[params.DATA_PSUM_BITWIDTH:]
+                logger.error(f'ReferenceData: {line1.strip()}' + "   " + str(twos_complement(line1_first, params.DATA_PSUM_BITWIDTH)) + " " + str(twos_complement(line1_second, params.DATA_PSUM_BITWIDTH)))
+                logger.error(f'Output Stream: {line2.strip()}' + "   " + str(twos_complement(line2_first, params.DATA_PSUM_BITWIDTH)) + " " + str(twos_complement(line2_second, params.DATA_PSUM_BITWIDTH)))
 
                 return False
         

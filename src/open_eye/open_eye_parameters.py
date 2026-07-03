@@ -75,7 +75,7 @@ class OpenEyeParameters(object):
         WGHT_WOH_Bitwidth (int): Bitwidth for weights with overhead (12 bits).
         IACT_Addr_Bitwidth (int): Bitwidth for input activation addresses (4 bits).
         WGHT_Addr_Bitwidth (int): Bitwidth for weight addresses (7 bits).
-        PSUM_Bitwidth (int): Bitwidth for partial sum values (20 bits).
+        PSUM_BITWIDTH (int): Bitwidth for partial sum values (20 bits).
         IACT_Trans_Bitwidth (int): Bitwidth for activation transmissions (24 bits).
         WGHT_Trans_Bitwidth (int): Bitwidth for weight transmissions (24 bits).
         PSUM_Trans_Bitwidth (int): Bitwidth for psum transmissions (40 bits for 2 MACs).
@@ -194,6 +194,11 @@ class OpenEyeParameters(object):
             self.QUANT_AMOUNT = int(os.getenv("QUANT_AMOUNT"))
         except:
             self.QUANT_AMOUNT = 32  
+        # Partial sum bitwidth (wider to prevent overflow during accumulation)
+        try:
+            self.DATA_PSUM_BITWIDTH = int(os.getenv("DATA_PSUM_BITWIDTH"))
+        except:
+            self.DATA_PSUM_BITWIDTH = 20        # Partial sum: 20 bits (signed accumulator)
 
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode
@@ -215,13 +220,10 @@ class OpenEyeParameters(object):
         self.IACT_Addr_Bitwidth = 4    # Activation address: 4 bits (16 locations)
         self.WGHT_Addr_Bitwidth = 7    # Weight address: 7 bits (128 locations)
 
-        # Partial sum bitwidth (wider to prevent overflow during accumulation)
-        self.PSUM_Bitwidth = 20        # Partial sum: 20 bits (signed accumulator)
-
         # Transmission bitwidths for data movement across routers
         self.IACT_Trans_Bitwidth = 24  # Activation transmission: 24 bits
         self.WGHT_Trans_Bitwidth = 24  # Weight transmission: 24 bits
-        self.PSUM_Trans_Bitwidth = 20 * self.PARALLEL_MACS  # PSUM transmission: 40 bits (2 MACs)
+        self.PSUM_Trans_Bitwidth = self.DATA_PSUM_BITWIDTH * self.PARALLEL_MACS  # PSUM transmission: 40 bits (2 MACs)
 
         # === DERIVED DIMENSIONS ===
         # Calculate total cluster and PE counts from base parameters
