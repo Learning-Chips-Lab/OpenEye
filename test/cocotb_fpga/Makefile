@@ -70,28 +70,28 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 
 export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 
-#export LAYER=FC
+export LAYER=FC
 #export LAYER=MNIST
-export LAYER=Convolution
+#export LAYER=Convolution
 #export LAYER=MobileNetV1
 #export LAYER=Pooling
 export NUM_FILTERS=16
-export KERNEL_SIZE_X=1
-export KERNEL_SIZE_Y=1
-export INPUT_SIZE_X=64
-export INPUT_SIZE_Y=6
+export KERNEL_SIZE_X=3
+export KERNEL_SIZE_Y=3
+export INPUT_SIZE_X=7
+export INPUT_SIZE_Y=7
 export STRIDE=1
-export INPUT_CHANNELS=12
+export INPUT_CHANNELS=4
 export OUTPUT_SIZE=32
 #Amout of parallel MACs
 export PARALLEL_MACS=2
-export USE_RANDOM_VALUES=0
+export USE_RANDOM_VALUES=1
 export USE_SPARSE_IACTS=0
 export USE_SPARSE_WEIGHTS=0
 
 #Actual Datawidth of Data
 export DATA_IACT_BITWIDTH=8
-export DATA_PSUM_BITWIDTH=20
+export DATA_PSUM_BITWIDTH=32
 export DATA_WGHT_BITWIDTH=8
 export DATA_IACT_OVERHEAD=4
 export DATA_WGHT_IGNORE_ZEROS=4
@@ -99,7 +99,7 @@ export DATA_WGHT_IGNORE_ZEROS=4
 #Datawidth for Transportation of Data
 export TRANS_BITWIDTH_IACT=24
 export TRANS_BITWIDTH_WGHT=24
-export TRANS_BITWIDTH_PSUM=20
+export TRANS_BITWIDTH_PSUM=32
 
 #Set Number of Router Clusters per Instance
 export NUM_GLB_IACT=3
@@ -108,7 +108,7 @@ export NUM_GLB_PSUM=4
 
 #Set number of Cluster rows need at least to be 2 COLUMNS
 export CLUSTER_COLUMNS=2
-export CLUSTER_ROWS=4
+export CLUSTER_ROWS=2
 
 #Amoutn of Iact RAM STORAGES
 export RAM_CELLS=32

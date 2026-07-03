@@ -155,6 +155,8 @@ class ConvMapper(LayerMapper):
         "fc_size_reg": 0,
         "iact_size_x":layer_params.iact_size_x,
         "iact_size_y": layer_params.iact_size_y,
+        "psum_size_x":math.ceil(layer_params.iact_size_x/layer_params.strideX),
+        "psum_size_y": math.ceil(layer_params.iact_size_y/layer_params.strideY),
         "iact_needed_cycles": layer_params.iact_stream_cycles,
         "kernels_per_calc": layer_params.different_kernels_per_calculation,
         "y_lines_per_calc": layer_params.y_lines_per_calculation,
@@ -187,6 +189,7 @@ class ConvMapper(LayerMapper):
         "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
         "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
         "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
+        "pooling_mode": 0,
         "test_reg": 0
         })
 
@@ -285,7 +288,7 @@ class ConvMapper(LayerMapper):
         """
         dma_line = 0
         dma_storage = []
-        for f in range(math.ceil(32/8)):
+        for f in range(math.ceil(1024/8)):
             dma_line = 0
             dma_line = dma_line + (layer_params.offset[8*f] << 0)
             dma_line = dma_line + (layer_params.offset[8*f+1] << 8)
@@ -516,7 +519,7 @@ class ConvMapper(LayerMapper):
                 for cl_x in range(params.Clusters_X):
                     if(params.SERIAL):
                         
-                        line = line + (int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * dram[0][0][part_data_num]))) << (params.PSUM_Bitwidth * cl_x))
+                        line = line + (int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * dram[0][0][part_data_num]))) << (params.DATA_PSUM_BITWIDTH * cl_x))
                         line = 0
                         storage.append(line)
                         line = 0

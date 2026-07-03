@@ -178,6 +178,8 @@ class LayerParameters(object):
         """
         # === Layer Identification ===
         self.layer_name = ""
+        # === Pooling Identification ===
+        self.pooling_mode = 0
 
         # === PE Allocation Parameters ===
         self.used_PEs_X = 1                    # PEs used in X dimension
@@ -303,7 +305,7 @@ class LayerParameters(object):
             logger.debug("Dense Layer")
             self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
 
-        elif "max_pooling2d" in layer.name:
+        elif "pooling2d" in layer.name:
             logger.debug("Pooling Layer")
             self.write_pooling_layer(layer_parameters, layer, params, layer_number, max_layers)
 
@@ -778,7 +780,7 @@ class LayerParameters(object):
                 self.Used_refreshes = math.ceil(self.all_transmissions_of_pe * math.ceil(self.output_shape[1] * self.output_shape[2]/(params.PEs_X*params.Clusters_X)))
             case _:
                 # Multi-cluster mode: full distribution
-                self.Used_refreshes = math.ceil(self.output_shape[2] * self.output_shape[1]/((params.Clusters//self.different_kernels_per_calculation)*params.PEs_X))
+                self.Used_refreshes = math.ceil(self.output_shape[2] * math.ceil(self.output_shape[1]/((params.Clusters//self.different_kernels_per_calculation)*params.PEs_X)))
                 self.Used_refreshes = math.ceil(self.used_Y_cluster * self.iact_transmissions_pe * self.Used_refreshes * math.ceil(math.ceil(self.filters/self.different_kernels_per_calculation)/self.used_psum_per_PE))
 
     def calculate_single_cluster_computation(self, params):
@@ -1119,15 +1121,19 @@ class LayerParameters(object):
             self.limit_increase <= math.floor((self.iact_size_x*2)/(2*4))
             self.initial_upper_limit = self.limit_increase
         else:
-            print(self.buffer_cycles_for_x_iact)
             words_per_iact_glb = 8
             if (self.buffer_cycles_for_x_iact == 1):
-                self.limit_increase = math.floor((params.Clusters*params.PEs_X*self.used_channels*self.strideX)/words_per_iact_glb)
-                self.limit_increase = self.limit_increase//self.different_kernels_per_calculation
-                if (self.limit_increase == params.RAM_CELLS):
-                    self.initial_upper_limit = 0
+                if (self.iact_x_line_repetitions == 1):
+                    self.limit_increase = (self.iact_size_x*self.used_channels*self.strideX)//words_per_iact_glb
+                    if (self.limit_increase == params.RAM_CELLS):
+                        self.initial_upper_limit = 0
+                    else:
+                        self.initial_upper_limit = self.limit_increase + 1
                 else:
-                    self.initial_upper_limit = self.limit_increase + 1
+                    self.limit_increase = (self.iact_size_x*self.used_channels*self.strideX)//words_per_iact_glb
+                    self.limit_increase = math.ceil(self.limit_increase/self.iact_x_line_repetitions)
+                    self.initial_upper_limit = self.limit_increase + 2
+
             else :
                 self.limit_increase = math.ceil(((params.Clusters_X*params.Clusters_Y*params.PEs_X*self.strideX)//self.buffer_cycles_for_x_iact)/(words_per_iact_glb//self.used_channels))
                 self.initial_upper_limit = self.limit_increase + 1
@@ -1140,7 +1146,7 @@ class LayerParameters(object):
             psum_cycles = 1
         self.fsm_psum_limit = (((self.iact_size_x + self.add_up) * psum_cycles * self.different_kernels_per_calculation * self.needed_wght_cycles * self.used_psum_per_PE * self.iact_size_y)//8) + 12
         if (self.channels == 1):
-            self.iact_converter_max_cycles = self.buffer_cycles_for_x_iact*self.iact_x_line_repetitions*(self.iact_size_y +  self.kernel_size[1])/2
+            self.iact_converter_max_cycles = math.ceil(self.buffer_cycles_for_x_iact*self.iact_x_line_repetitions*(self.iact_size_y +  self.kernel_size[1])/2)
 
         else:
             """if (self.iact_x_line_repetitions != 1):
@@ -1440,12 +1446,13 @@ class LayerParameters(object):
         if (params.Clusters_Y == 1):
             self.psum_delay = 5
         self.limit_increase = math.floor((params.NUM_GLB_WGHT*self.used_iact_per_PE)/8)
-        self.limit_increase = math.floor((params.NUM_GLB_WGHT*self.used_iact_per_PE)%8)
-        self.initial_upper_limit = 0
+        #self.limit_increase = math.floor((params.NUM_GLB_WGHT*self.used_iact_per_PE)%8)
+        self.initial_upper_limit = 12
         self.iteration_for_kernels = math.ceil(self.diff_iact_layer_next_layer / self.different_kernels_per_calculation)
         self.buffer_cycles_for_x_iact = params.Clusters_Y
         self.iact_converter_max_cycles = 1
-        self.iact_buffer_words_per_write = 6
+        print(self.used_iact_per_PE)
+        self.iact_buffer_words_per_write = math.ceil(self.used_iact_per_PE/2) * self.needed_Iact_writes
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))
@@ -1479,6 +1486,10 @@ class LayerParameters(object):
             Always sends output values to DRAM (send_values_out = 1).
         """
         self.layer_name = "Pooling"
+        if ("max" in layer.name):
+            self.pooling_mode = 0
+        else:
+            self.pooling_mode = 1
         self.input_shape = layer.input.shape
         self.output_shape = layer.output.shape
         self.skipIact = 1
@@ -1496,7 +1507,7 @@ class LayerParameters(object):
                                         for _ in range(params.Clusters_Y)]
                                         for _ in range(params.Clusters_X)]
         self.diff_iact_layer = self.input_shape[3]
-        if (layer_parameters[max_layers - layer_number - 2].layer_name == "Dense"):
+        if ((layer_parameters[max_layers - layer_number - 2].layer_name == "Dense") & (self.pooling_mode == 0)):
             self.used_channels = 1
         else:
             self.used_channels = 4

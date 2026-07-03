@@ -1,5 +1,5 @@
 # This file is part of the OpenEye project.
-# © Fachhochschule Dortmund – University of Applied Sciences and Arts (until 2025), Universität Duisburg-Essen (since 2025).
+# © Fachhochschule Dortmund – University of Applied Sciences and Arts (until params.DATA_PSUM_BITWIDTH25), Universität Duisburg-Essen (since params.DATA_PSUM_BITWIDTH25).
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
@@ -196,12 +196,12 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                             for router in range(params.Psum_Routers):
                                 for psum_pe in range(int((layer_params.filters*(layer_repetition%layer_params.needed_wght_transmissions)/layer_params.needed_wght_transmissions)/2),\
                                     int((layer_params.filters*(1+(layer_repetition%layer_params.needed_wght_transmissions))/layer_params.needed_wght_transmissions)/2)):
-                                    for counter in range(params.DMA_Bit_AXI//params.PSUM_Bitwidth):
+                                    for counter in range(params.DMA_Bit_AXI//params.DATA_PSUM_BITWIDTH):
                                         x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % layer_params.output_shape[2]))
                                         y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / layer_params.output_shape[2]))
                                         if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[2])):
                                             if(calculated_results[2 * psum_pe + counter][x_cor][y_cor] >= 0):
-                                                dma_line = dma_line + (calculated_results[2 * psum_pe + counter][x_cor][y_cor] << (params.PSUM_Bitwidth * counter))
+                                                dma_line = dma_line + (calculated_results[2 * psum_pe + counter][x_cor][y_cor] << (params.DATA_PSUM_BITWIDTH * counter))
                                             else:
                                                 dma_line = dma_line
                                     file_dma_ref[layer_repetition].write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
@@ -250,10 +250,10 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
         if(params.SERIAL):
             for refresh in range(math.ceil(len(calculated_results)/2)):
                 for x in range(2) :
-                    partial_result_a = gtu.to_twos_complement_string(0,20)
-                    partial_result_b = gtu.to_twos_complement_string(0,20)
+                    partial_result_a = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
+                    partial_result_b = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
                     try:
-                        partial_result_b = gtu.to_twos_complement_string(calculated_results[refresh + x * layer_params.used_psum_per_PE],20)
+                        partial_result_b = gtu.to_twos_complement_string(calculated_results[refresh + x * layer_params.used_psum_per_PE],params.DATA_PSUM_BITWIDTH)
                     except:
                         partial_result_b = partial_result_b
                     file_dma_ref.write(partial_result_a + partial_result_b + "\n")
@@ -265,8 +265,8 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                 for psum_pe in range(math.ceil(layer_params.used_psum_per_PE/2)):
                     for cl_y in range(params.Clusters_Y):
                         for cl_x in range(params.Clusters_X):
-                            partial_result_a = gtu.to_twos_complement_string(0,20)
-                            partial_result_b = gtu.to_twos_complement_string(0,20)
+                            partial_result_a = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
+                            partial_result_b = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
                             for counter in range(params.PARALLEL_MACS):
                                 layer_repetition_cycle = math.floor(layer_repetition/layer_params.iact_transmissions_pe)
                                 output = \
@@ -277,14 +277,14 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                                     layer_repetition_cycle * layer_params.used_psum_per_PE * params.Clusters_X * params.Clusters_Y
                                 if (counter == 0):
                                     try:
-                                        partial_result_b = gtu.to_twos_complement_string(calculated_results[output],20)
+                                        partial_result_b = gtu.to_twos_complement_string(calculated_results[output],params.DATA_PSUM_BITWIDTH)
                                     except:
-                                        partial_result_b = gtu.to_twos_complement_string(0,20)
+                                        partial_result_b = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
                                 else:
                                     try:
-                                        partial_result_a = gtu.to_twos_complement_string(calculated_results[output],20)
+                                        partial_result_a = gtu.to_twos_complement_string(calculated_results[output],params.DATA_PSUM_BITWIDTH)
                                     except:
-                                        partial_result_a = gtu.to_twos_complement_string(0,20)
+                                        partial_result_a = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
 
                             file_dma_ref[layer_repetition].write(partial_result_a)
                             file_dma_ref[layer_repetition].write(partial_result_b)
@@ -482,16 +482,28 @@ def collect_results(layer_number, layer_params, dram, serial):
 
     elif "Pooling" in str(layer_params.layer_name):
         calculated_results = [[[0 for i in range(layer_params.output_shape[2])] for j in range(layer_params.output_shape[1])]for k in range(layer_params.output_shape[3])]
-        for f in range(layer_params.output_shape[3]):
-            for i in range(layer_params.output_shape[2]):
-                for j in range(layer_params.output_shape[1]):
-                    block = [
-                        dram.fmap[layer_number][f][2*j][2*i],
-                        dram.fmap[layer_number][f][2*j][2*i+1],
-                        dram.fmap[layer_number][f][2*j+1][2*i],
-                        dram.fmap[layer_number][f][2*j+1][2*i+1]
-                    ]
-                    calculated_results[f][j][i] = int(max(block))
+        if (layer_params.pooling_mode == 0): #Is Max Pooling
+            for f in range(layer_params.output_shape[3]):
+                for i in range(layer_params.output_shape[2]):
+                    for j in range(layer_params.output_shape[1]):
+                        block = [
+                            dram.fmap[layer_number][f][2*j][2*i],
+                            dram.fmap[layer_number][f][2*j][2*i+1],
+                            dram.fmap[layer_number][f][2*j+1][2*i],
+                            dram.fmap[layer_number][f][2*j+1][2*i+1]
+                        ]
+                        calculated_results[f][j][i] = int(max(block))
+        else:#Is Average Pooling
+            for f in range(layer_params.output_shape[3]):
+                for i in range(layer_params.output_shape[2]):
+                    for j in range(layer_params.output_shape[1]):
+                        temp = 0
+                        for x in range(layer_params.input_shape[1]):
+                            for y in range(layer_params.input_shape[2]):
+                                temp = temp + dram.fmap[layer_number][x][y]
+                        temp = temp//(layer_params.inut_shape[1]*layer_params.input_shape[2])
+                        calculated_results[f][j][i] = int(temp)
+
     return calculated_results
 
 def calculate_dense_results_mp(x, layer_params, layer_number, dram, calculated_results,return_dict):
@@ -529,15 +541,15 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                             x_cor = les.x_start
                             filter = filter + 1
                     for router in range(0, params.Psum_Routers, 2) :
-                        partial_result_a, partial_result_b = gtu.to_twos_complement_string(0,20), gtu.to_twos_complement_string(0,20)
+                        partial_result_a, partial_result_b = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH), gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
                         for counter in range(params.PARALLEL_MACS) :
                                 array.append((x_cor,y_cor,filter))
                                 if (kernel_counter < layer_params.different_kernels_per_calculation) :
                                     if((x_cor < layer_params.psum_size_x) & (y_cor < layer_params.psum_size_y)) :
                                         if (counter == 0):
-                                            partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
+                                            partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],params.DATA_PSUM_BITWIDTH)
                                         else:
-                                            partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
+                                            partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],params.DATA_PSUM_BITWIDTH)
                                         x_cor = x_cor + 1
                         file_dma_ref.write(partial_result_a + partial_result_b + "\n")
             filter = filter + 1
@@ -571,7 +583,7 @@ def calculate_conv_parallel(params, layer_params, calculated_results, cluster_or
                 for cl_x in range(params.Clusters_X):
                     for router in range(params.Psum_Routers):
                         if(layer_params.computing_mx[cl_x][cl_y][0][router] == 1):
-                            partial_result_a, partial_result_b = gtu.to_twos_complement_string(0,20), gtu.to_twos_complement_string(0,20)
+                            partial_result_a, partial_result_b = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH), gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
                             for counter in range(params.PARALLEL_MACS):
                                 match layer_params.single_cluster_computation:
                                     case 1:
@@ -611,9 +623,9 @@ def calculate_conv_parallel(params, layer_params, calculated_results, cluster_or
                                 try:
                                     if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[2])):
                                         if (counter == 0):
-                                            partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
+                                            partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],params.DATA_PSUM_BITWIDTH)
                                         else:
-                                            partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],20)
+                                            partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],params.DATA_PSUM_BITWIDTH)
                                 except:
                                     partial_result_b = partial_result_b
                                     partial_result_a = partial_result_a
@@ -636,14 +648,14 @@ def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_
     filter_number = 0
     file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
     max_refresh = math.floor(((layer_repetition+1)/layer_params.needed_total_transmissions) * layer_params.Used_refreshes) - math.floor((layer_repetition/layer_params.needed_total_transmissions) * layer_params.Used_refreshes)
-    max_refresh = math.ceil(max_refresh/math.floor(params.PSUM_Trans_Bitwidth/params.PSUM_Bitwidth))
+    max_refresh = math.ceil(max_refresh/math.floor(params.PSUM_Trans_Bitwidth/params.DATA_PSUM_BITWIDTH))
     for refresh in range(0,max_refresh):
         for cl_y in range(params.Clusters_Y):
             for cl_x in range(params.Clusters_X):
                 for router in range(params.Psum_Routers):
                     if(layer_params.computing_mx[cl_x][cl_y][0][router] == 1):
-                        partial_result_a, partial_result_b = gtu.to_twos_complement_string(0,20), gtu.to_twos_complement_string(0,20)
-                        for counter in range(math.floor(params.PSUM_Trans_Bitwidth/params.PSUM_Bitwidth)):
+                        partial_result_a, partial_result_b = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH), gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
+                        for counter in range(math.floor(params.PSUM_Trans_Bitwidth/params.DATA_PSUM_BITWIDTH)):
                             match layer_params.single_cluster_computation:
                                 case 1:
                                     x_cor= int(((router + (2*refresh+counter) * params.PEs_X ) % (layer_params.output_shape[1] + layer_params.add_up)))
@@ -667,9 +679,9 @@ def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_
                             try:
                                 if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[1])):
                                     if (counter == 0):
-                                        partial_result_b = gtu.to_twos_complement_string(calculated_results[filter_number][x_cor][y_cor],params.PSUM_Bitwidth)
+                                        partial_result_b = gtu.to_twos_complement_string(calculated_results[filter_number][x_cor][y_cor],params.DATA_PSUM_BITWIDTH)
                                     else:
-                                        partial_result_a = gtu.to_twos_complement_string(calculated_results[filter_number][x_cor][y_cor],params.PSUM_Bitwidth)
+                                        partial_result_a = gtu.to_twos_complement_string(calculated_results[filter_number][x_cor][y_cor],params.DATA_PSUM_BITWIDTH)
                             except:
                                 partial_result_b = partial_result_b
                                 partial_result_a = partial_result_a

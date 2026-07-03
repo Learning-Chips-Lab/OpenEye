@@ -145,6 +145,8 @@ class DenseMapper(LayerMapper):
             "fc_size_reg": layer_params.iact_size_x,
             "iact_size_x": 1,
             "iact_size_y": layer_params.iact_size_y,
+            "psum_size_x":math.ceil(layer_params.iact_size_x/layer_params.strideX),
+            "psum_size_y": math.ceil(layer_params.iact_size_y/layer_params.strideY),
             "iact_needed_cycles": layer_params.iact_stream_cycles,
             "kernels_per_calc": layer_params.different_kernels_per_calculation,
             "y_lines_per_calc": layer_params.y_lines_per_calculation,
@@ -177,6 +179,7 @@ class DenseMapper(LayerMapper):
             "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
             "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
             "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
+            "pooling_mode": 0,
             "test_reg": 0
             })
             
@@ -264,42 +267,6 @@ class DenseMapper(LayerMapper):
 
             dma_storage.append(dma_line)
         return dma_storage
-    
-    def write_offset(self, params, layer_params, layer_repetition):
-        """Generate offset parameters for the dense layer.
-
-        Packs 32 offset values into DMA transmission format. Each DMA line contains
-        8 offset values packed at 8-bit intervals. Offset values are used for
-        bias correction or activation adjustments.
-
-        Args:
-            params: Hardware configuration parameters
-            layer_params: Layer-specific parameters containing offset values
-            layer_repetition: Current repetition index for the layer
-
-        Returns:
-            list: 4 DMA words containing packed offset parameters, where each word
-                  contains 8 consecutive offset values at 8-bit intervals (0, 8, 16,
-                  24, 32, 40, 48, 56).
-        """
-        dma_line = 0
-        dma_storage = []
-
-        # Pack 32 offset values into 4 DMA words (8 values per word)
-        # Each offset value occupies 8 bits
-        for f in range(math.ceil(32/8)):
-            dma_line = 0
-            # Pack 8 consecutive offset values at 8-bit intervals
-            dma_line = dma_line + (layer_params.offset[8*f] << 0)       # bits 0-7: offset 0
-            dma_line = dma_line + (layer_params.offset[8*f+1] << 8)     # bits 8-15: offset 1
-            dma_line = dma_line + (layer_params.offset[8*f+2] << 16)    # bits 16-23: offset 2
-            dma_line = dma_line + (layer_params.offset[8*f+3] << 24)    # bits 24-31: offset 3
-            dma_line = dma_line + (layer_params.offset[8*f+4] << 32)    # bits 32-39: offset 4
-            dma_line = dma_line + (layer_params.offset[8*f+5] << 40)    # bits 40-47: offset 5
-            dma_line = dma_line + (layer_params.offset[8*f+6] << 48)    # bits 48-55: offset 6
-            dma_line = dma_line + (layer_params.offset[8*f+7] << 56)    # bits 56-63: offset 7
-            dma_storage.append(dma_line)
-        return dma_storage
         
     def write_offset(self, params, layer_params, layer_repetition):
         """Generate offset parameters for the layer.
@@ -318,7 +285,7 @@ class DenseMapper(LayerMapper):
         """
         dma_line = 0
         dma_storage = []
-        for f in range(math.ceil(32/8)):
+        for f in range(math.ceil(1024/8)):
             dma_line = 0
             dma_line = dma_line + (layer_params.offset[8*f] << 0)
             dma_line = dma_line + (layer_params.offset[8*f+1] << 8)
@@ -551,7 +518,7 @@ class DenseMapper(LayerMapper):
                         # Calculate scaled bias value (currently initialized to 0)
                         # Scaling factor: 2^(IACT_Bitwidth + WGHT_Bitwidth - 1)
                         scaled_bias = int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * 0)))
-                        line = line + (scaled_bias << (params.PSUM_Bitwidth * cl_x))
+                        line = line + (scaled_bias << (params.DATA_PSUM_BITWIDTH * cl_x))
                         storage.append(line)
                         line = 0
                     else:

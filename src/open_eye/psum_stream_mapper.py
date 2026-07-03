@@ -111,12 +111,12 @@ class PsumStreamMapper(object):
                           for distribution to PE scratchpad memories.
 
         Note:
-            - Serial mode uses 20-bit two's complement for each bias value
-            - Values are packed into 40-bit words (two 20-bit values per word)
+            - Serial mode uses two's complement for each bias value
+            - Values are packed into 40-bit words (two values per word)
             - Parallel mode delegates to write_psum_data_glb() for per-cluster generation
 
         """
-        if (self.params.SERIAL) :
+        if (self.params.SERIAL):
             # === SERIAL MODE: LINEAR STREAM GENERATION ===
             # Calculate how many times to replicate each bias value
             block_length = ((self.params.NUM_GLB_PSUM//2) * self.params.Clusters)//self.layer_params.different_kernels_per_calculation
@@ -126,12 +126,12 @@ class PsumStreamMapper(object):
             for k in range (self.layer_params.iact_x_line_repetitions) :
                 for j in range(self.layer_params.iact_size_y) :
                     for i in range(self.layer_params.filters) :
-                        # Convert bias to 20-bit two's complement
-                        bias_20bit = gtu.to_twos_complement(self.dram_bias[i], 20)
-                        # Pack two 20-bit values into a 40-bit word and replicate
-                        packed_value = bias_20bit + (bias_20bit * 2**20)
+                        # Convert bias to two's complement
+                        bias_bit = gtu.to_twos_complement(self.dram_bias[i], self.params.DATA_PSUM_BITWIDTH)
+                        # Pack two values into a 40-bit word and replicate
+                        packed_value = bias_bit + (bias_bit * 2**self.params.DATA_PSUM_BITWIDTH)
                         psum_stream.extend([packed_value] * block_length)
-        else :
+        else:
             # === PARALLEL MODE: CLUSTER-BASED STREAM GENERATION ===
             # Create 3D structure: [cluster_x][cluster_y][router]
             psum_stream = [[[[] for c in range(self.params.Psum_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
@@ -207,7 +207,7 @@ class PsumStreamMapper(object):
         """
         params = self.params
         # Initialize output stream with same hierarchical structure
-        stream = [[[[] for c in range(self.params.Psum_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
+        stream = [[[[] for c in range(params.Psum_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
 
         # === FLATTEN CYCLE DATA ===
         # Extend each router's stream with data from all cycles
@@ -221,7 +221,7 @@ class PsumStreamMapper(object):
                         stream[cl_x][cl_y][router].extend(spad_storage[cl_x][cl_y][router][cycle])
 
         # === MODE-SPECIFIC FORMATTING ===
-        if(self.params.SERIAL):
+        if(params.SERIAL):
             # Serial mode: combine X-clusters into packed words
             temp_stream = stream
             stream = []

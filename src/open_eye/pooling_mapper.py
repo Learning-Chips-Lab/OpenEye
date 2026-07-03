@@ -125,17 +125,21 @@ class PoolingMapper(LayerMapper):
         "skipIact_reg": layer_params.skipIact,
         "skipWght_reg": layer_params.skipWght,
         "skipPsum_reg": layer_params.skipPsum,
+        "psum_q": layer_params.psum_delay,
         "psum_delay_reg": layer_params.psum_delay,
         "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
-        "kernel_size": 2,#layer_params.kernel_size[1]
+        "kernel_size_x": layer_params.strideX,
+        "kernel_size_y": layer_params.strideY,
         "x_lines_reg": layer_params.iact_x_lines,
-        "needed_wght_cycles_reg": math.ceil(layer_params.filters/(layer_params.used_psum_per_PE * layer_params.different_kernels_per_calculation)),
-        "needed_cycles_reg": layer_params.needed_standing_cycles,
-        "iact_converter_buffer_addr_max_cycles": layer_params.needed_standing_cycles,
+        "needed_wght_cycles": math.ceil(layer_params.filters/(layer_params.used_psum_per_PE * layer_params.different_kernels_per_calculation)),
+        "needed_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
+        "iact_converter_buffer_addr_max_cycles": layer_params.needed_cycles,
         "iact_channels_per_pe": layer_params.used_channels,
         "fc_size_reg":0,
         "iact_size_x":layer_params.iact_size_x,
         "iact_size_y": layer_params.iact_size_y,
+        "psum_size_x":math.ceil(layer_params.iact_size_x/layer_params.strideX),
+        "psum_size_y": math.ceil(layer_params.iact_size_y/layer_params.strideY),
         "iact_needed_cycles": layer_params.iact_stream_cycles,
         "kernels_per_calc": layer_params.different_kernels_per_calculation,
         "y_lines_per_calc": layer_params.y_lines_per_calculation,
@@ -149,16 +153,27 @@ class PoolingMapper(LayerMapper):
         "needed_psum_storage_cycles_reg": 0,#layer_params.psum_storage_cycles
         "iact_channel_max_cycles": layer_params.diff_iact_layer,
         "input_activations": layer_params.used_iact_per_PE,
-        "filters_reg": layer_params.used_psum_per_PE,
+        "filters": layer_params.used_psum_per_PE,
         "needed_x_cls_reg": layer_params.used_X_cluster,
         "needed_y_cls_reg": layer_params.used_Y_cluster,
         "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
         "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
         "iact_addr_len_reg": layer_params.used_iact_addr_per_PE,
         "send_data_out": layer_params.send_values_out,
-        "needed_iact_buffer_words_reg": layer_params.needed_iact_buffer_words,
+        "needed_iact_buffer_words": layer_params.needed_iact_buffer_words,
         "add_up_reg":layer_params.add_up,
-        "iact_x_line_repetitions_reg":layer_params.iact_x_line_repetitions
+        "iact_x_line_repetitions_reg":layer_params.iact_x_line_repetitions,
+        "buffer_cycles_for_x_iact" : layer_params.buffer_cycles_for_x_iact,
+        "start_param_array" : layer_params.start_param_array,
+        "limit_increase" : layer_params.limit_increase,
+        "initial_upper_limit": layer_params.initial_upper_limit,
+        "iteration_for_kernels": layer_params.iteration_for_kernels,
+        "fsm_psum_limit": layer_params.fsm_psum_limit,
+        "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
+        "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
+        "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
+        "pooling_mode": layer_params.pooling_mode,
+        "test_reg": 0
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===
@@ -488,7 +503,7 @@ class PoolingMapper(LayerMapper):
                     if(self.params.SERIAL):
                         # Calculate zero value with correct bitwidth
                         # (2**(IACT_Bitwidth + WGHT_Bitwidth - 1)) ensures proper accumulator size
-                        line = line + (int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * 0))) << (params.PSUM_Bitwidth * cl_x))
+                        line = line + (int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * 0))) << (params.DATA_PSUM_BITWIDTH * cl_x))
                         storage.append(line)
                         line = 0
                     else:

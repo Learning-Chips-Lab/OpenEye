@@ -250,6 +250,7 @@ class DRAMContents(object):
                 # Load Conv2D biases: one bias per output filter
                 for x in range(layer_parameters[l].filters):
                     self.bias[l][x] = int(math.floor(float(model[l].weights[1][x])))
+                    self.bias[l][x] = 1
                     # Alternative: self.bias[l][x] = x * (-1)  # Uncomment for test pattern
             elif "Dense" in str(layer_parameters[l].layer_name):
                 # Load Dense layer biases: one bias per output feature
