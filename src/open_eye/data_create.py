@@ -58,6 +58,12 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
 
         case "Depthwise_Convolution":
             model.add(tf.keras.layers.DepthwiseConv2D((kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
+        case "GEMM":
+            # Pure matrix multiplication C = A x B (+ bias), realized as a single
+            # Dense layer. Combined with DATAFLOW="output_stationary" (or the
+            # GemmMapper) it runs on the output-stationary GEMM datapath
+            # (gemm_mode=1) instead of the row-stationary conv routing.
+            model.add(tf.keras.layers.Dense(input_shape=(inputsize_x,), units=outputsize, use_bias=True))
         case "FC":
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
             model.add(tf.keras.layers.Flatten())

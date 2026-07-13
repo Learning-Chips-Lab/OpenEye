@@ -6,18 +6,20 @@ registers:
   - {name: skipIact_reg, width: 1}
   - {name: skipWght_reg, width: 1}
   - {name: skipPsum_reg, width: 1}
-  - {name: psum_delay_reg, width: 4}
+  - {name: psum_q, width: 4}
   - {name: kernel_per_pe_cluster_reg, width: 4}
   - {name: kernel_size_x, width: 6}
   - {name: kernel_size_y, width: 4}
   - {name: x_lines_reg, width: 8}
-  - {name: needed_wght_cycles_reg, width: 8}
-  - {name: needed_cycles_reg, width: 18}
+  - {name: needed_wght_cycles, width: 8}
+  - {name: needed_cycles, width: 18}
   - {name: iact_converter_buffer_addr_max_cycles, width: 8}
   - {name: iact_channels_per_pe, width: 8}
   - {name: fc_size_reg, width: 12}
   - {name: iact_size_x, width: 12}
   - {name: iact_size_y, width: 8}
+  - {name: psum_size_x, width: 12}
+  - {name: psum_size_y, width: 8}
   - {name: iact_needed_cycles, width: 11}
   - {name: kernels_per_calc, width: 5}
   - {name: y_lines_per_calc, width: 4}
@@ -38,13 +40,24 @@ registers:
   - {name: wght_addr_len_reg, width: 5}
   - {name: iact_addr_len_reg, width: 4}
   - {name: send_data_out, width: 1}
-  - {name: needed_iact_buffer_words, width: 13}
+  - {name: needed_iact_buffer_words, width: int(BUFFER_WIDTH)}
   - {name: add_up_reg, width: 3}
   - {name: iact_x_line_repetitions_reg, width: 8}
   - {name: buffer_cycles_for_x_iact, width: 8}
   - {name: start_param_array, width: int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)}
   - {name: limit_increase, width: 8}
   - {name: initial_upper_limit, width: 8}
+  - {name: iteration_for_kernels, width: 4}
+  - {name: fsm_psum_limit, width: 17}
+  - {name: cluster_per_conv_cycle, width: ceil(log2((int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS))+1))}
+  - {name: iact_converter_max_cycles, width: 8}
+  - {name: iact_buffer_words_per_write, width: 12}
+  - {name: pooling_mode, width: 1}
+  - {name: gemm_mode, width: 1}
+  - {name: test_reg, width: 20}
+
+
+
 
 
 

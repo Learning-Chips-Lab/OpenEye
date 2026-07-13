@@ -326,6 +326,7 @@ reg [1023:0] fst_path;
                                                  // Formula: (1 << N) - 1 where N = ceil((kernels * y_lines * ceil(iact_size_x/NUM_GLB_PSUM)) / 1)
   wire [7:0]needed_psum_storage_cycles_reg;      // How many PSUM accumulation passes are required before the final result is complete (from dma_storage).
   wire      pooling_mode;
+  wire      gemm_mode;                    // Dataflow select from dma_storage: 0 = row-stationary conv, 1 = output-stationary GEMM.
   reg [7:0] debug_reg;                           // Scratch debug register; written with small integer literals inside RECEIVE_PSUMS_TO_IACT to mark which packing branch was taken.
 
   // -----------------------------------------------------------------------
@@ -4147,7 +4148,8 @@ reg [1023:0] fst_path;
         .cluster_per_conv_cycle(cluster_per_conv_cycle),
         .iact_converter_max_cycles(iact_converter_max_cycles),
         .iact_buffer_words_per_write(iact_buffer_words_per_write),
-        .pooling_mode(pooling_mode)
+        .pooling_mode(pooling_mode),
+        .gemm_mode(gemm_mode)
     );
 
 
@@ -4236,6 +4238,7 @@ reg [1023:0] fst_path;
         //Ports for Hyperparameters
         .status_reg_enable_i          (status_reg_enable_reg),
         .data_mode_i                  (data_mode_reg),
+        .gemm_mode_i                  (gemm_mode),
         .fraction_bit_i               (fraction_bit_reg),
         .needed_cycles_i              (needed_cycles),
         .needed_x_cls_i               (needed_x_cls_reg),

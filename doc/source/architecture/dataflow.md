@@ -5,6 +5,8 @@
 
 The **Row Stationary (RS)** dataflow is an energy-efficient data orchestration strategy designed for deep neural network (DNN) accelerators, originally introduced in Eyeriss and adopted in Eyeriss v2. It is adopted by OpenEye. RS dataflow specifically optimized to minimize data movement and maximize data reuse across the memory hierarchy by strategically keeping partial convolution results stationary within the processing elements (PEs).
 
+RS is the default dataflow of OpenEye. For GEMM-shaped workloads (fully connected layers, matrix multiplications) an alternative **output-stationary** dataflow can be selected per layer at runtime; see {ref}`output_stationary`.
+
 ## Motivation
 
 Data movement is the dominant source of energy consumption in DNN accelerators, often consuming orders of magnitude more energy than the actual computation. The row stationary dataflow addresses this challenge by:
@@ -118,8 +120,10 @@ The row stationary dataflow exploits three levels of data reuse:
 |----------|-------------------------|------------------|
 | **Row Stationary** | Filter rows + Psums | Balanced reuse, energy efficiency |
 | Weight Stationary | Filter weights | Large batch sizes, filter reuse |
-| Output Stationary | Partial sums | Large filter dimensions |
+| Output Stationary | Partial sums | Large filter dimensions, GEMM/FC layers |
 | No Local Reuse | None (streaming) | Memory-constrained designs |
+
+OpenEye implements Row Stationary as the default and Output Stationary as a runtime-selectable alternative for GEMM-shaped layers (`gemm_mode` configuration bit, see {ref}`output_stationary`).
 
 ## Eyeriss v2 Enhancements
 

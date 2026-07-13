@@ -202,6 +202,14 @@ class OpenEyeParameters(object):
 
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode
+
+        # === DATAFLOW SELECTION ===
+        # "row_stationary" (default): Eyeriss-style conv mapping, filter rows and
+        # psums stationary in the PEs, iact routing via iact_choose patterns.
+        # "output_stationary": GEMM mapping, PE row j is hard-wired to iact GLB
+        # bank j (gemm_mode=1 in hardware) and each PE keeps its output tile
+        # stationary in the local psum SPad. Overridable via DATAFLOW env var.
+        self.DATAFLOW = os.getenv("DATAFLOW", "row_stationary")
         self.PARALLEL_MACS = 2         # Number of MAC units operating in parallel per PE
 
         # === DATA BITWIDTH CONFIGURATION ===

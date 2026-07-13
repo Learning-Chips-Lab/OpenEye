@@ -303,7 +303,7 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
         pf.write("    \"\"\"\n")
         pf.write("    words = [0] * TRANSMISSIONS\n")
         pf.write("    for reg in REGISTERS:\n")
-        pf.write("        val = values[reg['name']]\n")
+        pf.write("        val = values.get(reg['name'], 0)\n")
         pf.write("        mask = (1 << reg['width']) - 1\n")
         pf.write("        words[reg['trans']] |= (val & mask) << reg['pos']\n")
         pf.write("    return words\n\n")

@@ -256,6 +256,7 @@ class LayerParameters(object):
         self.needed_total_transmissions = 1    # Total all transmissions
         self.psum_delay = 0                    # Partial sum delay cycles
         self.fully_connected = 0               # Dense layer flag
+        self.gemm_mode = 0                     # Dataflow: 0 = row-stationary, 1 = output-stationary GEMM
         self.store_in_psum = 0                 # Store in psum memory flag
         self.limit_increase = 0                # Amount of Iact Storages, that incrase adresses
         self.limit_increase_mod = 0            # Module amount of Iact Storages, that incrase adresses
@@ -304,6 +305,10 @@ class LayerParameters(object):
         elif "dense" in layer.name:
             logger.debug("Dense Layer")
             self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
+
+        elif "gemm" in layer.name or "matmul" in layer.name:
+            logger.debug("GEMM Layer (output-stationary)")
+            self.write_gemm_layer(layer_parameters, layer, params, layer_number, max_layers)
 
         elif "pooling2d" in layer.name:
             logger.debug("Pooling Layer")
@@ -1361,6 +1366,12 @@ class LayerParameters(object):
             self.quantize[f][0] = 1
             self.quantize[f][1] = 4
         self.fully_connected = 1
+        # Global dataflow selection: with DATAFLOW="output_stationary" the
+        # dense layer runs with gemm_mode=1 so PE row j is hard-wired to iact
+        # GLB bank j (output-stationary GEMM datapath) instead of relying on
+        # the iact_choose pattern produced by the converter.
+        if getattr(params, "DATAFLOW", "row_stationary") == "output_stationary":
+            self.gemm_mode = 1
         self.output_cycles = 1
         self.y_lines_per_calculation = 1
         self.kernel_size = [0]
@@ -1464,6 +1475,32 @@ class LayerParameters(object):
         logger.debug("Needed transmissions WGHT    : " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions PSUM    : " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions TOTAL   : " + str(self.needed_total_transmissions))
+        return
+
+    def write_gemm_layer(self, layer_parameters, layer, params, layer_number, max_layers):
+        """Compute configuration parameters for a GEMM layer (output-stationary).
+
+        A GEMM layer computes C = A x B (+ bias). The mapping reuses the dense
+        layer machinery: the inner dimension K is split across cluster rows,
+        PE rows and the per-PE iact SPad, while each PE keeps its output tile
+        stationary in the local psum SPad. In contrast to the dense path the
+        gemm_mode flag is always set, which makes the PE clusters bind iact
+        GLB bank j to PE row j in hardware (see PE_cluster.gemm_mode_i).
+
+        Args:
+            layer_parameters (list): Previously computed parameters for other layers
+            layer: Layer object with input/kernel/output shapes (dense-compatible)
+            params: OpenEye hardware parameters
+            layer_number (int): Index of this layer (0-indexed)
+            max_layers (int): Total number of layers in network
+
+        Note:
+            Sets fully_connected = 1 (shared FPGA datapath) and gemm_mode = 1
+            (output-stationary routing).
+        """
+        self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
+        self.layer_name = "Gemm"
+        self.gemm_mode = 1
         return
 
     def write_pooling_layer(self, layer_parameters, layer, params, layer_number, max_layers):

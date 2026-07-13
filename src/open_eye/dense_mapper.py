@@ -180,6 +180,7 @@ class DenseMapper(LayerMapper):
             "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
             "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
             "pooling_mode": 0,
+            "gemm_mode": getattr(layer_params, "gemm_mode", 0),
             "test_reg": 0
             })
             
@@ -228,6 +229,7 @@ class DenseMapper(LayerMapper):
             storage[strdic.status_dict["skipPsum"]] = layer_params.skipPsum
             storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
             storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
+            storage[strdic.status_dict["gemm_mode"]] = getattr(layer_params, "gemm_mode", 0)
             # Router configurations as nested structures for parallel access
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
             storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params, layer_params)

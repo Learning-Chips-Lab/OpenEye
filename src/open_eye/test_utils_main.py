@@ -34,6 +34,7 @@ import numpy as np
 
 from open_eye.pooling_mapper import PoolingMapper
 from open_eye.dense_mapper import DenseMapper
+from open_eye.gemm_mapper import GemmMapper
 from open_eye.conv_mapper import ConvMapper
 from open_eye.dw_mapper import DWMapper
 import open_eye.generic_test_utils as gtu
@@ -94,8 +95,16 @@ def write_stream_layer_mp(params, layer_params, dram_layer_content, return_dict,
     elif "Conv" in str(layer_params.layer_name):
         LayerStreamGenerator = ConvMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
+    elif "Gemm" in str(layer_params.layer_name):
+        LayerStreamGenerator = GemmMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
+        LayerStreamGenerator.make_stream()
     elif "Dense" in str(layer_params.layer_name):
-        LayerStreamGenerator = DenseMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
+        # With the output-stationary dataflow selected globally, dense layers
+        # are mapped through the GEMM mapper (gemm_mode=1) instead.
+        if getattr(params, "DATAFLOW", "row_stationary") == "output_stationary":
+            LayerStreamGenerator = GemmMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
+        else:
+            LayerStreamGenerator = DenseMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
     elif "Pooling" in str(layer_params.layer_name):
         LayerStreamGenerator = PoolingMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)

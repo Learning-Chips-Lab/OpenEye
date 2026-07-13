@@ -23,6 +23,20 @@ Architecture:
     - WghtStreamCreator: Handles weight data layout
     - PsumStreamCreator: Handles bias/partial sum data layout
 
+Datastream construction overview:
+    make_stream() assembles one list per channel (see stream_dicts.py for
+    the channel map). In serial mode the result is the exact 64-bit word
+    sequence the OpenEye_FPGA DMA port consumes per layer:
+    configuration words (regmap_pack) -> PE-enable bitmap -> router words
+    -> iacts -> weights -> bias -> quantization -> offsets. In parallel
+    mode the channels hold per-GLB-bank SPad word lists that
+    rtl_test_utils.send_stream drives onto the OpenEye_Parallel ports.
+    The dataflow is part of the configuration: gemm_mode = 0 keeps the
+    row-stationary conv mapping, gemm_mode = 1 selects the
+    output-stationary GEMM mapping (see gemm_mapper.py). The complete
+    word-level documentation lives in
+    doc/source/architecture/datastream_construction.md.
+
 Typical Usage:
     LayerMapper is not instantiated directly. Instead, use layer-specific subclasses:
 

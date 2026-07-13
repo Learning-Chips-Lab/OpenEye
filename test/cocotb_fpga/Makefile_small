@@ -119,7 +119,9 @@ export PSUM_PER_PE=32
 export ONLY_FILES=0
 export BRANCHES=1
 export BUFFER_WIDTH=10
-export QUANT_AMOUNT=64
+# conv_mapper.write_quantize sends 512 DMA words (2 pairs each); the
+# GET_QUANTIZE FSM and the quantize array need QUANT_AMOUNT=1024 for that.
+export QUANT_AMOUNT=1024
 
 export
 run:
