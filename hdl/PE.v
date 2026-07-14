@@ -463,9 +463,6 @@ module PE #(
     parameter IS_TOPLEVEL = 1,
     parameter SERIAL      = 1,
 
-    parameter PE_X = 0,
-    parameter PE_Y = 0,
-
     parameter integer PARALLEL_MACS = 2,
 
     parameter integer SPARSITY_EN      = 1,  // 1=sparse mode (default), 0=dense mode
@@ -603,7 +600,6 @@ module PE #(
 
   // Configuration and addressing registers
   reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_max_reg;     // Max number of iact addresses
-  reg  [ WGHT_ADDR_ADDR_BITWIDTH-1 : 0] wght_addr_max_reg;     // Max number of weight addresses
 
   // Pipeline registers for input activation data (3-stage delay line)
   reg  [      DATA_IACT_BITWIDTH-1 : 0] iact_data_current_3;   // Pipeline stage 3 (feeds multipliers)
@@ -701,24 +697,14 @@ module PE #(
   reg  [                         3 : 0] channel_reg_C0;            // Number of channels configured, in Eyeriss-Paper referenced as C0
   wire                                  psum_data_SPad_en_a_w_i;// Internal write enable port A
   wire                                  psum_data_SPad_en_b_w_i;// Internal write enable port B
-  reg                                   data_mode_reg;          // Data mode configuration
   reg                                   raw_wght_reg;           // 1 = raw (uncompressed) weight stream: keep all-zero weight words
-  reg  [                           2:0] stride_reg;             // Stride configuration
-  reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_reg;      // Fixed-point fraction bits
   reg  [                           3:0] iact_x_line_repetitions;
 
   // Configuration streaming FSM
   reg  [                           1:0] current_state_stream;   // Config stream state
-  reg  [                           7:0] iact_data_position_reg; // Position in iact data
-
   // Approach 3: systolic pass-through (reg when SYSTOLIC_GEMM_EN=1, wire otherwise)
   reg  [         DATA_IACT_BITWIDTH-1:0] iact_pass_data_reg;    // Registered iact value to forward
   reg                                    iact_pass_enable_reg;   // Registered enable to forward
-
-  // Input activation data partitioning (splitting bus into 3 parts)
-  wire [        DATA_IACT_BITWIDTH-1:0] iact_part_1_w;         // Bits [7:0] of iact bus
-  wire [        DATA_IACT_BITWIDTH-1:0] iact_part_2_w;         // Bits [15:8] of iact bus
-  wire [        DATA_IACT_BITWIDTH-1:0] iact_part_3_w;         // Bits [23:16] of iact bus
 
   // Output formatting
   wire [        DATA_PSUM_BITWIDTH-1:0] output_adder;          // Combined output from both adders
@@ -939,13 +925,9 @@ module PE #(
   // Parameters are received in four sequential states and stored in registers
   always @(posedge clk_i, negedge rst_ni) begin
     if (!rst_ni) begin
-      //data_mode_reg         <= 0;
       raw_wght_reg            <= 0;
-      stride_reg              <= 0;
-      fraction_bit_reg        <= 0;
       current_state_stream    <= 0;
       iact_addr_max_reg       <= 0;
-      wght_addr_max_reg       <= 0;
       iact_x_line_repetitions <= 0;
       filters_reg_M0          <= 0;
       channel_reg_C0          <= 0;
@@ -955,9 +937,6 @@ module PE #(
           // Receive first set of parameters: stride, weight address max
           if (enable_stream_i) begin
             current_state_stream  <= SECOND_PARAMS;
-            //data_mode_reg         <= data_stream_i[0];
-            stride_reg              <= data_stream_i[3:1];    // Convolution stride
-            wght_addr_max_reg       <= data_stream_i[7:4];    // Max weight addresses
             raw_wght_reg            <= data_stream_i[9];      // Raw (uncompressed) weight stream flag
           end
         end

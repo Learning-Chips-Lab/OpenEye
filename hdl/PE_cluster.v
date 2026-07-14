@@ -303,8 +303,6 @@ module PE_cluster #(
             .PARALLEL_MACS         (PARALLEL_MACS),
             .SPARSITY_EN           (SPARSITY_EN),
             .SYSTOLIC_GEMM_EN      (SYSTOLIC_GEMM_EN),
-            .PE_X                  (i),
-            .PE_Y                  (j),
             .DATA_IACT_BITWIDTH    (DATA_IACT_BITWIDTH),
             .DATA_WGHT_BITWIDTH    (DATA_WGHT_BITWIDTH),
             .DATA_PSUM_BITWIDTH    (DATA_PSUM_BITWIDTH),
