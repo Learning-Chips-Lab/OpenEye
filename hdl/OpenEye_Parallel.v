@@ -208,7 +208,6 @@ module OpenEye_Parallel #(
     input      [                                          2:0] stride_y_i,
     input      [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i,
     input      [                                          3:0] iact_x_line_repetitions_i,
-    input      [                                          5:0] kernel_size_x_i,
     input      [                                          3:0] kernel_size_y_i,
     input      [                             CLUSTERS*PES-1:0] compute_mask_i,
     input      [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i,
@@ -219,8 +218,6 @@ module OpenEye_Parallel #(
     input      [                                        8-1:0] needed_psum_storage_cycles_i,
     input      [                                        8-1:0] needed_iact_channel_cycles_i,
     input                                                      psum_transmitted_i
-
-
 );
   ///#######################
   ///Reset synchronization
@@ -775,6 +772,8 @@ module OpenEye_Parallel #(
         OpenEye_Cluster #(
             .IS_TOPLEVEL       (0),
             .SERIAL            (SERIAL),
+            .CLUSTER_COLUMNS   (CLUSTER_COLUMNS),
+            .CLUSTER_ROWS      (CLUSTER_ROWS),
             .SPARSITY_EN       (SPARSITY_EN),
             .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
             .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),

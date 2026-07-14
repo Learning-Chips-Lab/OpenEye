@@ -138,6 +138,14 @@ class OpenEyeParameters(object):
         # === CLUSTER AND PE ARRAY DIMENSIONS ===
         # These parameters define the 2D grid structure of the accelerator
 
+        # Number of cluster COLUMNS (X dimension)
+        # Can be overridden by CLUSTER_COLUMNS environment variable
+        try:
+            self.Clusters_X = int(os.getenv("CLUSTER_COLUMNS"))
+        except:
+            self.Clusters_X = 2  # Default: 2 columns of clusters
+
+
         # Number of cluster rows (Y dimension)
         # Can be overridden by CLUSTER_ROWS environment variable
         try:
@@ -194,6 +202,11 @@ class OpenEyeParameters(object):
             self.QUANT_AMOUNT = int(os.getenv("QUANT_AMOUNT"))
         except:
             self.QUANT_AMOUNT = 32  
+        # Number of parallel rewrites to next layer
+        try:
+            self.TRANS_WORDS = int(os.getenv("TRANS_WORDS"))
+        except:
+            self.TRANS_WORDS = 8 
         # Partial sum bitwidth (wider to prevent overflow during accumulation)
         try:
             self.DATA_PSUM_BITWIDTH = int(os.getenv("DATA_PSUM_BITWIDTH"))
@@ -236,7 +249,6 @@ class OpenEyeParameters(object):
         # === DERIVED DIMENSIONS ===
         # Calculate total cluster and PE counts from base parameters
 
-        self.Clusters_X = 2            # Number of cluster columns (fixed at 2)
         self.PEs = self.PEs_X * self.PEs_Y  # Total PEs per cluster (e.g., 4*3 = 12)
         self.Clusters = self.Clusters_X * self.Clusters_Y  # Total clusters (e.g., 2*8 = 16)
         self.PE_Complete = self.PEs * self.Clusters  # Total PEs in accelerator (e.g., 192)

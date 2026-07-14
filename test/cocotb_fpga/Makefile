@@ -20,8 +20,6 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/varlenFIFO.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_Parallel.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_Cluster.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/GLB_cluster.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/af_cluster.v)
-VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/bano_cluster.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/router_iact.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/router_wght.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/router_psum.v)
@@ -70,19 +68,19 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 
 export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 
-export LAYER=FC
+#export LAYER=FC
 #export LAYER=MNIST
-#export LAYER=Convolution
+export LAYER=Convolution
 #export LAYER=MobileNetV1
 #export LAYER=Pooling
 export NUM_FILTERS=16
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=7
-export INPUT_SIZE_Y=7
+export INPUT_SIZE_X=4
+export INPUT_SIZE_Y=1
 export STRIDE=1
 export INPUT_CHANNELS=4
-export OUTPUT_SIZE=32
+export OUTPUT_SIZE=10
 #Amout of parallel MACs
 export PARALLEL_MACS=2
 export USE_RANDOM_VALUES=1
@@ -102,13 +100,13 @@ export TRANS_BITWIDTH_WGHT=24
 export TRANS_BITWIDTH_PSUM=32
 
 #Set Number of Router Clusters per Instance
-export NUM_GLB_IACT=3
+export NUM_GLB_IACT=1
 export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
 #Set number of Cluster rows need at least to be 2 COLUMNS
-export CLUSTER_COLUMNS=2
-export CLUSTER_ROWS=2
+export CLUSTER_COLUMNS=1
+export CLUSTER_ROWS=1
 
 #Amoutn of Iact RAM STORAGES
 export RAM_CELLS=32
@@ -123,7 +121,8 @@ export PSUM_PER_PE=32
 export ONLY_FILES=0
 export BRANCHES=1
 export BUFFER_WIDTH=12
-export QUANT_AMOUNT=1024
+export QUANT_AMOUNT=32
+export TRANS_WORDS = 4
 
 export
 run:

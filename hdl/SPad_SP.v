@@ -79,8 +79,7 @@
 
 module SPad_SP #(
     parameter DATA_WIDTH = 8,
-    parameter ADDR_WIDTH = 10,
-    parameter Implementation = 0
+    parameter ADDR_WIDTH = 10
 ) (
     input clk_i,
 
@@ -98,9 +97,7 @@ module SPad_SP #(
   RAM_SP #(
       .AddrWidth(ADDR_WIDTH),
       .DataWidth(DATA_WIDTH),
-      .Pipelined(0),
-
-      .Implementation(Implementation)
+      .Pipelined(0)
   ) ram (
       .clk_i  (clk_i),
       .rd_en_i(re_i),

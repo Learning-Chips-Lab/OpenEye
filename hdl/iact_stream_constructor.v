@@ -91,7 +91,7 @@ module iact_stream_constructor #(
     output reg [ (PES*$clog2(NUM_GLB_IACT+1))-1:0] iact_choose_o,
     input      [       $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                            8-1:0] needed_iact_channel_cycles_i,
-    input      [                           12-1:0] fc_size_i,
+    input      [                           14-1:0] fc_size_i,
     input signed [                         12-1:0] iact_size_x_i,
     input signed [                          8-1:0] iact_size_y_i,
     input signed [                          8-1:0] iact_channels_i,
@@ -233,7 +233,7 @@ module iact_stream_constructor #(
             ram_rd_en                  <= 0;
             current_iact_cycle_mod_reg <= 0;
             current_iact_cycle_reg     <= 0;
-            rd_addr_1_inc              <= (iact_size_y_i + padding_y * 2)*needed_iact_router_cycles_reg*((iact_channels_i + 1)/2);
+            rd_addr_1_inc              <= (iact_size_y_i + padding_y * 2) * needed_iact_router_cycles_reg * ((iact_channels_i + 1)/2);
             rd_addr_2_inc              <= 0;
             rd_addr_3_inc              <= needed_iact_channel_cycles_i * needed_iact_router_cycles_reg * (iact_size_y_i + padding_y * 2) * ((iact_channels_i + 1)/2);
             rd_addr_4_inc              <= needed_iact_router_cycles_reg * ((iact_channels_i + 1)/2) * (y_lines_per_calc) * stride_y_i;
@@ -558,7 +558,7 @@ module iact_stream_constructor #(
             (- w > (y_reg_q * iact_channels_i)) |
             (iact_size_y_i * iact_channels_i <= w + (y_reg_q * iact_channels_i))
             )) & !fully_connected_i) |
-            (((2 * byte_var_pre_calc_q) + w + (((channels_q * NUM_GLB_IACT) + r) * CLUSTER_ROWS) >= fc_size_i) & fully_connected_i)) begin
+            (((WORDS_PER_CYCLE * byte_var_pre_calc_q) + w + (((((channels_q * PE_Y) + r) * iact_channels_i))) >= fc_size_i) & fully_connected_i)) begin
               mem_data_payload_reg[r][w] <= 0;
             end else begin
               mem_data_payload_reg[r][w] <= storage_reg[ram_q[r][w][$clog2(RAM_CELLS)-1:0]][byte_q[r][w][$clog2(IACT_WORDS_IN_RAM)-1:0]];

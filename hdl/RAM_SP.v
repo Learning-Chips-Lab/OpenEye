@@ -81,10 +81,8 @@ module RAM_SP
 #(
     parameter AddrWidth = 16,
     parameter DataWidth = 32,
-    parameter Pipelined = 0,
+    parameter Pipelined = 0
     
-    // Hint for physical Implementation.
-    parameter Implementation = 0
 ) (
     input   wire                        clk_i,
     // We deliberately leave out a reset here so that it is obvious 

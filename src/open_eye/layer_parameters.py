@@ -319,6 +319,7 @@ class LayerParameters(object):
             logger.debug(f"Layer type for {layer.name} not supported.")
             raise ValueError("Layer type not supported.")
 
+
     def check_for_multiple_lines_per_computation(self, params):
         """Determine how many Y lines and kernels can be processed simultaneously.
 
@@ -776,17 +777,8 @@ class LayerParameters(object):
             - Mode 2: Single X-cluster computation
             - Default: Full multi-cluster computation
         """
-        match self.single_cluster_computation:
-            case 1:
-                # Single cluster mode: all outputs from one cluster
-                self.Used_refreshes = math.ceil(self.all_transmissions_of_pe * math.ceil(self.output_shape[1] * self.output_shape[2]/(params.PEs_X)))
-            case 2:
-                # Single X-cluster mode: distribute across X-clusters only
-                self.Used_refreshes = math.ceil(self.all_transmissions_of_pe * math.ceil(self.output_shape[1] * self.output_shape[2]/(params.PEs_X*params.Clusters_X)))
-            case _:
-                # Multi-cluster mode: full distribution
-                self.Used_refreshes = math.ceil(self.output_shape[2] * math.ceil(self.output_shape[1]/((params.Clusters//self.different_kernels_per_calculation)*params.PEs_X)))
-                self.Used_refreshes = math.ceil(self.used_Y_cluster * self.iact_transmissions_pe * self.Used_refreshes * math.ceil(math.ceil(self.filters/self.different_kernels_per_calculation)/self.used_psum_per_PE))
+        self.Used_refreshes = math.ceil(self.output_shape[2] * math.ceil(self.output_shape[1]/((params.Clusters//self.different_kernels_per_calculation)*params.PEs_X)))
+        self.Used_refreshes = math.ceil(self.used_Y_cluster * self.iact_transmissions_pe * self.Used_refreshes * math.ceil(math.ceil(self.filters/self.different_kernels_per_calculation)/self.used_psum_per_PE))
 
     def calculate_single_cluster_computation(self, params):
         """Determine if layer can use single-cluster optimization mode.
@@ -1083,13 +1075,8 @@ class LayerParameters(object):
         self.calculate_glb_transmissions(params)
 
         # Calculate weight address entries based on computation mode
-        match self.single_cluster_computation:
-            case 1:
-                self.used_wght_addr_per_PE = (math.ceil(self.kernel_size[0] * self.input_shape[3]/self.kernel_per_pe_cluster / self.iact_transmissions_pe/ self.wght_transmissions_pe)) + 2
-            case 2:
-                self.used_wght_addr_per_PE = (math.ceil(self.kernel_size[0] * self.input_shape[3]/self.kernel_per_pe_cluster / self.iact_transmissions_pe/ self.wght_transmissions_pe)) + 2
-            case _:
-                self.used_wght_addr_per_PE = (math.ceil(self.kernel_size[0] * self.input_shape[3]/self.kernel_per_pe_cluster / self.iact_transmissions_pe)) + 2
+        
+        self.used_wght_addr_per_PE = (math.ceil(self.kernel_size[0] * self.input_shape[3]/self.kernel_per_pe_cluster / self.iact_transmissions_pe)) + 2
 
         # Clamp weight addresses to hardware limit
         if(self.used_wght_addr_per_PE == (params.Wghts_Addr_per_PE + 1)):
@@ -1123,7 +1110,7 @@ class LayerParameters(object):
             self.start_param_array = (1 << math.ceil((params.Clusters_X*params.Clusters_Y)/self.buffer_cycles_for_x_iact)) - 1
         # Calculated the limit of iact buffers that need activations
         if (self.used_channels == 1):
-            self.limit_increase <= math.floor((self.iact_size_x*2)/(2*4))
+            self.limit_increase = math.floor((self.iact_size_x*2)/(2*4))
             self.initial_upper_limit = self.limit_increase
         else:
             words_per_iact_glb = 8
@@ -1133,11 +1120,12 @@ class LayerParameters(object):
                     if (self.limit_increase == params.RAM_CELLS):
                         self.initial_upper_limit = 0
                     else:
-                        self.initial_upper_limit = self.limit_increase + 1
+                        self.initial_upper_limit = self.limit_increase + self.strideX
                 else:
-                    self.limit_increase = (self.iact_size_x*self.used_channels*self.strideX)//words_per_iact_glb
-                    self.limit_increase = math.ceil(self.limit_increase/self.iact_x_line_repetitions)
-                    self.initial_upper_limit = self.limit_increase + 2
+                    #self.limit_increase = (self.iact_size_x*self.used_channels*self.strideX)//words_per_iact_glb
+                    #self.limit_increase = math.ceil(self.limit_increase/self.iact_x_line_repetitions)
+                    self.limit_increase = (params.PEs_X*params.Clusters*self.strideX)//2
+                    self.initial_upper_limit = self.limit_increase + self.strideX
 
             else :
                 self.limit_increase = math.ceil(((params.Clusters_X*params.Clusters_Y*params.PEs_X*self.strideX)//self.buffer_cycles_for_x_iact)/(words_per_iact_glb//self.used_channels))
@@ -1395,9 +1383,9 @@ class LayerParameters(object):
 
         # Calculate the number of refreshes needed for the layer
         
-        self.used_iact_per_PE = math.ceil(self.iact_size_x/(params.Clusters_Y*params.PEs_Y))
-        self.used_iact_per_PE = min(self.used_iact_per_PE, 12)
-        temp = math.ceil(self.iact_size_x/(params.PEs_Y*self.used_iact_per_PE))
+        temp = math.ceil(self.iact_size_x/(params.Clusters_Y*params.PEs_Y))
+        temp = min(temp, 12)
+        temp = math.ceil(self.iact_size_x/(params.PEs_Y*temp))
         self.needed_wght_transmissions = math.ceil(temp/params.Clusters_Y)
         self.used_iact_per_PE = math.ceil(self.iact_size_x/(self.needed_wght_transmissions*params.Clusters_Y*params.PEs_Y))
         # Hardware constraint of the iact converter FC path: iact_channels
@@ -1466,7 +1454,7 @@ class LayerParameters(object):
             self.psum_delay = 5
         self.limit_increase = math.floor((params.NUM_GLB_WGHT*self.used_iact_per_PE)/8)
         #self.limit_increase = math.floor((params.NUM_GLB_WGHT*self.used_iact_per_PE)%8)
-        self.initial_upper_limit = 12
+        self.initial_upper_limit = self.limit_increase + 9
         self.iteration_for_kernels = math.ceil(self.diff_iact_layer_next_layer / self.different_kernels_per_calculation)
         self.buffer_cycles_for_x_iact = params.Clusters_Y
         self.iact_converter_max_cycles = 1

@@ -66,6 +66,7 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
     gtu.delete_files_in_directory('demo/')
     with open(filename, 'w') as txt_file:
         txt_file.write(f"parameter CLUSTER_ROWS  = {openeye_parameter.Clusters_Y},\n")
+        txt_file.write(f"parameter CLUSTER_COLUMNS  = {openeye_parameter.Clusters_X},\n")
         txt_file.write(f"parameter NUM_GLB_IACT  = {openeye_parameter.NUM_GLB_IACT},\n")
         txt_file.write(f"parameter NUM_GLB_PSUM  = {openeye_parameter.NUM_GLB_PSUM},\n")
         txt_file.write(f"parameter NUM_GLB_WGHT = {openeye_parameter.NUM_GLB_WGHT},\n")
@@ -74,8 +75,7 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
         txt_file.write(f"parameter BRANCHES = {openeye_parameter.BRANCHES},\n")
         txt_file.write(f"parameter QUANT_AMOUNT = {openeye_parameter.QUANT_AMOUNT},\n")
         txt_file.write(f"parameter DATA_PSUM_BITWIDTH = {openeye_parameter.DATA_PSUM_BITWIDTH},\n")
-        
-
+        txt_file.write(f"parameter TRANS_WORDS = {openeye_parameter.TRANS_WORDS},\n")
 
 def create_vh_file_from_envvars(
     file_path_vh: Optional[str] = None,

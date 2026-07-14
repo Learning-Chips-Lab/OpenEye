@@ -20,10 +20,12 @@ import open_eye.simple_layer_operations as slo
 import open_eye.layer_execution_state as les
 import open_eye.data_create as data_create
 import open_eye.tflite2model as tflite2model
+import open_eye.onnx2model as o2m
 from cocotb.logging import SimLogFormatter
 import logging
 import sys
 import logging
+from pathlib import Path
 from cocotb.utils import get_sim_time
 from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout, SimTimeoutError
 
@@ -191,31 +193,24 @@ async def single_layer_test(dut):
     #Here If-Condition test, wether use model or single Layer
     if(use_random):
         model = data_create.create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inputsize_y, strides, channels, outputsize)
+        trunc_model = [
+        layer for layer in model.layers
+        if not isinstance(layer, tf.keras.layers.Flatten)
+        ]
     else:
-        #model = tflite2model.create_model_from_tflite(use_random)
-
-        base_model = tf.keras.applications.MobileNet(
-            input_shape=(128, 128, 3),
-            alpha=0.50,
-            include_top=True,
-            weights='imagenet'
-        )
-
-        converter = tf.lite.TFLiteConverter.from_keras_model(base_model)
-        converter.optimizations = [tf.lite.Optimize.DEFAULT]
-
-        model = converter.convert()
-        print("Klappt!")
-        for layer_number, layer in reversed(list(enumerate(base_model.layers))):
-            print(layer)
-    #load_model_function
-    trunc_model = truncate_model(model)
+        current_dir = Path(__file__).resolve().parent
+        target_dir = current_dir.parent.parent / "models"
+        sys.path.append(str(target_dir))
+        from mnist_conv_net import SimpleMNISTConvNet, load_simple_mnist_model
+        model = SimpleMNISTConvNet()
+        model = o2m.get_model(model)
+        trunc_model = truncate_model(model)
     await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, trunc_model)
 
 def truncate_model(model):
     
     trunc_model = [
-        layer for layer in model.layers
+        layer for layer in model
         if not isinstance(layer, tf.keras.layers.Flatten)
     ]
     return trunc_model

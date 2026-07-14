@@ -81,10 +81,7 @@
 module RAM_DP #(
     parameter AddrWidth = 16,
     parameter DataWidth = 32,
-    parameter Pipelined = 0,
-
-    // Hint for physical Implementation.
-    parameter Implementation = 0
+    parameter Pipelined = 0
 ) (
     input wire clk_i,
     // We deliberately leave out a reset here so that it is obvious 
@@ -123,7 +120,6 @@ module RAM_DP #(
       .aB(addr_w_i),
 
       .d (data_i),
-      .bw({DataWidth{1'b1}}),
       .q (data_o)
   );
 

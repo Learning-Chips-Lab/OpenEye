@@ -61,7 +61,7 @@
 /// 1. Configuration Phase:
 ///    - Parameter streaming: Receives stride, filter count, channel count via data_stream_i
 ///    - FSM states: FIRST_PARAMS -> SECOND_PARAMS -> THIRD_PARAMS -> FOURTH_PARAMS
-///    - Configures operational parameters: stride_reg, filters_reg_M0, channel_reg_C0, iact_addr_max_reg
+///    - Configures operational parameters: filters_reg_M0, channel_reg_C0, iact_addr_max_reg
 ///
 /// 2. Memory Loading Phase:
 ///    - Input activations and weights are loaded into respective SPad memories via data pipelines
@@ -204,9 +204,6 @@
 ///                              0: Parallel mode - dual MACs operate simultaneously (default)
 ///                              1: Serial mode - single MAC, time-multiplexed operation
 ///                              Serial mode reduces area at the cost of 2× latency
-///    CREATE_VCD              - Boolean flag to enable VCD file creation for simulation
-///                              0: No waveform dump (faster simulation)
-///                              1: Generate PE.vcd for debugging (CocoTB testbenches)
 ///    PE_X                    - X coordinate position of PE in the processing array cluster
 ///                              Range: 0 to array_width-1
 ///                              Used for neighbor identification and routing decisions
@@ -465,7 +462,6 @@ module PE #(
 
     parameter IS_TOPLEVEL = 1,
     parameter SERIAL      = 1,
-    parameter CREATE_VCD  = 0,
 
     parameter PE_X = 0,
     parameter PE_Y = 0,
@@ -494,32 +490,26 @@ module PE #(
     parameter integer TRANS_BITWIDTH_IACT     = 24, // 3 * 8 bit data OR 2 * 12 bit data OR 6 * 4 bit addresses
     parameter integer TRANS_BITWIDTH_WGHT     = 24, // 3 * 8 bit weight OR 2 * 12 bit weight OR 3 * 8 bit addresses
 
-    parameter integer NUM_GLB_IACT = 3,
+    parameter integer NUM_GLB_IACT = 1,
 
     // local parameters
     localparam integer IACT_ADDR_DATA = $clog2(IACT_DATA_ADDR),
     localparam integer WGHT_ADDR_DATA = $clog2(WGHT_DATA_ADDR),
 
     localparam integer IACT_ADDR_ADDR_BITWIDTH = $clog2(IACT_ADDR_ADDR),
-    localparam integer IACT_ADDR_DATA_BITWIDTH = $clog2(IACT_ADDR_DATA),
 
-    localparam integer IACT_DATA_DATA          = SPARSITY_EN ? (DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD) : DATA_IACT_BITWIDTH,
+    localparam integer IACT_DATA_DATA          = SPARSITY_EN == 1 ? (DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD) : DATA_IACT_BITWIDTH,
     localparam integer IACT_DATA_ADDR_BITWIDTH = $clog2(IACT_DATA_ADDR),
-    localparam integer IACT_DATA_DATA_BITWIDTH = $clog2(IACT_DATA_DATA),
 
-    localparam integer WGHT_DATA_DATA          = SPARSITY_EN ? ((DATA_WGHT_BITWIDTH + DATA_WGHT_IGNORE_ZEROS) * PARALLEL_MACS) : (DATA_WGHT_BITWIDTH * PARALLEL_MACS),
+    localparam integer WGHT_DATA_DATA          = SPARSITY_EN == 1 ? ((DATA_WGHT_BITWIDTH + DATA_WGHT_IGNORE_ZEROS) * PARALLEL_MACS) : (DATA_WGHT_BITWIDTH * PARALLEL_MACS),
     localparam integer WGHT_ADDR_ADDR_BITWIDTH = $clog2(WGHT_ADDR_ADDR),
-    localparam integer WGHT_ADDR_DATA_BITWIDTH = $clog2(WGHT_ADDR_DATA),
 
     localparam integer WGHT_DATA_ADDR_BITWIDTH = $clog2(WGHT_DATA_ADDR),
-    localparam integer WGHT_DATA_DATA_BITWIDTH = $clog2(WGHT_DATA_DATA),
 
     localparam integer PSUM_DATA = DATA_PSUM_BITWIDTH,
     localparam integer PSUM_ADDR_BITWIDTH = $clog2(PSUM_ADDR),
-    localparam integer PSUM_DATA_BITWIDTH = $clog2(PSUM_DATA),
-    localparam integer PSUM_WORDS_PER_TRANSFER = (SERIAL ? 1 : PARALLEL_MACS),
-    localparam integer TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER,
-    localparam integer VALUES_OF_IACTS = $rtoi($ceil(TRANS_BITWIDTH_IACT / DATA_IACT_BITWIDTH))
+    localparam integer PSUM_WORDS_PER_TRANSFER = (SERIAL == 1 ? 1 : PARALLEL_MACS),
+    localparam integer TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER
 
 ) (
     input                                             clk_i,
@@ -699,7 +689,7 @@ module PE #(
   reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_vec;         // Weight data SPad address
 
   // Word counters from data pipeline modules (indicating amount of valid data loaded)
-  wire [                         3 : 0] first_spad_words_iact_S;  // # of words in iact addr SPad, in Eyeriss-Paper referenced as S
+  wire [                         3 : 0] first_spad_words_iact_S;// # of words in iact addr SPad, in Eyeriss-Paper referenced as S
   wire [                         4 : 0] second_spad_words_iact; // # of words in iact data SPad
   wire [                         4 : 0] first_spad_words_wght;  // # of words in wght addr SPad
   wire [                         6 : 0] second_spad_words_wght; // # of words in wght data SPad
@@ -731,7 +721,7 @@ module PE #(
   wire [        DATA_IACT_BITWIDTH-1:0] iact_part_3_w;         // Bits [23:16] of iact bus
 
   // Output formatting
-  wire [      2*DATA_PSUM_BITWIDTH-1:0] output_adder;          // Combined output from both adders
+  wire [        DATA_PSUM_BITWIDTH-1:0] output_adder;          // Combined output from both adders
 
   // ============================================================================
   // FST Waveform Dump Configuration (for CocoTB simulation)
@@ -823,14 +813,9 @@ module PE #(
   assign data_set       = iact_set & wght_set;
   assign mux_iact_c_i_w = mux_iact_ready;
 
-  // Split input activation bus into three 8-bit parts
-  assign iact_part_1_w  = mux_iact_a_o_w[7:0];
-  assign iact_part_2_w  = mux_iact_a_o_w[15:8];
-  assign iact_part_3_w  = mux_iact_a_o_w[23:16];
-
   // Unpack iact data SPad output: conditional based on SPARSITY_EN
   generate
-    if (SPARSITY_EN) begin : gen_sparse_iact_unpack
+    if (SPARSITY_EN == 1) begin : gen_sparse_iact_unpack
       // Sparse mode: extract overhead bits from packed data
       assign {iact_data_spad_oh, iact_data_spad_pay} = iact_data_SPad_data_r;
     end else begin : gen_dense_iact_unpack
@@ -842,7 +827,7 @@ module PE #(
 
   // Unpack weight data SPad output: conditional based on SPARSITY_EN
   generate
-    if (SPARSITY_EN) begin : gen_sparse_wght_unpack
+    if (SPARSITY_EN == 1) begin : gen_sparse_wght_unpack
       // Sparse mode: extract overhead bits for dual MACs
       assign {wght_data_spad_oh_2, wght_data_spad_pay_2, wght_data_spad_oh_1, wght_data_spad_pay_1} = wght_data_SPad_data_r;
     end else begin : gen_dense_wght_unpack
@@ -860,13 +845,13 @@ module PE #(
 
   // Output mux: serial mode outputs single psum, parallel mode outputs combined
   assign psum_data_o = SERIAL == 1 ? {{(TRANS_BITWIDTH_PSUM-DATA_PSUM_BITWIDTH){1'd0}}, adder_3_o_w} : output_adder[TRANS_BITWIDTH_PSUM-1:0];
-  assign output_adder = {adder_2_o_w, adder_1_o_w};
+  assign output_adder = adder_1_o_w;
 
   // Weight address generation:
   // SPARSITY_EN=1: use vector or compute from iact overhead (for zero-skipping)
   // SPARSITY_EN=0: weight addr SPad unused; wght_data_SPad_addr driven by dense FSM
   generate
-    if (SPARSITY_EN) begin : gen_sparse_wght_addr
+    if (SPARSITY_EN == 1) begin : gen_sparse_wght_addr
       assign wght_addr_SPad_addr = gen_sparse_fsm.wght_addr_use_vec ? gen_sparse_fsm.wght_addr_vec : (iact_data_spad_oh == 0 ? 0 : (iact_data_spad_oh - 1));
       assign wght_data_SPad_addr = gen_sparse_fsm.wght_data_use_vec ? wght_data_vec : wght_addr_SPad_data_r;
     end else begin : gen_dense_wght_addr
@@ -920,7 +905,7 @@ module PE #(
   //   - SPARSITY_EN=1: add weight sparsity offset to base address (for sparse indexing)
   //   - SPARSITY_EN=0: use base address directly (no sparse offset)
   generate
-    if (SPARSITY_EN) begin : gen_sparse_psum_addr
+    if (SPARSITY_EN == 1) begin : gen_sparse_psum_addr
       assign psum_spad_addr_a_r = ((current_state_computing == WAIT_TO_SEND_PSUM) | (current_state_computing == SEND_PSUM)) ?
                                     psum_spad_addr_a_mem :
                                     wght_data_spad_oh_1 + psum_spad_addr_a_mem;
@@ -959,8 +944,8 @@ module PE #(
       stride_reg              <= 0;
       fraction_bit_reg        <= 0;
       current_state_stream    <= 0;
-      wght_addr_max_reg       <= 0;
       iact_addr_max_reg       <= 0;
+      wght_addr_max_reg       <= 0;
       iact_x_line_repetitions <= 0;
       filters_reg_M0          <= 0;
       channel_reg_C0          <= 0;
@@ -1044,7 +1029,7 @@ module PE #(
   //                  weight address range computation, and activation advance logic.
   //   SPARSITY_EN=0: Simplified dense FSM with sequential weight/iact addressing,
   //                  no zero-skipping, no overhead bits, no weight range computation.
-    generate if (SPARSITY_EN) begin : gen_sparse_fsm
+    generate if (SPARSITY_EN == 1) begin : gen_sparse_fsm
     // --------------------------------------------------------------------------
     // Sparsity-only registers (only exist when SPARSITY_EN=1)
     // --------------------------------------------------------------------------
@@ -1053,7 +1038,6 @@ module PE #(
     reg  [        DATA_IACT_OVERHEAD-1:0] iact_oh_delay_1;       // Pipeline delay stage 1 for overhead
     reg  [        DATA_IACT_OVERHEAD-1:0] iact_oh_delay_2;       // Pipeline delay stage 2 for overhead
     reg                                   next_iact;             // Flag to advance to next input activation
-    reg                                   next_iact2;            // Secondary flag for iact advancement
     reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_current;     // Current iact address being processed
     reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_count;       // Counter for iact addresses processed
     reg                                   wght_addr_use_vec;     // Mux select: use vector addr or computed
@@ -1082,7 +1066,6 @@ module PE #(
         iact_addr_count         <= 0;
         iact_data_SPad_addr     <= 0;
         iact_data_SPad_en_r     <= 0;
-        iact_data_position_reg  <= 0;
         wght_addr_SPad_en_r     <= 0;
         wght_addr_use_vec       <= 1;
         wght_data_use_vec       <= 1;
@@ -1107,7 +1090,6 @@ module PE #(
         computing               <= 0;
         fast_cycle              <= 0;
         next_iact               <= 0;
-        next_iact2              <= 0;
         used_psum_memory        <= 0;
         use_psum_1              <= 0;
         use_psum_2              <= 0;
@@ -1169,7 +1151,6 @@ module PE #(
             //Read first values
             fast_cycle             <= 0;
             next_iact              <= 0;
-            next_iact2             <= 0;
             iact_addr_SPad_addr    <= 0;
             iact_addr_SPad_en_r    <= 0;
             iact_data_SPad_addr    <= 0;
@@ -1208,31 +1189,6 @@ module PE #(
             end else begin
               used_psum_memory <= 0;
             end
-            /*if (data_mode_reg) begin
-              psum_select <= 0;
-              adder_1_en  <= 0;
-              adder_2_en  <= 0;
-              if (stride_reg != 0) begin
-                iact_data_position_reg <= PE_Y + PE_X * stride_reg;
-              end
-              if (iact_data_position_reg >= NUM_GLB_IACT[7:0]) begin
-                iact_data_position_reg <= iact_data_position_reg - NUM_GLB_IACT[7:0];
-              end
-              if (iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]]) begin
-                current_state_computing <= CALCULATING;
-                wght_data_SPad_en_r <= 1;
-                next_iact <= iact_enable_i[iact_data_position_reg[$clog2(NUM_GLB_IACT+1)-1:0]];
-                if (iact_data_position_reg == 0) begin
-                  iact_data_current_2 <= iact_part_1_w;
-                end else begin
-                  if (iact_data_position_reg == 1) begin
-                    iact_data_current_2 <= iact_part_2_w;
-                  end else begin
-                    iact_data_current_2 <= iact_part_3_w;
-                  end
-                end
-              end
-            end*/
             // Check if external system wants to read partial sums
             if (psum_enable_i) begin
               current_state_computing <= SEND_PSUM;
@@ -1267,9 +1223,6 @@ module PE #(
                 used_psum_memory_2 <= 0;
               end else begin
                 used_psum_memory <= 0;
-              end
-              if (first_spad_iact_en_w & second_spad_iact_en_w & (second_spad_iact_en_w == 15)) begin
-                //iact_addr_max_reg <= 16;
               end
             end
           end
@@ -1407,9 +1360,6 @@ module PE #(
             wght_start_set          <= 1;
             computing               <= 1;
             wght_addr_use_vec       <= 1;
-            if (iact_addr_current == 1) begin
-              next_iact2 <= 1;
-            end
             if (wght_data_end > wght_data_start) begin
               values_valid <= 1;
             end
@@ -1454,7 +1404,7 @@ module PE #(
               // Rationale: Set defaults for all SPad enables and control flags
               iact_addr_SPad_en_r   <= 0;            // Disable iact address reads
               iact_data_SPad_en_r   <= !mux_iact_ready; // Enable iact data when ready
-              wght_addr_SPad_en_r   <= SPARSITY_EN;  // Enable weight address reads only in sparse mode
+              wght_addr_SPad_en_r   <= $bits(wght_addr_SPad_en_r)'(SPARSITY_EN);  // Enable weight address reads only in sparse mode
               psum_data_SPad_en_a_r <= computing;    // Read psum port A when computing
               psum_data_SPad_en_b_r <= computing;    // Read psum port B when computing
               psum_data_SPad_en_a_w <= 0;            // Disable psum writes (default)
@@ -1466,7 +1416,6 @@ module PE #(
               wght_addr_use_vec     <= 1;            // Use computed weight addresses
               fast_cycle            <= 0;            // Not in fast cycling mode
               next_iact             <= 0;            // Don't advance activation yet
-              next_iact2            <= 0;            // No dual activation
               psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1; // Next psum A memory
               psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2; // Next psum B memory
 
@@ -1566,7 +1515,6 @@ module PE #(
               // vector falls within the valid range for MAC operations.
               if (next_iact) begin
                 // Update iact data pipeline (3-cycle delay for SPad read latency)
-                next_iact2           <= iact_addr_SPad_en_r; // Latch enable signal
                 iact_data_current_1  <= iact_data_spad_pay;  // Read new activation
                 iact_data_current_2  <= iact_data_current_1; // Shift pipeline stage 1
                 iact_data_current_3  <= iact_data_current_2; // Shift pipeline stage 2
@@ -1717,9 +1665,7 @@ module PE #(
             psum_data_SPad_en_a_r <= 0;
             psum_data_SPad_en_b_r <= 0;
             psum_data_SPad_en_a_w <= 1;
-            if (!data_mode_reg) begin
-              psum_data_SPad_en_b_w <= 1;
-            end
+            psum_data_SPad_en_b_w <= 1;
             psum_spad_addr_a_mem <= 0;
             if (SERIAL == 1) begin
               psum_spad_addr_b_mem <= 0;
@@ -1808,33 +1754,31 @@ module PE #(
                 end
               end
             end else begin
-              if (!data_mode_reg) begin
-                if (SERIAL == 1) begin
-                  if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
-                    use_psum_1 <= 1;
-                  end else begin
-                    use_psum_1 <= 0;
-                    //used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
-                  end
-                  if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
-                    use_psum_2 <= 1;
-                  end else begin
-                    use_psum_2 <= 0;
-                    //used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
-                  end
+              if (SERIAL == 1) begin
+                if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
+                  use_psum_1 <= 1;
                 end else begin
-                  if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
-                    use_psum_1 <= 1;
-                  end else begin
-                    use_psum_1 <= 0;
-                    used_psum_memory[(psum_spad_addr_a_r)] <= 1;
-                  end
-                  if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
-                    use_psum_2 <= 1;
-                  end else begin
-                    use_psum_2 <= 0;
-                    used_psum_memory[(psum_spad_addr_b_r)] <= 1;
-                  end
+                  use_psum_1 <= 0;
+                  //used_psum_memory_1[(psum_spad_addr_a_r)] <= 1;
+                end
+                if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
+                  use_psum_2 <= 1;
+                end else begin
+                  use_psum_2 <= 0;
+                  //used_psum_memory_2[(psum_spad_addr_b_r)] <= 1;
+                end
+              end else begin
+                if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
+                  use_psum_1 <= 1;
+                end else begin
+                  use_psum_1 <= 0;
+                  used_psum_memory[(psum_spad_addr_a_r)] <= 1;
+                end
+                if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
+                  use_psum_2 <= 1;
+                end else begin
+                  use_psum_2 <= 0;
+                  used_psum_memory[(psum_spad_addr_b_r)] <= 1;
                 end
               end
             end
@@ -1906,7 +1850,7 @@ module PE #(
     // - No weight address SPad needed (weights stored densely)
     // - No overhead-bit pipeline (iact_oh_delay_*, iact_data_spad_oh unused)
     // - No weight range computation (all weights valid)
-    // - No zero-skipping (next_iact/next_iact2/values_valid unused)
+    // - No zero-skipping (next_iact/values_valid unused)
     // - Sequential addressing: iact and weight SPads are read in order
     // - Loop termination: when all iact data words processed
 
@@ -1921,7 +1865,6 @@ module PE #(
         iact_addr_SPad_en_r     <= 0;
         iact_data_SPad_addr     <= 0;
         iact_data_SPad_en_r     <= 0;
-        iact_data_position_reg  <= 0;
         wght_addr_SPad_en_r     <= 0;
         wght_data_vec           <= 0;
         wght_data_SPad_en_r     <= 0;
@@ -2216,9 +2159,6 @@ module PE #(
             psum_data_SPad_en_a_r <= computing;
             psum_data_SPad_en_b_r <= computing;
             psum_data_SPad_en_a_w <= 1;
-            if (!data_mode_reg) begin
-              psum_data_SPad_en_b_w <= 1;
-            end
             if (computing) begin
               psum_spad_addr_a_mem <= psum_spad_addr_a_mem + 2;
               psum_spad_addr_b_mem <= psum_spad_addr_b_mem + 2;
@@ -2312,31 +2252,29 @@ module PE #(
                 end
               end
             end else begin
-              if (!data_mode_reg) begin
-                if (SERIAL == 1) begin
-                  if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
-                    use_psum_1 <= 1;
-                  end else begin
-                    use_psum_1 <= 0;
-                  end
-                  if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
-                    use_psum_2 <= 1;
-                  end else begin
-                    use_psum_2 <= 0;
-                  end
+              if (SERIAL == 1) begin
+                if (used_psum_memory_1[(psum_spad_addr_a_r)] == 1) begin
+                  use_psum_1 <= 1;
                 end else begin
-                  if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
-                    use_psum_1 <= 1;
-                  end else begin
-                    use_psum_1 <= 0;
-                    used_psum_memory[(psum_spad_addr_a_r)] <= 1;
-                  end
-                  if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
-                    use_psum_2 <= 1;
-                  end else begin
-                    use_psum_2 <= 0;
-                    used_psum_memory[(psum_spad_addr_b_r)] <= 1;
-                  end
+                  use_psum_1 <= 0;
+                end
+                if (used_psum_memory_2[(psum_spad_addr_b_r)] == 1) begin
+                  use_psum_2 <= 1;
+                end else begin
+                  use_psum_2 <= 0;
+                end
+              end else begin
+                if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
+                  use_psum_1 <= 1;
+                end else begin
+                  use_psum_1 <= 0;
+                  used_psum_memory[(psum_spad_addr_a_r)] <= 1;
+                end
+                if (used_psum_memory[(psum_spad_addr_b_r)] == 1) begin
+                  use_psum_2 <= 1;
+                end else begin
+                  use_psum_2 <= 0;
+                  used_psum_memory[(psum_spad_addr_b_r)] <= 1;
                 end
               end
             end
@@ -2405,11 +2343,10 @@ module PE #(
   // Stores addresses/indices for sparse input activation data
   // Only instantiated when SPARSITY_EN=1
   generate
-    if (SPARSITY_EN) begin : gen_iact_addr_spad
+    if (SPARSITY_EN == 1) begin : gen_iact_addr_spad
       SPad_SP #(
           .DATA_WIDTH(IACT_ADDR_DATA),
-          .ADDR_WIDTH(IACT_ADDR_ADDR_BITWIDTH),
-          .Implementation("pe_iact_addr")
+          .ADDR_WIDTH(IACT_ADDR_ADDR_BITWIDTH)
       ) iact_addr_SPad (
           .clk_i (clk_i),
           .re_i  (iact_addr_SPad_en_r & !first_spad_iact_en_w),
@@ -2428,8 +2365,7 @@ module PE #(
   // Stores actual input activation values with overhead bits for sparsity
   SPad_SP #(
       .DATA_WIDTH(IACT_DATA_DATA),
-      .ADDR_WIDTH(IACT_DATA_ADDR_BITWIDTH),
-      .Implementation("pe_iact_data")
+      .ADDR_WIDTH(IACT_DATA_ADDR_BITWIDTH)
   ) iact_data_SPad (
       .clk_i (clk_i),
       .re_i  (iact_data_SPad_en_r & !second_spad_iact_en_w),
@@ -2443,11 +2379,10 @@ module PE #(
   // Stores pointers/addresses into weight data SPad for sparse weight access
   // Only instantiated when SPARSITY_EN=1
   generate
-    if (SPARSITY_EN) begin : gen_wght_addr_spad
+    if (SPARSITY_EN == 1) begin : gen_wght_addr_spad
       SPad_SP #(
           .DATA_WIDTH(WGHT_ADDR_DATA),
-          .ADDR_WIDTH(WGHT_ADDR_ADDR_BITWIDTH),
-          .Implementation("pe_weight_addr")
+          .ADDR_WIDTH(WGHT_ADDR_ADDR_BITWIDTH)
       ) weight_addr_SPad (
           .clk_i (clk_i),
           .re_i  (wght_addr_SPad_en_r & !first_spad_wght_en_w),
@@ -2467,8 +2402,6 @@ module PE #(
   SPad_SP #(
       .DATA_WIDTH(WGHT_DATA_DATA),
       .ADDR_WIDTH(WGHT_DATA_ADDR_BITWIDTH)
-
-      , .Implementation("pe_weight_data")
   ) weight_data_SPad (
       .clk_i (clk_i),
       .re_i  (wght_data_SPad_en_r & !second_spad_wght_en_w),
@@ -2496,9 +2429,7 @@ module PE #(
     );
     SPad_DP #(
         .DATA_WIDTH(PSUM_DATA),
-        .ADDR_WIDTH(PSUM_ADDR_BITWIDTH),
-
-        .Implementation("pe_psum")
+        .ADDR_WIDTH(PSUM_ADDR_BITWIDTH)
     ) psum_SPad_B (
         .clk_i(clk_i),
         .re_i(psum_data_SPad_en_b_r || psum_enable_i),
@@ -2512,8 +2443,6 @@ module PE #(
     SPad_DP_RW #(
         .DATA_WIDTH(PSUM_DATA),
         .ADDR_WIDTH(PSUM_ADDR_BITWIDTH)
-
-        , .Implementation("pe_psum")
     ) psum_SPad (
         .clk_i     (clk_i),
         .re_a_i    (psum_data_SPad_en_a_r || psum_enable_i),
@@ -2555,16 +2484,15 @@ module PE #(
   // two-level SPad structure (address SPad + data SPad) for sparse storage
   data_pipeline_wght #(
       .DATA_WIDTH      (TRANS_BITWIDTH_WGHT),
+      .SPARSITY_EN     (SPARSITY_EN),
       .FIRST_SPAD_ADDR (WGHT_ADDR_ADDR),
       .FIRST_SPAD_DATA (WGHT_ADDR_DATA),
       .SECOND_SPAD_ADDR(WGHT_DATA_ADDR),
-      .SECOND_SPAD_DATA(WGHT_DATA_DATA),
-      .SPARSITY_EN     (SPARSITY_EN)
+      .SECOND_SPAD_DATA(WGHT_DATA_DATA)
   ) wght_data_handler (
       .clk_i    (clk_i),
       .rst_ni   (rst_ni),
       .compute_i(compute_i | enable_stream_i),
-      //.data_mode(1'd0), ReAdd later
 
       .data_i  (wght_data_i),
       .enable_i(wght_enable_i),
@@ -2590,16 +2518,15 @@ module PE #(
   // two-level SPad structure (address SPad + data SPad) for sparse storage
   data_pipeline_iact #(
       .DATA_WIDTH      (TRANS_BITWIDTH_IACT),
+      //.SPARSITY_EN     (SPARSITY_EN),
       .FIRST_SPAD_ADDR (IACT_ADDR_ADDR),
       .FIRST_SPAD_DATA (IACT_ADDR_DATA),
       .SECOND_SPAD_ADDR(IACT_DATA_ADDR),
-      .SECOND_SPAD_DATA(IACT_DATA_DATA),
-      .SPARSITY_EN     (SPARSITY_EN)
+      .SECOND_SPAD_DATA(IACT_DATA_DATA)
   ) iact_data_handler (
       .clk_i    (clk_i),
       .rst_ni   (rst_ni),
       .compute_i(compute_i | enable_stream_i),
-      //.data_mode         (data_mode_reg), ReAdd later
 
       .data_i                    (mux_iact_a_o_w),
       .enable_i                  (mux_iact_b_o_w),
@@ -2643,8 +2570,7 @@ module PE #(
           .multiplier_en_i(values_valid),
           .factor_1       (mult_1_fac_1),
           .factor_2       (mult_1_fac_2),
-          .product        (mult_1_o_w),
-          .fraction_bit_i (fraction_bit_reg)
+          .product        (mult_1_o_w)
       );
 
       // Multiplier 2: Second parallel MAC unit
@@ -2659,8 +2585,7 @@ module PE #(
           .multiplier_en_i(values_valid),
           .factor_1       (mult_2_fac_1),
           .factor_2       (mult_2_fac_2),
-          .product        (mult_2_o_w),
-          .fraction_bit_i (fraction_bit_reg)
+          .product        (mult_2_o_w)
       );
 
       // Adder 1: Accumulator for MAC 1
@@ -2765,7 +2690,7 @@ module PE #(
     mux2 #(
         .DATA_WIDTH(TRANS_BITWIDTH_PSUM * PARALLEL_MACS)
     ) mux_psum (
-        .a_in ({psum_data_2_delay, psum_data_1_delay}),
+        .a_in (psum_data_combined_w),
         .b_in ({mult_2_o_w, mult_1_o_w}),
         .sel_i(psum_select),
         .y_o  ({adder_2_summand_2, adder_1_summand_2})

@@ -103,16 +103,14 @@ module multiplier #(
     parameter DATATYPE        = 0,
     parameter DATA_WIDTH_FAC1 = 8,
     parameter DATA_WIDTH_FAC2 = 8,
-    parameter DATA_WIDTH_PROD = 20,
-    parameter Q_BITWIDTH      = $clog2(DATA_WIDTH_PROD)
+    parameter DATA_WIDTH_PROD = 20
 ) (
     input                                   clk_i,
     input                                   rst_ni,
     input                                   multiplier_en_i,
     input  signed     [DATA_WIDTH_FAC1-1:0] factor_1,
     input  signed     [DATA_WIDTH_FAC2-1:0] factor_2,
-    output reg signed [DATA_WIDTH_PROD-1:0] product,
-    input             [     Q_BITWIDTH-1:0] fraction_bit_i
+    output reg signed [DATA_WIDTH_PROD-1:0] product
 );
   generate
     if (DATATYPE == 0) begin : gen_integer
@@ -133,7 +131,7 @@ module multiplier #(
           product <= 0;
         end else begin
           if (multiplier_en_i) begin
-            product <= (factor_1 * factor_2) >> fraction_bit_i;
+            product <= factor_1 * factor_2;
           end else begin
             product <= 0;
           end

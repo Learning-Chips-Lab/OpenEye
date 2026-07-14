@@ -15,7 +15,7 @@ registers:
   - {name: needed_cycles, width: 18}
   - {name: iact_converter_buffer_addr_max_cycles, width: 8}
   - {name: iact_channels_per_pe, width: 8}
-  - {name: fc_size_reg, width: 12}
+  - {name: fc_size_reg, width: 14}
   - {name: iact_size_x, width: 12}
   - {name: iact_size_y, width: 8}
   - {name: psum_size_x, width: 12}
@@ -34,7 +34,7 @@ registers:
   - {name: iact_channel_max_cycles, width: 8}
   - {name: input_activations, width: 5}
   - {name: filters, width: 6}
-  - {name: needed_x_cls_reg, width: 2}
+  - {name: needed_x_cls_reg, width: ceil(log2(int(CLUSTER_COLUMNS)+1))}
   - {name: needed_y_cls_reg, width: ceil(log2(int(CLUSTER_ROWS)+1))}
   - {name: needed_iact_cycles_reg, width: 4}
   - {name: wght_addr_len_reg, width: 5}

@@ -566,12 +566,6 @@ def create_model_from_tflite(use_random=False, tflite_model_path=None, model_nam
 
 
             show_weights, show_biases = conv_layer[i].get_weights()
-            print(f"Layer {i} Gewichte Form:", show_weights.shape)
-            print(f"Layer {i} Gewichte Werte:", show_weights)
-
-            print(f"Layer {i} Biases Form:", show_biases.shape)
-        print(f"Layer {i} Biases Werte:", show_biases)
-        print("use random:",use_random)
         model.summary()
         return model
 

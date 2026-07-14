@@ -559,13 +559,13 @@ Partial sums (output accumulators) are initialized with bias values and updated 
 #### Bias Encoding
 
 ```python
-def pack_psum_bias(biases, psum_bitwidth=20):
+def pack_psum_bias(biases, PSUM_BITWIDTH=20):
     """
     Pack bias values for partial sum initialization.
 
     Args:
         biases: 1D array of bias values (one per output filter)
-        psum_bitwidth: Bits per accumulator (typically 20)
+        PSUM_BITWIDTH: Bits per accumulator (typically 20)
 
     Returns:
         List of DMA words with packed bias values
@@ -574,13 +574,13 @@ def pack_psum_bias(biases, psum_bitwidth=20):
 
     psum_storage = []
     DMA_BITWIDTH = 64
-    values_per_word = DMA_BITWIDTH // psum_bitwidth
+    values_per_word = DMA_BITWIDTH // PSUM_BITWIDTH
 
     for bias_idx in range(len(biases)):
         # Convert to two's complement if needed
         bias_val = int(biases[bias_idx])
         if bias_val < 0:
-            bias_val = (1 << psum_bitwidth) + bias_val
+            bias_val = (1 << PSUM_BITWIDTH) + bias_val
 
         word_idx = bias_idx // values_per_word
         position_in_word = bias_idx % values_per_word
@@ -590,8 +590,8 @@ def pack_psum_bias(biases, psum_bitwidth=20):
             psum_storage.append(0)
 
         # Pack into word
-        mask = (1 << psum_bitwidth) - 1
-        psum_storage[word_idx] |= (bias_val & mask) << (psum_bitwidth * position_in_word)
+        mask = (1 << PSUM_BITWIDTH) - 1
+        psum_storage[word_idx] |= (bias_val & mask) << (PSUM_BITWIDTH * position_in_word)
 
     return psum_storage
 
@@ -958,7 +958,7 @@ hw_params = OpenEyeParameters(
     PEs_Y=3,
     IACT_Bitwidth=8,
     WGHT_Bitwidth=8,
-    PSUM_Bitwidth=20
+    PSUM_BITWIDTH=20
 )
 
 # Initialize layer parameters
@@ -1015,7 +1015,7 @@ wght_dict = pack_wght_data(weights)
 
 # Pack bias/psum data
 biases = np.random.randint(-1000, 1000, (64,), dtype=np.int32)
-psum_words = pack_psum_bias(biases, psum_bitwidth=20)
+psum_words = pack_psum_bias(biases, PSUM_BITWIDTH=20)
 
 # Complete DMA transmission
 complete_config = config_words + iact_words + wght_dict['data'] + psum_words

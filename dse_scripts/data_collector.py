@@ -64,13 +64,10 @@ def collect_all_runs(base_dir=".", out_csv="all_utilization.csv"):
         rows.append(row)
 
     if not rows:
-        print("⚠️ Keine utilization.xml-Dateien gefunden.")
         return
 
     df = pd.DataFrame(rows)
     df.to_csv(out_csv, index=False)
-    print(f"✅ Ergebnisse gespeichert in {out_csv}")
-    print(df.head())
 
 if __name__ == "__main__":
     collect_all_runs(base_dir=".")

@@ -1,0 +1,164 @@
+# ====================================================================
+# Olimex GateMate EVB - Pin Constraints File (CCF)
+# Design: OpenEye_FPGA (DMA Interface)
+# ====================================================================
+
+# --------------------------------------------------------------------
+# Globals (Clock & Reset)
+# --------------------------------------------------------------------
+Pin_in  "clk_i"        Loc = "IO_SB_A8"; # 10 MHz On-Board Oscillator (oder FPLL Input)
+Pin_in  "rst_ni"       Loc = "IO_EB_B8"; # Beispiel: Zuordnung zu einem Taster oder GPIO
+
+# --------------------------------------------------------------------
+# DMA Control Signals
+# --------------------------------------------------------------------
+Pin_out "ready_dma_o"  Loc = "IO_NB_A8";
+Pin_in  "enable_dma_i" Loc = "IO_NB_B8";
+Pin_in  "ready_dma_i"  Loc = "IO_NA_A8";
+Pin_out "enable_dma_o" Loc = "IO_NA_B8";
+Pin_out "last_data_o"  Loc = "IO_WB_B8";
+
+# --------------------------------------------------------------------
+# Input DMA Bus: data_dma_i [63:0]
+# --------------------------------------------------------------------
+Pin_in "data_dma_i[0]"  Loc = "IO_SA_A0";
+Pin_in "data_dma_i[1]"  Loc = "IO_SA_B0";
+Pin_in "data_dma_i[2]"  Loc = "IO_SA_A1";
+Pin_in "data_dma_i[3]"  Loc = "IO_SA_B1";
+Pin_in "data_dma_i[4]"  Loc = "IO_SA_A2";
+Pin_in "data_dma_i[5]"  Loc = "IO_SA_B2";
+Pin_in "data_dma_i[6]"  Loc = "IO_SA_A3";
+Pin_in "data_dma_i[7]"  Loc = "IO_SA_B3";
+Pin_in "data_dma_i[8]"  Loc = "IO_SA_A4";
+Pin_in "data_dma_i[9]"  Loc = "IO_SA_B4";
+Pin_in "data_dma_i[10]" Loc = "IO_SA_A5";
+Pin_in "data_dma_i[11]" Loc = "IO_SA_B5";
+Pin_in "data_dma_i[12]" Loc = "IO_SA_A6";
+Pin_in "data_dma_i[13]" Loc = "IO_SA_B6";
+Pin_in "data_dma_i[14]" Loc = "IO_SA_A7";
+Pin_in "data_dma_i[15]" Loc = "IO_SA_B7";
+
+Pin_in "data_dma_i[16]" Loc = "IO_SB_A0";
+Pin_in "data_dma_i[17]" Loc = "IO_SB_B0";
+Pin_in "data_dma_i[18]" Loc = "IO_SB_A1";
+Pin_in "data_dma_i[19]" Loc = "IO_SB_B1";
+Pin_in "data_dma_i[20]" Loc = "IO_SB_A2";
+Pin_in "data_dma_i[21]" Loc = "IO_SB_B2";
+Pin_in "data_dma_i[22]" Loc = "IO_SB_A3";
+Pin_in "data_dma_i[23]" Loc = "IO_SB_B3";
+Pin_in "data_dma_i[24]" Loc = "IO_SB_A4";
+Pin_in "data_dma_i[25]" Loc = "IO_SB_B4";
+Pin_in "data_dma_i[26]" Loc = "IO_SB_A5";
+Pin_in "data_dma_i[27]" Loc = "IO_SB_B5";
+Pin_in "data_dma_i[28]" Loc = "IO_SB_A6";
+Pin_in "data_dma_i[29]" Loc = "IO_SB_B6";
+Pin_in "data_dma_i[30]" Loc = "IO_SB_A7";
+Pin_in "data_dma_i[31]" Loc = "IO_SB_B7";
+
+Pin_in "data_dma_i[32]" Loc = "IO_WA_A0";
+Pin_in "data_dma_i[33]" Loc = "IO_WA_B0";
+Pin_in "data_dma_i[34]" Loc = "IO_WA_A1";
+Pin_in "data_dma_i[35]" Loc = "IO_WA_B1";
+Pin_in "data_dma_i[36]" Loc = "IO_WA_A2";
+Pin_in "data_dma_i[37]" Loc = "IO_WA_B2";
+Pin_in "data_dma_i[38]" Loc = "IO_WA_A3";
+Pin_in "data_dma_i[39]" Loc = "IO_WA_B3";
+Pin_in "data_dma_i[40]" Loc = "IO_WA_A4";
+Pin_in "data_dma_i[41]" Loc = "IO_WA_B4";
+Pin_in "data_dma_i[42]" Loc = "IO_WA_A5";
+Pin_in "data_dma_i[43]" Loc = "IO_WA_B5";
+Pin_in "data_dma_i[44]" Loc = "IO_WA_A6";
+Pin_in "data_dma_i[45]" Loc = "IO_WA_B6";
+Pin_in "data_dma_i[46]" Loc = "IO_WA_A7";
+Pin_in "data_dma_i[47]" Loc = "IO_WA_B7";
+
+Pin_in "data_dma_i[48]" Loc = "IO_WB_A0";
+Pin_in "data_dma_i[49]" Loc = "IO_WB_B0";
+Pin_in "data_dma_i[50]" Loc = "IO_WB_A1";
+Pin_in "data_dma_i[51]" Loc = "IO_WB_B1";
+Pin_in "data_dma_i[52]" Loc = "IO_WB_A2";
+Pin_in "data_dma_i[53]" Loc = "IO_WB_B2";
+Pin_in "data_dma_i[54]" Loc = "IO_WB_A3";
+Pin_in "data_dma_i[55]" Loc = "IO_WB_B3";
+Pin_in "data_dma_i[56]" Loc = "IO_WB_A4";
+Pin_in "data_dma_i[57]" Loc = "IO_WB_B4";
+Pin_in "data_dma_i[58]" Loc = "IO_WB_A5";
+Pin_in "data_dma_i[59]" Loc = "IO_WB_B5";
+Pin_in "data_dma_i[60]" Loc = "IO_WB_A6";
+Pin_in "data_dma_i[61]" Loc = "IO_WB_B6";
+Pin_in "data_dma_i[62]" Loc = "IO_WB_A7";
+Pin_in "data_dma_i[63]" Loc = "IO_WB_B7";
+
+# --------------------------------------------------------------------
+# Output DMA Bus: data_dma_o [63:0]
+# --------------------------------------------------------------------
+Pin_out "data_dma_o[0]"  Loc = "IO_EA_A0";
+Pin_out "data_dma_o[1]"  Loc = "IO_EA_B0";
+Pin_out "data_dma_o[2]"  Loc = "IO_EA_A1";
+Pin_out "data_dma_o[3]"  Loc = "IO_EA_B1";
+Pin_out "data_dma_o[4]"  Loc = "IO_EA_A2";
+Pin_out "data_dma_o[5]"  Loc = "IO_EA_B2";
+Pin_out "data_dma_o[6]"  Loc = "IO_EA_A3";
+Pin_out "data_dma_o[7]"  Loc = "IO_EA_B3";
+Pin_out "data_dma_o[8]"  Loc = "IO_EA_A4";
+Pin_out "data_dma_o[9]"  Loc = "IO_EA_B4";
+Pin_out "data_dma_o[10]" Loc = "IO_EA_A5";
+Pin_out "data_dma_o[11]" Loc = "IO_EA_B5";
+Pin_out "data_dma_o[12]" Loc = "IO_EA_A6";
+Pin_out "data_dma_o[13]" Loc = "IO_EA_B6";
+Pin_out "data_dma_o[14]" Loc = "IO_EA_A7";
+Pin_out "data_dma_o[15]" Loc = "IO_EA_B7";
+
+Pin_out "data_dma_o[16]" Loc = "IO_EB_A0";
+Pin_out "data_dma_o[17]" Loc = "IO_EB_B0";
+Pin_out "data_dma_o[18]" Loc = "IO_EB_A1";
+Pin_out "data_dma_o[19]" Loc = "IO_EB_B1";
+Pin_out "data_dma_o[20]" Loc = "IO_EB_A2";
+Pin_out "data_dma_o[21]" Loc = "IO_EB_B2";
+Pin_out "data_dma_o[22]" Loc = "IO_EB_A3";
+Pin_out "data_dma_o[23]" Loc = "IO_EB_B3";
+Pin_out "data_dma_o[24]" Loc = "IO_EB_A4";
+Pin_out "data_dma_o[25]" Loc = "IO_EB_B4";
+Pin_out "data_dma_o[26]" Loc = "IO_EB_A5";
+Pin_out "data_dma_o[27]" Loc = "IO_EB_B5";
+Pin_out "data_dma_o[28]" Loc = "IO_EB_A6";
+Pin_out "data_dma_o[29]" Loc = "IO_EB_B6";
+Pin_out "data_dma_o[30]" Loc = "IO_EB_A7";
+# Note: IO_EB_B8 ist oben für rst_ni vergeben
+
+Pin_out "data_dma_o[31]" Loc = "IO_NA_A0";
+Pin_out "data_dma_o[32]" Loc = "IO_NA_B0";
+Pin_out "data_dma_o[33]" Loc = "IO_NA_A1";
+Pin_out "data_dma_o[34]" Loc = "IO_NA_B1";
+Pin_out "data_dma_o[35]" Loc = "IO_NA_A2";
+Pin_out "data_dma_o[36]" Loc = "IO_NA_B2";
+Pin_out "data_dma_o[37]" Loc = "IO_NA_A3";
+Pin_out "data_dma_o[38]" Loc = "IO_NA_B3";
+Pin_out "data_dma_o[39]" Loc = "IO_NA_A4";
+Pin_out "data_dma_o[40]" Loc = "IO_NA_B4";
+Pin_out "data_dma_o[41]" Loc = "IO_NA_A5";
+Pin_out "data_dma_o[42]" Loc = "IO_NA_B5";
+Pin_out "data_dma_o[43]" Loc = "IO_NA_A6";
+Pin_out "data_dma_o[44]" Loc = "IO_NA_B6";
+Pin_out "data_dma_o[45]" Loc = "IO_NA_A7";
+
+Pin_out "data_dma_o[46]" Loc = "IO_NB_A0";
+Pin_out "data_dma_o[47]" Loc = "IO_NB_B0";
+Pin_out "data_dma_o[48]" Loc = "IO_NB_A1";
+Pin_out "data_dma_o[49]" Loc = "IO_NB_B1";
+Pin_out "data_dma_o[50]" Loc = "IO_NB_A2";
+Pin_out "data_dma_o[51]" Loc = "IO_NB_B2";
+Pin_out "data_dma_o[52]" Loc = "IO_NB_A3";
+Pin_out "data_dma_o[53]" Loc = "IO_NB_B3";
+Pin_out "data_dma_o[54]" Loc = "IO_NB_A4";
+Pin_out "data_dma_o[55]" Loc = "IO_NB_B4";
+Pin_out "data_dma_o[56]" Loc = "IO_NB_A5";
+Pin_out "data_dma_o[57]" Loc = "IO_NB_B5";
+Pin_out "data_dma_o[58]" Loc = "IO_NB_A6";
+Pin_out "data_dma_o[59]" Loc = "IO_NB_B6";
+Pin_out "data_dma_o[60]" Loc = "IO_NB_A7";
+
+# Die verbleibenden Bits weichen auf freie West-Pins aus:
+Pin_out "data_dma_o[61]" Loc = "IO_WA_A8";
+Pin_out "data_dma_o[62]" Loc = "IO_WA_B8";
+Pin_out "data_dma_o[63]" Loc = "IO_WB_A8";

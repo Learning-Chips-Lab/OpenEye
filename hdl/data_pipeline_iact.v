@@ -176,7 +176,7 @@ module data_pipeline_iact #(
     parameter SECOND_SPAD_ADDR          = 16,
     parameter SECOND_SPAD_DATA          = 12,
     parameter SECOND_PAYLOAD_WIDTH      = 8,
-    parameter SPARSITY_EN               = 1,  // 1=sparse mode (default), 0=dense mode
+    //parameter SPARSITY_EN               = 1,  // 1=sparse mode (default), 0=dense mode
     parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
     parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
     parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
@@ -186,7 +186,6 @@ module data_pipeline_iact #(
     input                                         clk_i,
     input                                         rst_ni,
     input                                         compute_i,
-    //input                                         data_mode, Insert later
 
     input      [                DATA_WIDTH-1 : 0] data_i,
     input                                         enable_i,
@@ -398,7 +397,7 @@ module data_pipeline_iact #(
         end
 
         // Wrap cycle_counter at SECOND_SPAD_DATA_CYCLE so it stays in range.
-        if (cycle_counter == SECOND_SPAD_DATA_CYCLE - 1) begin
+        if (cycle_counter == $bits(cycle_counter)'(SECOND_SPAD_DATA_CYCLE - 1)) begin
           cycle_counter <= 0;
         end
 
@@ -547,11 +546,11 @@ module data_pipeline_iact #(
           if (uneven_counter == iact_x_line_repetitions_i - 1) begin
             // Wrap: toggle the storage flag; next line starts at the opposite sub-word.
             uneven_ending_storage <= 1 - uneven_ending_storage;
-            cycle_counter         <= 1 - uneven_ending_storage;
+            cycle_counter <= $bits(cycle_counter)'(1) - $bits(cycle_counter)'(uneven_ending_storage);
             uneven_ending         <= 1 - uneven_ending_storage;
           end else begin
             // No wrap: continue with the current storage value.
-            cycle_counter <= uneven_ending_storage;
+            cycle_counter <= $bits(cycle_counter)'(uneven_ending_storage);
             uneven_ending <= uneven_ending_storage;
           end
         end

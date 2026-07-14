@@ -532,7 +532,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
     layer_es = les.LayerExecutionState()
     les.x_start = 0
     array = []
-    for refresh in range(layer_params.needed_refreshes_mx[0][0]) :
+    for refresh in range(layer_params.needed_refreshes_mx[0][0]//layer_params.diff_iact_layer) :
         les.y_start = ((refresh // filter_cycles) // layer_params.iact_x_line_repetitions) * layer_params.y_lines_per_calculation
         les.f_start = layer_params.used_psum_per_PE * (refresh % filter_cycles) * layer_params.different_kernels_per_calculation
 
@@ -705,7 +705,7 @@ def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_
 
 def calculate_conv_results_mp(f, layer_number, layer_params, serial, dram, calculated_results, return_dict, semaphore):
     with semaphore:
-        if(f < layer_params.kernel_shape[3]):
+        if(f < layer_params.filters):
             for j in range(layer_params.output_shape[1]):
                 for i in range(layer_params.output_shape[2]):
                     for x in range(0 - math.floor(layer_params.kernel_size[0]/2),math.ceil(layer_params.kernel_size[0]/2)):

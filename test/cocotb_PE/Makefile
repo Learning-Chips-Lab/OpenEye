@@ -1,8 +1,8 @@
 # Makefile
 
 # defaults
-#SIM ?= verilator
-SIM ?= icarus
+SIM ?= verilator
+#SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 #EXTRA_ARGS += --trace-fst --trace-structs
 
