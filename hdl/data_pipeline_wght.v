@@ -195,13 +195,11 @@ module data_pipeline_wght #(
     parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
     parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
     parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
-    parameter SECOND_SPAD_DATA_CYCLE    = DATA_WIDTH / SECOND_SPAD_DATA,
     parameter SECOND_OVERHEAD_WIDTH     = SECOND_SPAD_DATA - SECOND_PAYLOAD_WIDTH
 ) (
     input clk_i,
     input rst_ni,
     input compute_i,
-    //input                                         data_mode, Insert later
 
     input      [                DATA_WIDTH-1 : 0] data_i,
     input                                         enable_i,
@@ -291,10 +289,6 @@ module data_pipeline_wght #(
   //   during the previous cycle (overhead_new_calc_reg >= filters_w).
   reg         [$clog2(SECOND_OVERHEAD_WIDTH)  :0] overhead_new_calc_reg;
 
-  // cycle_max_reg: reserved register for configurable cycle-count limit.
-  //   Currently unused but present for future data-width extension.
-  reg         [                              3:0] cycle_max_reg;
-
   // compute_delay: one-cycle delayed copy of compute_i.
   //   Triggers a second pipeline-flush step one cycle after compute_i:
   //   clears data_storage_1/2, first_spad_addr registers.
@@ -343,13 +337,6 @@ module data_pipeline_wght #(
   //   a filter boundary.
   reg         [                              7:0] overhead_pos;
 
-  // missingvalue: indicates how many sub-words of data_i belong to the
-  //   current filter (vs. the next).
-  //   = 2 if (overhead_pos + input_words_w[0][11:8] < filters_w * 2)
-  //     (both sub-words fit in the current filter).
-  //   = 1 if the second sub-word already belongs to the next filter.
-  wire        [                              1:0] missingvalue;
-
   // filters_w: effective filter size (first_spad_max_i, defaulting to 16
   //   when first_spad_max_i == 0).
   wire        [  $clog2(FIRST_SPAD_ADDR+1)-1 : 0] filters_w;
@@ -380,12 +367,6 @@ module data_pipeline_wght #(
   // filters_w: treat first_spad_max_i == 0 as 16 (full filter depth).
   assign filters_w = first_spad_max_i == 0 ? 16 : first_spad_max_i;
 
-  // missingvalue: does the current input word straddle the filter boundary?
-  //   Compares the byte offset into the current filter (overhead_pos + the
-  //   first sub-word's overhead tag) against the filter size in bytes
-  //   (filters_w * 2, because each filter entry occupies 2 positions).
-  assign missingvalue = (overhead_pos + input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH] < filters_w*2) ? 2 : 1;
-
   // next_channel_counter: signed comparison to detect filter-boundary crossing.
   //   Positive (>= 0) means the accumulated count has reached filters_w,
   //   so the first SPAD address should step and counters reset.
@@ -409,9 +390,9 @@ module data_pipeline_wght #(
   // premade_spad_2_output: corrected second SPAD output word.
   //   Sparse: replace bits [11:8] (overhead tag) with overhead_output.
   //   Dense:  pass data_storage_2 unchanged.
-  if (SPARSITY_EN) begin
+  if (SPARSITY_EN) begin : gen_sparse
     assign premade_spad_2_output = {data_storage_2[23:12], overhead_output, data_storage_2[7:0]};
-  end else begin
+  end else begin : gen_dense
     assign premade_spad_2_output = data_storage_2;
   end
 
@@ -598,7 +579,7 @@ module data_pipeline_wght #(
           end
         end
 
-        temp_acc_overhead     <= temp_acc_overhead + overhead_w;
+        temp_acc_overhead     <= temp_acc_overhead + $bits(temp_acc_overhead)'(overhead_w);
         overhead_pos          <= overhead_pos + 2;
 
         // Wrap address_temp_2 and cycle_counter at SECOND_SPAD depth.
@@ -621,7 +602,7 @@ module data_pipeline_wght #(
         // Idle: seed data_storage_1 to -filters_w so the next data burst
         // sees the correct threshold from the very first word.
         data_storage_1     <= -filters_w;
-        overhead_pos       <= filters_w;
+        overhead_pos       <= $bits(overhead_pos)'(filters_w);
       end
 
       // -----------------------------------------------------------------------

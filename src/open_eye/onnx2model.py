@@ -1,669 +1,295 @@
-# This file is part of the OpenEye project.
-# © Fachhochschule Dortmund – University of Applied Sciences and Arts (until 2025), Universität Duisburg-Essen (since 2025).
-# SPDX-License-Identifier: SHL-2.1
-# For more details, see the LICENSE file in the root directory of this project.
-
-"""ONNX model converter for OpenEye neural network accelerator.
-
-This module provides functionality to convert ONNX models to a format
-compatible with the OpenEye neural network accelerator. It supports quantized
-ONNX models and maps them to the internal layer representation used by OpenEye.
-
-Key Classes:
-- ONNXLayer: Base class for all layer types from ONNX
-- ONNXConv2d: Convolutional layer representation
-- ONNXMaxPooling2d: Max pooling layer representation
-- ONNXLinear: Fully connected layer representation (Gemm)
-- ONNXModel: Container class for the complete ONNX model
-
-Typical Usage:
-    >>> import onnx
-    >>> onnx_model = onnx.load('model.onnx')
-    >>> openeye_model = create_model_from_onnx(onnx_model)
-    >>> print(f"Converted {len(openeye_model.layers)} layers")
-
-Supported Layer Types:
-    - Conv (Convolution)
-    - QLinearConv (Quantized Convolution)
-    - MaxPool (Max Pooling)
-    - Gemm (Fully Connected/Dense)
-    - QLinearMatMul (Quantized Fully Connected)
-    - Relu
-    - BatchNormalization
-"""
-
+import os
+import torch
 import onnx
 from onnx import numpy_helper
+import onnxruntime as ort
 import numpy as np
-from pathlib import Path
-import math
-import logging
-from open_eye.base_model import OpenEyeBaseModel
-
-logger = logging.getLogger("cocotb")
-
-
-class ONNXLayer(object):
-    """Base class for ONNX layers in OpenEye.
-
-    This class serves as the foundation for all ONNX layer types supported by
-    the OpenEye accelerator. It provides common attributes and interfaces compatible
-    with the existing TFLite layer system.
-
-    Attributes:
-        name (str): Name/type of the layer
-        idx_in (int): Input tensor index
-        idx_out (int): Output tensor index
-        input_shape (tuple): Shape of input tensor
-        output_shape (tuple): Shape of output tensor
-    """
-    def __init__(self, name, idx_in, idx_out, input_shape, output_shape):
-        """Initialize an ONNX layer.
-
-        Args:
-            name: Identifier/type of the layer
-            idx_in: Input tensor index
-            idx_out: Output tensor index
-            input_shape: Shape of input tensor
-            output_shape: Shape of output tensor
-        """
-        self.name = name
-        self.idx_in = idx_in
-        self.idx_out = idx_out
-        self.input_shape = input_shape
-        self.output_shape = output_shape
-
-
-class ONNXConv2d(ONNXLayer):
-    """2D Convolutional layer implementation for ONNX models.
-
-    This class represents a 2D convolutional layer with support for:
-    - Weight and bias parameters
-    - ReLU activation
-    - Batch normalization
-    - Quantization parameters
-    - Configurable stride and kernel size
-
-    Attributes:
-        weights (list): List containing weights and bias tensors
-        store_in_psum (int): Flag for partial sum storage
-        skip_psum (int): Flag for skipping partial sum computation
-        filters (int): Number of output filters
-        kernel_size (tuple): Size of convolution kernel (height, width)
-        kernel (ndarray): Convolution kernel weights
-        relu (bool): Whether ReLU activation is applied
-        batchnorm (bool): Whether batch normalization is applied
-        strides (tuple): Convolution stride in (height, width)
-        quantization_factor (float): Scale factor for quantization
-        zero_point (int): Zero point for quantization
-    """
-    weights = []
-    store_in_psum = 0
-    skip_psum = 0
-
-    def __init__(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu=False, bn=False):
-        """Initialize a 2D convolutional layer.
-
-        Args:
-            idx_in (int): Input tensor index
-            idx_out (int): Output tensor index
-            input_shape (tuple): Shape of input tensor
-            output_shape (tuple): Shape of output tensor
-            weights (ndarray): Convolution kernel weights
-            bias (ndarray): Bias terms
-            qf (float): Quantization scale factor
-            zp (int): Quantization zero point
-            relu (bool, optional): Apply ReLU activation. Defaults to False
-            bn (bool, optional): Apply batch normalization. Defaults to False
-        """
-        super().__init__('conv2d', idx_in, idx_out, input_shape, output_shape)
-
-        self.weights = [weights, bias]
-        self.filters = len(bias)
-        self.kernel_size = weights.shape[:2]
-        self.kernel = weights
-        self.relu = relu
-        self.batchnorm = bn
-        self.strides = (1, 1)
-
-        # quantization
-        self.quantization_factor = qf
-        self.zero_point = zp
-
-
-class ONNXMaxPooling2d(ONNXLayer):
-    """2D Max Pooling layer implementation for ONNX models.
-
-    This class represents a 2D max pooling layer that downsamples the input
-    by taking the maximum value in sliding windows.
-
-    The layer maintains the dimensionality reduction information through its
-    input and output shapes but doesn't require weights or additional parameters.
-    """
-    def __init__(self, idx_in, idx_out, input_shape, output_shape):
-        """Initialize a 2D max pooling layer.
-
-        Args:
-            idx_in (int): Input tensor index
-            idx_out (int): Output tensor index
-            input_shape (tuple): Shape of input tensor
-            output_shape (tuple): Shape of output tensor
-        """
-        super().__init__('max_pooling2d', idx_in, idx_out, input_shape, output_shape)
-
-
-class ONNXLinear(ONNXLayer):
-    """Dense (fully connected) layer implementation for ONNX models.
-
-    This class represents a fully connected layer (Gemm/MatMul in ONNX) that
-    performs a matrix multiplication with learnable weights and biases.
-    It supports quantization for efficient computation on hardware.
-
-    Attributes:
-        weights (list): List containing weight matrix and bias vector
-        qf (None): Default quantization factor
-        quantization_factor (float): Scale factor for quantization
-        zero_point (int): Zero point for quantization
-    """
-    weights = []
-    qf = None
-
-    def __init__(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp):
-        """Initialize a dense layer.
-
-        Args:
-            idx_in (int): Input tensor index
-            idx_out (int): Output tensor index
-            input_shape (tuple): Shape of input tensor
-            output_shape (tuple): Shape of output tensor
-            weights (ndarray): Weight matrix
-            bias (ndarray): Bias vector
-            qf (float): Quantization scale factor
-            zp (int): Quantization zero point
-        """
-        super().__init__('dense', idx_in, idx_out, input_shape, output_shape)
-
-        self.weights = [weights, bias]
-
-        # quantization
-        self.quantization_factor = qf
-        self.zero_point = zp
-
-
-class ONNXModel(OpenEyeBaseModel):
-    """Container class for ONNX models in OpenEye.
-
-    This class manages a collection of neural network layers and provides
-    methods to add different types of layers. It serves as the high-level
-    representation of a complete neural network model compatible with
-    the existing OpenEye infrastructure.
-
-    Inherits from OpenEyeBaseModel to provide:
-    - input_shape property
-    - output_shape property
-    - is_quantized property
-    - Common model inspection methods
-
-    Attributes:
-        layers (list): List of layer objects in the model
-    """
-
-    def __init__(self):
-        """Initialize an empty ONNX model."""
-        super().__init__(framework='onnx')
-        self.layers = []
-
-    def add_conv2d(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu=None, bn=None):
-        """Add a 2D convolutional layer to the model.
-
-        Args:
-            idx_in (int): Input tensor index
-            idx_out (int): Output tensor index
-            input_shape (tuple): Shape of input tensor
-            output_shape (tuple): Shape of output tensor
-            weights (ndarray): Convolution kernel weights
-            bias (ndarray): Bias terms
-            qf (float): Quantization scale factor
-            zp (int): Quantization zero point
-            relu (bool, optional): Apply ReLU activation
-            bn (bool, optional): Apply batch normalization
-        """
-        layer = ONNXConv2d(idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp, relu, bn)
-        self.layers.append(layer)
-
-    def add_max_pooling2d(self, idx_in, idx_out, input_shape, output_shape):
-        """Add a 2D max pooling layer to the model.
-
-        Args:
-            idx_in (int): Input tensor index
-            idx_out (int): Output tensor index
-            input_shape (tuple): Shape of input tensor
-            output_shape (tuple): Shape of output tensor
-        """
-        layer = ONNXMaxPooling2d(idx_in, idx_out, input_shape, output_shape)
-        self.layers.append(layer)
-
-    def add_dense(self, idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp):
-        """Add a dense (fully connected) layer to the model.
-
-        Args:
-            idx_in (int): Input tensor index
-            idx_out (int): Output tensor index
-            input_shape (tuple): Shape of input tensor
-            output_shape (tuple): Shape of output tensor
-            weights (ndarray): Weight matrix
-            bias (ndarray): Bias vector
-            qf (float): Quantization scale factor
-            zp (int): Quantization zero point
-        """
-        layer = ONNXLinear(idx_in, idx_out, input_shape, output_shape, weights, bias, qf, zp)
-        self.layers.append(layer)
-
-
-def quantize_scale(scale):
-    """Calculate quantization parameters for a given scale factor.
-
-    This function converts a floating-point scale factor into fixed-point
-    representation suitable for hardware implementation. It decomposes the
-    scale into a multiplier and shift value.
-
-    Args:
-        scale (float): Scale factor to quantize
-
-    Returns:
-        tuple: (q, shift) where:
-            - q (int): Fixed-point multiplier
-            - shift (int): Required bit shift
-
-    Implementation Details:
-        - Uses frexp to decompose float into mantissa and exponent
-        - Handles special case of zero scale
-        - Ensures no overflow in fixed-point representation
-        - Adjusts for maximum precision while avoiding overflow
-    """
-    if scale == 0:
-        return 0, 0
-
-    m, e = math.frexp(scale)
-    q = int(round(m * (1 << 31)))
-
-    if q == (1 << 31):
-        q //= 2
-        e += 1
-
-    shift = -e
-    return q, shift
-
-
-def get_initializer_dict(onnx_model):
-    """Create a dictionary of initializers (weights/biases) from ONNX model.
-
-    Args:
-        onnx_model: ONNX model object
-
-    Returns:
-        dict: Dictionary mapping initializer names to numpy arrays
-    """
-    initializer_dict = {}
-    for initializer in onnx_model.graph.initializer:
-        initializer_dict[initializer.name] = numpy_helper.to_array(initializer)
-    return initializer_dict
-
-
-def get_tensor_shape_dict(onnx_model):
-    """Create a dictionary of tensor shapes from ONNX model.
-
-    Args:
-        onnx_model: ONNX model object
-
-    Returns:
-        dict: Dictionary mapping tensor names to shapes
-    """
-    shape_dict = {}
-
-    # Add input shapes
-    for input_tensor in onnx_model.graph.input:
-        shape = []
-        for dim in input_tensor.type.tensor_type.shape.dim:
-            shape.append(getattr(dim, 'dim_value', 1))
-        shape_dict[input_tensor.name] = tuple(shape)
-
-    # Add output shapes from value_info
-    for value_info in onnx_model.graph.value_info:
-        shape = []
-        for dim in value_info.type.tensor_type.shape.dim:
-            shape.append(getattr(dim, 'dim_value', 1))
-        shape_dict[value_info.name] = tuple(shape)
-
-    # Add output shapes
-    for output_tensor in onnx_model.graph.output:
-        shape = []
-        for dim in output_tensor.type.tensor_type.shape.dim:
-            shape.append(getattr(dim, 'dim_value', 1))
-        shape_dict[output_tensor.name] = tuple(shape)
-
-    return shape_dict
-
-
-def get_attribute_value(node, attr_name, default=None):
-    """Extract attribute value from ONNX node.
-
-    Args:
-        node: ONNX node object
-        attr_name (str): Attribute name to extract
-        default: Default value if attribute not found
-
-    Returns:
-        Attribute value or default
-    """
-    for attr in node.attribute:
-        if attr.name == attr_name:
-            if attr.ints:
-                return list(attr.ints)
-            elif attr.floats:
-                return list(attr.floats)
-            elif attr.i:
-                return attr.i
-            elif attr.f:
-                return attr.f
-            elif attr.s:
-                return attr.s.decode('utf-8')
-    return default
-
-
-def create_model_from_onnx(onnx_model_path, use_random=False):
-    """Create an OpenEye model from an ONNX model.
-
-    This function takes an ONNX model file and creates an OpenEye-compatible
-    model representation. It extracts weights, biases, and quantization
-    parameters from each supported layer type.
-
-    Args:
-        onnx_model_path (str or Path): Path to ONNX model file
-        use_random (bool, optional): Use random weights instead of trained weights.
-            Defaults to False.
-
-    Returns:
-        ONNXModel: OpenEye model representation
-
-    Features:
-        - Loads ONNX model from file
-        - Extracts weights and biases from Conv, Gemm layers
-        - Handles quantization parameters if model is quantized
-        - Supports ReLU and MaxPool operations
-        - Tracks tensor shapes through the network
-        - Converts ONNX weight format to OpenEye format
-
-    Supported Layer Types:
-        - Conv (regular and QLinearConv)
-        - MaxPool
-        - Gemm (Fully Connected)
-        - QLinearMatMul (Quantized Fully Connected)
-        - Relu
-        - BatchNormalization
-
-    Raises:
-        ValueError: If unsupported layer type is encountered
-        FileNotFoundError: If ONNX model file not found
-        RuntimeError: If weight extraction fails
-    """
-    # Load ONNX model
-    if isinstance(onnx_model_path, (str, Path)):
-        onnx_model = onnx.load(str(onnx_model_path))
-    else:
-        # Assume it's already a loaded ONNX model
-        onnx_model = onnx_model_path
-
-    # Verify the model
-    try:
-        onnx.checker.check_model(onnx_model)
-        logger.info("ONNX model is valid")
-    except Exception as e:
-        logger.warning(f"ONNX model validation warning: {e}")
-
-    # Create dictionaries for easy lookup
-    initializer_dict = get_initializer_dict(onnx_model)
-    shape_dict = get_tensor_shape_dict(onnx_model)
-
-    # Create OpenEye model
-    openeye_model = ONNXModel()
-
-    # Track tensor indices
-    idx_in = 0
-    idx_out = 0
-
-    # Track if next layer should have ReLU
-    next_has_relu = False
-
-    # Process each node in the graph
-    for node in onnx_model.graph.node:
-        node_type = node.op_type
-        node_name = node.name
-
-        logger.debug(f"Processing node: {node_name} (type: {node_type})")
-
-        # Skip QuantizeLinear and DequantizeLinear nodes (handled separately)
-        if node_type in ['QuantizeLinear', 'DequantizeLinear']:
-            continue
-
-        if node_type == 'Conv' or node_type == 'QLinearConv':
-            # Convolution layer
-            logger.debug(f"Processing Conv layer: {node_name}")
-
-            # Get input/output tensor names
-            if node_type == 'QLinearConv':
-                # QLinearConv has: input, input_scale, input_zp, weight, weight_scale, weight_zp, [bias], output_scale, output_zp
-                input_name = node.input[0]
-                weight_name = node.input[3]
-                bias_name = node.input[6] if len(node.input) > 6 else None
-                output_name = node.output[0]
-            else:
-                # Regular Conv has: input, weight, [bias]
-                input_name = node.input[0]
-                weight_name = node.input[1]
-                bias_name = node.input[2] if len(node.input) > 2 else None
-                output_name = node.output[0]
-
-            # Get weights
-            if weight_name in initializer_dict:
-                weights = initializer_dict[weight_name]
-                # ONNX format: (out_channels, in_channels, kernel_h, kernel_w)
-                # OpenEye format: (kernel_h, kernel_w, in_channels, out_channels)
-                weights = np.transpose(weights, (2, 3, 1, 0))
-            else:
-                logger.error(f"Weight {weight_name} not found in initializers")
-                continue
-
-            # Get bias
-            if bias_name and bias_name in initializer_dict:
-                bias = initializer_dict[bias_name]
-            else:
-                # No bias - create zero bias
-                out_channels = weights.shape[3]
-                bias = np.zeros(out_channels, dtype=np.int32)
-
-            # Get quantization parameters
-            if node_type == 'QLinearConv':
-                # Quantized convolution
-                input_scale_name = node.input[1]
-                weight_scale_name = node.input[4]
-                output_scale_name = node.input[7] if len(node.input) > 7 else node.input[-2]
-
-                input_scale = initializer_dict.get(input_scale_name, 1.0)
-                weight_scale = initializer_dict.get(weight_scale_name, np.array([1.0]))
-                output_scale = initializer_dict.get(output_scale_name, 1.0)
-
-                # Convert scalar to array if needed
-                if isinstance(input_scale, np.ndarray):
-                    input_scale = float(input_scale)
-                if isinstance(output_scale, np.ndarray):
-                    output_scale = float(output_scale)
-                if not isinstance(weight_scale, np.ndarray):
-                    weight_scale = np.array([weight_scale])
-
-                zero_point = 0  # Assuming symmetric quantization
-            else:
-                # Non-quantized - use default values
-                input_scale = 1.0
-                output_scale = 1.0
-                weight_scale = np.ones(weights.shape[3])
-                zero_point = 0
-
-            # Calculate quantization factors for each filter
-            qf = []
-            for scale_w in weight_scale:
-                combined_scale = input_scale * float(scale_w) / output_scale
-                mult, shift = quantize_scale(combined_scale)
-                qf.append((mult, shift + 31))
-
-            # Get shapes
-            input_shape = shape_dict.get(input_name, (1, 1, 28, 28))
-            output_shape = shape_dict.get(output_name, (1, weights.shape[3], 28, 28))
-
-            # Get stride and padding from attributes
-            strides = get_attribute_value(node, 'strides', [1, 1])
-            pads = get_attribute_value(node, 'pads', [0, 0, 0, 0])
-
-            # Add to OpenEye model
-            openeye_model.add_conv2d(
-                idx_in=idx_in,
-                idx_out=idx_out + 1,
-                input_shape=input_shape,
-                output_shape=output_shape,
-                weights=weights,
-                bias=bias,
-                qf=qf,
-                zp=zero_point,
-                relu=next_has_relu,  # Apply ReLU if flagged
-                bn=False
-            )
-
-            next_has_relu = False  # Reset flag
-            idx_in = idx_out + 1
-            idx_out += 1
-
-        elif node_type == 'MaxPool':
-            # MaxPooling layer
-            logger.debug(f"Processing MaxPool layer: {node_name}")
-
-            input_name = node.input[0]
-            output_name = node.output[0]
-
-            input_shape = shape_dict.get(input_name, (1, 1, 28, 28))
-            output_shape = shape_dict.get(output_name, (1, 1, 14, 14))
-
-            openeye_model.add_max_pooling2d(
-                idx_in=idx_in,
-                idx_out=idx_out + 1,
-                input_shape=input_shape,
-                output_shape=output_shape
-            )
-
-            idx_in = idx_out + 1
-            idx_out += 1
-
-        elif node_type == 'Gemm' or node_type == 'QLinearMatMul' or node_type == 'MatMul':
-            # Fully connected layer
-            logger.debug(f"Processing Gemm/MatMul layer: {node_name}")
-
-            # Get input/output tensor names
-            input_name = node.input[0]
-            weight_name = node.input[1]
-            bias_name = node.input[2] if len(node.input) > 2 else None
-            output_name = node.output[0]
-
-            # Get weights
-            if weight_name in initializer_dict:
-                weights = initializer_dict[weight_name]
-                # ONNX Gemm format: (out_features, in_features)
-                # OpenEye format: (in_features, out_features)
-                if len(weights.shape) == 2:
-                    weights = np.transpose(weights, (1, 0))
-            else:
-                logger.error(f"Weight {weight_name} not found in initializers")
-                continue
-
-            # Get bias
-            if bias_name and bias_name in initializer_dict:
-                bias = initializer_dict[bias_name]
-            else:
-                out_features = weights.shape[1]
-                bias = np.zeros(out_features, dtype=np.int32)
-
-            # Get quantization parameters (if quantized)
-            if node_type == 'QLinearMatMul':
-                # Similar to QLinearConv
-                scale = 1.0
-                zero_point = 0
-            else:
-                scale = 1.0
-                zero_point = 0
-
-            # Calculate quantization factors
-            qf = []
-            for i in range(weights.shape[1]):
-                mult, shift = quantize_scale(scale)
-                qf.append((mult, shift + 31))
-
-            # Get shapes
-            input_shape = shape_dict.get(input_name, (1, 784))
-            output_shape = shape_dict.get(output_name, (1, weights.shape[1]))
-
-            openeye_model.add_dense(
-                idx_in=idx_in,
-                idx_out=idx_out + 1,
-                input_shape=input_shape,
-                output_shape=output_shape,
-                weights=weights,
-                bias=bias,
-                qf=qf,
-                zp=zero_point
-            )
-
-            idx_in = idx_out + 1
-            idx_out += 1
-
-        elif node_type == 'Relu':
-            # ReLU activation - flag for next layer
-            logger.debug(f"Processing Relu layer: {node_name}")
-            # Mark that the previous layer should have ReLU
-            if len(openeye_model.layers) > 0:
-                prev_layer = openeye_model.layers[-1]
-                if hasattr(prev_layer, 'relu'):
-                    prev_layer.relu = True
-
-        elif node_type in ['BatchNormalization', 'Flatten', 'Reshape', 'Transpose', 'Squeeze', 'Unsqueeze']:
-            # These are either fused or no-ops in OpenEye
-            logger.debug(f"Processing {node_type} layer: {node_name} (will be fused or skipped)")
-            continue
-
+from onnxruntime.quantization import quant_pre_process, quantize_dynamic, QuantType
+
+class TensorShape:
+    """Helper class to allow reading shapes via .shape property, similar to TensorFlow."""
+    def __init__(self, shape_list):
+        # Swap NCHW to NHWC if the shape belongs to a 4D image/feature tensor
+        if len(shape_list) == 4:
+            # shape_list layout: [batch_size, channels, height, width]
+            # target layout:     [batch_size, height, width, channels]
+            self.shape = [shape_list[0], shape_list[2], shape_list[3], shape_list[1]]
         else:
-            # Unsupported layer type
-            logger.warning(f"Unsupported layer type {node_type}: {node_name}")
+            self.shape = shape_list
 
-    logger.info(f"Successfully converted ONNX model with {len(openeye_model.layers)} layers")
-    return openeye_model
+    def __repr__(self):
+        return str(self.shape)
+
+class HardwareLayer:
+    """Represents an extracted layer as a configurable hardware object."""
+    def __init__(self, index, layer_type, onnx_op, node_name, has_relu, input_shape, output_shape):
+        self.index = index
+        self.type = layer_type            # Type name (e.g., conv2d, dense, pooling2d)
+        self.name = node_name            # Node name within the ONNX graph
+        self.onnx_op = onnx_op
+        self.has_relu = has_relu
+        
+        # Nested shape objects convert NCHW arrays automatically to NHWC format
+        self.input = TensorShape(input_shape)
+        self.output = TensorShape(output_shape)
+        self.kernel = TensorShape([0, 0]) 
+        
+        # Default structural attributes to prevent subscriptable/NoneType crashes
+        self.kernel_size = [0, 0]
+        self.strides = [1, 1]
+        self.padding_pads = [0, 0, 0, 0]
+        self.filters = 0                  
+        
+        # Channel and feature configurations
+        self.out_channels = None
+        self.in_channels = None
+        self.out_features = None
+        self.in_features = None
+        
+        # TensorFlow convention compatibility: weights[0] = Weights, weights[1] = Bias
+        self.weights = [None, None]
+        self.bias_fp32 = None
+        self.bias_int32 = None
+        self.scale = None
+        self.zero_point = None
+
+    def __repr__(self):
+        return f"<HardwareLayer [{self.index}] {self.type} (Name: {self.name})>"
 
 
-if __name__ == "__main__":
-    # Example usage
-    import sys
-    if len(sys.argv) > 1:
-        onnx_path = sys.argv[1]
+def export_to_onnx(model, path="simple_mnist_convnet.onnx"):
+    """Stable export of PyTorch model into ONNX format."""
+    model.eval()
+    dummy_input = torch.randn(1, 1, 28, 28)
+    torch.onnx.export(
+        model, dummy_input, path,
+        export_params=True, opset_version=18, do_constant_folding=True,
+        input_names=['input'], output_names=['output'],
+        dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}},
+        dynamo=False
+    )
+    print(f"Model successfully exported to {path}!")
+    return path
+
+def quantize_to_int8(src_path, dest_path="simple_mnist_convnet_int8.onnx"):
+    """Executes graph pre-processing and dynamic quantization to signed INT8."""
+    prep_path = "simple_mnist_processed.onnx"
+    quant_pre_process(input_model_path=src_path, output_model_path=prep_path)
+    quantize_dynamic(
+        model_input=prep_path, 
+        model_output=dest_path, 
+        weight_type=QuantType.QInt8
+    )
+    if os.path.exists(prep_path):
+        os.remove(prep_path)
+    print(f"Model successfully saved as SIGNED INT8: {dest_path}")
+    return dest_path
+
+def build_graph_helpers(onnx_model):
+    """Generates maps for look-ahead (ReLU fusion) and quick initializer lookups."""
+    onnx_model = onnx.shape_inference.infer_shapes(onnx_model)
+    inits = {i.name: numpy_helper.to_array(i) for i in onnx_model.graph.initializer}
+    
+    next_node_map = {}
+    for node in onnx_model.graph.node:
+        for inp in node.input:
+            next_node_map[inp] = node
+            
+    return onnx_model, inits, next_node_map
+
+def get_tensor_shapes(onnx_model):
+    """Extracts all automatically inferred intermediate tensor shapes."""
+    shapes = {}
+    graph = onnx_model.graph
+    for val in list(graph.value_info) + list(graph.input) + list(graph.output):
+        if val.type.tensor_type.HasField("shape"):
+            shapes[val.name] = [
+                d.dim_value if d.HasField("dim_value") else d.dim_param 
+                for d in val.type.tensor_type.shape.dim
+            ]
+    return shapes
+
+def check_fused_relu(node, next_node_map):
+    """Looks ahead in the dataflow to check if the next layer is a ReLU."""
+    current_tensor = node.output[0]
+    for _ in range(5):
+        if current_tensor in next_node_map:
+            next_node = next_node_map[current_tensor]
+            if next_node.op_type == 'Relu':
+                return True
+            current_tensor = next_node.output[0]
+        else:
+            break
+    return False
+
+def extract_conv_params(node, w_arr, attrs):
+    """Extracts specific structural hyperparameters for a Convolution."""
+    return {
+        "kernel_shape": [w_arr.shape[2], w_arr.shape[3]],
+        "strides": attrs.get("strides", [1, 1]),
+        "padding_pads": attrs.get("pads", [0, 0, 0, 0]),
+        "out_channels": w_arr.shape[0],
+        "in_channels": w_arr.shape[1]
+    }
+
+def process_weights_and_biases(layer_obj, node, inits, input_scale, next_node_map):
+    """Extracts parameters and locates the split bias tensor from global initializers."""
+    w_name = node.input[1]
+    if w_name not in inits:
+        return layer_obj
+    
+    raw_weights = inits[w_name]
+    layer_obj.zero_point = 0 
+    
+    # Extract base name (e.g., "Conv1" from "Conv1.weight_quantized")
+    base_name = w_name.split('.')[0]
+    
+    # 1. Target scale and zero-point retrieval
+    for s_name in [f"{w_name}_scale", f"{base_name}.weight_scale", f"{base_name}_scale"]:
+        if s_name in inits:
+            layer_obj.scale = float(inits[s_name])
+            break
+    for zp_name in [f"{w_name}_zero_point", f"{base_name}.weight_zero_point"]:
+        if zp_name in inits:
+            layer_obj.zero_point = int(inits[zp_name])
+
+    # 2. Direct bias lookup using PyTorch naming convention patterns
+    possible_biases = [f"{base_name}.bias", f"{base_name}_bias", base_name]
+    for b_name in possible_biases:
+        if b_name in inits:
+            layer_obj.bias_fp32 = inits[b_name]
+            break
+
+    # 3. Hardware INT32 bias transformation formula
+    if layer_obj.bias_fp32 is not None and layer_obj.scale is not None:
+        scale_effective = input_scale * layer_obj.scale
+        layer_obj.bias_int32 = np.round(
+            layer_obj.bias_fp32 / scale_effective
+        ).astype(np.int32)
+        
+    # 4. Transpose weights to match target extraction sequence [x][y][c][f]
+    if layer_obj.type == 'conv2d':
+        # ONNX layout:  [f, c, y, x] (out_channels, in_channels, height, width)
+        # Desired parsing structure: [x][y][c][f]
+        layer_obj.weights[0] = np.transpose(raw_weights, (3, 2, 1, 0))
     else:
-        onnx_path = "model.onnx"
+        layer_obj.weights[0] = raw_weights
+        
+    layer_obj.weights[1] = layer_obj.bias_int32
+        
+    return layer_obj
 
-    try:
-        openeye_model = create_model_from_onnx(onnx_path)
-        print(f"Successfully converted ONNX model with {len(openeye_model.layers)} layers")
+def build_layer_dict(idx, node, shapes, next_node_map):
+    """Instantiates a new HardwareLayer object instead of a raw dictionary."""
+    op_mapping = {
+        'ConvInteger': 'conv2d', 'QLinearConv': 'conv2d',
+        'MatMulInteger': 'dense', 'QLinearMatMul': 'dense',
+        'MaxPool': 'pooling2d'
+    }
+    l_type = op_mapping[node.op_type]
+    
+    return HardwareLayer(
+        index=idx,
+        layer_type=l_type,
+        onnx_op=node.op_type,
+        node_name=node.name,
+        has_relu=check_fused_relu(node, next_node_map),
+        input_shape=shapes.get(node.input[0], "Unknown"),
+        output_shape=shapes.get(node.output[0], "Unknown")
+    )
 
-        for i, layer in enumerate(openeye_model.layers):
-            print(f"Layer {i}: {layer.name}, input_shape={layer.input_shape}, output_shape={layer.output_shape}")
+def parse_pipeline(onnx_model, inits, next_node_map, shapes):
+    """Iterates through nodes to build the clean object-oriented hardware pipeline."""
+    pipeline = []
+    input_scale = inits.get('input_scale', 1.0)
+    
+    for node in onnx_model.graph.node:
+        if node.op_type not in ['ConvInteger', 'QLinearConv', 'MatMulInteger', 'QLinearMatMul', 'MaxPool']:
+            continue
+            
+        layer = build_layer_dict(len(pipeline), node, shapes, next_node_map)
+        attrs = {a.name: (list(a.ints) if a.type == onnx.AttributeProto.INTS else a.i) for a in node.attribute}
+        
+        if layer.type in ['conv2d', 'dense']:
+            layer = process_weights_and_biases(layer, node, inits, input_scale, next_node_map)
+            if layer.type == 'conv2d' and layer.weights[0] is not None:
+                params = extract_conv_params(node, inits[node.input[1]], attrs)
+                layer.kernel = TensorShape(params["kernel_shape"])
+                layer.kernel_size = params["kernel_shape"]
+                layer.strides = params["strides"]
+                layer.padding_pads = params["padding_pads"]
+                layer.out_channels = params["out_channels"]
+                layer.in_channels = params["in_channels"]
+                layer.filters = params["out_channels"]
+            elif layer.type == 'dense' and layer.weights[0] is not None:
+                layer.out_features = layer.weights[0].shape[0]
+                layer.in_features = layer.weights[0].shape[1]
+                layer.filters = layer.weights[0].shape[0]
+        elif layer.type == 'pooling2d':
+            pool_kernel = attrs.get("kernel_shape", [2, 2])
+            layer.kernel = TensorShape(pool_kernel)
+            layer.kernel_size = pool_kernel
+            layer.strides = attrs.get("strides", [2, 2])
+            layer.padding_pads = attrs.get("pads", [0, 0, 0, 0])
+            
+        pipeline.append(layer)
+    return pipeline
 
-    except FileNotFoundError:
-        print(f"Error: ONNX model file '{onnx_path}' not found")
-        print("Usage: python onnx2model.py <path_to_onnx_model>")
-    except Exception as e:
-        print(f"Error converting ONNX model: {e}")
-        import traceback
-        traceback.print_exc()
+def print_summary(pipeline):
+    """Prints a structured summary of the custom hardware pipeline."""
+    print("\n--- Generated Dynamic Hardware Pipeline (including Tensor Shapes) ---")
+    for l in pipeline:
+        print(f"[{l.index}] Type: {l.type:<15} | In: {str(l.input.shape):<22} | Out: {str(l.output.shape):<22} | Fused ReLU: {str(l.has_relu)}")
+
+def get_model(torch_model):
+    """Main Orchestrator: Controls export, quantization, parsing, and verification."""
+    fp32_path = export_to_onnx(torch_model)
+    int8_path = quantize_to_int8(fp32_path)
+    
+    loaded_model = onnx.load(int8_path)
+    onnx_model, inits, next_node_map = build_graph_helpers(loaded_model)
+    shapes = get_tensor_shapes(onnx_model)
+    
+    pipeline = parse_pipeline(onnx_model, inits, next_node_map, shapes)
+    print_summary(pipeline)
+    
+    for layer_number in range(len(pipeline)):
+        pipeline[layer_number].name = pipeline[layer_number].type
+    
+    # =========================================================================
+    # STABLE HARDWARE REFERENCE GENERATOR (Via Graph Modification)
+    # =========================================================================
+    raw_fp32_model = onnx.load("simple_mnist_convnet.onnx")
+    target_fp32_tensor = None
+    for node_fp32 in raw_fp32_model.graph.node:
+        if node_fp32.op_type == 'MaxPool':
+            target_fp32_tensor = node_fp32.output[0]
+            break
+
+    if target_fp32_tensor is not None:
+        try:
+            new_output = onnx.ValueInfoProto()
+            new_output.name = target_fp32_tensor
+            raw_fp32_model.graph.output.append(new_output)
+            
+            debug_model_path = "simple_mnist_convnet_debug_nodes.onnx"
+            onnx.save(raw_fp32_model, debug_model_path)
+            
+            session_fp32 = ort.InferenceSession(debug_model_path)
+            test_image_fp32 = np.zeros((1, 1, 28, 28), dtype=np.float32)
+            test_image_fp32[0, 0, 5, 5] = 1.0
+            input_name_fp32 = session_fp32.get_inputs()[0].name
+            
+            outputs_fp32 = session_fp32.run([target_fp32_tensor], {input_name_fp32: test_image_fp32})
+            fp32_intermediate_values = outputs_fp32[0]
+            
+            if os.path.exists(debug_model_path):
+                os.remove(debug_model_path)
+            
+            conv2_scale = pipeline[2].scale if pipeline[2].scale is not None else 1.0
+            input_for_conv2_int8 = np.round(fp32_intermediate_values / conv2_scale).astype(np.int8)
+            
+        except Exception as e:
+            print(f"\n[Hint] Failed executing intermediate FP32 simulation: {e}")
+            
+    return pipeline

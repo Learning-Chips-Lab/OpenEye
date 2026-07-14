@@ -261,7 +261,7 @@ class ConvMapper(LayerMapper):
         """
         dma_line = 0
         dma_storage = []
-        for f in range(math.ceil(1024/2)):
+        for f in range(math.ceil(params.QUANT_AMOUNT/2)):
             dma_line = 0
             dma_line = dma_line + (layer_params.quantize[2*f][0] << 0)
             dma_line = dma_line + (layer_params.quantize[2*f][1] << 25)
@@ -288,7 +288,7 @@ class ConvMapper(LayerMapper):
         """
         dma_line = 0
         dma_storage = []
-        for f in range(math.ceil(1024/8)):
+        for f in range(math.ceil(params.QUANT_AMOUNT/8)):
             dma_line = 0
             dma_line = dma_line + (layer_params.offset[8*f] << 0)
             dma_line = dma_line + (layer_params.offset[8*f+1] << 8)
@@ -329,6 +329,8 @@ class ConvMapper(LayerMapper):
             storage = []
         else:
             storage = [[[[] for c in range(params.NUM_GLB_IACT)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+        if ((params.Clusters_Y == 1) & (params.Clusters_X == 1)):
+            return storage
         router_cycle = 0
         for cl_y in range(params.Clusters_Y):
             for cl_x in range(params.Clusters_X):
@@ -402,6 +404,8 @@ class ConvMapper(LayerMapper):
             storage = []
         else:
             storage = [[[[] for c in range(params.Wght_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+        if ((params.Clusters_Y == 1) & (params.Clusters_X == 1)):
+            return storage
         router_cycle = 0    
         for cl_x in range(params.Clusters_X):
             for cl_y in range(params.Clusters_Y):   
@@ -452,6 +456,8 @@ class ConvMapper(LayerMapper):
             storage = []
         else:
             storage = [[[[] for c in range(params.Psum_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+        if ((params.Clusters_Y == 1) & (params.Clusters_X == 1)):
+            return storage
         router_cycle = 0          
         for cl_x in range(params.Clusters_X):
             for cl_y in range(params.Clusters_Y):

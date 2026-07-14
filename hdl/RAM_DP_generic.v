@@ -76,8 +76,6 @@
 /// Data Interface:
 ///    d               - Write data input [DataWidth-1:0]
 ///                      Data to be written through port B
-///    bw              - Byte write enable [DataWidth-1:0]
-///                      Controls partial word writes
 ///    q               - Read data output [DataWidth-1:0]
 ///                      Data read through port A
 ///
@@ -97,7 +95,6 @@ module RAM_DP_generic #(
     input wire [AddrWidth-1:0] aB,
 
     input  wire [DataWidth-1:0] d,
-    input  wire [DataWidth-1:0] bw,
     output reg  [DataWidth-1:0] q
 );
 

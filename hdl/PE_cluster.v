@@ -183,7 +183,7 @@ module PE_cluster #(
     output [                      PE_COLUMNS-1:0] pe_router_psum_enable_o,
 
     input                                         enable_stream_i,
-    input  [                              12-1:0] data_stream_i
+    input  [                                 8:0] data_stream_i
 );
 
   ///#######################
@@ -252,8 +252,6 @@ module PE_cluster #(
             .SERIAL                (SERIAL),
             .PARALLEL_MACS         (PARALLEL_MACS),
             .SPARSITY_EN           (SPARSITY_EN),
-            .PE_X                  (i),
-            .PE_Y                  (j),
             .DATA_IACT_BITWIDTH    (DATA_IACT_BITWIDTH),
             .DATA_WGHT_BITWIDTH    (DATA_WGHT_BITWIDTH),
             .DATA_PSUM_BITWIDTH    (DATA_PSUM_BITWIDTH),

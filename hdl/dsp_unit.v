@@ -1,3 +1,6 @@
+
+`timescale 1ns / 1ps
+
 (* use_dsp = "yes" *) // Force usage of DSP-Ressources
 module dsp_unit #(
     parameter DATA_WIDTH_FAC1 = 1,

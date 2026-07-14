@@ -187,8 +187,6 @@ module GLB_cluster #(
           .DataWidth(TRANS_BITWIDTH_IACT),
           .AddrWidth(IACT_MEM_ADDR_BITS),
           .Pipelined(1)
-
-          , .Implementation(2)  // GLB_IACT = 2
       ) iact_glb (
           .clk_i  (clk_i),
           .rd_en_i(iact_glb_we_in_w & !data_write_enable_iact_i),
@@ -215,8 +213,6 @@ module GLB_cluster #(
           .DataWidth(TRANS_BITWIDTH_PSUM),
           .AddrWidth(PSUM_MEM_ADDR_BITS),
           .Pipelined(1)
-
-          , .Implementation(1)  // GLB_PSUM = 1
       ) psum_glb (
           .clk_i  (clk_i),
           .rd_en_i(psum_glb_re_in_w),

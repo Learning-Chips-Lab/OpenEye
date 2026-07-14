@@ -673,13 +673,9 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
             for a in range(layer_parameters.used_Y_cluster):
                 cluster_order.append(int(oep.Clusters_Y/layer_parameters.used_Y_cluster)*a+int(b/layer_parameters.used_Y_cluster))#+c*(oep.Clusters*oep.PEs_X)
 
-        print(cluster_order)
         matrix = [[[i * 16 + j * 8 + k for k in range(8)] for j in range(8)] for i in range(layer_parameters.iact_x_line_repetitions)]
         reordered_matrix = [matrix[i] for i in cluster_order]
-        print(reordered_matrix)
         flat_list = [item for row in reordered_matrix for item in row]
-        print(flat_list)
-        print(len(flat_list))
         """
         dut._log.info("Output Stream started")
         used_clusters_per_calc = math.ceil(layer_parameters.iact_size_x / 4) * 4

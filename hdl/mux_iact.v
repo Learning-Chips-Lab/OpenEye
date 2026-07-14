@@ -90,7 +90,7 @@
 ///
 
 module mux_iact #(
-    parameter WIDTH   = 20,
+    parameter WIDTH   = 24,
     parameter I_COUNT = 3
 ) (
     input      [    WIDTH*I_COUNT-1:0] a_i,
@@ -109,9 +109,10 @@ module mux_iact #(
     assign a_w[i] = a_i[(WIDTH*(i+1))-1:(WIDTH*i)];
   end
   always @(*) begin : configure_mux
-    a_o = a_w[sel_i];
-    b_o = b_i[sel_i];
-    if (sel_i == I_COUNT) begin
+    if (sel_i < I_COUNT) begin
+      a_o = a_w[sel_i];
+      b_o = b_i[sel_i];
+    end else begin
       a_o = 0;
       b_o = 0;
     end

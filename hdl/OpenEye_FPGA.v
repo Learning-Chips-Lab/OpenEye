@@ -105,6 +105,8 @@ module OpenEye_FPGA #(
       parameter BUFFER_WIDTH  = 10,
       parameter QUANT_AMOUNT  = 32,
       parameter DATA_PSUM_BITWIDTH = 32,
+      parameter CLUSTER_COLUMNS = 2,
+      parameter TRANS_WORDS = 8,
   `else
     `include "parameters.vh"
       // Defaultvalues
@@ -128,7 +130,6 @@ module OpenEye_FPGA #(
 
     parameter PES = NUM_GLB_PSUM * NUM_GLB_WGHT,
 
-    parameter CLUSTER_COLUMNS = 2,
     parameter CLUSTERS        = CLUSTER_COLUMNS * CLUSTER_ROWS,
 
     parameter IACT_ADDR_PER_PE = 9,
@@ -191,31 +192,8 @@ module OpenEye_FPGA #(
 
 ) (
     //Clock and Reset
-    input clk_i,
-    input rst_ni,
-
-    //DEBUG OUTPUT IACT
-    output                                debug_iact_we,
-    output                                debug_iact_re,
-    output  [BUFFER_WIDTH-1:0]            debug_iact_addr,
-    output  [RAM_CELLS_WORD_BITWIDTH-1:0] debug_iact_data_i,
-    output  [RAM_CELLS_WORD_BITWIDTH-1:0] debug_iact_data_o,
-
-    //DEBUG OUTPUT PSUM1
-
-    output                              debug_psum_we,
-    output                              debug_psum_re,
-    output  [BUFFER_WIDTH-1:0]          debug_psum_addr,
-    output  [TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0] debug_psum_data_i,
-    output  [TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0] debug_psum_data_o,
-
-    //DEBUG OUTPUT PSUM2
-    output                              debug_skip_iact_o,
-    output  [DMA_BITWIDTH-1 : 0]        debug_data_dma_stream_o,
-    output                              debug_enable_dma_stream_o,
-    output  [3:0]                       debug_fsm_cycle_o,
-    output  [3:0]                       debug_fsm_current_state,
-    output  [2:0]                       debug_fsm_psum_state,
+    (* iopad_external *) input clk_i,
+    (* iopad_external *) input rst_ni,
 
     //Input DMA
     output reg                      ready_dma_o,
@@ -260,7 +238,7 @@ module OpenEye_FPGA #(
   // Latches data_dma_i and enable_dma_i on every rising clock edge so that
   // downstream logic always sees a stable, timing-closed copy of the bus.
   always @(posedge clk_i, negedge rst_n) begin
-    if (rst_n == 1'b0) begin
+    if (rst_n == 0) begin
       data_dma_i_reg   <= 0;
       enable_dma_i_reg <= 0;
     end else begin
@@ -296,7 +274,7 @@ reg [1023:0] fst_path;
   reg data_mode_reg;                              // 0 = fixed-point, 1 = floating-point computation mode passed to OpenEye_Parallel.
   reg [$clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_reg; // Position of the binary point in fixed-point psums (passed to OpenEye_Parallel).
   wire [17:0] needed_cycles;                 // Total iact-delivery iterations required to complete this layer (from dma_storage).
-  wire [1:0] needed_x_cls_reg;                   // Number of active cluster columns for this layer (from dma_storage).
+  wire [$clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_reg;// Number of active cluster columns for this layer (from dma_storage).
   wire [$clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg; // Number of active cluster rows for this layer (from dma_storage).
   wire [3:0] needed_iact_cycles_reg;             // Number of iact router broadcast cycles per spatial position (from dma_storage).
   wire [$clog2(PSUM_PER_PE+1)-1:0] filters; // Output filters per PE batch; also the psum address stride (from dma_storage).
@@ -341,7 +319,6 @@ reg [1023:0] fst_path;
   reg results_ready;                                   // Local flag (combinatorial inside always block): AND of all active psum_enable_o or psum_ready_o signals.
   reg [19:0] finished_cycles_iact;                     // Count of completed iact delivery iterations; used as address base in MAXPOOLING_SEND.
   reg [19:0] finished_cycles_psum;                     // Count of completed psum output passes; determines when last_data fires.
-  reg new_stream;                                      // Pulse asserted in GET_ROUTER_CONFIG to reset the output varlenFIFO.
   reg reset_cycle;                                     // Pulse that resets all iteration counters (current_cycle, iact_cycle_count, etc.) to 0.
   wire send_data_out;                                  // When 1: final results go directly to DMA output (PSUM_SEND_RESULTS). When 0: quantize and loop back as next-layer iact.
   wire [2:0] add_up;                                   // Extra overlap columns beyond iact_size_x needed for the sliding iact window (from dma_storage).
@@ -401,7 +378,7 @@ reg [1023:0] fst_path;
   reg  [CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_SP_en_r;           // Per-buffer read-enable vector (one bit per RAM instance).
   reg  [CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_SP_en_w;           // Per-buffer write-enable vector.
   wire [BUFFER_WIDTH*CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_SP_addr; // Flattened address bus; driven from psum_buffer_SP_addr_array.
-  reg  [BUFFER_WIDTH-1:0] psum_buffer_SP_addr_array [NUM_GLB_PSUM-1:0][CLUSTER_ROWS-1:0][CLUSTER_COLUMNS-1:0]; // Per-buffer address register; indexed as [glb][row][col].
+  reg  [BUFFER_WIDTH-1:0] psum_buffer_SP_addr_array [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][NUM_GLB_PSUM-1:0]; // Per-buffer address register; indexed as [glb][row][col].
   reg  [BUFFER_WIDTH-1:0] psum_buffer_SP_addr_storage;              // Base address for the start of the current output page; advances by filters after each complete psum pass.
   reg  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_data_w;  // Write-data bus to all psum buffers; MUXed between bias-load and PE-output paths.
   wire [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_SP_data_r;  // Read-data bus from all psum buffers; fed into OpenEye_Parallel or into the quantizer.
@@ -496,7 +473,7 @@ reg [1023:0] fst_path;
   reg status_reg_enable_reg; // When 1: enables OpenEye_Parallel to accept configuration data from the DMA stream (active during GET_PARAMETERS).
 
   reg compute_reg;           // One-cycle pulse sent to OpenEye_Parallel.compute_i to trigger the start of a computation batch.
-  reg  [ CLUSTERS * PES-1:0] compute_mask_reg; // Bitmask of active PE instances (one bit per PE × cluster); loaded from DMA in GET_PARAMETERS words 4+.
+  reg  [CLUSTERS * PES -1:0] compute_mask_reg; // Bitmask of active PE instances (one bit per PE × cluster); loaded from DMA in GET_PARAMETERS words 4+.
   wire [CLUSTERS * PES -1:0] compute_mask_reg_port;
   assign compute_mask_reg_port = compute_mask_reg[CLUSTERS * PES -1:0]; // Wire alias for compute_mask_reg; passed to OpenEye_Parallel.compute_mask_i.
 
@@ -534,7 +511,7 @@ reg [1023:0] fst_path;
   wire [4-1:0] y_lines_per_calc; // Output rows calculated per batch (from dma_storage).
 
   wire [ 7:0] needed_wght_cycles;                                           // Weight cycling period (from dma_storage); how many iact batches share the same weights.
-  wire [11:0] fc_size_reg;                                                  // FC-layer input size (from dma_storage).
+  wire [13:0] fc_size_reg;                                                  // FC-layer input size (from dma_storage).
   wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] needed_iact_buffer_words; // Words required in the iact stream constructor's internal buffer (from dma_storage).
 
   //Output Registers for counting and delaying output (AXI Stream)
@@ -592,7 +569,7 @@ reg [1023:0] fst_path;
 
   reg [3:0] fsm_current_state;  // Current state of the main FSM.
   reg [3:0] fsm_last_state;     // Previous main FSM state; useful for tracing transitions in simulation.
-  assign debug_fsm_current_state = fsm_current_state; // Expose current state on debug port.
+  //assign debug_fsm_current_state = fsm_current_state; // Expose current state on debug port.
 
   //#######################
   // Process Variable Declarations
@@ -612,7 +589,6 @@ reg [1023:0] fst_path;
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] flat_help_var_send; // Temporary variable for building the wght_enable_i_reg bitmask (blocking assignment).
   reg [CLUSTERS*NUM_GLB_WGHT-1:0] temp_var;           // Scratch variable used when computing the weight-enable bitmask for partial cluster rows.
   reg [63:0] prepared_iact [31:0]; // Pre-assembled iact words (one per buffer cell); populated in Process 5 for later streaming (currently unused in main path).
-  reg        psum_to_iact_state;   // Toggle flag in SEND_PSUM_TO_IACT: alternates between two half-batches of psums when CLUSTERS*NUM_GLB_PSUM < 8.
   localparam EXTENDEDBITS = 48 - NUM_GLB_WGHT; // Zero-padding width when building flat_help_var_send from a per-row weight-enable mask.
 
   wire [CLUSTERS*NUM_GLB_IACT-1:0] iact_ready_o_oep_w; // Back-pressure bus from OpenEye_Parallel iact inputs; all-ones when every iact GLB is ready for more data.
@@ -756,7 +732,7 @@ reg [1023:0] fst_path;
         end
       end
     end else begin
-      if (GET_ROUTER_CONFIG == fsm_current_state) begin
+      if (GET_PARAMETERS == fsm_last_state) begin
         param_array_reg <= start_param_array;
         fsm_iact_params <= CLUSTER_ROWS;
       end else begin
@@ -994,7 +970,7 @@ reg [1023:0] fst_path;
           end
         end
       end
-      if (fsm_current_state == GET_ROUTER_CONFIG) begin
+      if (fsm_last_state == GET_PARAMETERS) begin
         conv_array_reg <= start_param_array;
         if (fully_connected_layer) begin
           conv_array_reg <= 3;
@@ -1237,10 +1213,10 @@ reg [1023:0] fst_path;
   //   pooling_stage_3[0..1]- third level: 4→2 values.
   //   pooling_stage_4      - final output: 2→1 maximum value.
   reg signed [ 7:0] pooling_regs    [31:0];
-  wire signed [ 7:0] debug_pooling_regs0;    // Simulation probe for pooling_regs[0].
+  /*wire signed [ 7:0] debug_pooling_regs0;    // Simulation probe for pooling_regs[0].
   assign debug_pooling_regs0 = pooling_regs[0];
   wire signed [ 7:0] debug_pooling_regs1;    // Simulation probe for pooling_regs[1].
-  assign debug_pooling_regs1 = pooling_regs[1];
+  assign debug_pooling_regs1 = pooling_regs[1];*/
   reg signed [ 7:0] pooling_stage_1 [7:0];  // Pipeline stage 1: 32→8 max.
   reg signed [ 7:0] pooling_stage_2 [3:0];  // Pipeline stage 2: 8→4 max.
   reg signed [ 7:0] pooling_stage_3 [1:0];  // Pipeline stage 3: 4→2 max.
@@ -1308,7 +1284,7 @@ reg [1023:0] fst_path;
   reg [15:0] fsm_psum_cycle;            // Cycle counter within the current PSUM FSM state.
   reg [ 3:0] fsm_psum_last_state;       // Previous PSUM FSM state; used for transition tracing in simulation.
   reg [ 3:0] fsm_psum_current_state;    // Current PSUM FSM state (one of PSUM_IDLE … SEND_PSUM_TO_IACT).
-  assign debug_fsm_psum_state = fsm_psum_current_state; // Expose PSUM state on debug port.
+  //assign debug_fsm_psum_state = fsm_psum_current_state; // Expose PSUM state on debug port.
 
   reg        psum_transmitted;           // Handshake flag: 1 once psum_ready_o from OpenEye_Parallel confirms receipt.
   reg        psum_router_set_reg;        // High once psum router modes have been updated for the output phase.
@@ -1329,7 +1305,7 @@ reg [1023:0] fst_path;
   // --- Quantization output staging (SEND_PSUM_TO_IACT) ---
   // After quantization, the 8 output bytes (one per filter in the current group)
   // are held here for packing into the iact buffer.
-  reg [7:0] quantized_value_reg [7:0]; // Quantized output bytes [0..7]; one per parallel filter.
+  reg [7:0] quantized_value_reg [TRANS_WORDS-1:0]; // Quantized output bytes [0..7]; one per parallel filter.
 
   reg [7:0] current_filter; // Index of the filter group currently being quantized/output [0..filters-1].
 
@@ -1463,7 +1439,6 @@ reg [1023:0] fst_path;
       fraction_bit_reg                      <= 0;
       padding_x                             <= 0;
       padding_y                             <= 0;
-      new_stream                            <= 0;
       fsm_cycle                             <= 0;
       fsm_last_state                        <= IDLE;
       fsm_current_state                     <= GET_PARAMETERS;
@@ -1648,12 +1623,31 @@ reg [1023:0] fst_path;
                 if (fsm_cycle == ((TRANSMISSIONS+1) + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
                   choose_iact_buffer <= choose_iact_buffer_input;
                   fsm_last_state     <= GET_PARAMETERS;
-                  fsm_current_state  <= GET_ROUTER_CONFIG;
+                  if (CLUSTERS != 1) begin
+                    fsm_current_state  <= GET_ROUTER_CONFIG;
+                  end
+                  if (!skipIact_reg) begin
+                    fsm_current_state <= GET_IACT;
+                  end else begin
+                    fsm_current_state <= GET_WGHT;
+                  end
+                  if (max_pooling) begin
+                    ready_dma_o       <= 0;
+                    fsm_current_state <= GET_OFFSET;
+                  end
                   fsm_cycle          <= 0;
                   write_dma_addr     <= ~0;
+                  iact_channels      <= iact_channels_per_pe * iact_channel_max_cycles;
+                  psum_x_with_add_up <= psum_size_x + add_up;
                   if (fully_connected_layer) begin
-                    padding_x <= 0;
-                    padding_y <= 0;
+                    iact_channels <= iact_channels_per_pe * NUM_GLB_WGHT * iact_channel_max_cycles; //iact_channel contains CLUSTER_Y
+                    padding_x     <= 0;
+                    padding_y     <= 0;
+                  end
+                  if (max_pooling) begin
+                    for (a = 0; a < RAM_CELLS; a=a+1) begin
+                      buffer_SP_en_r_reg[a] <= 1;
+                    end
                   end
                 end
               end
@@ -1682,24 +1676,13 @@ reg [1023:0] fst_path;
         //   if max_pooling (no iact load needed, jump straight to pooling).
         // -------------------------------------------------------------------
         GET_ROUTER_CONFIG: begin
-          ready_dma_o   <= 1;
-          new_stream    <= 1;
-          iact_channels <= iact_channels_per_pe * iact_channel_max_cycles;
-          psum_x_with_add_up <= psum_size_x + add_up;
-          if (fully_connected_layer) begin
-            iact_channels <= iact_channels_per_pe * NUM_GLB_WGHT * iact_channel_max_cycles; //iact_channel contains CLUSTER_Y
-          end
-          if (max_pooling) begin
-            for (a = 0; a < RAM_CELLS; a=a+1) begin
-              buffer_SP_en_r_reg[a] <= 1;
-            end
-          end
+          status_reg_enable_reg <= 0;
+          ready_dma_o           <= 1;
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
             if(fsm_cycle == FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS + FSM_CEIL_PSUM_RTR_CCLS - 1) begin
               fsm_cycle             <= 0;
               fsm_last_state        <= GET_ROUTER_CONFIG;
-              status_reg_enable_reg <= 0;
               if (!skipIact_reg) begin
                 fsm_current_state <= GET_IACT;
               end else begin
@@ -1735,7 +1718,8 @@ reg [1023:0] fst_path;
         // - When !enable_dma_i_reg: de-asserts all write enables.
         // -------------------------------------------------------------------
         GET_IACT: begin
-          ready_dma_o         <= 1;
+          status_reg_enable_reg <= 0;
+          ready_dma_o           <= 1;
           for (a = 0; a < RAM_CELLS; a=a+1) begin
             buffer_SP_en_w_reg[a] <= 0;
           end
@@ -1787,7 +1771,8 @@ reg [1023:0] fst_path;
         //     to GET_BIAS (or GET_QUANTIZE if skipPsum is set).
         // -------------------------------------------------------------------
         GET_WGHT: begin
-          ready_dma_o <= 1;
+          status_reg_enable_reg <= 0;
+          ready_dma_o           <= 1;
           for (a = 0; a < RAM_CELLS; a=a+1) begin
             buffer_SP_en_w_reg[a] <= 0;
           end
@@ -1849,8 +1834,9 @@ reg [1023:0] fst_path;
         // is entered only after psum_cnt is set.
         // -------------------------------------------------------------------
         GET_BIAS: begin
-          ready_dma_o         <= 1;
-          wght_buffer_SP_en_w <= 0;
+          status_reg_enable_reg <= 0;
+          ready_dma_o           <= 1;
+          wght_buffer_SP_en_w   <= 0;
           if ((((fsm_psum_cycle == (needed_wght_cycles * filters * iact_size_y * iact_x_line_repetitions)-1) & (!fully_connected_layer))
                       | (fully_connected_layer & (fsm_psum_cycle == filters - 1)))
                       & (enable_dma_i_reg)
@@ -2194,7 +2180,7 @@ reg [1023:0] fst_path;
         // - Each cycle: clears buffer write enables; if any were set in the
         //   previous cycle, advances that cell's read address by 1.
         // - When PSUM FSM is in SEND_PSUM_TO_IACT and fsm_psum_cycle >= 3
-        //   (quantized_value_reg is valid) and psum_to_iact_state == 0:
+        //   (quantized_value_reg is valid)
         //   Packs quantized bytes into buffer_SP_data_w_reg cells using one
         //   of three sub-modes determined by iact_channels_per_pe_next_layer:
         //     4: 4 bytes per pixel (normal conv next layer); uses select_ram_counter,
@@ -2222,7 +2208,7 @@ reg [1023:0] fst_path;
               buffer_SP_addr_reg[a] <= buffer_SP_addr_reg[a] + 1;
             end
           end
-          if ((fsm_psum_current_state == SEND_PSUM_TO_IACT) & (fsm_psum_cycle >= 3) & (psum_to_iact_state == 0)) begin
+          if ((fsm_psum_current_state == SEND_PSUM_TO_IACT) & (fsm_psum_cycle >= 3)) begin
             fsm_cycle <= fsm_cycle + 1;
             if (fsm_cycle >= 1) begin
               if (iact_channels_per_pe_next_layer == 4) begin
@@ -2334,7 +2320,7 @@ reg [1023:0] fst_path;
                     end
                   end
                 end
-              end else if (iact_channels_per_pe_next_layer == 2) begin
+              end /*else if (iact_channels_per_pe_next_layer == 2) begin
                 select_ram_counter <= select_ram_counter + 1;
                 if (select_ram_counter == 16 - 1) begin
                   select_ram_counter <= 0;
@@ -2412,7 +2398,7 @@ reg [1023:0] fst_path;
                     end
                   end
                 end
-              end
+              end*/
             end
           end
           if ((fsm_psum_current_state == PSUM_IDLE) & (fsm_cycle >= 1)) begin
@@ -2752,114 +2738,116 @@ reg [1023:0] fst_path;
           end
         end
       end
-      if (fsm_current_state == GET_ROUTER_CONFIG) begin
-        storage_cycles_router  <= 0;
-        first_cycle            <= 1;
-        iact_channels_counter_psum_router <= 0;
-        if (enable_dma_i_reg) begin
-          if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS) begin
-            for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
-              for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
-                for (g = 0; g < NUM_GLB_IACT; g = g + 1) begin
-                  if(((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)>=(fsm_cycle    *(DMA_BITWIDTH/ROUTER_MODES_IACT)))
-                    &((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)< ((fsm_cycle+1)*(DMA_BITWIDTH/ROUTER_MODES_IACT))))begin
-                    router_mode_iact[cc * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
-                                        cr * NUM_GLB_IACT * ROUTER_MODES_IACT + 
-                                        g * ROUTER_MODES_IACT +:ROUTER_MODES_IACT] <=
-                    data_dma_i_reg[(cc*NUM_GLB_IACT+cr*CLUSTER_COLUMNS*NUM_GLB_IACT+g-fsm_cycle*(DMA_BITWIDTH/ROUTER_MODES_IACT))
-                    *ROUTER_MODES_IACT+:ROUTER_MODES_IACT];
-                  end
-                end
-              end
-            end
-          end else begin
-            if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS) begin
+      if (CLUSTERS!= 1) begin
+        if (fsm_current_state == GET_ROUTER_CONFIG) begin
+          storage_cycles_router  <= 0;
+          first_cycle            <= 1;
+          iact_channels_counter_psum_router <= 0;
+          if (enable_dma_i_reg) begin
+            if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS) begin
               for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
                 for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
-                  for (g = 0; g < NUM_GLB_WGHT; g = g + 1) begin
-                    if(((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_WGHT)))
-                      &((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))))begin
-                      router_mode_wght[cc * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
-                                          cr * NUM_GLB_WGHT * ROUTER_MODES_WGHT + 
-                                          g * ROUTER_MODES_WGHT+: ROUTER_MODES_WGHT] <=
-                      data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))+:ROUTER_MODES_WGHT];
+                  for (g = 0; g < NUM_GLB_IACT; g = g + 1) begin
+                    if(((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)>=(fsm_cycle    *(DMA_BITWIDTH/ROUTER_MODES_IACT)))
+                      &((cc*NUM_GLB_IACT + cr*CLUSTER_COLUMNS*NUM_GLB_IACT + g)< ((fsm_cycle+1)*(DMA_BITWIDTH/ROUTER_MODES_IACT))))begin
+                      router_mode_iact[cc * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
+                                          cr * NUM_GLB_IACT * ROUTER_MODES_IACT + 
+                                          g * ROUTER_MODES_IACT +:ROUTER_MODES_IACT] <=
+                      data_dma_i_reg[(cc*NUM_GLB_IACT+cr*CLUSTER_COLUMNS*NUM_GLB_IACT+g-fsm_cycle*(DMA_BITWIDTH/ROUTER_MODES_IACT))
+                      *ROUTER_MODES_IACT+:ROUTER_MODES_IACT];
                     end
                   end
                 end
               end
             end else begin
-              for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
-                for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
-                  for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
-                    if(((cc*CLUSTER_ROWS*NUM_GLB_PSUM+cr*NUM_GLB_PSUM+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_PSUM)))
-                      &((cc*CLUSTER_ROWS*NUM_GLB_PSUM+cr*NUM_GLB_PSUM+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_PSUM))))begin
-                      router_mode_psum[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
-                                          cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + 
-                                          g * ROUTER_MODES_PSUM +:ROUTER_MODES_PSUM] <=
-                      data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_PSUM*ROUTER_MODES_PSUM+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*fsm_psum_rTR_CCLS_C)+:ROUTER_MODES_PSUM];
+              if (fsm_cycle < FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS) begin
+                for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                  for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
+                    for (g = 0; g < NUM_GLB_WGHT; g = g + 1) begin
+                      if(((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_WGHT)))
+                        &((cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))))begin
+                        router_mode_wght[cc * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
+                                            cr * NUM_GLB_WGHT * ROUTER_MODES_WGHT + 
+                                            g * ROUTER_MODES_WGHT+: ROUTER_MODES_WGHT] <=
+                        data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_WGHT+cr*NUM_GLB_WGHT+g-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_WGHT))+:ROUTER_MODES_WGHT];
+                      end
+                    end
+                  end
+                end
+              end else begin
+                for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                  for (cr = 0; cr < CLUSTER_ROWS; cr = cr + 1) begin
+                    for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
+                      if(((cc*CLUSTER_ROWS*NUM_GLB_PSUM+cr*NUM_GLB_PSUM+g)>=((fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)  *(DMA_BITWIDTH/ROUTER_MODES_PSUM)))
+                        &((cc*CLUSTER_ROWS*NUM_GLB_PSUM+cr*NUM_GLB_PSUM+g)< ((fsm_cycle+1-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*(DMA_BITWIDTH/ROUTER_MODES_PSUM))))begin
+                        router_mode_psum[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
+                                            cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM + 
+                                            g * ROUTER_MODES_PSUM +:ROUTER_MODES_PSUM] <=
+                        data_dma_i_reg[(cc*CLUSTER_ROWS*NUM_GLB_PSUM*ROUTER_MODES_PSUM+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM-(fsm_cycle-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*fsm_psum_rTR_CCLS_C)+:ROUTER_MODES_PSUM];
+                      end
                     end
                   end
                 end
               end
             end
           end
-        end
-        router_mode_iact_storage <= router_mode_iact;
-      end else begin
-        if (fsm_current_state == WAIT_FOR_RESULTS | fsm_current_state == RECEIVE_PSUMS_TO_IACT) begin
-          if (single_iteration3) begin
-            if (iact_channels_counter == iact_channel_max_cycles -1) begin
-              if (iact_router_counter == needed_y_cls_reg - 1) begin
-                router_mode_iact <= router_mode_iact_storage;
-              end else begin
-                for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
-                  for (g=0; g<NUM_GLB_IACT; g=g+1) begin
-                    router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+3] <= 0;
-                    router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+4] <= 1;
-                    router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+5] <= 1;
-                  end
-                end
-                for (cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
+          router_mode_iact_storage <= router_mode_iact;
+        end else begin
+          if (fsm_current_state == WAIT_FOR_RESULTS | fsm_current_state == RECEIVE_PSUMS_TO_IACT) begin
+            if (single_iteration3) begin
+              if (iact_channels_counter == iact_channel_max_cycles -1) begin
+                if (iact_router_counter == needed_y_cls_reg - 1) begin
+                  router_mode_iact <= router_mode_iact_storage;
+                end else begin
                   for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
                     for (g=0; g<NUM_GLB_IACT; g=g+1) begin
-                      // If router is not on top of source already
-                      if (!((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT] == 1) &
-                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] == 1) &
-                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+2] == 0) &
-                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] == 0) &
-                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
-                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1))) begin
-                        // If router is source
-                        if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 0) &
-                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
-                              // If router above is already destination
+                      router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+3] <= 0;
+                      router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+4] <= 1;
+                      router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+g*ROUTER_MODES_IACT+5] <= 1;
+                    end
+                  end
+                  for (cr=1; cr<CLUSTER_ROWS; cr=cr+1) begin
+                    for (cc=0; cc<CLUSTER_COLUMNS; cc=cc+1) begin
+                      for (g=0; g<NUM_GLB_IACT; g=g+1) begin
+                        // If router is not on top of source already
+                        if (!((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT] == 1) &
+                                (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] == 1) &
+                                (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+2] == 0) &
+                                (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] == 0) &
+                                (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
+                                (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1))) begin
+                          // If router is source
+                          if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 0) &
+                                (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
+                                // If router above is already destination
+                                if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
+                                    (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1)) begin
+                                  router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
+                                end
+                                router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] <= 0;
+                                router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
+                                router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 1;
+                          end else begin
+                            if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 0) &
+                                (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
+                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
+                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 0;
+                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 0;
+                            end else begin
                               if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
                                   (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1)) begin
                                 router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
-                              end
-                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] <= 0;
-                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
-                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 1;
-                        end else begin
-                          if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 0) &
-                              (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
-                            router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
-                            router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 0;
-                            router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 0;
-                          end else begin
-                            if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
-                                (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 1)) begin
-                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+1] <= 1;
-                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] <= 0;
-                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
-                              router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 1;
-                            end else begin
-                              if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] == 1) &
-                                  (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
-                                  (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
+                                router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] <= 0;
+                                router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
+                                router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 1;
+                              end else begin
+                                if ((router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+3] == 1) &
+                                    (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] == 1) &
+                                    (router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+(cr-1)*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] == 0)) begin
 
-                                  router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
-                                  router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 0;
+                                    router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+4] <= 1;
+                                    router_mode_iact[cc*ROUTER_MODES_IACT*NUM_GLB_IACT*CLUSTER_ROWS+cr*NUM_GLB_IACT*ROUTER_MODES_IACT+g*ROUTER_MODES_IACT+5] <= 0;
+                                end
                               end
                             end
                           end
@@ -2869,29 +2857,13 @@ reg [1023:0] fst_path;
                   end
                 end
               end
-            end
-            //PSUM Router
-            first_cycle    <= 0;
-            if (first_cycle == 0) begin
-              if ((needed_y_cls_reg >= 2)) begin
-                iact_channels_counter_psum_router <= iact_channels_counter_psum_router + 1;
-                if ((iact_channels_counter_psum_router == iact_channel_max_cycles - 1)) begin
-                  iact_channels_counter_psum_router <= 0;
-                  for (cr = 1; cr < CLUSTER_ROWS; cr = cr + 1) begin
-                    for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
-                      for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
-                        router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2] <=
-                        router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2];
-                      end
-                    end
-                  end
-                  if (storage_cycles_router != (needed_psum_storage_cycles_reg - 1)) begin
-                    storage_cycles_router <= storage_cycles_router + 1;
-                    for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
-                      for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
-                        router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 0;
-                      end
-                    end
+              //PSUM Router
+              first_cycle    <= 0;
+              if (first_cycle == 0) begin
+                if ((needed_y_cls_reg >= 2)) begin
+                  iact_channels_counter_psum_router <= iact_channels_counter_psum_router + 1;
+                  if ((iact_channels_counter_psum_router == iact_channel_max_cycles - 1)) begin
+                    iact_channels_counter_psum_router <= 0;
                     for (cr = 1; cr < CLUSTER_ROWS; cr = cr + 1) begin
                       for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
                         for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
@@ -2900,19 +2872,35 @@ reg [1023:0] fst_path;
                         end
                       end
                     end
-                  end else begin
-                    for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
-                      for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
-                        router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 1;
+                    if (storage_cycles_router != (needed_psum_storage_cycles_reg - 1)) begin
+                      storage_cycles_router <= storage_cycles_router + 1;
+                      for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                        for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
+                          router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 0;
+                        end
                       end
+                      for (cr = 1; cr < CLUSTER_ROWS; cr = cr + 1) begin
+                        for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                          for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
+                            router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2] <=
+                            router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+(cr-1)*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM+2];
+                          end
+                        end
+                      end
+                    end else begin
+                      for (cc = 0; cc < CLUSTER_COLUMNS; cc = cc + 1) begin
+                        for (g = 0; g < NUM_GLB_PSUM; g = g + 1) begin
+                          router_mode_psum[cc*ROUTER_MODES_PSUM*NUM_GLB_PSUM*CLUSTER_ROWS+g*ROUTER_MODES_PSUM+2] <= 1;
+                        end
+                      end
+                      storage_cycles_router <= 0;
                     end
-                    storage_cycles_router <= 0;
                   end
-                end
-                if (storage_cycles_router == needed_psum_storage_cycles_reg - 1) begin
-                  storage_cycles_router <= 0;
-                end else begin
-                  storage_cycles_router <= storage_cycles_router + 1;
+                  if (storage_cycles_router == needed_psum_storage_cycles_reg - 1) begin
+                    storage_cycles_router <= 0;
+                  end else begin
+                    storage_cycles_router <= storage_cycles_router + 1;
+                  end
                 end
               end
             end
@@ -3016,7 +3004,6 @@ reg [1023:0] fst_path;
       enable_dma_o                <= 0;
       data_dma_o                  <= 0;
       last_data_reg               <= 0;
-      psum_to_iact_state          <= 0;
       fsm_x_cl_psum               <= 0;
       fsm_y_cl_psum               <= 0;
       fsm_y_cl_psum_offset        <= 0;
@@ -3054,7 +3041,7 @@ reg [1023:0] fst_path;
       fsm_x_cl_psum_q1            <= 0;
       fsm_x_cl_psum_q2            <= 0;
       fsm_x_cl_psum_q3            <= 0;
-      for (cr_psum = 0; cr_psum < 8; cr_psum = cr_psum + 1) begin
+      for (cr_psum = 0; cr_psum < TRANS_WORDS; cr_psum = cr_psum + 1) begin
         quantized_value_reg[cr_psum] <= 0;
       end
       finished_cycles_psum        <= 0;
@@ -3090,15 +3077,14 @@ reg [1023:0] fst_path;
         //   Transitions to WAIT_TO_SEND_READY_SIGNAL.
         // -------------------------------------------------------------------
         PSUM_IDLE: begin
-          psum_buffer_SP_en_w  <= 0;
-          psum_enable_i_reg    <= 0;
-          last_data_reg        <= 0;
-          current_filter       <= 0;
+          psum_buffer_SP_en_w <= 0;
+          psum_enable_i_reg   <= 0;
+          last_data_reg       <= 0;
+          current_filter      <= 0;
           psum_cycle_buffer_0 <= 0;
-
           if (ready_dma_i == 1) begin
-            enable_dma_o         <= 0;
-            last_data_o          <= 0;
+            enable_dma_o <= 0;
+            last_data_o  <= 0;
           end
           if (GET_BIAS == fsm_current_state) begin
             if (enable_dma_i_reg) begin
@@ -3219,21 +3205,21 @@ reg [1023:0] fst_path;
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
                   results_ready = results_ready & (psum_ready_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum*2] |
-                   (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0));
+                   ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTERS != 1)));
                 end
               end
             end
           end
           if (results_ready & (psum_ready_i_reg != 0)) begin
-            fsm_psum_cycle <= fsm_psum_cycle + 1;
+            fsm_psum_cycle  <= fsm_psum_cycle + 1;
             psum_data_i_reg <= psum_buffer_SP_data_r;
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                  if (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) begin
+                  if (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1 | (CLUSTERS == 1)) begin
                     psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] + 1;
                   end
-                  if ((fsm_psum_cycle != 0) & (router_mode_psum[(cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (g_psum * ROUTER_MODES_PSUM) + 2] == 1)) begin
+                  if ((fsm_psum_cycle != 0) & ((router_mode_psum[(cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (g_psum * ROUTER_MODES_PSUM) + 2] == 1) | (CLUSTERS == 1))) begin
                     psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] <= 1;
                     psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2 + 1] <= 1;
                   end
@@ -3250,7 +3236,7 @@ reg [1023:0] fst_path;
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                    if (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) begin
+                    if ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) | (CLUSTERS == 1)) begin
                       psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_SP_addr_storage;
                     end
                   end
@@ -3299,7 +3285,7 @@ reg [1023:0] fst_path;
                   psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] + 1;
                 end
                 results_ready = results_ready & (psum_enable_o[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] | 
-                (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0));
+                ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTERS != 1)));
                 if (psum_enable_o[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] != 0) begin
                   psum_buffer_SP_en_w[cc_psum*NUM_GLB_PSUM/2*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM/2+g_psum] <= 1;
                 end else begin
@@ -3579,8 +3565,6 @@ reg [1023:0] fst_path;
         //      two bytes (even/odd) per pair from fsm_y_cl_psum_q3 row.
         //   2. CLUSTERS*NUM_GLB_PSUM >= 8 (multi-column, narrow):
         //      Iterates cc_psum and cr_psum; each pair (cc, cr) provides 2 bytes.
-        //   3. CLUSTERS*NUM_GLB_PSUM < 8 (small array):
-        //      Uses psum_to_iact_state toggle: alternates between two half-batches
         //      (state 0: quantized_value_reg[0..3], state 1: [4..7]).
         //   FC mode: only reads 2 values: quantized_value_reg[0] from [0] and
         //            quantized_value_reg[1] from [CLUSTER_ROWS slice].
@@ -3608,9 +3592,9 @@ reg [1023:0] fst_path;
           fsm_x_cl_psum_q2 <= fsm_x_cl_psum_q1;
           fsm_x_cl_psum_q3 <= fsm_x_cl_psum_q2;
           if (fsm_psum_cycle >= 3) begin
-            if (!fully_connected_layer) begin
+            if (!fully_connected_layer | (CLUSTERS == 1)) begin
               if (CLUSTER_COLUMNS*NUM_GLB_PSUM>= 8) begin
-                for (cr_psum = 0; cr_psum < 4; cr_psum = cr_psum + 1) begin
+                for (cr_psum = 0; cr_psum < TRANS_WORDS/2; cr_psum = cr_psum + 1) begin
                   quantized_value_reg[2*cr_psum]     <= (quant_mant[current_filter] *
                   (psum_buffer_SP_data_r[((fsm_x_cl_psum_q3+(cr_psum/2))*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM)+(fsm_y_cl_psum_q3*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+
                   ((cr_psum%2)*TRANS_BITWIDTH_PSUM*PARALLEL_MACS)+:TRANS_BITWIDTH_PSUM]
@@ -3623,43 +3607,25 @@ reg [1023:0] fst_path;
                   >>> quant_exp[current_filter];
                 end
               end else begin
-                if (CLUSTERS*NUM_GLB_PSUM>= 8) begin
+                if (CLUSTERS*NUM_GLB_PSUM > TRANS_WORDS) begin
                   for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                     for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                      quantized_value_reg[4*cr_psum+2*cc_psum]     <= (quant_mant[current_filter] *
+                      quantized_value_reg[(TRANS_WORDS/2)*cr_psum+2*cc_psum]     <= (quant_mant[current_filter] *
                       (psum_buffer_SP_data_r[cc_psum*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+(cr_psum+(fsm_y_cl_psum_q3))*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM]
                       + quant_offset[current_filter]))
                       >>> quant_exp[current_filter];
-                      quantized_value_reg[4*cr_psum+2*cc_psum + 1] <= (quant_mant[current_filter] *
+                      quantized_value_reg[(TRANS_WORDS/2)*cr_psum+2*cc_psum + 1] <= (quant_mant[current_filter] *
                       (psum_buffer_SP_data_r[cc_psum*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+(cr_psum+(fsm_y_cl_psum_q3))*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]
                       + quant_offset[current_filter]))
                       >>> quant_exp[current_filter];
                     end
                   end
                 end else begin
-                  psum_to_iact_state <= ~psum_to_iact_state;
-                  if (psum_to_iact_state == 0) begin
-                    for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                      quantized_value_reg[2*cc_psum]     <= (quant_mant[current_filter] *
-                      (psum_buffer_SP_data_r[cc_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM]
-                      + quant_offset[current_filter]))
-                      >>> quant_exp[current_filter];
-                      quantized_value_reg[2*cc_psum + 1] <= (quant_mant[current_filter] *
-                      (psum_buffer_SP_data_r[cc_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]
-                      + quant_offset[current_filter]))
-                      >>> quant_exp[current_filter];
-                    end
-                  end else begin
-                    for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                      quantized_value_reg[4+(2*cc_psum)]     <= (quant_mant[current_filter] *
-                      (psum_buffer_SP_data_r[(cc_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM) +:TRANS_BITWIDTH_PSUM]
-                      + quant_offset[current_filter]))
-                      >>> quant_exp[current_filter];
-                      quantized_value_reg[4+(2*cc_psum) + 1] <= (quant_mant[current_filter] *
-                      (psum_buffer_SP_data_r[(cc_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM) + TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]
-                      + quant_offset[current_filter]))
-                      >>> quant_exp[current_filter];
-                    end
+                  for (cc_psum = 0; cc_psum < TRANS_WORDS; cc_psum = cc_psum + 1) begin
+                    quantized_value_reg[cc_psum]     <= (quant_mant[current_filter] *
+                    (psum_buffer_SP_data_r[cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]
+                    + quant_offset[current_filter]))
+                    >>> quant_exp[current_filter];
                   end
                 end
               end
@@ -3668,10 +3634,12 @@ reg [1023:0] fst_path;
               (psum_buffer_SP_data_r[0+:TRANS_BITWIDTH_PSUM]
               + quant_offset[current_filter]))
               >>> quant_exp[current_filter];
-              quantized_value_reg[1] <= (quant_mant[current_filter] *
-              (psum_buffer_SP_data_r[TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM]
-              + quant_offset[current_filter]))
-              >>> quant_exp[current_filter];
+              if (CLUSTER_ROWS == 2) begin
+                quantized_value_reg[1] <= (quant_mant[current_filter] *
+                (psum_buffer_SP_data_r[TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM]
+                + quant_offset[current_filter]))
+                >>> quant_exp[current_filter];
+              end
             end
           end
           for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
@@ -3776,7 +3744,6 @@ reg [1023:0] fst_path;
             fsm_y_cl_psum_offset        <= 0;
             fsm_x_cl_psum               <= 0;
             psum_cycle_buffer_0         <= 0;
-            psum_to_iact_state          <= 0;
           end
         end
         default: begin
@@ -3875,7 +3842,7 @@ reg [1023:0] fst_path;
         wire [7:0] pooling_stage_out_trace; 
         assign pooling_stage_out_trace = pooling_regs[i_trace]; 
       end
-      for (i_trace = 0; i_trace < 8; i_trace = i_trace + 1) begin : quant_stage_traces
+      for (i_trace = 0; i_trace < TRANS_WORDS; i_trace = i_trace + 1) begin : quant_stage_traces
         wire [7:0] quantized_out_trace; 
         assign quantized_out_trace = quantized_value_reg[i_trace]; 
       end
@@ -3959,6 +3926,7 @@ reg [1023:0] fst_path;
         wire [                    NUM_GLB_IACT-1:0] iact_ready_w;
         wire [                    NUM_GLB_IACT-1:0] iact_enable_w;
         iact_stream_constructor #(
+            .CLUSTER_COLUMNS   (CLUSTER_COLUMNS),
             .CLUSTER_ROWS      (CLUSTER_ROWS),
             .NUM_GLB_IACT      (NUM_GLB_IACT),
             .PE_X              (NUM_GLB_PSUM),
@@ -3970,7 +3938,7 @@ reg [1023:0] fst_path;
             .ADDRWIDTH         (BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR)
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
-            .rst_ni                      (rst_ni),
+            .rst_ni                      (rst_n),
             .storage_i                   (buffer_SP_data_r),
             .reset_cycle_i               (reset_cycle),
             .params                      (iact_converter_params_reg[i_gen][j_gen]),
@@ -4047,7 +4015,7 @@ reg [1023:0] fst_path;
     for (i_gen = 0; i_gen < CLUSTER_COLUMNS; i_gen=i_gen+1) begin : PSUM_RAM_X
       for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen=j_gen+1) begin : PSUM_RAM_Y
         for (g_gen = 0; g_gen < NUM_GLB_PSUM/2; g_gen=g_gen+1) begin : PSUM_RAM_GLB
-          assign psum_buffer_SP_addr[i_gen*BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*BUFFER_WIDTH*NUM_GLB_PSUM/2+g_gen*BUFFER_WIDTH+:BUFFER_WIDTH]
+          assign psum_buffer_SP_addr[(i_gen*BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM/2)+(j_gen*BUFFER_WIDTH*NUM_GLB_PSUM/2)+(g_gen*BUFFER_WIDTH)+:BUFFER_WIDTH]
           = psum_buffer_SP_addr_array[i_gen][j_gen][g_gen];
           RAM_SP #(
               .DataWidth(TRANS_BITWIDTH_PSUM*PARALLEL_MACS),
@@ -4064,7 +4032,7 @@ reg [1023:0] fst_path;
         end
       end
     end
-    assign debug_psum_re     = psum_buffer_SP_en_r[0] & !psum_buffer_SP_en_w[0];
+    /*assign debug_psum_re     = psum_buffer_SP_en_r[0] & !psum_buffer_SP_en_w[0];
     assign debug_psum_we     = psum_buffer_SP_en_w[0];
     assign debug_psum_addr   = psum_buffer_SP_addr[0+:BUFFER_WIDTH];
     assign debug_psum_data_i = psum_buffer_SP_data_w[0+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS];
@@ -4073,7 +4041,7 @@ reg [1023:0] fst_path;
     assign debug_skip_iact_o = skipIact_reg;
     assign debug_data_dma_stream_o = data_dma_i_reg;
     assign debug_enable_dma_stream_o = enable_dma_i_reg;
-    assign debug_fsm_cycle_o = fsm_cycle[3:0];
+    assign debug_fsm_cycle_o = fsm_cycle[3:0];*/
 
     // -------------------------------------------------------------------
     // dma_storage: Register-Map Decoder Instance
@@ -4250,7 +4218,6 @@ reg [1023:0] fst_path;
         .pooling_cluster_mode_i       ({NUM_GLB_PSUM{1'd0}}),
         .kernel_per_pe_cluster_i      (kernel_per_pe_cluster_reg[$clog2(NUM_GLB_WGHT)-1:0]),
         .iact_x_line_repetitions_i    (iact_x_line_repetitions[3:0]),
-        .kernel_size_x_i              (kernel_size_x),
         .kernel_size_y_i              (kernel_size_y),
         .input_activations_i          (input_activations),
         .stride_x_i                   (stride_x_reg),

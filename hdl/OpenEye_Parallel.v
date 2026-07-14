@@ -200,7 +200,6 @@ module OpenEye_Parallel #(
     input      [                                          2:0] stride_y_i,
     input      [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i,
     input      [                                          3:0] iact_x_line_repetitions_i,
-    input      [                                          5:0] kernel_size_x_i,
     input      [                                          3:0] kernel_size_y_i,
     input      [                             CLUSTERS*PES-1:0] compute_mask_i,
     input      [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i,
@@ -211,8 +210,6 @@ module OpenEye_Parallel #(
     input      [                                        8-1:0] needed_psum_storage_cycles_i,
     input      [                                        8-1:0] needed_iact_channel_cycles_i,
     input                                                      psum_transmitted_i
-
-
 );
   ///#######################
   ///Reset synchronization
@@ -343,7 +340,7 @@ module OpenEye_Parallel #(
   reg  [  ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_i_reg;
   reg  [                               4*CLUSTERS-1:0] iact_router_offset;
   reg                                                  enable_stream_reg;
-  reg  [                                         11:0] data_stream_reg;
+  reg  [                                          8:0] data_stream_reg;
   reg  [                                          4:0] iact_pes_per_router;
 
 
@@ -411,17 +408,17 @@ module OpenEye_Parallel #(
         end
         FIRST_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{3{1'd0}},wght_addr_len_i_reg, stride_x_i_reg, data_mode_i_reg};
+          data_stream_reg        <= {{1{1'd0}},wght_addr_len_i_reg, stride_x_i_reg, data_mode_i_reg};
           fsm_transmission_state <= SECOND_PARAMS;
         end
         SECOND_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{2{1'd0}},{filters_i_reg}, {iact_addr_len_i_reg}};
+          data_stream_reg        <= {{filters_i_reg}, {iact_addr_len_i_reg}};
           fsm_transmission_state <= THIRD_PARAMS;
         end
         THIRD_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{4{1'd0}},iact_x_line_repetitions_reg,{kernel_size_y_i}};
+          data_stream_reg        <= {{2{1'd0}},iact_x_line_repetitions_reg,{kernel_size_y_i}};
           fsm_transmission_state <= IDLE_TRANSMI;
         end
         default: begin
@@ -756,6 +753,8 @@ module OpenEye_Parallel #(
         OpenEye_Cluster #(
             .IS_TOPLEVEL       (0),
             .SERIAL            (SERIAL),
+            .CLUSTER_COLUMNS   (CLUSTER_COLUMNS),
+            .CLUSTER_ROWS      (CLUSTER_ROWS),
             .SPARSITY_EN       (SPARSITY_EN),
             .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
             .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
