@@ -20,6 +20,7 @@ The OpenEye architecture is based on a hierachical structure, with the following
     dataflow
     output_stationary
     datastream_construction
+    attention
     noc
     PE_cluster
     sparsity_modes
