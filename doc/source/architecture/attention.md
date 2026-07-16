@@ -45,15 +45,15 @@ reproduce:
   zero on the dense path; the 20-bit psum range bounds
   `inner_dim * |a|max * |w|max`, which the scheduler respects by
   requantizing operands to INT8 between stages).
-- **Weight operands must be zero-free.** The serial dense weight stream is
-  zero-compressed and the datapath rejects zero weight entries (verified
-  with `OpenEye_FPGA_gemmpass_probe_tb`: zero *iacts* are tolerated, zero
-  *weights* corrupt or hang the pass; the DRAM writer applies the same
-  +-1 replacement to random dense weights). The scheduler therefore
-  produces zero-free K, V and P tensors (`requantize_pow2(..., nonzero=True)`,
-  softmax probabilities clipped to `[1, 127]`) and sanitizes the static
-  projection weights the same way — a one-LSB perturbation that is part of
-  the deterministic contract.
+- **Zero entries are legal in every operand.** Historically the dense
+  weight stream dropped all-zero packed words (a bandwidth optimization
+  valid only for the zero-compressed sparse conv format), which corrupted
+  or hung dense passes with zero weight pairs. This is fixed by the raw
+  weight-stream mode: dense/FC/GEMM layers assert `raw_wght`
+  (`fully_connected_layer | gemm_mode` at the FPGA level, bit 9 of the PE
+  FIRST_PARAMS word), and `data_pipeline_wght.raw_mode_i` stores all-zero
+  words like any other data. The operand probes
+  (`OpenEye_FPGA_gemmpass_probe_tb`) verify all three cases.
 - Host requantization uses power-of-two shifts with
   round-half-away-from-zero (`requantize_pow2`), deterministic on
   integers.
@@ -100,12 +100,13 @@ on top of the full DMA flow.
 
 Phase 0 is a functional reference, not a fast implementation: every
 dynamic operand (K, P, V) makes a host round-trip, and each pass pays the
-full per-layer DMA overhead (config, quantize and offset streams).
-Additionally, the dense datapath has a minimum problem size (8x8 GEMVs do
-not complete; 32x32 is the verified envelope), so the testbench executor
-zero-pads every pass to at least 32x32 — exact for the GEMV, but it means
-small heads (`d_k < 32`) and short sequences waste cycles on padding. The
-planned hardware phases remove the round-trip and softmax costs:
+full per-layer DMA overhead (config, quantize and offset streams). Small
+inner dimensions are handled by the mapper itself: the iact converter FC
+path requires an even `iact_channels_per_pe >= 4`, so
+`write_dense_layer` rounds `used_iact_per_PE` up accordingly and the
+padded positions carry zero iacts/weights (exact, enabled by the
+zero-operand fix). The planned hardware phases remove the round-trip and
+softmax costs:
 
 | Phase | Addition | Removes |
 |---|---|---|

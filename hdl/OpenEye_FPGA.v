@@ -4239,6 +4239,9 @@ reg [1023:0] fst_path;
         .status_reg_enable_i          (status_reg_enable_reg),
         .data_mode_i                  (data_mode_reg),
         .gemm_mode_i                  (gemm_mode),
+        // Dense/FC and GEMM layers stream raw (uncompressed) weights;
+        // all-zero weight words must then be stored, not skipped.
+        .raw_wght_i                   (fully_connected_layer | gemm_mode),
         .fraction_bit_i               (fraction_bit_reg),
         .needed_cycles_i              (needed_cycles),
         .needed_x_cls_i               (needed_x_cls_reg),

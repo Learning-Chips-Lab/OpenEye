@@ -100,7 +100,15 @@ words arrive in the order of the main FSM states:
 5. **Weights** (`GET_WGHT`): the pre-encoded two-level SPad image produced
    by `wght_stream_mapper`: first the address SPad words (column pointers),
    then the data SPad words (weight payload plus `ignore_zeros` sparsity
-   offsets, `PARALLEL_MACS` values per entry).
+   offsets, `PARALLEL_MACS` values per entry). Two stream flavours exist:
+   - *Compressed (conv)*: zeros are removed by the encoder; all-zero packed
+     words act as per-PE stream-length padding and are skipped by
+     `data_pipeline_wght`.
+   - *Raw (dense/FC/GEMM)*: values are transmitted verbatim, including
+     all-zero pairs. The layer asserts `raw_wght`
+     (`fully_connected_layer | gemm_mode`), which reaches every PE as bit 9
+     of the FIRST_PARAMS config word and disables the zero-word skip
+     (`data_pipeline_wght.raw_mode_i`).
 6. **Bias / partial sums** (`GET_BIAS`): initial psum values, one
    `DATA_PSUM_BITWIDTH` value per cluster column packed per word
    (`write_psum_data_glb`).

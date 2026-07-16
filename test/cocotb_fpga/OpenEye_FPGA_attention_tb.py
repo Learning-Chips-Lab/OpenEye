@@ -62,15 +62,11 @@ def _dense_layer_shim(k, n):
 
 
 # The dense datapath has a minimum problem size (8x8 GEMVs fail, 32x32 is
-# the proven envelope from test_gemm_layer.py), and the weight stream must
-# be zero-free (see attention_scheduler.requantize_pow2). Passes are padded
-# up to the minimum size accordingly:
-#   - iact padding is 0 (zero iacts are tolerated; verified by the
-#     OpenEye_FPGA_gemmpass_probe_tb probes), so padded weight columns
-#     contribute nothing;
-#   - weight padding is 1 (nonzero), padded output rows compute a garbage
-#     sum that is discarded.
-# The real [N, K] result region therefore stays bit-exact.
+# the proven envelope from test_gemm_layer.py). Passes are zero-padded up
+# to that size; padded inputs contribute 0 to every accumulation and padded
+# output rows are discarded, so the real [N, K] result region stays
+# bit-exact. (Zero padding in the weight matrix is fine since the raw
+# weight-stream fix — see data_pipeline_wght.raw_mode_i.)
 PAD_K = 32
 PAD_N = 32
 
@@ -80,11 +76,9 @@ async def _run_gemm_pass(dut, ptp, params, spec, log_level):
 
     Returns the captured output vector (raw integer psums, length N).
     """
-    assert np.all(spec.weight != 0), \
-        f"pass {spec.name}: zero weight entries violate the dense-stream constraint"
     k_pad = max(spec.k, PAD_K)
     n_pad = max(spec.n, PAD_N)
-    weight = np.ones((n_pad, k_pad), dtype=np.int64)
+    weight = np.zeros((n_pad, k_pad), dtype=np.int64)
     weight[:spec.n, :spec.k] = spec.weight
     iact = np.zeros(k_pad, dtype=np.int64)
     iact[:spec.k] = spec.iact

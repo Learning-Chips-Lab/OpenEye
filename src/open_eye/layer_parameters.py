@@ -1400,6 +1400,14 @@ class LayerParameters(object):
         temp = math.ceil(self.iact_size_x/(params.PEs_Y*self.used_iact_per_PE))
         self.needed_wght_transmissions = math.ceil(temp/params.Clusters_Y)
         self.used_iact_per_PE = math.ceil(self.iact_size_x/(self.needed_wght_transmissions*params.Clusters_Y*params.PEs_Y))
+        # Hardware constraint of the iact converter FC path: iact_channels
+        # per PE must be an even value >= 4. Odd values leave a half-filled
+        # buffer word whose phantom slot corrupts the element indexing, and
+        # values <= 2 take a broken special case (empirical: K sweeps in
+        # test_gemm_layer.py; used_iact 2/3/5 fail, 4/6 work). Round up; the
+        # padded positions carry zero iacts and zero weights, which is exact
+        # (requires the raw_wght zero-operand fix).
+        self.used_iact_per_PE = max(4, self.used_iact_per_PE + (self.used_iact_per_PE % 2))
         self.used_wght_per_PE = self.used_iact_per_PE * math.ceil(self.filters/params.Clusters_X/params.PARALLEL_MACS)*params.PARALLEL_MACS
         self.diff_iact_layer = math.ceil(self.iact_size_x/(params.NUM_GLB_WGHT*self.used_iact_per_PE))
         self.used_psum_per_PE = math.ceil(self.used_wght_per_PE/self.used_iact_per_PE)

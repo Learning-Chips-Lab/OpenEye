@@ -71,19 +71,12 @@ def test_attention_scheduler_software(SEQ_LEN, D_MODEL, NUM_HEADS, SEED):
     assert out_int.shape == (SEQ_LEN, D_MODEL)
     assert sched.total_passes() == (3 + 2 * NUM_HEADS + 1) * SEQ_LEN
 
-    # All on-chip operands must be INT8 (hardware constraint)
+    # All on-chip operands must be INT8 (hardware constraint). Zeros are
+    # allowed in every operand since the raw weight-stream fix (raw_wght).
     for stage_name, tensor in (("q8", sched.q8), ("k8", sched.k8),
                                ("v8", sched.v8), ("p8", sched.p8),
                                ("o8", sched.o8)):
         assert np.max(np.abs(tensor)) <= 127, f"{stage_name} exceeds INT8"
-
-    # Tensors used as weight operands must be zero-free (the dense weight
-    # stream is zero-compressed and the datapath rejects zero entries)
-    for stage_name, tensor in (("k8", sched.k8), ("v8", sched.v8),
-                               ("p8", sched.p8), ("w_q", sched.w_q),
-                               ("w_k", sched.w_k), ("w_v", sched.w_v),
-                               ("w_o", sched.w_o)):
-        assert np.all(tensor != 0), f"{stage_name} contains zero weights"
 
     # Dequantized result must track the float attention reference
     ref = sched.float_reference()

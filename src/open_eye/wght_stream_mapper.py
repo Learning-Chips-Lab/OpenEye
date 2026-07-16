@@ -73,6 +73,11 @@ class WghtStreamMapper(object):
 
     """
 
+    # Omit all-zero packed words from the data stream. Correct only for the
+    # overhead-encoded conv weight format; raw dense payloads must transmit
+    # every word (see create_pe_data_wght_stream).
+    SKIP_ZERO_WORDS = True
+
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
         """Initialize the weight stream mapper.
 
@@ -544,8 +549,15 @@ class WghtStreamMapper(object):
                     # Weight out of range, leave as zero in packed word
                     pass
 
-            # Only append non-zero words to save bandwidth
-            if (temp_trans != 0):
+            # SKIP_ZERO_WORDS: historic behaviour that omits all-zero packed
+            # words. Safe only for the overhead-encoded (sparse) conv format,
+            # where meaningful words are never all-zero. For raw dense
+            # payloads (Dense/GEMM) an all-zero weight pair is legitimate
+            # data; dropping it desynchronizes the hardware word count and
+            # shifts every following weight to a wrong SPad address (wrong
+            # results or a hang in GET_WGHT). Dense mappers therefore
+            # disable the skip (see DenseWghtStreamMapper).
+            if (temp_trans != 0) or not self.SKIP_ZERO_WORDS:
                 stream.append(temp_trans)
 
             line_counter = line_counter + 1
@@ -744,6 +756,11 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         Inherited from WghtStreamMapper
 
     """
+
+    # Dense payloads are raw values: an all-zero weight pair is real data
+    # and must be transmitted, otherwise the hardware word count
+    # desynchronizes (wrong SPad addresses or a GET_WGHT hang).
+    SKIP_ZERO_WORDS = False
 
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
         """Initialize the Dense layer weight stream mapper.

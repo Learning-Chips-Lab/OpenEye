@@ -186,6 +186,10 @@ module OpenEye_Parallel #(
     input                                                      data_mode_i,
     // Dataflow select: 0 = row-stationary (default), 1 = output-stationary GEMM
     input                                                      gemm_mode_i,
+    // Raw weight stream flag: 1 = weights arrive uncompressed (dense/GEMM
+    // layers); all-zero weight words are stored instead of being skipped.
+    // Forwarded to every PE via bit 9 of the FIRST_PARAMS config stream.
+    input                                                      raw_wght_i,
     input      [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i,
     input      [                                         17:0] needed_cycles_i,
     input      [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i,
@@ -328,6 +332,7 @@ module OpenEye_Parallel #(
   reg                                                  status_reg_enable_i_reg;
   reg                                                  data_mode_i_reg;
   reg                                                  gemm_mode_i_reg;
+  reg                                                  raw_wght_i_reg;
   reg  [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i_reg;
   reg  [                                         19:0] needed_cycles_i_reg;
   reg  [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i_reg;
@@ -418,7 +423,8 @@ module OpenEye_Parallel #(
         end
         FIRST_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{3{1'd0}},wght_addr_len_i_reg, stride_x_i_reg, data_mode_i_reg};
+          // Bit 9 carries the raw-weight-stream flag (see PE FIRST_PARAMS)
+          data_stream_reg        <= {{2{1'd0}}, raw_wght_i_reg, wght_addr_len_i_reg, stride_x_i_reg, data_mode_i_reg};
           fsm_transmission_state <= SECOND_PARAMS;
         end
         SECOND_PARAMS: begin
@@ -470,6 +476,7 @@ module OpenEye_Parallel #(
       status_reg_enable_i_reg        <= 0;
       data_mode_i_reg                <= 0;
       gemm_mode_i_reg                <= 0;
+      raw_wght_i_reg                 <= 0;
       fraction_bit_i_reg             <= 0;
       needed_cycles_i_reg            <= 0;
       needed_x_cls_i_reg             <= 0;
@@ -507,6 +514,7 @@ module OpenEye_Parallel #(
       status_reg_enable_i_reg     <= status_reg_enable_i;
       data_mode_i_reg             <= data_mode_i;
       gemm_mode_i_reg             <= gemm_mode_i;
+      raw_wght_i_reg              <= raw_wght_i;
       fraction_bit_i_reg          <= fraction_bit_i;
       needed_cycles_i_reg         <= needed_cycles_i;
       needed_x_cls_i_reg          <= needed_x_cls_i;

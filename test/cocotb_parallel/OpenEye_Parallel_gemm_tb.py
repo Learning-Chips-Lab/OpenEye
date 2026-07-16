@@ -49,6 +49,7 @@ async def _apply_reset(dut):
     dut.status_reg_enable_i.value = 0
     dut.data_mode_i.value = 0
     dut.gemm_mode_i.value = 0
+    dut.raw_wght_i.value = 0
     dut.fraction_bit_i.value = 0
     dut.needed_cycles_i.value = 0
     dut.needed_x_cls_i.value = 0

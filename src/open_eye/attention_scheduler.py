@@ -53,7 +53,7 @@ INT8_MIN = -128
 INT8_MAX = 127
 
 
-def requantize_pow2(values, target_max=INT8_MAX, nonzero=False):
+def requantize_pow2(values, target_max=INT8_MAX):
     """Requantize an integer tensor to INT8 with a power-of-two shift.
 
     Chooses the smallest shift so that ``round(v / 2**shift)`` fits into
@@ -62,14 +62,9 @@ def requantize_pow2(values, target_max=INT8_MAX, nonzero=False):
     integers, so host and (future) hardware implementations can agree
     bit-exactly.
 
-    With ``nonzero=True`` any zero result is replaced by +1. This is
-    required for tensors that are re-injected as the *weight* operand of a
-    later pass: the serial dense weight stream is zero-compressed and the
-    datapath does not tolerate zero weight entries (the DRAM writer applies
-    the same +-1 replacement to dense weights). The replacement perturbs
-    the value by one LSB of the requantized scale and is part of the
-    deterministic fixed-point contract (the host golden model applies it
-    identically).
+    Zero results are legitimate for every operand role: since the raw
+    weight-stream mode (raw_wght / data_pipeline_wght.raw_mode_i) the dense
+    datapath stores all-zero weight words instead of skipping them.
 
     Returns:
         (int8 ndarray, shift)
@@ -86,21 +81,7 @@ def requantize_pow2(values, target_max=INT8_MAX, nonzero=False):
         quant = np.where(values >= 0,
                          (values + half) >> shift,
                          -((-values + half) >> shift))
-    quant = np.clip(quant, INT8_MIN, INT8_MAX).astype(np.int64)
-    if nonzero:
-        quant = np.where(quant == 0, 1, quant)
-    return quant, shift
-
-
-def make_weights_nonzero(w):
-    """Replace zero entries of a weight matrix by +1 (hardware constraint).
-
-    The dense weight stream cannot carry zero entries (see
-    requantize_pow2). Mirrors DRAM.write_initial_data_to_dram, which does
-    the same for randomly generated dense weights.
-    """
-    w = np.asarray(w, dtype=np.int64)
-    return np.where(w == 0, 1, w)
+    return np.clip(quant, INT8_MIN, INT8_MAX).astype(np.int64), shift
 
 
 class GemmPass(object):
@@ -126,6 +107,8 @@ class GemmPass(object):
         if np.max(np.abs(self.weight)) > INT8_MAX + 1 or \
                 np.max(np.abs(self.iact)) > INT8_MAX + 1:
             raise ValueError(f"operands of pass {name} exceed INT8 range")
+        # Zero entries are allowed in both operands: raw weight-stream mode
+        # (raw_wght) stores all-zero weight words instead of skipping them.
         self.result = None
 
     @property
@@ -184,12 +167,10 @@ class AttentionScheduler(object):
     def __init__(self, x, w_q, w_k, w_v, w_o, num_heads=1,
                  s_x=1.0, s_w=1.0, p_scale=INT8_MAX):
         self.x = np.asarray(x, dtype=np.int64)
-        # Weight-operand tensors must be zero-free (dense weight stream
-        # constraint); zeros are replaced by +1 like in the DRAM writer.
-        self.w_q = make_weights_nonzero(w_q)
-        self.w_k = make_weights_nonzero(w_k)
-        self.w_v = make_weights_nonzero(w_v)
-        self.w_o = make_weights_nonzero(w_o)
+        self.w_q = np.asarray(w_q, dtype=np.int64)
+        self.w_k = np.asarray(w_k, dtype=np.int64)
+        self.w_v = np.asarray(w_v, dtype=np.int64)
+        self.w_o = np.asarray(w_o, dtype=np.int64)
         self.seq_len, self.d_model = self.x.shape
         if self.d_model % num_heads != 0:
             raise ValueError("num_heads must divide d_model")
@@ -236,11 +217,9 @@ class AttentionScheduler(object):
             q = np.stack(results[0:per])
             k = np.stack(results[per:2 * per])
             v = np.stack(results[2 * per:3 * per])
-            # Q stays an iact operand (zeros allowed); K and V become
-            # weight operands of the score/context passes (zero-free).
             self.q8, self.q_shift = requantize_pow2(q)
-            self.k8, self.k_shift = requantize_pow2(k, nonzero=True)
-            self.v8, self.v_shift = requantize_pow2(v, nonzero=True)
+            self.k8, self.k_shift = requantize_pow2(k)
+            self.v8, self.v_shift = requantize_pow2(v)
 
         return Stage("projection", passes, finalize)
 
@@ -268,11 +247,8 @@ class AttentionScheduler(object):
             logits = logits - logits.max(axis=-1, keepdims=True)
             e = np.exp(logits)
             p = e / e.sum(axis=-1, keepdims=True)
-            # P becomes the weight operand of the context passes: quantize
-            # to [1, p_scale] (zero probabilities become the minimum weight,
-            # 1/p_scale, to satisfy the zero-free weight constraint).
             self.p8 = np.clip(np.rint(p * self.p_scale),
-                              1, self.p_scale).astype(np.int64)
+                              0, self.p_scale).astype(np.int64)
 
         return Stage("score", passes, finalize)
 

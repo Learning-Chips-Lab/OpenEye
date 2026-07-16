@@ -712,6 +712,7 @@ module PE #(
   wire                                  psum_data_SPad_en_a_w_i;// Internal write enable port A
   wire                                  psum_data_SPad_en_b_w_i;// Internal write enable port B
   reg                                   data_mode_reg;          // Data mode configuration
+  reg                                   raw_wght_reg;           // 1 = raw (uncompressed) weight stream: keep all-zero weight words
   reg  [                           2:0] stride_reg;             // Stride configuration
   reg  [$clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_reg;      // Fixed-point fraction bits
   reg  [                           3:0] iact_x_line_repetitions;
@@ -954,6 +955,7 @@ module PE #(
   always @(posedge clk_i, negedge rst_ni) begin
     if (!rst_ni) begin
       //data_mode_reg         <= 0;
+      raw_wght_reg            <= 0;
       stride_reg              <= 0;
       fraction_bit_reg        <= 0;
       current_state_stream    <= 0;
@@ -971,6 +973,7 @@ module PE #(
             //data_mode_reg         <= data_stream_i[0];
             stride_reg              <= data_stream_i[3:1];    // Convolution stride
             wght_addr_max_reg       <= data_stream_i[7:4];    // Max weight addresses
+            raw_wght_reg            <= data_stream_i[9];      // Raw (uncompressed) weight stream flag
           end
         end
         SECOND_PARAMS: begin
@@ -2576,7 +2579,10 @@ module PE #(
 
       .second_spad_addr_o(second_spad_wght_addr_w),
       .second_spad_data_o(second_spad_wght_data_w),
-      .second_spad_en_o  (second_spad_wght_en_w)
+      .second_spad_en_o  (second_spad_wght_en_w),
+
+      // Raw (dense/GEMM) weight streams carry legitimate all-zero words
+      .raw_mode_i(raw_wght_reg)
   );
 
   // Input Activation Data Pipeline
