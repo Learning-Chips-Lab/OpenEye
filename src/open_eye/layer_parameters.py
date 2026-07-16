@@ -231,6 +231,8 @@ class LayerParameters(object):
         self.kernel_shape = []                 # Weight tensor shape
         self.output_shape = []                 # Output tensor shape
         self.kernel_size = []                  # Convolution kernel dimensions
+        self.padding_x = 0
+        self.padding_y = 0
         self.kernel_per_pe_cluster = 1         # Kernels per PE cluster
         self.used_channels = 1                 # Channels processed per iteration
         self.channel_repetition = 4            # Channel processing repetition factor
@@ -593,6 +595,9 @@ class LayerParameters(object):
         self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
         self.kernel_size = layer.kernel_size
+        if(self.padding == "same"):
+            self.padding_x = layer.kernel_size[0]//2
+            self.padding_y = layer.kernel_size[1]//2
         self.strideX = layer.strides[0]
         self.strideY = layer.strides[1]
 
@@ -673,14 +678,14 @@ class LayerParameters(object):
             - Power-of-2 alignment for efficient addressing
         """
         # Simple case: all channels fit in PE memory
-        if((self.input_shape[3]*self.kernel_size[1])<params.Iacts_per_PE):
-            self.used_channels = math.floor(self.input_shape[3])
+        if((self.channels*self.kernel_size[1])<params.Iacts_per_PE):
+            self.used_channels = math.floor(self.channels)
         else:
             self.used_channels = 8
 
         # Case: kernel height allows multiple kernels per PE cluster
         if(2*self.kernel_size[0] <= params.PEs_Y):
-            temp = math.ceil(self.input_shape[3]/self.kernel_per_pe_cluster)
+            temp = math.ceil(self.channels/self.kernel_per_pe_cluster)
             if (self.kernel_size[0] >= 2):
                 divisor = math.ceil(temp / params.Iacts_per_PE)
             else:
@@ -693,7 +698,7 @@ class LayerParameters(object):
             self.used_channels = 1 << (self.used_channels.bit_length() - 1)  # Round down to 2^n
             if (self.used_channels == 0):
                 assert False
-        self.used_channels = min(self.input_shape[3],self.used_channels)
+        self.used_channels = min(self.channels,self.used_channels)
 
     def calculate_needed_refreshes_mx(self, params):
         """Generate a matrix of refresh cycle counts for each transmission iteration.
@@ -1071,7 +1076,7 @@ class LayerParameters(object):
 
         # Calculate weight address entries based on computation mode
         
-        self.used_wght_addr_per_PE = (math.ceil(self.kernel_size[0] * self.input_shape[3]/self.kernel_per_pe_cluster / self.iact_transmissions_pe)) + 2
+        self.used_wght_addr_per_PE = (math.ceil(self.kernel_size[0] * self.channels/self.kernel_per_pe_cluster / self.iact_transmissions_pe)) + 2
 
         # Clamp weight addresses to hardware limit
         if(self.used_wght_addr_per_PE == (params.Wghts_Addr_per_PE + 1)):
@@ -1441,6 +1446,8 @@ class LayerParameters(object):
         self.iact_converter_max_cycles = 1
         print(self.used_iact_per_PE)
         self.iact_buffer_words_per_write = math.ceil(self.used_iact_per_PE/2) * self.needed_Iact_writes
+        
+        self.iact_size_c = self.used_iact_per_PE * params.NUM_GLB_WGHT * self.diff_iact_layer
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))

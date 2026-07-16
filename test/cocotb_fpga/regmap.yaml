@@ -18,6 +18,9 @@ registers:
   - {name: fc_size_reg, width: 14}
   - {name: iact_size_x, width: 12}
   - {name: iact_size_y, width: 8}
+  - {name: iact_size_c, width: 12}
+  - {name: padding_x, width: 4}
+  - {name: padding_y, width: 4}
   - {name: psum_size_x, width: 12}
   - {name: psum_size_y, width: 8}
   - {name: iact_needed_cycles, width: 11}
