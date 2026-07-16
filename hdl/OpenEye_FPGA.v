@@ -51,48 +51,59 @@
 ///
 ///
 /// Parameters:
-///   IS_TOPLEVEL            - Decides, wether modul is topmodul or not
-///   DATA_IACT_BITWIDTH     - Width of input activation data
-///   DATA_WGHT_BITWIDTH     - Width of weight data
-///   DATA_PSUM_BITWIDTH     - Width of partial sum data, used in internal accumulator
-///   TRANS_BITWIDTH_IACT    - Width of iact input port 
-///   TRANS_BITWIDTH_WGHT    - Width of weight input port
-///   TRANS_BITWIDTH_PSUM    - Width of partial sum input port
-///   NUM_GLB_IACT           - Number of input activation global buffers
-///   NUM_GLB_WGHT           - Number of rows of PEs in cluster (No WGHT GLBs)
-///   NUM_GLB_PSUM           - Number of partial sum global buffers
-///   CLUSTER_ROWS           - Amount of rows of clusters
-///   CLUSTER_COLUMNS        - Amount of columns of clusters
-///   IACT_PER_PE            - Maximum Iact Words in process element
-///   WGHT_PER_PE            - Maximum Wght Words in process element
-///   PSUM_PER_PE            - Maximum Psum Words in process element
-///   IACT_PER_PE            - Iact words in PE
-///   PSUM_PER_PE            - Psum words in PE
-///   WGHT_PER_PE            - Wght words in PE
-///   IACT_MEM_ADDR_WORDS    - Number of words in IACT GLB
-///   PSUM_MEM_ADDR_WORDS    - Number of words in PSUM GLB
-///   IACT_MEM_ADDR_BITS     - Width of words in IACT GLB
-///   PSUM_MEM_ADDR_BITS     - Width of words in PSUM GLB
-///   ROUTER_MODES_IACT      - Amount of bits in the Router for IACT
-///   ROUTER_MODES_WGHT      - Amount of bits in the Router for WGHT
-///   ROUTER_MODES_PSUM      - Amount of bits in the Router for PSUM
-///   BANO_MODES             - Amount of Modes in Batch Normalization
-///   AF_MODES               - Amount of Modes in AutoFunction CLuster
-///   CLUSTERS               - Amount of clusters
-///   PES                    - Amount of process elements
-///   PARAMETER_POS indicates, in which word and at which position the required parameter ist stored
-/// 
-/// Ports:
-///   ready_dma_o            - Ready Port Out
-///   data_dma_i             - Data Port In
-///   enable_dma_i           - Enable Port In
+///   CLUSTER_ROWS           - Number of cluster rows
+///   CLUSTER_COLUMNS        - Number of cluster columns
+///   NUM_GLB_IACT           - Number of activation global buffers
+///   NUM_GLB_WGHT           - Number of weight global buffers
+///   NUM_GLB_PSUM           - Number of partial-sum global buffers
+///   RAM_CELLS             - Number of RAM cells used for buffering
+///   BRANCHES              - Number of branch paths in the storage structure
+///   BUFFER_WIDTH          - Width of the buffering datapath
+///   QUANT_AMOUNT          - Quantization-related parameter count
+///   DATA_PSUM_BITWIDTH    - Width of the partial-sum data path
+///   TRANS_WORDS           - Number of DMA transfer words
+///   IS_TOPLEVEL           - Selects top-level behavior for this instance
+///   SERIAL                - Enables serial execution mode
+///   PARALLEL_MACS         - Number of parallel MAC units
+///   SPARSITY_EN           - Enables sparse-mode operation
+///   ADDR_IACT_BITWIDTH    - Address width for activation memories
+///   ADDR_WGHT_BITWIDTH    - Address width for weight memories
+///   DATA_IACT_BITWIDTH    - Width of activation data
+///   DATA_WGHT_BITWIDTH    - Width of weight data
+///   TRANSMISSIONS         - Number of DMA transmissions
+///   TRANS_BITWIDTH_IACT   - DMA bit width for activation data
+///   TRANS_BITWIDTH_WGHT   - DMA bit width for weight data
+///   TRANS_BITWIDTH_PSUM   - DMA bit width for partial-sum data
+///   DATA_IACT_OVERHEAD    - Overhead bits appended to activation data
+///   PES                   - Total number of processing elements
+///   CLUSTERS              - Total number of clusters
+///   IACT_ADDR_PER_PE      - Activation address words per PE
+///   WGHT_ADDR_PER_PE      - Weight address words per PE
+///   IACT_PER_PE           - Activation words per PE
+///   PSUM_PER_PE           - Partial-sum words per PE
+///   WGHT_PER_PE           - Weight words per PE
+///   IACT_MEM_ADDR_WORDS   - Number of activation memory words
+///   PSUM_MEM_ADDR_WORDS  - Number of partial-sum memory words
+///   IACT_MEM_ADDR_BITS    - Bit width of activation memory addresses
+///   PSUM_MEM_ADDR_BITS    - Bit width of partial-sum memory addresses
+///   ROUTER_MODES_IACT     - Router mode count for activation traffic
+///   ROUTER_MODES_WGHT     - Router mode count for weight traffic
+///   ROUTER_MODES_PSUM     - Router mode count for partial-sum traffic
+///   DMA_BITWIDTH          - DMA data width
+///   BANO_MODES            - Batch-normalization modes
+///   AF_MODES              - Activation-function modes
 ///
-///   ready_dma_i            - Ready Port In
-///   data_dma_o             - Data Port Out
-///   enable_dma_o           - Enable Port Out
-///   last_data_o            - Signals the last output data word
-///                 
-
+/// Ports:
+///   clk_i                 - System clock input
+///   rst_ni                - Active-low reset input
+///   ready_dma_o           - DMA-ready signal from FPGA to host
+///   data_dma_i            - DMA input data from host
+///   enable_dma_i          - DMA input-enable signal from host
+///   ready_dma_i           - DMA-ready signal from host to FPGA
+///   data_dma_o            - DMA output data from FPGA
+///   enable_dma_o          - DMA output-enable signal from FPGA
+///   last_data_o           - Asserted on the final output data word
+///
 module OpenEye_FPGA #(
     //Set parameters
   `ifdef USE_INTERNAL_PARAMS
@@ -296,8 +307,8 @@ reg [1023:0] fst_path;
   wire [4-1:0] kernel_per_pe_cluster_reg;        // Number of filter kernels mapped to a single PE cluster (from dma_storage).
   wire [5:0] kernel_size_x;                      // Spatial kernel size (e.g. 3 for 3×3 conv); used to compute padding and iact_converter_max_cycles.
   wire [3:0] kernel_size_y;                      // Spatial kernel size (e.g. 3 for 3×3 conv); used to compute padding and iact_converter_max_cycles.
-  reg [3:0] padding_x;                           // Zero-padding amount = (kernel_size-1)/2; computed in GET_PARAMETERS word 3.
-  reg [3:0] padding_y;                           // Zero-padding amount = (kernel_size-1)/2; computed in GET_PARAMETERS word 3.
+  reg [3:0] padding_x;                           // Zero-padding amount = (kernel_sizeX-1)/2.
+  reg [3:0] padding_y;                           // Zero-padding amount = (kernel_sizeY-1)/2.
   reg [DMA_BITWIDTH-1 : 0] fifo_data_i;          // Data word written into the output varlenFIFO (currently driven to 0).
   reg fifo_read_i;                               // Read strobe for the output varlenFIFO (currently driven to 0).
   reg fifo_write_i;                              // Write strobe for the output varlenFIFO (currently driven to 0).
@@ -401,9 +412,9 @@ reg [1023:0] fst_path;
   reg [$clog2(RAM_CELLS)-1:0] current_buffer_n_1; // One-cycle delayed current_buffer_n; used to update buffer_SP_addr_reg one cycle after the write.
   wire [11:0] iact_size_x;       // Feature map width in pixels (from dma_storage).
   wire [ 7:0] iact_size_y;       // Feature map height in pixels (from dma_storage).
+  wire [11:0] iact_size_c;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
   wire [11:0] psum_size_x;       // Output map width in pixels (from dma_storage).
   wire [ 7:0] psum_size_y;       // Output map height in pixels (from dma_storage).
-  reg [11:0] iact_channels;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
   wire [ 7:0] iact_channels_per_pe;             // Channels assigned to one PE (from dma_storage).
   wire [ 3:0] iact_channels_per_pe_next_layer;  // Channel count for the next layer (from dma_storage); used when routing psums back as iact.
   reg [ 7:0] iact_channels_counter;             // Counts which channel batch [0..iact_channel_max_cycles-1] is currently being processed.
@@ -813,7 +824,7 @@ reg [1023:0] fst_path;
                     iact_converter_c <= iact_converter_c + iact_channels_per_pe;
                   end
                 end
-                if (iact_converter_c + iact_channels_per_pe == iact_channels) begin
+                if (iact_converter_c + iact_channels_per_pe == iact_size_c) begin
                   iact_converter_c <= 0;
                   iact_converter_y <= iact_converter_y + 1;
                   if (iact_converter_y + 1 >= iact_size_y) begin
@@ -901,7 +912,7 @@ reg [1023:0] fst_path;
                   if (fully_connected_layer) begin
                     iact_converter_c <= iact_converter_c + 1;
                   end
-                  if (iact_converter_c == iact_channels - iact_channels_per_pe) begin
+                  if (iact_converter_c == iact_size_c - iact_channels_per_pe) begin
                     iact_converter_c <= 0;
                     iact_converter_y <= iact_converter_y + 1;
                     if (iact_converter_y >= iact_size_y - 1) begin
@@ -1351,7 +1362,7 @@ reg [1023:0] fst_path;
   //
   //  GET_PARAMETERS  (fsm_cycle 0..3+)
   //    Receives DMA words one per cycle while enable_dma_i_reg is high.
-  //    Cycles 0-3 go to the dma_storage decoder (write_dma_en, write_dma_addr).
+  //    Cycles trough states of the dma_storage decoder (write_dma_en).
   //    Remaining cycles fill compute_mask_reg (one word = one cluster-column
   //    enable bit).  ready_dma_o stays high throughout.
   //    Transitions to GET_ROUTER_CONFIG once the expected word count is done.
@@ -1442,8 +1453,6 @@ reg [1023:0] fst_path;
       status_reg_enable_reg                 <= 0;
       data_mode_reg                         <= 0;
       fraction_bit_reg                      <= 0;
-      padding_x                             <= 0;
-      padding_y                             <= 0;
       fsm_cycle                             <= 0;
       fsm_last_state                        <= IDLE;
       fsm_current_state                     <= GET_PARAMETERS;
@@ -1482,7 +1491,6 @@ reg [1023:0] fst_path;
       current_buffer_n                      <= 0;
       current_buffer_n_1                    <= 0;
       current_buffer_addr                   <= 0;
-      iact_channels                         <= 0;
       iact_channels_counter                 <= 0;
       reset_cycle                           <= 0;
       select_ram_counter                    <= 0;
@@ -1492,7 +1500,6 @@ reg [1023:0] fst_path;
       iact_converter_buffer_addr_cycles     <= 0;
       send_data_reg                         <= 0;
       write_dma_en                          <= 0;
-      write_dma_addr                        <= ~0;
       dma_data_i                            <= 0;
       past_padding                          <= 0;
       // Pooling
@@ -1558,7 +1565,7 @@ reg [1023:0] fst_path;
         //   previous layer; clears it once DMA data arrives.
         // - Clears pooling_regs, quant arrays, buffer addresses.
         // - Cycles 0-3 (fsm_cycle 0-3): writes each 64-bit DMA word to
-        //   dma_storage via write_dma_en / write_dma_addr (+1 each cycle).
+        //   dma_storage via write_dma_en.
         //   Cycle 3 also latches padding = (kernel_size-1)/2.
         // - Cycles 4+: fills compute_mask_reg one 64-bit slice per cycle;
         //   each bit in the DMA word enables one (PE, cluster) pair.
@@ -1614,10 +1621,7 @@ reg [1023:0] fst_path;
                 fsm_cycle   <= fsm_cycle + 1;
                 reset_cycle <= 0;
                 dma_data_i  <= data_dma_i_reg;
-                padding_x   <= (kernel_size_x-1)/2;
-                padding_y   <= (kernel_size_y-1)/2;
                 if (fsm_cycle < (TRANSMISSIONS+1)) begin
-                    write_dma_addr <= write_dma_addr + 1;
                     write_dma_en   <= 1;
                 end
                 for (a = 0; a < PES * CLUSTERS; a = a + 1) begin
@@ -1626,7 +1630,6 @@ reg [1023:0] fst_path;
                   end
                 end
                 if (fsm_cycle == ((TRANSMISSIONS+1) + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
-                  choose_iact_buffer <= choose_iact_buffer_input;
                   fsm_last_state     <= GET_PARAMETERS;
                   // CLUSTERS != 1 must route through GET_ROUTER_CONFIG first
                   // (it loads router_mode_iact/wght/psum, then itself
@@ -1652,13 +1655,9 @@ reg [1023:0] fst_path;
                     end
                   end
                   fsm_cycle          <= 0;
-                  write_dma_addr     <= ~0;
-                  iact_channels      <= iact_channels_per_pe * iact_channel_max_cycles;
                   psum_x_with_add_up <= psum_size_x + add_up;
                   if (fully_connected_layer) begin
-                    iact_channels <= iact_channels_per_pe * NUM_GLB_WGHT * iact_channel_max_cycles; //iact_channel contains CLUSTER_Y
-                    padding_x     <= 0;
-                    padding_y     <= 0;
+                    //iact_size_c <= iact_channels_per_pe * NUM_GLB_WGHT * iact_channel_max_cycles; //iact_channel contains CLUSTER_Y
                   end
                   if (max_pooling) begin
                     for (a = 0; a < RAM_CELLS; a=a+1) begin
@@ -1678,7 +1677,7 @@ reg [1023:0] fst_path;
         //
         // On entry each cycle:
         // - Asserts ready_dma_o and new_stream.
-        // - Latches iact_channels = iact_channels_per_pe * iact_channel_max_cycles
+        // - Latches iact_size_c = iact_channels_per_pe * iact_channel_max_cycles
         //   (FC: multiplied by NUM_GLB_WGHT for full row sweep).
         // - Latches psum_x_with_add_up = psum_size_x + add_up.
         // - max_pooling mode: asserts read-enable for all buffer cells so
@@ -1729,7 +1728,7 @@ reg [1023:0] fst_path;
         //   * Advances current_buffer_addr: the address within the RAM
         //     cell (rows increase by 1 per full RAM_CELLS-wide word cycle).
         // - Exit condition: fsm_cycle reaches
-        //   ceil(iact_size_x * iact_size_y * iact_channels / IACT_WORDS_IN_RAM) - 1.
+        //   ceil(iact_size_x * iact_size_y * iact_size_c / IACT_WORDS_IN_RAM) - 1.
         //   Resets fsm_cycle and transitions to GET_WGHT.
         // - When !enable_dma_i_reg: de-asserts all write enables.
         // -------------------------------------------------------------------
@@ -1751,7 +1750,7 @@ reg [1023:0] fst_path;
             if (current_buffer_n == RAM_CELLS - 1) begin
               current_buffer_n <= 0;
             end
-            if (fsm_cycle == ((iact_size_x*iact_size_y*iact_channels + IACT_WORDS_IN_RAM - 1)/IACT_WORDS_IN_RAM) - 1) begin
+            if (fsm_cycle == ((iact_size_x*iact_size_y*iact_size_c + IACT_WORDS_IN_RAM - 1)/IACT_WORDS_IN_RAM) - 1) begin
               fsm_cycle         <= 0;
               fsm_current_state <= GET_WGHT;
               fsm_last_state    <= GET_IACT;
@@ -1898,6 +1897,7 @@ reg [1023:0] fst_path;
         //   transitions to GET_OFFSET.
         // -------------------------------------------------------------------
         GET_QUANTIZE: begin
+          choose_iact_buffer  <= choose_iact_buffer_input;
           overhang_counter    <= overhang_discrepancy;
           ready_dma_o         <= 1;
           wght_buffer_SP_en_w <= 0;
@@ -1990,7 +1990,7 @@ reg [1023:0] fst_path;
         //   * Resets select_ram_counter and ram_counter_storage to 0.
         //   * Enables all buffers read lines (buffer_SP_en_r_reg all 1).
         //   * Resets all buffer address pointers to 0.
-        //   * Special case (iact_channels == 1): sets past_padding = 1
+        //   * Special case (iact_size_c == 1): sets past_padding = 1
         //     immediately (single-channel layers skip the padding ramp).
         //
         // This state may spin for multiple cycles if any converter is still
@@ -2020,7 +2020,7 @@ reg [1023:0] fst_path;
                 buffer_SP_addr_reg[a] <= ~0;
               end
             end
-            if ((iact_channels == 1) | (kernel_size_x == 1)) begin
+            if ((iact_size_c == 1) | (kernel_size_x == 1)) begin
               past_padding <= 1;
             end
           end
@@ -2427,7 +2427,6 @@ reg [1023:0] fst_path;
             fsm_last_state        <= RECEIVE_PSUMS_TO_IACT;
             send_data_reg         <= 0;
             iact_channels_counter <= 0;
-            write_dma_addr        <= ~0;
           end
         end
 
@@ -2445,7 +2444,6 @@ reg [1023:0] fst_path;
         //   or passed to the iact buffer):
         //   * Transitions to GET_PARAMETERS (the host will send the next layer).
         //   * Clears send_data_reg, fsm_cycle, iact_channels_counter.
-        //   * Resets write_dma_addr to ~0 (ready for next config burst).
         // -------------------------------------------------------------------
         WAIT_FOR_RESULTS: begin
           if (fsm_psum_current_state == WAIT_FOR_SENDING_RESULTS) begin
@@ -2464,7 +2462,6 @@ reg [1023:0] fst_path;
             send_data_reg         <= 0;
             fsm_cycle             <= 0;
             iact_channels_counter <= 0;
-            write_dma_addr        <= ~0;
           end
         end
 
@@ -2618,7 +2615,7 @@ reg [1023:0] fst_path;
         // - After all 32/IACT_WORDS_IN_RAM cycles: clears fsm_cycle,
         //   resets all pooling_regs to -128 (minimum, ready for next pass).
         // - If finished_cycles_iact == needed_cycles - 1 (last pass):
-        //   * Resets finished_cycles_iact, write_dma_addr.
+        //   * Resets finished_cycles_iact.
         //   * Clears iact_channels_counter.
         //   * Transitions to GET_PARAMETERS.
         // - Otherwise:
@@ -2662,7 +2659,6 @@ reg [1023:0] fst_path;
               finished_cycles_iact   <= 0;
               fsm_last_state    <= MAXPOOLING_SEND;
               fsm_current_state <= GET_PARAMETERS;
-              write_dma_addr    <= ~0;
               iact_channels_counter <= 0;
             end else begin
               finished_cycles_iact  <= finished_cycles_iact + 1;
@@ -4097,7 +4093,6 @@ reg [1023:0] fst_path;
         .clk_i(clk_i),
         .rst_ni(rst_n),
         .write_en(write_dma_en),
-        .write_addr(write_dma_addr),
         .dma_data_i(dma_data_i),
         .wght_cycles_reg(wght_cycles_reg),
         .stride_x_reg(stride_x_reg),
@@ -4117,6 +4112,9 @@ reg [1023:0] fst_path;
         .fc_size_reg(fc_size_reg),
         .iact_size_x(iact_size_x),
         .iact_size_y(iact_size_y),
+        .iact_size_c(iact_size_c),
+        .padding_x(padding_x),
+        .padding_y(padding_y),
         .psum_size_x(psum_size_x),
         .psum_size_y(psum_size_y),
         .iact_needed_cycles(iact_needed_cycles),
