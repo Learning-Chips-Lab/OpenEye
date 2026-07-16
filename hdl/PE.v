@@ -204,16 +204,26 @@
 ///                              0: Parallel mode - dual MACs operate simultaneously (default)
 ///                              1: Serial mode - single MAC, time-multiplexed operation
 ///                              Serial mode reduces area at the cost of 2× latency
-///    PE_X                    - X coordinate position of PE in the processing array cluster
-///                              Range: 0 to array_width-1
-///                              Used for neighbor identification and routing decisions
-///    PE_Y                    - Y coordinate position of PE in the processing array cluster
-///                              Range: 0 to array_height-1
-///                              Determines data flow direction in systolic array
 ///    PARALLEL_MACS           - Number of multiply-accumulate operations executed in parallel
 ///                              Typical values: 1 (serial), 2 (default dual-MAC), 4 (quad-MAC)
 ///                              Affects throughput (ops/cycle) and area (multiplier count)
 ///                              Must match WGHT_DATA_DATA packing format
+///    SPARSITY_EN             - Sparsity optimization enable flag
+///                              1: Sparse mode (default) - enables zero-skipping via overhead bits
+///                              0: Dense mode - sequential addressing, no overhead processing
+///                              Affects FSM selection, SPad instantiation, and data unpacking logic
+///    USE_DSP                 - MAC implementation selection
+///                              0: Standard multiplier + adder pipeline (fabric-based, default)
+///                              1: DSP48 slice optimization (integrated MAC, FPGA-optimized)
+///                              Controls which compute unit generate block is instantiated
+///    DATA_IACT_OVERHEAD      - Bits reserved for zero-skipping metadata in input activations
+///                              Default: 4 bits (can encode gaps of 0-15 zeros)
+///                              Total iact word width = DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD
+///                              Larger overhead supports sparser activations but increases memory
+///    DATA_WGHT_IGNORE_ZEROS  - Bits reserved for zero-skipping metadata in weights
+///                              Default: 4 bits per weight (encodes position within sparse structure)
+///                              Used as offset into psum SPad: psum_addr = base + ignore_zeros
+///                              Allows efficient indexing of non-zero weight positions
 ///
 /// Data Width Parameters:
 ///    DATA_IACT_BITWIDTH      - Bit width of input activation values (payload only)
@@ -352,8 +362,10 @@
 ///                              Used during initialization to configure PE operation
 ///                              Sequence: FIRST_PARAMS → SECOND_PARAMS → THIRD_PARAMS
 ///    data_stream_i          - Configuration parameter data stream
-///                              Width: 12 bits
+///                              Width: 9 bits
 ///                              Carries runtime configuration: stride, filters, channels, etc.
+///                              Bit assignments: [8:4]=filters, [7:4]=iact_x_line_repetitions,
+///                              [3:0]=channel count/iact_addr_max
 ///                              Format varies by config FSM state (see configuration phase above)
 ///
 /// FSM State Transitions and Descriptions:
