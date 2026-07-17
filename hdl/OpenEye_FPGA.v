@@ -154,7 +154,7 @@ module OpenEye_FPGA #(
 
     parameter PES = NUM_GLB_PSUM * NUM_GLB_WGHT,
 
-    parameter CLUSTERS        = CLUSTER_COLUMNS * CLUSTER_ROWS,
+    parameter CLUSTERS = CLUSTER_COLUMNS * CLUSTER_ROWS,
 
     parameter IACT_ADDR_PER_PE = 9,
     parameter WGHT_ADDR_PER_PE = 16,
@@ -204,9 +204,6 @@ module OpenEye_FPGA #(
     //Storage RAMs
     parameter BRANCHES_CLOG = $clog2(BRANCHES),
     parameter BRANCHES_WIDTH = BUFFER_WIDTH - BRANCHES_CLOG,
-    parameter IACT_RAM_CELLS_WORD_BITWIDTH = 64,
-    parameter WGHT_RAM_CELLS_WORD_BITWIDTH = 64,
-    parameter PSUM_RAM_CELLS_WORD_BITWIDTH = 64,
 
     //Enable Traces for unpacked arrays
     parameter UNPACKED_TRACES_ENABLED = 1,
@@ -214,12 +211,24 @@ module OpenEye_FPGA #(
     //Pooling Features
     parameter AVERAGE_POOLING = 0,
 
+    localparam FINAL_DATA_IACT_BITWIDTH = SPARSITY_EN ? 4 + DATA_IACT_BITWIDTH : DATA_IACT_BITWIDTH,
+    localparam FINAL_DATA_WGHT_BITWIDTH = SPARSITY_EN ? 4 + DATA_WGHT_BITWIDTH : DATA_WGHT_BITWIDTH,
+
+    localparam integer IACT_RAM_CELLS_WORD_BITWIDTH = DATA_IACT_BITWIDTH * 8,
+    localparam integer WGHT_RAM_CELLS_WORD_BITWIDTH = FINAL_DATA_WGHT_BITWIDTH * PARALLEL_MACS * NUM_GLB_WGHT,
+    localparam integer PSUM_RAM_CELLS_WORD_BITWIDTH = DATA_PSUM_BITWIDTH * 2,
+
     localparam IACT_WORDS_IN_RAM = IACT_RAM_CELLS_WORD_BITWIDTH / DATA_IACT_BITWIDTH,
     localparam WORDS_PER_CYCLE   = 2,
     localparam PSUM_TO_IACT_CYCLES = (CLUSTER_COLUMNS * NUM_GLB_PSUM) == 4 ? 2 : 1,
     localparam integer IACT_CYCLES_ONE_WORD_ALL_CELLS = ((IACT_RAM_CELLS * IACT_RAM_CELLS_WORD_BITWIDTH) + DMA_BITWIDTH - 1) / DMA_BITWIDTH,
     localparam IACT_CELL_INPUT_WIDTH = IACT_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
-    localparam integer IACT_ONE_WORD_ALL_RAM = $ceil(IACT_RAM_CELLS*IACT_RAM_CELLS_WORD_BITWIDTH/DMA_BITWIDTH)
+    localparam integer IACT_ONE_WORD_ALL_RAM = $ceil(IACT_RAM_CELLS*IACT_RAM_CELLS_WORD_BITWIDTH/DMA_BITWIDTH),
+
+    localparam WGHT_RAM_CELLS = CLUSTERS * NUM_GLB_WGHT,
+    localparam integer WGHT_CYCLES_ONE_WORD_ALL_CELLS = ((WGHT_RAM_CELLS * WGHT_RAM_CELLS_WORD_BITWIDTH) + DMA_BITWIDTH - 1) / DMA_BITWIDTH,
+    localparam WGHT_CELL_INPUT_WIDTH = WGHT_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
+    localparam integer WGHT_ONE_WORD_ALL_RAM = ((CLUSTERS*WGHT_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH
 
 ) (
     //Clock and Reset
@@ -392,13 +401,13 @@ reg [1023:0] fst_path;
   // Read and write addresses are OR-combined on the RAM address port
   // (only one is non-zero at any time).
   // -----------------------------------------------------------------------
-  reg wght_buffer_en_r;                                          // Read enable for the weight staging RAM.
-  reg wght_buffer_en_w;                                          // Write enable for the weight staging RAM.
-  reg [BUFFER_WIDTH-1:0] wght_buffer_wr_addr;                      // Write-address pointer; incremented each time a full weight row is assembled.
-  reg [BUFFER_WIDTH-1:0] wght_buffer_rd_addr;                      // Read-address pointer; incremented each clock during the send phase.
-  reg [BUFFER_WIDTH-1:0] wght_buffer_rd_addr_storage;              // Saved read address to rewind to the start of the current weight block after each channel batch.
-  reg [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_data_w;  // Write-data bus: assembled from pairs of DMA words, one row per cycle.
-  wire [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_data_r; // Read-data bus; directly assigned to wght_data_i_w → OpenEye_Parallel.
+  reg                                                  wght_buffer_en_r;            // Read enable for the weight staging RAM.
+  reg                                                  wght_buffer_en_w;            // Write enable for the weight staging RAM.
+  reg [BUFFER_WIDTH-1:0]                               wght_buffer_wr_addr;         // Write-address pointer; incremented each time a full weight row is assembled.
+  reg [BUFFER_WIDTH-1:0]                               wght_buffer_rd_addr;         // Read-address pointer; incremented each clock during the send phase.
+  reg [BUFFER_WIDTH-1:0]                               wght_buffer_rd_addr_storage; // Saved read address to rewind to the start of the current weight block after each channel batch.
+  reg [WGHT_CELL_INPUT_WIDTH-1:0]                      wght_buffer_data_w;          // Write-data bus: assembled from pairs of DMA words, one row per cycle.
+  wire [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_data_r;          // Read-data bus; directly assigned to wght_data_i_w → OpenEye_Parallel.
 
   // -----------------------------------------------------------------------
   // Psum Staging Buffer Control
@@ -422,7 +431,7 @@ reg [1023:0] fst_path;
   // Used during GET_IACT to distribute incoming DMA words across the 32
   // double-buffer cells in a round-robin fashion.
   // -----------------------------------------------------------------------
-  reg [$clog2(IACT_RAM_CELLS)-1:0] current_buffer_n;   // Index of the cell currently being written (0–31); increments each DMA word, wraps at IACT_RAM_CELLS.
+  reg [$clog2(IACT_RAM_CELLS)-1:0] current_buffer;   // Index of the cell currently being written (0–31); increments each DMA word, wraps at IACT_RAM_CELLS.
   wire [11:0] iact_size_x;       // Feature map width in pixels (from dma_storage).
   wire [ 7:0] iact_size_y;       // Feature map height in pixels (from dma_storage).
   wire [11:0] iact_size_c;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
@@ -1121,7 +1130,7 @@ reg [1023:0] fst_path;
           if (fsm_sending_cycle <= wghts_per_pe) begin
             wght_buffer_rd_addr <= wght_buffer_rd_addr + 1;
           end
-          if (fsm_sending_cycle > 2) begin
+          if (fsm_sending_cycle > 1) begin
             flat_help_var_send = 0;
             for (a = 0; a < CLUSTER_ROWS; a=a+1) begin
               if ((a * (NUM_GLB_PSUM * CLUSTER_COLUMNS)) <= (((iact_size_x%NUM_GLB_PSUM)+iact_size_x) * y_lines_per_calc * kernels_per_calc * needed_y_cls_reg) - 1) begin
@@ -1498,7 +1507,7 @@ reg [1023:0] fst_path;
       overhang                              <= 0;
       overhang_delay                        <= 0;
       buffer_addr_lower_limit            <= 0;
-      current_buffer_n                      <= 0;
+      current_buffer                      <= 0;
       iact_channels_counter                 <= 0;
       reset_cycle                           <= 0;
       select_ram_counter                    <= 0;
@@ -1631,15 +1640,38 @@ reg [1023:0] fst_path;
                 fsm_cycle   <= fsm_cycle + 1;
                 reset_cycle <= 0;
                 dma_data_i  <= data_dma_i_reg;
-                if (fsm_cycle < (TRANSMISSIONS+1)) begin
+                // write_dma_en is itself a registered (nonblocking) signal,
+                // so it takes effect one cycle after this condition is
+                // checked - by the time it deasserts, dma_storage's shift
+                // register has already received exactly TRANSMISSIONS
+                // pushes (fsm_cycle 0..TRANSMISSIONS-1). Using
+                // TRANSMISSIONS+1 here (as the other TRANSMISSIONS+1 uses
+                // below do, for the separate compute_mask_reg/PE-bitmap
+                // phase boundary) pushes one extra, stale word into the
+                // shift chain, permanently misaligning every decoded field
+                // by one transmission slot - harmless on the old
+                // non-shifting dma_storage architecture (an extra write to
+                // an already-terminal per-field register is a no-op), but
+                // corrupting on the new pipelined shift-register one.
+                if (fsm_cycle < TRANSMISSIONS) begin
                     write_dma_en   <= 1;
                 end
+                // Shifted from TRANSMISSIONS+1 to TRANSMISSIONS to match the
+                // write_dma_en fix above: dma_storage now correctly
+                // receives exactly TRANSMISSIONS words (fsm_cycle
+                // 1..TRANSMISSIONS), so the PE-bitmap phase starts one
+                // cycle earlier than before. Leaving this at TRANSMISSIONS+1
+                // read the bitmap from the wrong word and delayed the
+                // GET_PARAMETERS->GET_ROUTER_CONFIG transition by one DMA
+                // word, which then made GET_ROUTER_CONFIG (which reads
+                // data_dma_i_reg directly, not through dma_storage's shift
+                // chain) skip the first router_mode_iact word entirely.
                 for (a = 0; a < PES * CLUSTERS; a = a + 1) begin
-                  if (fsm_cycle >= (TRANSMISSIONS+1) & (((fsm_cycle - (TRANSMISSIONS+1)) * DMA_BITWIDTH <= a) & ((fsm_cycle - 4) * DMA_BITWIDTH > a))) begin
+                  if (fsm_cycle >= TRANSMISSIONS & (((fsm_cycle - TRANSMISSIONS) * DMA_BITWIDTH <= a) & ((fsm_cycle - 4) * DMA_BITWIDTH > a))) begin
                     compute_mask_reg[a] <= data_dma_i_reg[a%DMA_BITWIDTH];
                   end
                 end
-                if (fsm_cycle == ((TRANSMISSIONS+1) + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
+                if (fsm_cycle == (TRANSMISSIONS + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
                   fsm_last_state     <= GET_PARAMETERS;
                   // CLUSTERS != 1 must route through GET_ROUTER_CONFIG first
                   // (it loads router_mode_iact/wght/psum, then itself
@@ -1659,6 +1691,7 @@ reg [1023:0] fst_path;
                       for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
                         iact_buffer_addr_reg[a] <= ~0;
                       end
+                      wght_buffer_wr_addr <= ~0;
                     end else begin
                       fsm_current_state <= GET_WGHT;
                     end
@@ -1713,6 +1746,7 @@ reg [1023:0] fst_path;
                 for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
                   iact_buffer_addr_reg[a] <= ~0;
                 end
+                wght_buffer_wr_addr <= ~0;
               end else begin
                 fsm_current_state <= GET_WGHT;
               end
@@ -1732,7 +1766,7 @@ reg [1023:0] fst_path;
         // - Asserts ready_dma_o; clears all buffer write enables at the
         //   top of each cycle (en_w gated per-cell below).
         // - On each enable_dma_i_reg pulse:
-        //   * Advances the round-robin cell pointer current_buffer_n
+        //   * Advances the round-robin cell pointer current_buffer
         //     (wraps at IACT_RAM_CELLS-1).
         //   * Asserts iact_buffer_en_w for the current cell.
         //   * Writes data_dma_i_reg into iact_buffer_data_w.
@@ -1752,19 +1786,19 @@ reg [1023:0] fst_path;
           end
           if (enable_dma_i_reg) begin
             fsm_cycle          <= fsm_cycle + 1;
-            current_buffer_n   <= current_buffer_n + 1;
+            current_buffer   <= current_buffer + 1;
             iact_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
             for (a = 0; a < IACT_CYCLES_ONE_WORD_ALL_CELLS-1; a=a+1) begin
               iact_buffer_data_w[DMA_BITWIDTH*(a+1)+:DMA_BITWIDTH]
               <= iact_buffer_data_w[DMA_BITWIDTH*a+:DMA_BITWIDTH];
             end
-            if (current_buffer_n == 0) begin
+            if (current_buffer == 0) begin
               for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
                 iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
               end
             end
-            if (current_buffer_n == IACT_ONE_WORD_ALL_RAM - 1) begin
-              current_buffer_n <= 0;
+            if (current_buffer == IACT_ONE_WORD_ALL_RAM - 1) begin
+              current_buffer <= 0;
               for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
                 iact_buffer_en_w[a] <= 1;
               end
@@ -1813,30 +1847,26 @@ reg [1023:0] fst_path;
           wght_buffer_en_w <= 0;
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
-            for (b = 0; b < TRANS_BITWIDTH_WGHT; b = b + 1) begin
-              wght_buffer_data_w[fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b]
-              <= data_dma_i_reg[b];
-              wght_buffer_data_w[CLUSTER_ROWS*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_y_cl*TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT+fsm_wght_r*TRANS_BITWIDTH_WGHT+b]
-              <= data_dma_i_reg[TRANS_BITWIDTH_WGHT+b];
+            current_buffer   <= current_buffer + 1;
+            wght_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
+            for (a = 0; a < WGHT_CYCLES_ONE_WORD_ALL_CELLS-1; a=a+1) begin
+              wght_buffer_data_w[DMA_BITWIDTH*(a+1)+:DMA_BITWIDTH]
+              <= wght_buffer_data_w[DMA_BITWIDTH*a+:DMA_BITWIDTH];
             end
-            if (fsm_wght_r != NUM_GLB_WGHT - 1) begin
-              fsm_wght_r <= fsm_wght_r + 1;
-            end else begin
-              fsm_wght_r <= 0;
-              fsm_y_cl <= fsm_y_cl + 1;
-              if (fsm_y_cl == CLUSTER_ROWS - 1) begin
-                fsm_y_cl               <= 0;
-                wght_buffer_en_w    <= 1;
+            if (current_buffer == 0) begin
                 wght_buffer_wr_addr <= wght_buffer_wr_addr + 1;
-                if(fsm_cycle == trans_cycles_wght - 1)begin
-                  fsm_cycle      <= 0;
-                  fsm_last_state <= GET_WGHT;
-                  if (!skipPsum_reg) begin
-                    fsm_current_state <= GET_BIAS;
-                  end else begin
-                    fsm_current_state <= GET_QUANTIZE;
-                  end
-                end
+            end
+            if (current_buffer == WGHT_ONE_WORD_ALL_RAM - 1) begin
+              current_buffer   <= 0;
+              wght_buffer_en_w <= 1;
+            end
+            if(fsm_cycle == trans_cycles_wght - 1)begin
+              fsm_cycle      <= 0;
+              fsm_last_state <= GET_WGHT;
+              if (!skipPsum_reg) begin
+                fsm_current_state <= GET_BIAS;
+              end else begin
+                fsm_current_state <= GET_QUANTIZE;
               end
             end
           end
@@ -2085,9 +2115,6 @@ reg [1023:0] fst_path;
           if (iact_buffer_next_addr) begin
             iact_converter_enc_enable <= 1;
             select_ram_counter        <= 0;
-            /*if (buffer_cycles_for_x_iact == 1) begin
-              past_padding <= 0;
-            end*/
           end
           if ((iact_converter_cycles + 1 > (padding_y * buffer_cycles_for_x_iact * iact_x_line_repetitions))) begin // Lower bound
             if ((iact_converter_cycles < ((padding_y+iact_size_y) * buffer_cycles_for_x_iact * iact_x_line_repetitions))) begin // Upper bound
@@ -2146,7 +2173,7 @@ reg [1023:0] fst_path;
         // - Deasserts iact_ready and iact_converter_enc_enable.
         // - Counts fsm_cycle; at cycle 16:
         //   * Clears fsm_cycle and iact_converter_cycles.
-        //   * Resets buffer pointers (current_buffer_n/n_1/addr, all addr_reg).
+        //   * Resets buffer pointers (current_buffer/n_1/addr, all addr_reg).
         //   * Asserts send_data_reg for one cycle, triggering Process 5 to
         //     begin the weight + iact send phase.
         //   * Routing decision based on send_data_out from dma_storage:
@@ -2184,7 +2211,7 @@ reg [1023:0] fst_path;
               iact_buffer_data_w <= 0;
             end
             iact_converter_cycles <= 0;
-            current_buffer_n      <= 0;
+            current_buffer      <= 0;
             for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
               iact_buffer_addr_reg[a] <= 0;
             end
@@ -2985,7 +3012,7 @@ reg [1023:0] fst_path;
         .rd_en_i(wght_buffer_en_r & !wght_buffer_en_w),
         .wr_en_i(wght_buffer_en_w),
         .addr_i (wght_buffer_wr_addr | wght_buffer_rd_addr),
-        .data_i (wght_buffer_data_w),
+        .data_i (wght_buffer_data_w[TRANS_BITWIDTH_WGHT * CLUSTERS * NUM_GLB_WGHT-1:0]),
         .data_o (wght_buffer_data_r)
     );
 

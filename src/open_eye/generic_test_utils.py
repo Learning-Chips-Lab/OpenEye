@@ -152,6 +152,38 @@ def create_stream_file(stream, layer_number, layer_repetition):
         
     f_dump.close()
 
+def transform_n_to_m_chunked(input_list, n, m, chunk_size):
+    result = []
+    bit_buffer = 0
+    buffer_length = 0
+    mask_n = (1 << n) - 1
+    mask_m = (1 << m) - 1
+    chunk_counter = 0
+
+    for value in input_list:
+        clean_value = value & mask_n
+        bit_buffer |= (clean_value << buffer_length)
+        buffer_length += n
+        chunk_counter += 1
+
+        while buffer_length >= m:
+            block_mbit = bit_buffer & mask_m
+            result.append(block_mbit)
+            bit_buffer >>= m
+            buffer_length -= m
+
+        if chunk_counter == chunk_size:
+            if buffer_length > 0:
+                result.append(bit_buffer & mask_m)
+                bit_buffer = 0
+                buffer_length = 0
+            chunk_counter = 0
+
+    if buffer_length > 0:
+        result.append(bit_buffer & mask_m)
+
+    return result
+
 class HDF5_Model:
     def save_model_to_hdf5(self, model, filename):
         model.save(filename)

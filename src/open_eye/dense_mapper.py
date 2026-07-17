@@ -141,6 +141,20 @@ class DenseMapper(LayerMapper):
             "needed_wght_cycles": 1,
             "needed_cycles": layer_params.needed_refreshes_mx[layer_repetition][0],
             "trans_cycles_psum": layer_params.trans_cycles_psum,
+            # GET_WGHT's exit condition (fsm_cycle == trans_cycles_wght - 1)
+            # replaced the old inline computation
+            # wght_cycles_reg * input_activations * ceil((PARALLEL_MACS+filters-1)/PARALLEL_MACS)
+            # with this precomputed register; dense/gemm never packed it
+            # (conv_mapper.py is the only mapper that did), which left
+            # trans_cycles_wght defaulting to 0 and GET_WGHT hanging forever.
+            "trans_cycles_wght": layer_params.needed_refreshes_mx[layer_repetition][0] * layer_params.used_iact_per_PE * math.ceil((params.PARALLEL_MACS + layer_params.used_psum_per_PE - 1) / params.PARALLEL_MACS),
+            # GET_IACT's exit condition (fsm_cycle == trans_cycles_iact - 1)
+            # replaced the old inline computation
+            # ceil(iact_size_x*iact_size_y*iact_channels / IACT_WORDS_IN_RAM) - 1,
+            # using the same iact_size_x=1/iact_size_y/iact_size_c values
+            # packed just below - never packed by dense/gemm, which left
+            # trans_cycles_iact defaulting to 0 and GET_IACT hanging forever.
+            "trans_cycles_iact": math.ceil(1 * layer_params.iact_size_y * (layer_params.used_iact_per_PE * params.NUM_GLB_WGHT * layer_params.diff_iact_layer) / params.IACT_WORDS_IN_RAM),
             "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
             "iact_channels_per_pe": layer_params.used_iact_per_PE,
             "fc_size_reg": layer_params.iact_size_x,

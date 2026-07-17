@@ -890,7 +890,7 @@ class LayerParameters(object):
                     self.used_psum_per_PE = int(self.used_wght_per_PE/self.used_iact_per_PE)
                 case _:
                     # Multi-cluster: use tiling factor
-                    self.used_wght_per_PE = math.ceil(self.filters/wght_factor)*self.used_iact_per_PE
+                    self.used_wght_per_PE = math.ceil(self.filters/wght_factor/params.PARALLEL_MACS)*self.used_iact_per_PE
                     self.used_psum_per_PE = int(self.filters/wght_factor)
 
             # Calculate weight transmission iterations based on mode
@@ -991,6 +991,21 @@ class LayerParameters(object):
             self.iact_converter_buffer_addr_max_cycles = (self.kernel_size[1] + self.iact_size_y - 1) * self.iact_x_line_repetitions * math.ceil(self.used_channels / 2) * self.needed_Iact_writes
         self.iact_converter_buffer_addr_max_cycles = math.ceil(self.used_channels / 2) * self.needed_Iact_writes
 
+    def  calculate_transmission_cycles(self, params):
+        self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_Bit_AXI)
+        self.trans_cycles_iact = math.ceil(self.iact_size_x*self.iact_size_y*self.channels / params.IACT_WORDS_IN_RAM)
+        missing_cycles = self.iact_cycles_one_word_all_ram - (self.trans_cycles_iact % self.iact_cycles_one_word_all_ram)
+        self.trans_cycles_iact =  self.trans_cycles_iact + missing_cycles
+
+        self.wght_cycles_one_word_all_ram = math.ceil((params.Clusters*params.NUM_GLB_WGHT*params.WGHT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_Bit_AXI)
+        print("LP")
+        print(self.wght_cycles_one_word_all_ram)
+        self.trans_cycles_wght = self.needed_wght_transmissions * (self.used_iact_per_PE * (math.ceil(self.filters / params.PARALLEL_MACS))) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * 24 / params.DMA_Bit_AXI)
+        self.trans_cycles_wght = self.trans_cycles_wght
+        print(self.trans_cycles_wght)
+        
+        temp = math.ceil(params.NUM_GLB_PSUM * (params.DATA_PSUM_BITWIDTH/params.DMA_Bit_AXI))
+        self.trans_cycles_psum = self.needed_wght_cycles * self.filters * self.iact_size_y * self.iact_x_line_repetitions * temp
 
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         """Compute all configuration parameters for a Conv2D layer.
@@ -1158,18 +1173,12 @@ class LayerParameters(object):
             self.iact_buffer_words_per_write = self.needed_Iact_writes * self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1) * (4//2) 
         else:
             self.iact_buffer_words_per_write = self.needed_Iact_writes * (4//2)
-        self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_Bit_AXI)
-        self.trans_cycles_iact = math.ceil(self.iact_size_x*self.iact_size_y*self.channels / params.IACT_WORDS_IN_RAM)
-        missing_cycles = self.iact_cycles_one_word_all_ram - (self.trans_cycles_iact % self.iact_cycles_one_word_all_ram)
-        self.trans_cycles_iact =  self.trans_cycles_iact + missing_cycles
-        self.trans_cycles_wght = params.NUM_GLB_WGHT * params.Clusters_Y * self.needed_wght_transmissions * (self.used_iact_per_PE * (math.ceil(self.filters / params.PARALLEL_MACS)))
-        temp = math.ceil(params.NUM_GLB_PSUM * (params.DATA_PSUM_BITWIDTH/params.DMA_Bit_AXI))
-        self.trans_cycles_psum = self.needed_wght_cycles * self.filters * self.iact_size_y * self.iact_x_line_repetitions * temp
+        
         # === Phase 9: Finalize calculations ===
+        self.calculate_transmission_cycles(params)
         self.calculate_needed_refreshes_mx(params)
         self.calculate_fpga_parameters(params)
         self.output_logger()
- 
     def write_convdw_layer(self, layer, params):
         """Compute all configuration parameters for a Depthwise Convolution layer.
 

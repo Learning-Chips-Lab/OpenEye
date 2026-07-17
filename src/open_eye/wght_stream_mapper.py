@@ -172,7 +172,23 @@ class WghtStreamMapper(object):
 
             # Convert SPAD data to transmission bitstream
             wght_stream = self.create_complete_wght_stream(storage)
-
+        print(len(wght_stream))
+        print(hex(wght_stream[0]))
+        print(hex(wght_stream[1]))
+        print(hex(wght_stream[2]))
+        chunk = self.params.Clusters * self.params.NUM_GLB_WGHT
+        wght_stream = gtu.transform_n_to_m_chunked(wght_stream,24,self.params.DMA_Bit_AXI, 3)
+        print(len(wght_stream))
+        print(hex(wght_stream[0]))
+        print(hex(wght_stream[1]))
+        n = self.layer_params.wght_cycles_one_word_all_ram
+        temp = []
+        for i in range(0, len(wght_stream), n):
+                part = wght_stream[i : i + n]
+                temp.extend(part[::-1])
+        wght_stream = temp
+        print(n)
+        print(len(wght_stream))
         return wght_stream
     
     def set_sparse_stream(self, spad_data):
