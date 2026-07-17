@@ -159,7 +159,6 @@ class OpenEyeParameters(object):
             self.NUM_GLB_IACT = int(os.getenv("NUM_GLB_IACT"))
         except:
             self.NUM_GLB_IACT = 3  # Default: 3 global IACT buffers per cluster
-
         # Number of global partial sum buffers and horizontal PEs per cluster
         # NUM_GLB_PSUM corresponds to PEs_X since partial sums flow horizontally
         # Can be overridden by NUM_GLB_PSUM environment variable
@@ -172,9 +171,9 @@ class OpenEyeParameters(object):
 
         # Number of global IACT RAM buffers
         try:
-            self.RAM_CELLS = int(os.getenv("RAM_CELLS"))
+            self.IACT_RAM_CELLS = int(os.getenv("IACT_RAM_CELLS"))
         except:
-            self.RAM_CELLS = 4  # Default: 4 global PSUM buffers per cluster
+            self.IACT_RAM_CELLS = 4  # Default: 4 global PSUM buffers per cluster
 
         # Number of global weight buffers and vertical PEs per cluster
         # NUM_GLB_WGHT corresponds to PEs_Y since weights are distributed vertically
@@ -291,9 +290,6 @@ class OpenEyeParameters(object):
         self.Router_Modes_WGHT = 1     # Weight router modes (1 = single mode)
         self.Router_Modes_PSUM = 1     # Partial sum router modes (1 = single mode)
 
-        # Note: poolingmode set again (redundant, already set above)
-        self.poolingmode = 1           # Pooling mode confirmation
-
         # === DMA AND CONTROL CONFIGURATION ===
         # Parameters for DMA transfers and FSM control logic
 
@@ -307,6 +303,12 @@ class OpenEyeParameters(object):
         self.Iact_Router_Bits = 6      # Activation router config: 6 bits (64 modes)
         self.Wght_Router_Bits = 1      # Weight router config: 1 bit (2 modes)
         self.Psum_Router_Bits = 3      # Partial sum router config: 3 bits (8 modes)
+
+        self.IACT_RAM_CELLS_WORD_BITWIDTH = 64
+        self.WGHT_RAM_CELLS_WORD_BITWIDTH = 64
+        self.PSUM_RAM_CELLS_WORD_BITWIDTH = 64
+        self.DATA_IACT_BITWIDTH = 8
+        self.IACT_WORDS_IN_RAM = self.IACT_RAM_CELLS_WORD_BITWIDTH//self.DATA_IACT_BITWIDTH
 
 
 
