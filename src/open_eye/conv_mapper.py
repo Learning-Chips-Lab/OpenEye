@@ -176,7 +176,7 @@ class ConvMapper(LayerMapper):
         "needed_psum_storage_cycles_reg": layer_params.psum_storage_cycles,
         "iact_channel_max_cycles": layer_params.diff_iact_layer,
         "input_activations": layer_params.used_iact_per_PE,
-        "used_wght_per_PE": layer_params.used_wght_per_PE,
+        "used_wght_per_PE": math.ceil(layer_params.used_wght_per_PE/params.PARALLEL_MACS),
         "filters": layer_params.used_psum_per_PE,
         "needed_x_cls_reg": layer_params.used_X_cluster,
         "needed_y_cls_reg": layer_params.used_Y_cluster,

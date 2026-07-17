@@ -297,7 +297,7 @@ class OpenEyeParameters(object):
         self.Psum_Router_Bits = 3      # Partial sum router config: 3 bits (8 modes)
 
         self.IACT_RAM_CELLS_WORD_BITWIDTH = 64
-        self.WGHT_RAM_CELLS_WORD_BITWIDTH = 64
+        self.WGHT_RAM_CELLS_WORD_BITWIDTH = 24
         self.PSUM_RAM_CELLS_WORD_BITWIDTH = 64
         self.DATA_IACT_BITWIDTH = 8
         self.IACT_WORDS_IN_RAM = self.IACT_RAM_CELLS_WORD_BITWIDTH//self.DATA_IACT_BITWIDTH
