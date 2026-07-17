@@ -26,23 +26,26 @@
 
 module af_cluster #(
     parameter integer WIDTH = 8,
-    parameter integer DEPTH = 2,
+    parameter integer DEPTH = 1,
     parameter integer VECTOR_SIZE = 4
 ) (
-    input  wire                      clk_i,
-    input  wire                      rst_ni,
-    input  wire                      relu_en_i,
-    input  wire signed [WIDTH-1:0]   data_i [0:VECTOR_SIZE-1],
-    output wire signed [WIDTH-1:0]   data_o [0:VECTOR_SIZE-1]
+    input  wire                           clk_i,
+    input  wire                           rst_ni,
+    input  wire                           relu_en_i,
+    input  wire [WIDTH*VECTOR_SIZE-1:0]   data_i,
+    output wire [WIDTH*VECTOR_SIZE-1:0]   data_o
 );
 
     // One-dimensional register array used as a simple shift register for each
     // vector element. Each entry stores one delayed sample, so the outputs are
     // available on the next clock cycle after the inputs are captured.
-    reg signed [WIDTH-1:0] pipeline_reg [0:DEPTH-1][0:VECTOR_SIZE-1];
+    reg [WIDTH-1:0] pipeline_reg [0:DEPTH-1][0:VECTOR_SIZE-1];
+    wire [WIDTH-1:0]input_lane[0:VECTOR_SIZE-1];
+    wire [WIDTH-1:0]output_lane[0:VECTOR_SIZE-1];
 
     integer idx;
     integer lane;
+
 
     // Main sequential logic.
     always @(posedge clk_i or negedge rst_ni) begin
@@ -65,13 +68,13 @@ module af_cluster #(
             // new samples.
             for (lane = 0; lane < VECTOR_SIZE; lane = lane + 1) begin
                 if (relu_en_i) begin
-                    if (data_i[lane] < 0) begin
+                    if (input_lane[lane] < 0) begin
                         pipeline_reg[0][lane] <= {WIDTH{1'b0}};
                     end else begin
-                        pipeline_reg[0][lane] <= data_i[lane];
+                        pipeline_reg[0][lane] <= input_lane[lane];
                     end
                 end else begin
-                    pipeline_reg[0][lane] <= data_i[lane];
+                    pipeline_reg[0][lane] <= input_lane[lane];
                 end
             end
         end
@@ -81,7 +84,9 @@ module af_cluster #(
     genvar gv;
     generate
         for (gv = 0; gv < VECTOR_SIZE; gv = gv + 1) begin : gen_data_o
-            assign data_o[gv] = pipeline_reg[DEPTH-1][gv];
+            assign input_lane[gv] = data_i[WIDTH*gv:+WIDTH];
+            assign output_lane[gv] = pipeline_reg[DEPTH-1][gv];
+            assign data_o[WIDTH*gv:+WIDTH] = output_lane[gv];
         end
     endgenerate
 

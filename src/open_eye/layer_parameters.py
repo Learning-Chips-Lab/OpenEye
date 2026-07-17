@@ -267,7 +267,11 @@ class LayerParameters(object):
         self.cluster_per_conv_cycle = 4        # Number of clusters, that IActs are written to per single cycle
         self.iact_converter_max_cycles = 1     # Needed cycles for iact converter to write data to buffer
         self.iact_buffer_words_per_write = 12  # Needed words per write in Iact Cycles
-        self.needed_cycles = 1            # Total needed cycles of rewritting of PEs
+        self.needed_cycles = 1                 # Total needed cycles of rewritting of PEs
+        self.trans_cycles_iact = 1             # Needed transmissions cycles for iact
+        self.trans_cycles_wght = 1             # Needed transmissions cycles for wght
+        self.trans_cycles_psum = 1             # Needed transmissions cycles for psum
+        self.iact_cycles_one_word_all_ram = 1
 
         # === Control Flags ===
         self.send_values_out = 1               # Send outputs to DRAM
@@ -1089,8 +1093,8 @@ class LayerParameters(object):
         self.psum_storage_cycles = self.diff_iact_layer * self.used_Y_cluster
         if (self.choose_iact_storage_output):
             self.psum_storage_cycles = self.diff_iact_layer
-        temp1 = math.ceil(self.strideX * self.iact_size_x/((params.RAM_CELLS*8)//4))
-        if ((self.iact_size_x/((params.RAM_CELLS*8)//4) >= 1) & (self.iact_x_line_repetitions >= 2)):
+        temp1 = math.ceil(self.strideX * self.iact_size_x/((params.IACT_RAM_CELLS*8)//4))
+        if ((self.iact_size_x/((params.IACT_RAM_CELLS*8)//4) >= 1) & (self.iact_x_line_repetitions >= 2)):
             temp2 = 2
         else:
             temp2 = 1
@@ -1099,7 +1103,7 @@ class LayerParameters(object):
             addition = self.kernel_size[1]
         else:
             addition = 0
-        self.buffer_cycles_for_x_iact = math.ceil((self.strideX*(addition+(params.Clusters_X*params.Clusters_Y*params.PEs_X)))/(params.RAM_CELLS*(8//4)))
+        self.buffer_cycles_for_x_iact = math.ceil((self.strideX*(addition+(params.Clusters_X*params.Clusters_Y*params.PEs_X)))/(params.IACT_RAM_CELLS*(8//4)))
         if (self.buffer_cycles_for_x_iact == 1):
             self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*math.ceil((self.used_channels*(self.kernel_size[1]+self.iact_size_y-1)/2))
         else :
@@ -1117,7 +1121,7 @@ class LayerParameters(object):
             if (self.buffer_cycles_for_x_iact == 1):
                 if (self.iact_x_line_repetitions == 1):
                     self.limit_increase = (self.iact_size_x*self.used_channels*self.strideX)//words_per_iact_glb
-                    if (self.limit_increase == params.RAM_CELLS):
+                    if (self.limit_increase == params.IACT_RAM_CELLS):
                         self.initial_upper_limit = 0
                     else:
                         self.initial_upper_limit = self.limit_increase + self.strideX
@@ -1140,7 +1144,6 @@ class LayerParameters(object):
         self.fsm_psum_limit = (((self.iact_size_x + self.add_up) * psum_cycles * self.different_kernels_per_calculation * self.needed_wght_cycles * self.used_psum_per_PE * self.iact_size_y)//8) + 12
         if (self.channels == 1):
             self.iact_converter_max_cycles = math.ceil(self.buffer_cycles_for_x_iact*self.iact_x_line_repetitions*(self.iact_size_y +  self.kernel_size[1])/2)
-
         else:
             """if (self.iact_x_line_repetitions != 1):
                 self.iact_converter_max_cycles = self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1)
@@ -1150,6 +1153,13 @@ class LayerParameters(object):
             self.iact_buffer_words_per_write = self.needed_Iact_writes * self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1) * (4//2) 
         else:
             self.iact_buffer_words_per_write = self.needed_Iact_writes * (4//2)
+        self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_Bit_AXI)
+        self.trans_cycles_iact = math.ceil(self.iact_size_x*self.iact_size_y*self.channels / params.IACT_WORDS_IN_RAM)
+        missing_cycles = self.iact_cycles_one_word_all_ram - (self.trans_cycles_iact % self.iact_cycles_one_word_all_ram)
+        self.trans_cycles_iact =  self.trans_cycles_iact + missing_cycles
+        self.trans_cycles_wght = params.NUM_GLB_WGHT * params.Clusters_Y * self.needed_wght_transmissions * (self.used_iact_per_PE * (math.ceil(self.filters / params.PARALLEL_MACS)))
+        temp = math.ceil(params.NUM_GLB_PSUM * (params.DATA_PSUM_BITWIDTH/params.DMA_Bit_AXI))
+        self.trans_cycles_psum = self.needed_wght_cycles * self.filters * self.iact_size_y * self.iact_x_line_repetitions * temp
         # === Phase 9: Finalize calculations ===
         self.calculate_needed_refreshes_mx(params)
         self.calculate_fpga_parameters(params)
@@ -1448,6 +1458,10 @@ class LayerParameters(object):
         self.iact_buffer_words_per_write = math.ceil(self.used_iact_per_PE/2) * self.needed_Iact_writes
         
         self.iact_size_c = self.used_iact_per_PE * params.NUM_GLB_WGHT * self.diff_iact_layer
+
+        self.trans_cycles_iact = math.ceil(self.iact_size_x*self.iact_size_y*self.channels / params.IACT_WORDS_IN_RAM)
+        self.trans_cycles_wght = params.NUM_GLB_WGHT * params.Clusters_Y * self.needed_wght_transmissions * (self.used_iact_per_PE * (math.ceil(self.filters / params.PARALLEL_MACS)))
+        self.trans_cycles_psum = self.filters
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))

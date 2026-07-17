@@ -13,6 +13,9 @@ registers:
   - {name: x_lines_reg, width: 8}
   - {name: needed_wght_cycles, width: 8}
   - {name: needed_cycles, width: 18}
+  - {name: trans_cycles_iact, width: 16}
+  - {name: trans_cycles_wght, width: 16}
+  - {name: trans_cycles_psum, width: 16}
   - {name: iact_converter_buffer_addr_max_cycles, width: 8}
   - {name: iact_channels_per_pe, width: 8}
   - {name: fc_size_reg, width: 14}
@@ -56,7 +59,8 @@ registers:
   - {name: iact_converter_max_cycles, width: 8}
   - {name: iact_buffer_words_per_write, width: 12}
   - {name: pooling_mode, width: 1}
-  - {name: test_reg, width: 20}
+  - {name: used_wght_per_PE, width: int(BUFFER_WIDTH)}
+
 
 
 

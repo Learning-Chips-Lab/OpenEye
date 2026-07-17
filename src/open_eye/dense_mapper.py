@@ -140,6 +140,7 @@ class DenseMapper(LayerMapper):
             "x_lines_reg": layer_params.iact_x_lines,
             "needed_wght_cycles": 1,
             "needed_cycles": layer_params.needed_refreshes_mx[layer_repetition][0],
+            "trans_cycles_psum": layer_params.trans_cycles_psum,
             "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
             "iact_channels_per_pe": layer_params.used_iact_per_PE,
             "fc_size_reg": layer_params.iact_size_x,

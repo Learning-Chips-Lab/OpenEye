@@ -150,6 +150,9 @@ class ConvMapper(LayerMapper):
         "x_lines_reg": layer_params.iact_x_lines,
         "needed_wght_cycles": layer_params.needed_wght_cycles,
         "needed_cycles": layer_params.needed_cycles,
+        "trans_cycles_iact": layer_params.trans_cycles_iact,
+        "trans_cycles_wght": layer_params.trans_cycles_wght,
+        "trans_cycles_psum": layer_params.trans_cycles_psum,
         "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
         "iact_channels_per_pe": layer_params.used_channels,
         "fc_size_reg": 0,
@@ -173,6 +176,7 @@ class ConvMapper(LayerMapper):
         "needed_psum_storage_cycles_reg": layer_params.psum_storage_cycles,
         "iact_channel_max_cycles": layer_params.diff_iact_layer,
         "input_activations": layer_params.used_iact_per_PE,
+        "used_wght_per_PE": layer_params.used_wght_per_PE,
         "filters": layer_params.used_psum_per_PE,
         "needed_x_cls_reg": layer_params.used_X_cluster,
         "needed_y_cls_reg": layer_params.used_Y_cluster,
@@ -192,8 +196,7 @@ class ConvMapper(LayerMapper):
         "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
         "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
         "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
-        "pooling_mode": 0,
-        "test_reg": 0
+        "pooling_mode": 0
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===

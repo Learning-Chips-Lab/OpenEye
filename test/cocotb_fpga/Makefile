@@ -15,6 +15,7 @@ VH_PATH = $(abspath $(PWD))
 
 # use VHDL_SOURCES for VHDL files
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_FPGA.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/psum_pipeline.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/dma_storage.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/varlenFIFO.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_Parallel.v)
@@ -46,6 +47,7 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_DP_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_DP_RW_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_SP_generic.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/iact_stream_constructor.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/router_configurator.v)
 
 COMPILE_ARGS += -I$(abspath $(PWD)/../../hdl/include)
 
@@ -109,7 +111,7 @@ export CLUSTER_COLUMNS=1
 export CLUSTER_ROWS=1
 
 #Amoutn of Iact RAM STORAGES
-export RAM_CELLS=32
+export IACT_RAM_CELLS=4
 
 #Number of Words per PE
 export IACT_PER_PE=16
