@@ -46,6 +46,15 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
         - Invalid layer_mode values will log an error and return an empty model
     """
     logger.debug("Start compiling.")
+    # Deterministic weight initialization when a seed is provided. Without
+    # this, Keras draws fresh random weights every run, which makes GEMM/Dense
+    # layer tests non-reproducible (a given run may pass or fail purely on the
+    # random draw). Set OPENEYE_LAYER_SEED to fix the weights across runs.
+    _seed = os.environ.get("OPENEYE_LAYER_SEED")
+    if _seed is not None:
+        import numpy as np
+        tf.keras.utils.set_random_seed(int(_seed))
+        np.random.seed(int(_seed))
     model = tf.keras.models.Sequential()
     match layer_mode:
         case "Convolution":

@@ -212,7 +212,6 @@ module PE_IO_debug #(
   PE #(
     .IS_TOPLEVEL(IS_TOPLEVEL),
     .SERIAL(SERIAL),
-    .CREATE_VCD(CREATE_VCD),
     .PE_X(PE_X),
     .PE_Y(PE_Y),
     .PARALLEL_MACS(PARALLEL_MACS),
