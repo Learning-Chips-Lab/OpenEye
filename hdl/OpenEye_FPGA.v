@@ -125,7 +125,11 @@ module OpenEye_FPGA #(
     parameter TRANSMISSIONS       = 5,
     parameter TRANS_BITWIDTH_IACT = 24,
     parameter TRANS_BITWIDTH_WGHT = 24,
-    parameter TRANS_BITWIDTH_PSUM = 32,
+    // Per-PE psum transfer width. Must match PE.v's internal
+    // TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * (SERIAL ? 1 : PARALLEL_MACS);
+    // a fixed value (was 32) mismatches the generated DATA_PSUM_BITWIDTH (e.g.
+    // 20) and prunes the psum bus feeding each PE, corrupting results.
+    parameter TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * (SERIAL == 1 ? 1 : PARALLEL_MACS),
     parameter DATA_IACT_OVERHEAD  = 4,
 
     parameter PES = NUM_GLB_PSUM * NUM_GLB_WGHT,
