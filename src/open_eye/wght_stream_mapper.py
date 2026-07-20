@@ -146,7 +146,6 @@ class WghtStreamMapper(object):
                                     temp_storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
                                 else:
                                     temp_storage[cl_x][cl_y][router] = spad
-
                 # Convert SPAD data to transmission bitstream and append to overall stream
                 wght_stream.extend(self.create_complete_wght_stream(temp_storage))
         else:
@@ -164,26 +163,16 @@ class WghtStreamMapper(object):
                                 storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
                             else:
                                 storage[cl_x][cl_y][router] = spad
-
             # Convert SPAD data to transmission bitstream
             wght_stream = self.create_complete_wght_stream(storage)
-        print(len(wght_stream))
-        print(hex(wght_stream[0]))
-        print(hex(wght_stream[1]))
-        print(hex(wght_stream[2]))
         chunk = self.params.Clusters * self.params.NUM_GLB_WGHT
-        wght_stream = gtu.transform_n_to_m_chunked(wght_stream,24,self.params.DMA_Bit_AXI, 3)
-        print(len(wght_stream))
-        print(hex(wght_stream[0]))
-        print(hex(wght_stream[1]))
+        wght_stream = gtu.transform_n_to_m_chunked(wght_stream,24,self.params.DMA_Bit_AXI, chunk)
         n = self.layer_params.wght_cycles_one_word_all_ram
         temp = []
         for i in range(0, len(wght_stream), n):
                 part = wght_stream[i : i + n]
                 temp.extend(part[::-1])
         wght_stream = temp
-        print(n)
-        print(len(wght_stream))
         return wght_stream
     
     def set_sparse_stream(self, spad_data):
@@ -443,18 +432,19 @@ class WghtStreamMapper(object):
 
             # Interleave words from different PEs for serial transmission
             for word in range(len(temp_stream[0][0][0])):
-                for cl_y in range(params.Clusters_Y):
-                    for router in range(params.NUM_GLB_WGHT):
-                        try:
-                            # Combine data from both X-clusters if available (24-bit shift)
-                            stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
-                        except:
+                for cl_x in range(params.Clusters_X):
+                    for cl_y in range(params.Clusters_Y):
+                        for router in range(params.NUM_GLB_WGHT):
                             try:
-                                # Only one X-cluster has data
+                                # Combine data from both X-clusters if available (24-bit shift)
                                 stream.append(temp_stream[0][cl_y][router][word])
                             except:
-                                # No data available, send zero
-                                stream.append(0)
+                                try:
+                                    # Only one X-cluster has data
+                                    stream.append(temp_stream[0][cl_y][router][word])
+                                except:
+                                    # No data available, send zero
+                                    stream.append(0)
 
         return stream
     
@@ -654,21 +644,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         channel_offset_in_calculation = (2 * cl_y + cl_x) // amount_of_used_clusters
         start_current_repetition = start_current_repetition + channel_offset_in_calculation
         # Handle different cluster computation modes
-        match layer_params.single_cluster_computation:
-            case 1:
-                # Single cluster does all: adjust for cluster-specific filters
-                start_current_repetition = start_current_repetition + ((cl_x  + cl_y * params.Clusters_X) * layer_params.used_psum_per_PE)
-                amount_of_words = int((layer_params.filters*amount_of_iacts)/params.Clusters/2)
-            case 2:
-                # Y-clusters distribute work: adjust for Y-cluster offset
-                start_current_repetition = start_current_repetition + (cl_y * layer_params.used_psum_per_PE)
-                amount_of_words = int((layer_params.filters*amount_of_iacts)/params.Clusters_Y/2)
-            case _:
-                # Normal multi-cluster distribution
-                start_current_repetition = start_current_repetition
-                amount_of_words = int((layer_params.filters*amount_of_iacts)/ \
-                                      (layer_params.needed_wght_transmissions//layer_params.needed_iact_transmissions)/2/layer_params.different_kernels_per_calculation)
-
+        amount_of_words = math.ceil(layer_params.used_wght_per_PE/params.PARALLEL_MACS)
         # Populate SPAD with weights
         filters = start_current_repetition
         spad_position = 0
@@ -707,7 +683,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                         kernel_x = kernel_x + 1
 
             # Stop when SPAD is full
-            if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
+            if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/params.PARALLEL_MACS)):
                 break
         return spad_storage
         

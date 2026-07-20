@@ -78,7 +78,7 @@ export LAYER=Convolution
 export NUM_FILTERS=16
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=4
+export INPUT_SIZE_X=16
 export INPUT_SIZE_Y=1
 export STRIDE=1
 export INPUT_CHANNELS=4
@@ -106,7 +106,7 @@ export NUM_GLB_IACT=1
 export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
-#Set number of Cluster rows need at least to be 2 COLUMNS
+#Set number of Clusters
 export CLUSTER_COLUMNS=1
 export CLUSTER_ROWS=1
 

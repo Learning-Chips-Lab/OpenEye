@@ -885,12 +885,11 @@ class LayerParameters(object):
                     self.used_psum_per_PE = int(self.used_wght_per_PE/self.used_iact_per_PE)
                 case _:
                     # Multi-cluster: use tiling factor
-                    self.used_wght_per_PE = math.ceil(self.filters/wght_factor/params.PARALLEL_MACS)*self.used_iact_per_PE
+                    self.used_wght_per_PE = math.ceil(self.filters/wght_factor)*self.used_iact_per_PE
                     self.used_psum_per_PE = int(self.filters/wght_factor)
 
             # Calculate weight transmission iterations based on mode
-            self.wght_transmissions_pe = math.ceil(self.channels/(self.used_channels*self.kernel_per_pe_cluster)) * math.ceil(self.filters * self.used_iact_per_PE / self.used_wght_per_PE / self.different_kernels_per_calculation)
-
+            self.wght_transmissions_pe = math.ceil(self.channels/(self.used_channels*self.kernel_per_pe_cluster)) * math.ceil(self.filters *self.used_iact_per_PE / self.used_wght_per_PE / self.different_kernels_per_calculation)
         # === Calculate Partial Sum Transmissions ===
         if(math.ceil(self.used_iact_per_PE/self.used_wght_per_PE) <= params.Psums_per_PE):
             # Partial sums fit in PE memory - single transmission
@@ -989,18 +988,15 @@ class LayerParameters(object):
     def  calculate_transmission_cycles(self, params):
         self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_Bit_AXI)
         self.trans_cycles_iact = math.ceil(self.iact_size_x*self.iact_size_y*self.channels / params.IACT_WORDS_IN_RAM)
-        missing_cycles = self.iact_cycles_one_word_all_ram - (self.trans_cycles_iact % self.iact_cycles_one_word_all_ram)
+        missing_cycles = (self.iact_cycles_one_word_all_ram - (self.trans_cycles_iact % self.iact_cycles_one_word_all_ram))%self.iact_cycles_one_word_all_ram
         self.trans_cycles_iact =  self.trans_cycles_iact + missing_cycles
 
         self.wght_cycles_one_word_all_ram = math.ceil((params.Clusters*params.NUM_GLB_WGHT*params.WGHT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_Bit_AXI)
-        print("LP")
-        print(self.wght_cycles_one_word_all_ram)
-        self.trans_cycles_wght = self.needed_wght_transmissions * (self.used_iact_per_PE * (math.ceil(self.filters / params.PARALLEL_MACS))) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * 24 / params.DMA_Bit_AXI)
-        self.trans_cycles_wght = self.trans_cycles_wght
-        print(self.trans_cycles_wght)
+        self.trans_cycles_wght = self.needed_wght_transmissions *  math.ceil(self.used_wght_per_PE/params.PARALLEL_MACS) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * 24 / params.DMA_Bit_AXI)
+
         
-        temp = math.ceil(params.NUM_GLB_PSUM * (params.DATA_PSUM_BITWIDTH/params.DMA_Bit_AXI))
-        self.trans_cycles_psum = self.needed_wght_cycles * self.filters * self.iact_size_y * self.iact_x_line_repetitions * temp
+        temp = math.ceil(params.NUM_GLB_PSUM * (params.Clusters * params.DATA_PSUM_BITWIDTH/params.DMA_Bit_AXI))
+        self.trans_cycles_psum = self.filters * self.iact_size_y * self.iact_x_line_repetitions * temp
 
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         """Compute all configuration parameters for a Conv2D layer.
@@ -1463,7 +1459,6 @@ class LayerParameters(object):
         self.iteration_for_kernels = math.ceil(self.diff_iact_layer_next_layer / self.different_kernels_per_calculation)
         self.buffer_cycles_for_x_iact = params.Clusters_Y
         self.iact_converter_max_cycles = 1
-        print(self.used_iact_per_PE)
         self.iact_buffer_words_per_write = math.ceil(self.used_iact_per_PE/2) * self.needed_Iact_writes
         
         self.iact_size_c = self.used_iact_per_PE * params.NUM_GLB_WGHT * self.diff_iact_layer

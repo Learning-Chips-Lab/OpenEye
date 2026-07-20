@@ -566,32 +566,13 @@ module OpenEye_Parallel #(
           cycle_break_counter   <= 0;
           if (psum_transmitted_i & (iact_enable_i == 0) & (wght_enable_i == 0)) begin
             cycle_break_counter <= cycle_break_counter + 1;
-            if (cycle_break_counter >= needed_y_cls_i_reg * 2) begin 
+            if (cycle_break_counter >= needed_y_cls_i_reg << 1) begin 
               cycle_break_counter <= 0;
               start_new_cycle     <= 1;
               if (start_new_cycle != 1) begin
                 finished_cycles <= finished_cycles + 1;
                 if (finished_cycles < needed_cycles_i_reg) begin
-                  //if (iact_x_line_repetitions_reg == 1) begin
-                  if (1 == 1) begin
-                    compute_cluster_i_reg <= compute_mask_reg;
-                  end else begin
-                    x_line_repetition_cycle <= x_line_repetition_cycle + 1;
-                    if (x_line_repetition_cycle != iact_x_line_repetitions_reg - 1) begin
-                      compute_cluster_i_reg   <= compute_mask_reg;
-                    end else begin
-                      x_line_repetition_cycle <= 0;
-                      for (cl_x = 0; cl_x < CLUSTER_COLUMNS; cl_x = cl_x + 1) begin
-                        for (cl_y = 0; cl_y < CLUSTER_ROWS; cl_y = cl_y + 1) begin
-                          if (iact_size_x_reg > ((x_line_repetition_cycle * CLUSTERS) + cl_x + cl_y * CLUSTER_COLUMNS) * PE_COLUMNS) begin
-                            compute_cluster_i_reg[((cl_x * CLUSTER_ROWS)+ cl_y) * PES+:PES] <= compute_mask_reg[((cl_x * CLUSTER_ROWS)+ cl_y) * PES+:PES];
-                          end else begin
-                            compute_cluster_i_reg[((cl_x * CLUSTER_ROWS)+ cl_y) * PES+:PES] <= 0;
-                          end
-                        end
-                      end
-                    end
-                  end
+                  compute_cluster_i_reg <= compute_mask_reg;
                 end
                 if (finished_cycles == needed_cycles_i_reg - 1) begin
                   fsm_last_state    <= COMPUTING;

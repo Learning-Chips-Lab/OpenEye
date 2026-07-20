@@ -368,20 +368,6 @@
 ///                              [3:0]=channel count/iact_addr_max
 ///                              Format varies by config FSM state (see configuration phase above)
 ///
-/// FSM State Transitions and Descriptions:
-///
-/// Configuration Streaming FSM (current_state_stream):
-///    State 0: FIRST_PARAMS  - Receives stride[3:1], wght_addr_max[7:4]
-///                             Waits for enable_stream_i pulse
-///                             Next: SECOND_PARAMS
-///    State 1: SECOND_PARAMS - Receives filters[8:4], channels[3:0]
-///                             Next: THIRD_PARAMS (if enable_stream_i)
-///                             Timeout: FIRST_PARAMS (if not enabled within window)
-///    State 2: THIRD_PARAMS  - Receives iact_addr_max configuration
-///                             Next: FOURTH_PARAMS
-///    State 3: FOURTH_PARAMS - Final configuration state (reserved for future expansion)
-///                             Next: Returns to FIRST_PARAMS for reconfiguration
-///
 /// Main Computation FSM (current_state_computing):
 ///    State 0: IDLE          - Initial state after reset or completion
 ///                             Waiting for data loading to complete (iact_set && wght_set)
@@ -596,12 +582,12 @@ module PE #(
   wire                                  data_set;               // Both iact and wght data ready
 
   // Input activation multiplexer signals
-  wire  [       TRANS_BITWIDTH_IACT-1:0] mux_iact_a_o_w;       // Mux data output (selected iact data)
+  wire  [       TRANS_BITWIDTH_IACT-1:0] mux_iact_a_o_w;        // Mux data output (selected iact data)
   wire                                   mux_iact_b_o_w;        // Mux enable output (selected enable)
   wire                                   mux_iact_c_i_w;        // Mux ready input
 
   // Configuration and addressing registers
-  reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_max_reg;     // Max number of iact addresses
+  wire [          IACT_ADDR_DATA-1 : 0] iact_addr_max_reg;     // Max number of iact addresses
 
   // Pipeline registers for input activation data (3-stage delay line)
   reg  [      DATA_IACT_BITWIDTH-1 : 0] iact_data_current_3;   // Pipeline stage 3 (feeds multipliers)
@@ -695,14 +681,12 @@ module PE #(
   // Computation control and configuration registers
   // [SPARSITY_EN=1 only] Weight data validity flag (always true in dense mode)
   reg                                   values_valid;           // Flag: current values are valid (not zero)
-  reg  [                         4 : 0] filters_reg_M0;            // Number of filters configured, in Eyeriss-Paper referenced as M0
-  reg  [                         3 : 0] channel_reg_C0;            // Number of channels configured, in Eyeriss-Paper referenced as C0
+  wire [                         4 : 0] filters_reg_M0;            // Number of filters configured, in Eyeriss-Paper referenced as M0
+  wire [                         3 : 0] channel_reg_C0;            // Number of channels configured, in Eyeriss-Paper referenced as C0
   wire                                  psum_data_SPad_en_a_w_i;// Internal write enable port A
   wire                                  psum_data_SPad_en_b_w_i;// Internal write enable port B
-  reg  [                           3:0] iact_x_line_repetitions;
+  wire [                           3:0] iact_x_line_repetitions;
 
-  // Configuration streaming FSM
-  reg  [                           1:0] current_state_stream;   // Config stream state
 
   // Output formatting
   wire [        DATA_PSUM_BITWIDTH-1:0] output_adder;          // Combined output from both adders
@@ -877,58 +861,25 @@ module PE #(
   assign psum_ready_o = psum_ready_i & psum_select;
 
   // Calculated ceiled filters from filters depending on PARALLEL_MACS
-
+  reg [(3*9)-1:0] stream_data;
+  assign channel_reg_C0 = stream_data[12:9];
+  assign filters_reg_M0 = stream_data[17:13];
+  assign iact_addr_max_reg = stream_data[21:18];
+  assign iact_x_line_repetitions = stream_data[25:22];
   // ============================================================================
-  // Configuration Parameter Streaming FSM
+  // Configuration Parameter Streaming
   // ============================================================================
-  // This FSM receives configuration parameters via the data_stream_i interface
-  // Parameters are received in four sequential states and stored in registers
+  // This process receives configuration parameters via the data_stream_i interface
+  // Parameters are received in sequential and stored in stream_data
   always @(posedge clk_i, negedge rst_ni) begin
     if (!rst_ni) begin
-      current_state_stream    <= 0;
-      iact_addr_max_reg       <= 0;
-      iact_x_line_repetitions <= 0;
-      filters_reg_M0          <= 0;
-      channel_reg_C0          <= 0;
+      stream_data <= 0;
     end else begin
-      case (current_state_stream)
-        FIRST_PARAMS: begin
-          // Receive first set of parameters: stride, weight address max
-          if (enable_stream_i) begin
-            current_state_stream  <= SECOND_PARAMS;
-          end
-        end
-        SECOND_PARAMS: begin
-          // Receive second set: filter count, channel count
-          if (enable_stream_i) begin
-            current_state_stream <= THIRD_PARAMS;
-            filters_reg_M0          <= data_stream_i[8:4];     // Number of filters
-            channel_reg_C0          <= data_stream_i[3:0];     // Number of channels
-          end else begin
-            current_state_stream <= FIRST_PARAMS;           // Timeout: restart
-          end
-        end
-        THIRD_PARAMS: begin
-          // Receive third set: input activation address max
-          if (enable_stream_i) begin
-            iact_addr_max_reg       <= data_stream_i[3:0];     // Max iact addresses
-            iact_x_line_repetitions <= data_stream_i[7:4];
-            current_state_stream    <= FOURTH_PARAMS;
-          end else begin
-            current_state_stream <= FIRST_PARAMS;           // Timeout: restart
-          end
-        end
-        FOURTH_PARAMS: begin
-          // Fourth parameter state (currently unused, returns to FIRST)
-          if (enable_stream_i) begin
-            current_state_stream <= FIRST_PARAMS;
-          end else begin
-            current_state_stream <= FIRST_PARAMS;
-          end
-        end
-        default: begin
-        end
-      endcase
+      if (enable_stream_i) begin
+        stream_data[8:0]   <= data_stream_i;
+        stream_data[17:9]  <= stream_data[8:0];
+        stream_data[26:18] <= stream_data[17:9];
+      end
     end
   end
 
@@ -1949,7 +1900,7 @@ module PE #(
           LOADING_1: begin
             current_state_computing <= CALCULATING;
             iact_data_current_3     <= iact_data_spad_pay;
-            if (0 >=  filters_reg_M0 - PARALLEL_MACS) begin
+            if (PARALLEL_MACS >= filters_reg_M0 ) begin
               iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
             end else begin
               wght_filter <= wght_filter + PARALLEL_MACS;
