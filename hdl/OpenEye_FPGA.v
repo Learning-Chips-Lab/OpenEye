@@ -228,7 +228,13 @@ module OpenEye_FPGA #(
     localparam WGHT_RAM_CELLS = CLUSTERS * NUM_GLB_WGHT,
     localparam integer WGHT_CYCLES_ONE_WORD_ALL_CELLS = ((WGHT_RAM_CELLS * WGHT_RAM_CELLS_WORD_BITWIDTH) + DMA_BITWIDTH - 1) / DMA_BITWIDTH,
     localparam WGHT_CELL_INPUT_WIDTH = WGHT_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
-    localparam integer WGHT_ONE_WORD_ALL_RAM = ((CLUSTERS*WGHT_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH
+    localparam integer WGHT_ONE_WORD_ALL_RAM = ((CLUSTERS*WGHT_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH,
+
+    localparam integer PSUM_RAM_CELLS = CLUSTERS * NUM_GLB_PSUM/2,
+    localparam integer PSUM_CYCLES_ONE_WORD_ALL_CELLS = ((PSUM_RAM_CELLS * PSUM_RAM_CELLS_WORD_BITWIDTH) + DMA_BITWIDTH - 1) / DMA_BITWIDTH,
+    localparam         PSUM_CELL_INPUT_WIDTH = PSUM_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
+    localparam integer PSUM_ONE_WORD_ALL_RAM = ((CLUSTERS*PSUM_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH
+
 
 ) (
     //Clock and Reset
@@ -431,7 +437,7 @@ reg [1023:0] fst_path;
   // Used during GET_IACT to distribute incoming DMA words across the 32
   // double-buffer cells in a round-robin fashion.
   // -----------------------------------------------------------------------
-  reg [$clog2(IACT_RAM_CELLS)-1:0] current_buffer;   // Index of the cell currently being written (0–31); increments each DMA word, wraps at IACT_RAM_CELLS.
+  reg  [ 3:0] current_buffer;   // Index of the cell currently being written (0–31); increments each DMA word.
   wire [11:0] iact_size_x;       // Feature map width in pixels (from dma_storage).
   wire [ 7:0] iact_size_y;       // Feature map height in pixels (from dma_storage).
   wire [11:0] iact_size_c;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
@@ -443,7 +449,7 @@ reg [1023:0] fst_path;
   wire [ 7:0] iact_channel_max_cycles;          // Total number of channel batches per layer pass (from dma_storage).
   wire [10:0] iact_needed_cycles;               // Number of iact streaming cycles for one spatial position (from dma_storage).
 
-  reg [$clog2(CLUSTER_ROWS+1):0] iact_router_counter; // Counts how many cluster-row sweeps have been performed within the current iact delivery; wraps at needed_y_cls_reg.
+  reg [$clog2(CLUSTER_ROWS+1)-1:0] iact_router_counter; // Counts how many cluster-row sweeps have been performed within the current iact delivery; wraps at needed_y_cls_reg.
 
   // -----------------------------------------------------------------------
   // Iact Double-Buffer Cell Arrays
@@ -1673,18 +1679,12 @@ reg [1023:0] fst_path;
                 end
                 if (fsm_cycle == (TRANSMISSIONS + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
                   fsm_last_state     <= GET_PARAMETERS;
-                  // CLUSTERS != 1 must route through GET_ROUTER_CONFIG first
-                  // (it loads router_mode_iact/wght/psum, then itself
-                  // transitions to GET_IACT/GET_WGHT/GET_OFFSET using this
-                  // same skipIact_reg/max_pooling logic - see the
-                  // GET_ROUTER_CONFIG exit below). Previously the skipIact_reg
-                  // and max_pooling branches below were unconditional and,
-                  // being nonblocking assignments to the same state register,
-                  // always overwrote the GET_ROUTER_CONFIG target - so
-                  // router_mode_psum (and _iact/_wght) never got loaded for
-                  // any multi-cluster configuration.
-                  if (CLUSTERS != 1) begin
-                    fsm_current_state  <= GET_ROUTER_CONFIG;
+                  if (!skipIact_reg) begin
+                    fsm_current_state <= GET_IACT;
+                    for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+                      iact_buffer_addr_reg[a] <= ~0;
+                    end
+                  wght_buffer_wr_addr <= ~0;
                   end else begin
                     if (!skipIact_reg) begin
                       fsm_current_state <= GET_IACT;
@@ -1702,6 +1702,9 @@ reg [1023:0] fst_path;
                   end
                   fsm_cycle          <= 0;
                   psum_x_with_add_up <= psum_size_x + add_up;
+                  if (CLUSTERS != 1) begin
+                    fsm_current_state  <= GET_ROUTER_CONFIG;
+                  end
                   if (max_pooling) begin
                     for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
                       iact_buffer_en_r[a] <= 1;
@@ -2635,7 +2638,7 @@ reg [1023:0] fst_path;
             end
             for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
               if (a == buffer_addr_upper_limit) begin
-                iact_buffer_addr_reg[a]      <= iact_buffer_addr_reg[a] + 1;
+                iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
                 buffer_addr_temp_reg[a] <= buffer_addr_temp_reg[a] + 1;
               end
             end
@@ -2750,7 +2753,8 @@ reg [1023:0] fst_path;
       .ROUTER_MODES_PSUM(ROUTER_MODES_PSUM),
       .QUANT_AMOUNT(QUANT_AMOUNT),
       .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
-      .PSUM_PER_PE(PSUM_PER_PE)
+      .PSUM_PER_PE(PSUM_PER_PE),
+      .PSUM_CYCLES_ONE_WORD_ALL_CELLS(PSUM_CYCLES_ONE_WORD_ALL_CELLS)
   ) psum_pipeline_inst (
       .clk_i(clk_i),
       .rst_n(rst_n),

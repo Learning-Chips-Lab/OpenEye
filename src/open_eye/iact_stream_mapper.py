@@ -155,7 +155,7 @@ class IactStreamMapper(object):
                     iact_stream.append(word)
 
                 n = self.layer_params.iact_cycles_one_word_all_ram
-                missing_zeros = n - (len(iact_stream) % n)
+                missing_zeros = (n - len(iact_stream)) % n
                 iact_stream = iact_stream + [0] * missing_zeros
                 temp = []
                 for i in range(0, len(iact_stream), n):

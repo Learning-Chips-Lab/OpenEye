@@ -117,7 +117,7 @@ module router_configurator #(
     input single_iteration3_i,
     input [$clog2(16+1)-1:0] iact_channels_counter_i,
     input [7:0] iact_channel_max_cycles_i,
-    input [$clog2(CLUSTER_ROWS)-1:0] iact_router_counter_i,
+    input [$clog2(CLUSTER_ROWS+1)-1:0] iact_router_counter_i,
     input [7:0] needed_psum_storage_cycles_i,
     input reset_cycle_i,
 
