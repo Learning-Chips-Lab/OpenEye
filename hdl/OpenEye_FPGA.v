@@ -1628,17 +1628,28 @@ reg [1023:0] fst_path;
                 if (fsm_cycle == ((TRANSMISSIONS+1) + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
                   choose_iact_buffer <= choose_iact_buffer_input;
                   fsm_last_state     <= GET_PARAMETERS;
+                  // CLUSTERS != 1 must route through GET_ROUTER_CONFIG first
+                  // (it loads router_mode_iact/wght/psum, then itself
+                  // transitions to GET_IACT/GET_WGHT/GET_OFFSET using this
+                  // same skipIact_reg/max_pooling logic - see the
+                  // GET_ROUTER_CONFIG exit below). Previously the skipIact_reg
+                  // and max_pooling branches below were unconditional and,
+                  // being nonblocking assignments to the same state register,
+                  // always overwrote the GET_ROUTER_CONFIG target - so
+                  // router_mode_psum (and _iact/_wght) never got loaded for
+                  // any multi-cluster configuration.
                   if (CLUSTERS != 1) begin
                     fsm_current_state  <= GET_ROUTER_CONFIG;
-                  end
-                  if (!skipIact_reg) begin
-                    fsm_current_state <= GET_IACT;
                   end else begin
-                    fsm_current_state <= GET_WGHT;
-                  end
-                  if (max_pooling) begin
-                    ready_dma_o       <= 0;
-                    fsm_current_state <= GET_OFFSET;
+                    if (!skipIact_reg) begin
+                      fsm_current_state <= GET_IACT;
+                    end else begin
+                      fsm_current_state <= GET_WGHT;
+                    end
+                    if (max_pooling) begin
+                      ready_dma_o       <= 0;
+                      fsm_current_state <= GET_OFFSET;
+                    end
                   end
                   fsm_cycle          <= 0;
                   write_dma_addr     <= ~0;
@@ -3224,7 +3235,11 @@ reg [1023:0] fst_path;
                   if (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1 | (CLUSTERS == 1)) begin
                     psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_SP_addr_array[cc_psum][cr_psum][g_psum] + 1;
                   end
-                  if ((fsm_psum_cycle != 0) & ((router_mode_psum[(cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (g_psum * ROUTER_MODES_PSUM) + 2] == 1) | (CLUSTERS == 1))) begin
+                  // g_psum indexes GLB pairs (loop bound NUM_GLB_PSUM/2), so
+                  // the stride into the full NUM_GLB_PSUM-wide router field
+                  // must be g_psum*ROUTER_MODES_PSUM*2, matching every other
+                  // use of this bit-2 check in this state (lines above/below).
+                  if ((fsm_psum_cycle != 0) & ((router_mode_psum[(cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (g_psum * ROUTER_MODES_PSUM * 2) + 2] == 1) | (CLUSTERS == 1))) begin
                     psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] <= 1;
                     psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2 + 1] <= 1;
                   end
@@ -3279,7 +3294,12 @@ reg [1023:0] fst_path;
         //      Transitions to WAIT_TO_SEND_READY_SIGNAL to accumulate again.
         // -------------------------------------------------------------------
         PSUM_GET_RESULTS: begin
-          psum_enable_i_reg <= 0;
+          // psum_enable_i must stay held high for the whole streaming burst
+          // (PE.v SEND_PSUM only advances/streams while its psum_enable_i
+          // is asserted, and returns to IDLE the instant it sees it low).
+          // The two exit branches below explicitly clear psum_enable_i_reg
+          // once the burst is actually done; do not clear it every cycle
+          // here or the compute core streams exactly one result then stops.
           results_ready      = 1;
           psum_ready_i_reg  <= psum_ready_i_reg;
           psum_buffer_SP_data_w <= psum_data_o_w;
@@ -3514,7 +3534,18 @@ reg [1023:0] fst_path;
           fsm_x_cl_psum <= fsm_x_cl_psum + 1;
           if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
             fsm_x_cl_psum <= 0;
-            fsm_y_cl_psum <= fsm_y_cl_psum + needed_y_cls_reg;
+            // FC mode: CALCULATE_PSUM/PSUM_GET_RESULTS gate all bias-feed
+            // and result-capture activity on router_mode_psum bit 2, which
+            // dense_mapper.py's write_router_psum() sets to 1 only on
+            // cluster row 0 (mode 5, "chain start") - row 0 is the port the
+            // hardware actually drives psum_enable_o/psum_data_o_w on for
+            // the whole chain, confirmed by simulation trace (psum_ready_o,
+            // psum_enable_o and psum_buffer_SP_en_w all read active only for
+            // cr=0 throughout CALCULATE_PSUM/PSUM_GET_RESULTS). So results
+            // live in row 0's bank, not CLUSTER_ROWS-1; keep fsm_y_cl_psum
+            // at 0 here (matching the write side) instead of the previous
+            // (incorrect) CLUSTER_ROWS-1.
+            fsm_y_cl_psum <= fully_connected_layer ? 0 : (fsm_y_cl_psum + needed_y_cls_reg);
             if ((fsm_y_cl_psum >= CLUSTER_ROWS - needed_y_cls_reg) | fully_connected_layer) begin
               fsm_y_cl_psum <= 0;
               fsm_psum_cycle <= fsm_psum_cycle + 1;
