@@ -1534,7 +1534,7 @@ module PE #(
               // Rationale: When iact_addr_SPad_data_r == current+1, we've reached
               // the end of the activation sequence. Transition to output state.
               // Reuse Values of PSUM SPad
-              if ((((iact_addr_SPad_data_r == iact_addr_current+1) | (iact_addr_count == 0)) & (wght_data_vec >= wght_data_end) | (iact_addr_count > iact_addr_SPad_data_r))) begin
+              if (((iact_addr_SPad_data_r == iact_addr_current+1) | (iact_addr_count == 0)) & (wght_data_vec >= wght_data_end) | (iact_addr_count > iact_addr_SPad_data_r)) begin
                 // All activations processed, prepare for psum output
                 current_state_computing <= WAIT_TO_SEND_PSUM; // Transition state
                 wght_addr_vec           <= 0;                  // Clear weight pointer

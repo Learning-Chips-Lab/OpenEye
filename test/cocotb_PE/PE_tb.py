@@ -102,9 +102,9 @@ def log_computation_time(elapsed_cycles, csv_filename="computation_times.csv"):
     print("ELAPSED TIME:", elapsed_cycles)
     print(80*"#")
 
+    
     csv_path = Path(csv_filename)
     file_exists = csv_path.exists()
-
     with open(csv_path, mode='a', newline='') as csvfile:
         fieldnames = ['B', 'C0', 'M0', 'sparse_iact', 'sparse_wght', 'elapsed_cycles', 'elapsed_time_ns']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -554,13 +554,14 @@ async def send_data_params(ptp, dut):
     # Enable the params reading
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.enable_stream_i), 1))
 
-    data_reg_i =  (wght_addr_max_reg << 4) + (stride_reg << 1)
+    data_reg_i =  (iact_addr_max_i << 0)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
     await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
     data_reg_i =  (filters_reg_i << 4) + (channel_reg_i << 0)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
     await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
-    data_reg_i =  (iact_addr_max_i << 0)
+    data_reg_i =  (wght_addr_max_reg << 4) + (stride_reg << 1)
+    print("TEST: " + str(data_reg_i))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
     await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
 
