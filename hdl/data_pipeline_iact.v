@@ -176,7 +176,7 @@ module data_pipeline_iact #(
     parameter SECOND_SPAD_ADDR          = 16,
     parameter SECOND_SPAD_DATA          = 12,
     parameter SECOND_PAYLOAD_WIDTH      = 8,
-    //parameter SPARSITY_EN               = 1,  // 1=sparse mode (default), 0=dense mode
+    parameter SPARSITY_EN               = 1,  // 1=sparse mode (default), 0=dense mode
     parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
     parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
     parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
@@ -525,8 +525,8 @@ module data_pipeline_iact #(
         second_spad_en_o           <= 0;
         data_storage_1             <= 0;
         data_storage_2             <= 0;
-        first_spad_data_o          <= 0;
         address_temp_2             <= 0;
+        first_spad_data_o          <= 0;
         first_spad_addr_o          <= 0;
         payload_reg                <= 0;
         overhead_reg               <= 0;
@@ -560,6 +560,12 @@ module data_pipeline_iact #(
           cycle_counter  <= 0;
           uneven_ending  <= 0;
           uneven_counter <= 0;
+        end
+        if (!SPARSITY_EN) begin
+          first_spad_en_o    <= 0;
+          first_spad_data_o  <= 0;
+          first_spad_addr_o  <= 0;
+          first_spad_words_o <= 0;
         end
       end
     end

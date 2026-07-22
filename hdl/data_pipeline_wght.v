@@ -387,8 +387,12 @@ module data_pipeline_wght #(
 
   // overhead_w: total overhead (non-zero position count) contributed by
   //   both sub-words in the current data_i word.
-  assign overhead_w = input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH]
+  if (SPARSITY_EN) begin
+    assign overhead_w = input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH]
                     + input_words_w[1][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH];
+  end else begin
+    assign overhead_w = 0;
+  end
 
   // overhead_next_word: look-ahead overhead tag from sub-word 0.
   //   Used to detect a filter boundary before updating overhead_reg.
@@ -408,7 +412,7 @@ module data_pipeline_wght #(
   //   If so: subtract filters_w (and 1 extra if over_ending) to wrap the tag
   //   into the next filter's address space.
   //   Otherwise: pass the stored tag through unchanged.
-  assign overhead_output = (data_storage_2[11:8] != 0) & overhead_delay_reg + data_storage_2[11:8] >= filters_w
+  assign overhead_output = !SPARSITY_EN ? 0: (data_storage_2[11:8] != 0) & overhead_delay_reg + data_storage_2[11:8] >= filters_w
                          ? data_storage_2[11:8] + overhead_delay_reg - filters_w - over_ending
                          : data_storage_2[11:8];
 
@@ -648,6 +652,12 @@ module data_pipeline_wght #(
         first_spad_en_o       <= 0;
         first_spad_addr_delay <= 0;
         first_spad_addr_o     <= 0;
+      end
+      if (!SPARSITY_EN) begin
+        first_spad_en_o       <= 0;
+        first_spad_addr_delay <= 0;
+        first_spad_addr_o     <= 0;
+        first_spad_data_delay <= 0;
       end
     end
   end

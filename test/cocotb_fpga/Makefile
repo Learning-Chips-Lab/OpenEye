@@ -7,6 +7,7 @@ SIM ?= icarus
 #SIM ?= verilator
 #EXTRA_ARGS += --trace --trace-fst --trace-structs
 #COMPILE_ARGS += --trace --trace-fst --trace-structs
+COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE
 TOPLEVEL_LANG ?= verilog
 WAVEFORM=on
 
@@ -53,6 +54,7 @@ COMPILE_ARGS += -I$(abspath $(PWD)/../../hdl/include)
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
 TOPLEVEL = OpenEye_FPGA
+export TOPLEVEL = OpenEye_FPGA
 
 # MODULE is the basename of the Python test file
 MODULE = OpenEye_FPGA_tb
