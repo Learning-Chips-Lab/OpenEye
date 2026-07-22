@@ -142,12 +142,18 @@ class DenseMapper(LayerMapper):
             "needed_cycles": layer_params.needed_refreshes_mx[layer_repetition][0],
             "trans_cycles_psum": layer_params.trans_cycles_psum,
             # GET_WGHT's exit condition (fsm_cycle == trans_cycles_wght - 1)
-            # replaced the old inline computation
-            # wght_cycles_reg * input_activations * ceil((PARALLEL_MACS+filters-1)/PARALLEL_MACS)
-            # with this precomputed register; dense/gemm never packed it
-            # (conv_mapper.py is the only mapper that did), which left
-            # trans_cycles_wght defaulting to 0 and GET_WGHT hanging forever.
-            "trans_cycles_wght": layer_params.needed_refreshes_mx[layer_repetition][0] * layer_params.used_iact_per_PE * math.ceil((params.PARALLEL_MACS + layer_params.used_psum_per_PE - 1) / params.PARALLEL_MACS),
+            # counts one DMA word per cycle, so this must equal the actual
+            # weight stream's word count. dense/gemm never packed this
+            # register at all (conv_mapper.py is the only mapper that did,
+            # via layer_parameters.calculate_transmission_cycles() - a
+            # conv-only method using conv-specific geometry), which left
+            # trans_cycles_wght defaulting to 0 and GET_WGHT hanging
+            # forever. Read directly from the weight mapper rather than
+            # re-deriving conv's formula for dense's different layout -
+            # this runs before make_stream()'s own call to the same
+            # get_wght_stream(), so it's an extra (cheap, deterministic)
+            # invocation, not a duplicate of stream construction.
+            "trans_cycles_wght": len(self.WghtStreamCreator.get_wght_stream()),
             # GET_IACT's exit condition (fsm_cycle == trans_cycles_iact - 1)
             # replaced the old inline computation
             # ceil(iact_size_x*iact_size_y*iact_channels / IACT_WORDS_IN_RAM) - 1,
