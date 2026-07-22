@@ -131,7 +131,7 @@ sparse_iact = 0 # Input activation sparsity: 0 = no sparsity, 1 = fully sparse
 M0 = 0  # Number of output filters
 C0S = 0  # Weights match input dimensions
 sparse_wght = 0 # Weight sparsity: 0 = no sparsity, 1 = fully sparse
-sparsity_en = 1 # Sparsity enable: 1 = sparse mode (default), 0 = dense mode
+sparsity_en = 0 # Sparsity enable: 1 = sparse mode (default), 0 = dense mode
 
 @cocotb.test()
 async def start_test_pe(dut):
@@ -308,7 +308,6 @@ async def send_iact(ptp, dut, data_array):
     # SISD mode (True) = one value per word, ignore_zeros (True) = compress zeros
     spad_data = generate_spad(
         data_array,
-        int(dut.IACT_ADDR_ADDR.value),  # Convert LogicArray to int
         int(dut.IACT_DATA_ADDR.value),  # Convert LogicArray to int
         int(dut.DATA_IACT_BITWIDTH.value),  # Convert LogicArray to int
         True,  # SISD mode
@@ -466,10 +465,9 @@ async def send_wght(ptp, dut, data_array):
     offset_val = int(dut.DATA_WGHT_BITWIDTH.value) if sparsity_en == 0 else (int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value))
     spad_data = generate_spad(
         data_array,
-        int(dut.WGHT_ADDR_ADDR.value),  # Convert LogicArray to int
         int(dut.WGHT_DATA_ADDR.value),  # Convert LogicArray to int
         int(dut.DATA_WGHT_BITWIDTH.value),  # Convert LogicArray to int
-        False,  # Packed mode (not SISD)
+        (int(dut.PARALLEL_MACS.value) == 1),
         offset_val,  # Offset for packing
         True,  # Ignore zeros
         sparsity_en=sparsity_en  # Use global sparsity_en setting
@@ -516,7 +514,6 @@ async def send_bias(ptp, dut, data_array):
     # Psum doesn't use sparsity encoding, so sparsity_en doesn't affect it
     spad_data = generate_spad(
         data_array,
-        int(dut.PSUM_ADDR.value),           # Convert LogicArray to int
         int(dut.PSUM_ADDR.value),           # Convert LogicArray to int
         int(dut.DATA_PSUM_BITWIDTH.value),  # Convert LogicArray to int
         True,                              # Packed mode
@@ -682,7 +679,7 @@ async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits,
     cocotb.start_soon(rtl_test_utils.set_input(ptp, data_signal, 0))
 
 def generate_spad(
-    array, addr_spad_words, data_spad_words, bitwidth, sisd, offset, ignore_zeros, sparsity_en=True
+    array, data_spad_words, bitwidth, sisd, offset, ignore_zeros, sparsity_en=True
 ):
     """
     Converts 2D data arrays into compressed scratchpad (SPAD) format.

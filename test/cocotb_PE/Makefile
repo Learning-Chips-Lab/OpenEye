@@ -1,11 +1,13 @@
 # Makefile
 
 # defaults
-SIM ?= verilator
-#SIM ?= icarus
+#SIM ?= verilator
+SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 #EXTRA_ARGS += --trace-fst --trace-structs
 
+HDL_PATH = $(abspath $(PWD)/../../hdl)
+VH_PATH = $(abspath $(PWD))
 # use VHDL_SOURCES for VHDL files
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/PE.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/adder.v)
@@ -27,6 +29,7 @@ VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/RAM_SP_generic.v)
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
 TOPLEVEL = PE
+export TOPLEVEL = PE
 
 # MODULE is the basename of the Python test file
 MODULE = PE_tb
@@ -45,11 +48,17 @@ export LOGGER_LEVEL=0    #Enables Logger Debug Mode
 
 export IACTSIZE_X=3
 export IACTSIZE_Y=4
-export WGHTSIZE_X=6
+export WGHTSIZE_X=4
+export C0=3
+export B=4
+export M0=8
+export PARALLEL_MACS = 1
+export SPARSITY_EN=0
 export SPARSE_IACT=20
 export SPARSE_WGHT=20
 export SEED = 42
 
 export
 run:
-	make -f $(shell cocotb-config --makefiles)/Makefile.sim
+	@python -m open_eye.vh_file_creator
+	@make -f $(shell cocotb-config --makefiles)/Makefile.sim
