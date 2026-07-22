@@ -472,10 +472,15 @@
 
 module PE #(
 
+  `ifdef USE_INTERNAL_PARAMS_PE
+    parameter integer PARALLEL_MACS = 2,
+  `else
+    `include "parameters.vh"
+      // Defaultvalues
+  `endif
     parameter IS_TOPLEVEL = 1,
     parameter SERIAL      = 1,
 
-    parameter integer PARALLEL_MACS = 2,
 
     parameter integer SPARSITY_EN      = 1,  // 1=sparse mode (default), 0=dense mode
     parameter integer USE_DSP          = 0,  // 0=standard multiplier+adder (default), 1=DSP48 slice optimization
@@ -590,7 +595,6 @@ module PE #(
   reg                                   psum_enable_2;          // Second delay stage for serial mode
   reg  [     TRANS_BITWIDTH_PSUM-1 : 0] psum_data_1_delay;     // Delayed psum input data 1
   reg  [     TRANS_BITWIDTH_PSUM-1 : 0] psum_data_2_delay;     // Delayed psum input data 2
-  wire [   2*TRANS_BITWIDTH_PSUM-1 : 0] psum_data_combined_w;  // Combined psum for parallel mode
 
   // Control and handshaking signals
   reg                                   mux_iact_ready;         // Ready signal for iact multiplexer
@@ -895,7 +899,6 @@ module PE #(
   assign psum_spad_data_b_i = adder_2_o_w;
 
   // Combine delayed psum inputs for parallel mode
-  assign psum_data_combined_w = {psum_data_2_delay, psum_data_1_delay};
 
   // Psum SPad read address calculation
   // During output: use base address directly
@@ -2008,6 +2011,8 @@ module PE #(
             end else begin
               wght_filter <= wght_filter + PARALLEL_MACS;
             end
+            psum_spad_addr_a_mem <= 0;
+            psum_spad_addr_b_mem <= 1;
           end
 
           // ==================================================================
@@ -2022,14 +2027,14 @@ module PE #(
             // Default signal setup
             // ---------------------------------------------------------------
             computing             <= 1;
-            computing_1           <= 1;
-            computing_2           <= 1;
+            computing_1           <= computing;
+            computing_2           <= computing_1;
             iact_data_current_3   <= iact_data_spad_pay;
             iact_addr_SPad_en_r   <= 0;
             iact_data_SPad_en_r   <= !mux_iact_ready;
             wght_addr_SPad_en_r   <= 0;           // No weight addr SPad in dense mode
-            psum_data_SPad_en_a_r <= computing;
-            psum_data_SPad_en_b_r <= computing;
+            psum_data_SPad_en_a_r <= 1;
+            psum_data_SPad_en_b_r <= 1;
             psum_data_SPad_en_a_w <= psum_data_SPad_en_a_r;
             psum_data_SPad_en_b_w <= psum_data_SPad_en_b_r;
             reuse_psum_spad_a     <= 0;
@@ -2073,7 +2078,7 @@ module PE #(
               wght_filter          <= 0;
               iact_channel         <= iact_channel + 1;
               iact_data_SPad_addr  <= iact_data_SPad_addr + 1;
-              if (((channel_reg_C0 * first_spad_words_iact_S) - 1 == iact_channel )) begin
+              if (((channel_reg_C0 * iact_addr_max_reg) - 1 == iact_channel)) begin
                 iact_channel            <= 0;
                 current_state_computing <= WAIT_TO_SEND_PSUM;
                 wght_ready_o            <= 1;
@@ -2085,9 +2090,14 @@ module PE #(
                 psum_data_SPad_en_b_w <= 1;
               end
             end
-            psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1;
-            psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
-            if (wght_filter == 2) begin
+            if (computing) begin
+              psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1;
+              psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
+              if (PARALLEL_MACS == 1) begin
+                psum_spad_addr_a_mem  <= psum_spad_addr_a_mem + 1;
+              end
+            end
+            if (wght_filter == PARALLEL_MACS) begin
               psum_spad_addr_a_mem <= 0;
               psum_spad_addr_b_mem <= 1;
             end
@@ -2151,8 +2161,8 @@ module PE #(
             psum_data_SPad_en_b_r <= computing;
             psum_data_SPad_en_a_w <= 1;
             if (computing) begin
-              psum_spad_addr_a_mem <= psum_spad_addr_a_mem + 2;
-              psum_spad_addr_b_mem <= psum_spad_addr_b_mem + 2;
+              psum_spad_addr_a_mem <= psum_spad_addr_a_mem + PARALLEL_MACS;
+              psum_spad_addr_b_mem <= psum_spad_addr_b_mem + PARALLEL_MACS;
             end else begin
               psum_spad_addr_a_mem <= 0;
               if (SERIAL == 1) begin
@@ -2227,8 +2237,8 @@ module PE #(
                   use_psum_2 <= 0;
                 end
               end else begin
-                psum_spad_addr_a_mem <= psum_spad_addr_a_r + 2;
-                psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
+                psum_spad_addr_a_mem <= psum_spad_addr_a_r + PARALLEL_MACS;
+                psum_spad_addr_b_mem <= psum_spad_addr_b_r + PARALLEL_MACS;
                 if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
                   use_psum_1                             <= 1;
                   used_psum_memory[(psum_spad_addr_a_r)] <= 0;
@@ -2509,7 +2519,7 @@ module PE #(
   // two-level SPad structure (address SPad + data SPad) for sparse storage
   data_pipeline_iact #(
       .DATA_WIDTH      (TRANS_BITWIDTH_IACT),
-      //.SPARSITY_EN     (SPARSITY_EN),
+      .SPARSITY_EN     (SPARSITY_EN),
       .FIRST_SPAD_ADDR (IACT_ADDR_ADDR),
       .FIRST_SPAD_DATA (IACT_ADDR_DATA),
       .SECOND_SPAD_ADDR(IACT_DATA_ADDR),
@@ -2678,13 +2688,21 @@ module PE #(
   // ============================================================================
   // Selects between psum from SPad (for accumulation) or external psum (from router/other PE)
   if (SERIAL) begin : gen_serial_psum_multiplexer
+    wire [PARALLEL_MACS*TRANS_BITWIDTH_PSUM-1 : 0] psum_data_combined_w;
+    assign psum_data_combined_w = PARALLEL_MACS == 1 ? psum_data_1_delay : {psum_data_2_delay, psum_data_1_delay};
+    wire [PARALLEL_MACS*TRANS_BITWIDTH_PSUM-1 : 0] psum_mult_combined_w;
+    assign psum_mult_combined_w = PARALLEL_MACS == 1 ? mult_1_o_w : {mult_2_o_w, mult_1_o_w};
+    wire [PARALLEL_MACS*TRANS_BITWIDTH_PSUM-1 : 0] psum_addr_combined_w;
+    assign adder_1_summand_2 = psum_addr_combined_w[$bits(adder_1_summand_2)-1 : 0];
+
+    assign adder_2_summand_2 = (PARALLEL_MACS > 1) ? psum_addr_combined_w[2*$bits(adder_1_summand_2)-1 : $bits(adder_1_summand_2)] : 0;
     mux2 #(
         .DATA_WIDTH(TRANS_BITWIDTH_PSUM * PARALLEL_MACS)
     ) mux_psum (
         .a_in (psum_data_combined_w),
-        .b_in ({mult_2_o_w, mult_1_o_w}),
+        .b_in (psum_mult_combined_w),
         .sel_i(psum_select),
-        .y_o  ({adder_2_summand_2, adder_1_summand_2})
+        .y_o  (psum_addr_combined_w)
     );
   end else begin : gen_parallel_psum_multiplexer
     mux2 #(
