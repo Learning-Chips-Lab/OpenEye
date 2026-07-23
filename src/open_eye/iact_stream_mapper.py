@@ -155,7 +155,7 @@ class IactStreamMapper(object):
                     iact_stream.append(word)
 
                 n = self.layer_params.iact_cycles_one_word_all_ram
-                missing_zeros = (n - len(iact_stream)) % n
+                missing_zeros = n - (len(iact_stream) % n)
                 iact_stream = iact_stream + [0] * missing_zeros
                 temp = []
                 for i in range(0, len(iact_stream), n):
@@ -836,7 +836,10 @@ class DenseIactStreamMapper(IactStreamMapper):
                 bitwidth = params.IACT_Bitwidth
                 dma_bitwidth = params.DMA_Bit_AXI
                 values_per_word = dma_bitwidth // bitwidth
-                transmissions = math.ceil((layer_params.input_shape[3] / (params.NUM_GLB_IACT*layer_params.used_iact_per_PE))) * (params.NUM_GLB_IACT*layer_params.used_iact_per_PE)
+                # iact_size_x is the flattened feature count K; input_shape may
+                # be 2D (standalone Dense/GEMM) or 4D (after conv), so it is
+                # not indexed directly here.
+                transmissions = math.ceil((layer_params.iact_size_x / (params.NUM_GLB_IACT*layer_params.used_iact_per_PE))) * (params.NUM_GLB_IACT*layer_params.used_iact_per_PE)
                 transmissions = math.ceil(transmissions/values_per_word)
                 for i in range(0, transmissions):
                     word = 0

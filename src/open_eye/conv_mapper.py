@@ -196,7 +196,10 @@ class ConvMapper(LayerMapper):
         "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
         "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
         "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
-        "pooling_mode": 0
+        "pooling_mode": 0,
+        "gemm_mode": getattr(layer_params, "gemm_mode", 0),
+        "test_reg": 0,
+        "used_wght_per_PE": layer_params.used_wght_per_PE
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===
@@ -242,6 +245,7 @@ class ConvMapper(LayerMapper):
             storage[strdic.status_dict["skipPsum"]] = layer_params.skipPsum
             storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
             storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
+            storage[strdic.status_dict["gemm_mode"]] = getattr(layer_params, "gemm_mode", 0)
 
             # Generate and store router configurations for all three data paths
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)

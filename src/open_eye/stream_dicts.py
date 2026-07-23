@@ -3,7 +3,36 @@
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 """
-Dictionaries that are needed for layer classes to create the data stream
+Dictionaries that name the channels of the assembled layer data stream.
+
+A layer stream is a list of channels; these dictionaries map channel names
+to list indices. Full documentation of the stream construction lives in
+doc/source/architecture/datastream_construction.md.
+
+stream_serial_dict (DMA / OpenEye_FPGA):
+    status       - packed 64-bit configuration words (regmap_pack) followed
+                   by the PE-enable bitmap words
+    router_iact  - iact router modes, 6 bits per router, 10 per word
+    router_wght  - wght router modes, 1 bit per router
+    router_psum  - psum router modes, 3 bits per router
+    iact_data    - raw pixel words (8 x 8-bit values per 64-bit word); the
+                   hardware iact_stream_constructor derives the sparse
+                   SPad streams from them
+    wght_data    - pre-encoded two-level weight SPad image (addr + data)
+    psum_data    - bias / initial partial sums
+
+stream_parallel_dict (direct ports / OpenEye_Parallel):
+    status       - list indexed by status_dict, driven onto the
+                   configuration ports by rtl_test_utils.send_stream
+    iact/wght/psum - nested [cluster_x][cluster_y][router] SPad word lists
+    quantize     - (mantissa, exponent) pairs for output requantization
+    offset       - per-filter output offsets
+
+status_dict:
+    Sub-indices of the parallel status channel. Every entry corresponds to
+    one OpenEye_Parallel configuration port. gemm_mode selects the dataflow:
+    0 = row-stationary (default), 1 = output-stationary GEMM (PE row j
+    reads iact GLB bank j, output tile stationary in the PE psum SPad).
 """
 
 stream_serial_dict = {
@@ -53,5 +82,6 @@ status_dict = {
   "router_wght": 22,
   "router_psum": 23,
   "psum_delay": 24,
-  "needed_standing_cycles": 25
+  "needed_standing_cycles": 25,
+  "gemm_mode": 26
 }

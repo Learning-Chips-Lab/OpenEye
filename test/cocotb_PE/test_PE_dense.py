@@ -99,8 +99,8 @@ def test_pe_dense_mode(U, C0, M0, SEED, USE_DSP):
         "CLOCK_DELAY_OUTPUT": str(CLK_DELAY_OUTPUT),
         "CLOCK_DELAY_UNIT_OUTPUT": CLK_DELAY_UNIT_OUTPUT,
 
-        # Test dimensions
-        "U": str(U),
+        # Test dimensions (PE_tb.py reads the input-block count as "B")
+        "B": str(U),
         "C0": str(C0),
         "M0": str(M0),
 

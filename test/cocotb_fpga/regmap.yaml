@@ -59,8 +59,9 @@ registers:
   - {name: iact_converter_max_cycles, width: 8}
   - {name: iact_buffer_words_per_write, width: 12}
   - {name: pooling_mode, width: 1}
+  - {name: gemm_mode, width: 1}
+  - {name: test_reg, width: 20}
   - {name: used_wght_per_PE, width: int(BUFFER_WIDTH)}
-
 
 
 

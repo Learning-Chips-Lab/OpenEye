@@ -73,6 +73,11 @@ class WghtStreamMapper(object):
 
     """
 
+    # Omit all-zero packed words from the data stream. Correct only for the
+    # overhead-encoded conv weight format; raw dense payloads must transmit
+    # every word (see create_pe_data_wght_stream).
+    SKIP_ZERO_WORDS = True
+
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
         """Initialize the weight stream mapper.
 
@@ -146,6 +151,7 @@ class WghtStreamMapper(object):
                                     temp_storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
                                 else:
                                     temp_storage[cl_x][cl_y][router] = spad
+
                 # Convert SPAD data to transmission bitstream and append to overall stream
                 wght_stream.extend(self.create_complete_wght_stream(temp_storage))
         else:
@@ -163,16 +169,26 @@ class WghtStreamMapper(object):
                                 storage[cl_x][cl_y][router] = self.set_sparse_stream(spad)
                             else:
                                 storage[cl_x][cl_y][router] = spad
+
             # Convert SPAD data to transmission bitstream
             wght_stream = self.create_complete_wght_stream(storage)
+        print(len(wght_stream))
+        print(hex(wght_stream[0]))
+        print(hex(wght_stream[1]))
+        print(hex(wght_stream[2]))
         chunk = self.params.Clusters * self.params.NUM_GLB_WGHT
-        wght_stream = gtu.transform_n_to_m_chunked(wght_stream,24,self.params.DMA_Bit_AXI, chunk)
+        wght_stream = gtu.transform_n_to_m_chunked(wght_stream,24,self.params.DMA_Bit_AXI, 3)
+        print(len(wght_stream))
+        print(hex(wght_stream[0]))
+        print(hex(wght_stream[1]))
         n = self.layer_params.wght_cycles_one_word_all_ram
         temp = []
         for i in range(0, len(wght_stream), n):
                 part = wght_stream[i : i + n]
                 temp.extend(part[::-1])
         wght_stream = temp
+        print(n)
+        print(len(wght_stream))
         return wght_stream
     
     def set_sparse_stream(self, spad_data):
@@ -432,19 +448,18 @@ class WghtStreamMapper(object):
 
             # Interleave words from different PEs for serial transmission
             for word in range(len(temp_stream[0][0][0])):
-                for cl_x in range(params.Clusters_X):
-                    for cl_y in range(params.Clusters_Y):
-                        for router in range(params.NUM_GLB_WGHT):
+                for cl_y in range(params.Clusters_Y):
+                    for router in range(params.NUM_GLB_WGHT):
+                        try:
+                            # Combine data from both X-clusters if available (24-bit shift)
+                            stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24)))
+                        except:
                             try:
-                                # Combine data from both X-clusters if available (24-bit shift)
+                                # Only one X-cluster has data
                                 stream.append(temp_stream[0][cl_y][router][word])
                             except:
-                                try:
-                                    # Only one X-cluster has data
-                                    stream.append(temp_stream[0][cl_y][router][word])
-                                except:
-                                    # No data available, send zero
-                                    stream.append(0)
+                                # No data available, send zero
+                                stream.append(0)
 
         return stream
     
@@ -550,8 +565,15 @@ class WghtStreamMapper(object):
                     # Weight out of range, leave as zero in packed word
                     pass
 
-            # Only append non-zero words to save bandwidth
-            if (temp_trans != 0):
+            # SKIP_ZERO_WORDS: historic behaviour that omits all-zero packed
+            # words. Safe only for the overhead-encoded (sparse) conv format,
+            # where meaningful words are never all-zero. For raw dense
+            # payloads (Dense/GEMM) an all-zero weight pair is legitimate
+            # data; dropping it desynchronizes the hardware word count and
+            # shifts every following weight to a wrong SPad address (wrong
+            # results or a hang in GET_WGHT). Dense mappers therefore
+            # disable the skip (see DenseWghtStreamMapper).
+            if (temp_trans != 0) or not self.SKIP_ZERO_WORDS:
                 stream.append(temp_trans)
 
             line_counter = line_counter + 1
@@ -644,7 +666,21 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         channel_offset_in_calculation = (2 * cl_y + cl_x) // amount_of_used_clusters
         start_current_repetition = start_current_repetition + channel_offset_in_calculation
         # Handle different cluster computation modes
-        amount_of_words = math.ceil(layer_params.used_wght_per_PE/params.PARALLEL_MACS)
+        match layer_params.single_cluster_computation:
+            case 1:
+                # Single cluster does all: adjust for cluster-specific filters
+                start_current_repetition = start_current_repetition + ((cl_x  + cl_y * params.Clusters_X) * layer_params.used_psum_per_PE)
+                amount_of_words = int((layer_params.filters*amount_of_iacts)/params.Clusters/2)
+            case 2:
+                # Y-clusters distribute work: adjust for Y-cluster offset
+                start_current_repetition = start_current_repetition + (cl_y * layer_params.used_psum_per_PE)
+                amount_of_words = int((layer_params.filters*amount_of_iacts)/params.Clusters_Y/2)
+            case _:
+                # Normal multi-cluster distribution
+                start_current_repetition = start_current_repetition
+                amount_of_words = int((layer_params.filters*amount_of_iacts)/ \
+                                      (layer_params.needed_wght_transmissions//layer_params.needed_iact_transmissions)/2/layer_params.different_kernels_per_calculation)
+
         # Populate SPAD with weights
         filters = start_current_repetition
         spad_position = 0
@@ -683,7 +719,7 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                         kernel_x = kernel_x + 1
 
             # Stop when SPAD is full
-            if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/params.PARALLEL_MACS)):
+            if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/2)):
                 break
         return spad_storage
         
@@ -737,6 +773,11 @@ class DenseWghtStreamMapper(WghtStreamMapper):
 
     """
 
+    # Dense payloads are raw values: an all-zero weight pair is real data
+    # and must be transmitted, otherwise the hardware word count
+    # desynchronizes (wrong SPad addresses or a GET_WGHT hang).
+    SKIP_ZERO_WORDS = False
+
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
         """Initialize the Dense layer weight stream mapper.
 
@@ -783,6 +824,38 @@ class DenseWghtStreamMapper(WghtStreamMapper):
 
             # Convert and append this transmission's stream
             wght_stream.extend(self.create_complete_wght_stream(temp_storage))
+        # GET_WGHT's shift-pipeline (hdl/OpenEye_FPGA.v) treats the incoming
+        # weight stream as a raw byte stream: it shifts WGHT_CYCLES_ONE_WORD_ALL_CELLS
+        # DMA words through a buffer and slices off the low
+        # TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT bits each time
+        # wght_buffer_wr_addr advances. That only produces correct weight
+        # rows if the incoming stream is already repacked into this same
+        # 24-bit-per-weight-pair -> 64-bit-DMA-word layout - the base
+        # WghtStreamMapper.get_wght_stream() (used by ConvWghtStreamMapper)
+        # applies this repack; this Dense override predates it and was
+        # never updated, so Dense/GEMM layers streamed weights in the old
+        # unpacked layout, producing garbage weight data that made the PE's
+        # zero-skip SPad range logic (CALCULATING state) loop indefinitely.
+        # create_complete_wght_stream's SERIAL-mode combining step packs
+        # Clusters_X clusters into each stream element (24 bits per
+        # cluster, e.g. temp_stream[0][...] + temp_stream[1][...]*2**24 for
+        # Clusters_X==2), so each element here is 24*Clusters_X bits wide,
+        # not the base class's flat 24 - passing a plain 24 here silently
+        # truncated away every cluster beyond the first via
+        # transform_n_to_m_chunked's masking.
+        elem_bits = 24 * self.params.Clusters_X
+        wght_stream = gtu.transform_n_to_m_chunked(wght_stream, elem_bits, self.params.DMA_Bit_AXI, 3)
+        # layer_params.wght_cycles_one_word_all_ram is only ever set by
+        # calculate_transmission_cycles(), a conv-only method Dense never
+        # calls; compute the same value directly from params here instead
+        # of depending on that (see WghtStreamMapper.get_wght_stream's
+        # base-class version for the formula this mirrors).
+        n = math.ceil((self.params.Clusters * self.params.NUM_GLB_WGHT * self.params.WGHT_RAM_CELLS_WORD_BITWIDTH) / self.params.DMA_Bit_AXI)
+        temp = []
+        for i in range(0, len(wght_stream), n):
+            part = wght_stream[i : i + n]
+            temp.extend(part[::-1])
+        wght_stream = temp
         return wght_stream
 
     def create_complete_wght_stream(self, spad_storage):

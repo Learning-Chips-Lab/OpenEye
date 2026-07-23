@@ -7,7 +7,6 @@ SIM ?= icarus
 #SIM ?= verilator
 #EXTRA_ARGS += --trace --trace-fst --trace-structs
 #COMPILE_ARGS += --trace --trace-fst --trace-structs
-COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE
 TOPLEVEL_LANG ?= verilog
 WAVEFORM=on
 
@@ -54,7 +53,6 @@ COMPILE_ARGS += -I$(abspath $(PWD)/../../hdl/include)
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
 TOPLEVEL = OpenEye_FPGA
-export TOPLEVEL = OpenEye_FPGA
 
 # MODULE is the basename of the Python test file
 MODULE = OpenEye_FPGA_tb
@@ -80,7 +78,7 @@ export LAYER=Convolution
 export NUM_FILTERS=16
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=16
+export INPUT_SIZE_X=4
 export INPUT_SIZE_Y=1
 export STRIDE=1
 export INPUT_CHANNELS=4
@@ -108,7 +106,7 @@ export NUM_GLB_IACT=1
 export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
-#Set number of Clusters
+#Set number of Cluster rows need at least to be 2 COLUMNS
 export CLUSTER_COLUMNS=1
 export CLUSTER_ROWS=1
 

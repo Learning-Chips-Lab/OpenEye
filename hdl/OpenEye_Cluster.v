@@ -87,6 +87,8 @@
 /// Ports:
 ///   iact_choose_i           - Specify the iact MUX and DEMUX for DATA, ENABLE, READY
 ///   psum_choose_i           - Specify the psum MUX and DEMUX for DATA, ENABLE, READY
+///   gemm_mode_i             - Dataflow select: 0 = row-stationary convolution (default),
+///                             1 = output-stationary GEMM (PE row j reads iact GLB bank j)
 ///   compute_i               - Trigger computation
 ///   data_write_enable_i     - Wether data should be read or written to RAMs. 1 is WR, 0 is RD
 ///   ext_mem_iact_addr_i     - Sets the address of IACT GLB from top modul
@@ -146,6 +148,11 @@ module OpenEye_Cluster #(
     input                                  rst_ni,
     input [$clog2(NUM_GLB_IACT+1)*PES-1:0] iact_choose_i,
     input [              NUM_GLB_PSUM-1:0] psum_choose_i,
+    // Dataflow select: 0 = row-stationary (default), 1 = output-stationary GEMM.
+    // In GEMM mode the PE_cluster overrides iact_choose_i so PE row j always
+    // reads iact GLB bank j and each PE keeps its output tile stationary in
+    // the local psum SPad.
+    input                                  gemm_mode_i,
     input [                       PES-1:0] compute_i,
     input                                  data_write_enable_iact_i,
     input                                  data_write_enable_i,
@@ -304,8 +311,17 @@ module OpenEye_Cluster #(
       .rst_ni       (rst_n),
       .iact_choose_i(iact_choose_i),
       .psum_choose_i(psum_choose_i),
+      .gemm_mode_i  (gemm_mode_i),
       .compute_i    (compute_i),
 
+      // Systolic pass-through (Approach 3) is not routed above cluster level;
+      // OS dataflow at this level uses gemm_mode_i with the standard GLB path.
+      .iact_pass_data_i  ({(DATA_IACT_BITWIDTH * PE_ROWS) {1'b0}}),
+      .iact_pass_enable_i({PE_ROWS{1'b0}}),
+      .iact_pass_ready_o (),
+      .iact_pass_data_o  (),
+      .iact_pass_enable_o(),
+      .iact_pass_ready_i ({PE_ROWS{1'b0}}),
 
       .pe_iact_data  (pe_iact_data),
       .pe_iact_enable(pe_iact_enable),

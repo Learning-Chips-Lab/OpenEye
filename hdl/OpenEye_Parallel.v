@@ -110,6 +110,8 @@
 ///   psum_enable_o           - Psum Enable Port Out
 ///   psum_ready_i            - Psum Ready Port In
 ///   data_mode_i             - Specify if data is compressed or not, 0:compressed, 1:not compressed
+///   gemm_mode_i             - Dataflow select: 0 = row-stationary convolution (default),
+///                             1 = output-stationary GEMM (forwarded to every PE_cluster)
 ///   router_mode_iact_i      - Configure Router Iact
 ///   router_mode_wght_i      - Configure Router Wght
 ///   router_mode_psum_i      - Configure Router Psum
@@ -182,6 +184,12 @@ module OpenEye_Parallel #(
     input      [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i,
     input                                                      status_reg_enable_i,
     input                                                      data_mode_i,
+    // Dataflow select: 0 = row-stationary (default), 1 = output-stationary GEMM
+    input                                                      gemm_mode_i,
+    // Raw weight stream flag: 1 = weights arrive uncompressed (dense/GEMM
+    // layers); all-zero weight words are stored instead of being skipped.
+    // Forwarded to every PE via bit 9 of the FIRST_PARAMS config stream.
+    input                                                      raw_wght_i,
     input      [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i,
     input      [                                         17:0] needed_cycles_i,
     input      [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i,
@@ -236,6 +244,7 @@ module OpenEye_Parallel #(
 
   ///Register, that occupy hyperparameters
   reg                                                  data_mode_reg;
+  reg                                                  gemm_mode_reg;
   reg  [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_reg;
   reg  [                                         19:0] needed_cycles_reg;
   reg  [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_reg;
@@ -292,6 +301,7 @@ module OpenEye_Parallel #(
   reg                                                  start_new_cycle;
   wire                                                 status_reg_enable_i_w;
   wire                                                 data_mode_i_w;
+  wire                                                 gemm_mode_i_w;
   wire [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i_w;
   wire [                                         19:0] needed_cycles_i_w;
   wire [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i_w;
@@ -318,6 +328,8 @@ module OpenEye_Parallel #(
   reg                                                  compute_i_reg;
   reg                                                  status_reg_enable_i_reg;
   reg                                                  data_mode_i_reg;
+  reg                                                  gemm_mode_i_reg;
+  reg                                                  raw_wght_i_reg;
   reg  [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i_reg;
   reg  [                                         19:0] needed_cycles_i_reg;
   reg  [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i_reg;
@@ -340,7 +352,7 @@ module OpenEye_Parallel #(
   reg  [  ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_i_reg;
   reg  [                               4*CLUSTERS-1:0] iact_router_offset;
   reg                                                  enable_stream_reg;
-  reg  [                                          8:0] data_stream_reg;
+  reg  [                                         11:0] data_stream_reg;
   reg  [                                          4:0] iact_pes_per_router;
 
 
@@ -408,7 +420,8 @@ module OpenEye_Parallel #(
         end
         FIRST_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{1{1'd0}},wght_addr_len_i_reg, stride_x_i_reg, data_mode_i_reg};
+          // Bit 9 carries the raw-weight-stream flag (see PE FIRST_PARAMS)
+          data_stream_reg        <= {{2{1'd0}}, raw_wght_i_reg, wght_addr_len_i_reg, stride_x_i_reg, data_mode_i_reg};
           fsm_transmission_state <= SECOND_PARAMS;
         end
         SECOND_PARAMS: begin
@@ -434,6 +447,7 @@ module OpenEye_Parallel #(
     if (!rst_n) begin  ///Reset
       start_new_cycle                <= 0;
       data_mode_reg                  <= 0;
+      gemm_mode_reg                  <= 0;
       fraction_bit_reg               <= 0;
       needed_cycles_reg              <= 0;
       needed_x_cls_reg               <= 0;
@@ -458,6 +472,8 @@ module OpenEye_Parallel #(
       compute_i_reg                  <= 0;
       status_reg_enable_i_reg        <= 0;
       data_mode_i_reg                <= 0;
+      gemm_mode_i_reg                <= 0;
+      raw_wght_i_reg                 <= 0;
       fraction_bit_i_reg             <= 0;
       needed_cycles_i_reg            <= 0;
       needed_x_cls_i_reg             <= 0;
@@ -494,6 +510,8 @@ module OpenEye_Parallel #(
       compute_i_reg               <= compute_i;
       status_reg_enable_i_reg     <= status_reg_enable_i;
       data_mode_i_reg             <= data_mode_i;
+      gemm_mode_i_reg             <= gemm_mode_i;
+      raw_wght_i_reg              <= raw_wght_i;
       fraction_bit_i_reg          <= fraction_bit_i;
       needed_cycles_i_reg         <= needed_cycles_i;
       needed_x_cls_i_reg          <= needed_x_cls_i;
@@ -520,6 +538,7 @@ module OpenEye_Parallel #(
       if (status_reg_enable_i_w) begin
         cycle_break_counter         <= 0;
         data_mode_reg               <= data_mode_i_w;
+        gemm_mode_reg               <= gemm_mode_i_w;
         needed_psum_storage_cycles_reg <= needed_psum_storage_cycles_i;
         fraction_bit_reg            <= fraction_bit_i_w;
         needed_cycles_reg           <= needed_cycles_i_w;
@@ -566,13 +585,32 @@ module OpenEye_Parallel #(
           cycle_break_counter   <= 0;
           if (psum_transmitted_i & (iact_enable_i == 0) & (wght_enable_i == 0)) begin
             cycle_break_counter <= cycle_break_counter + 1;
-            if (cycle_break_counter >= needed_y_cls_i_reg << 1) begin 
+            if (cycle_break_counter >= needed_y_cls_i_reg * 2) begin 
               cycle_break_counter <= 0;
               start_new_cycle     <= 1;
               if (start_new_cycle != 1) begin
                 finished_cycles <= finished_cycles + 1;
                 if (finished_cycles < needed_cycles_i_reg) begin
-                  compute_cluster_i_reg <= compute_mask_reg;
+                  //if (iact_x_line_repetitions_reg == 1) begin
+                  if (1 == 1) begin
+                    compute_cluster_i_reg <= compute_mask_reg;
+                  end else begin
+                    x_line_repetition_cycle <= x_line_repetition_cycle + 1;
+                    if (x_line_repetition_cycle != iact_x_line_repetitions_reg - 1) begin
+                      compute_cluster_i_reg   <= compute_mask_reg;
+                    end else begin
+                      x_line_repetition_cycle <= 0;
+                      for (cl_x = 0; cl_x < CLUSTER_COLUMNS; cl_x = cl_x + 1) begin
+                        for (cl_y = 0; cl_y < CLUSTER_ROWS; cl_y = cl_y + 1) begin
+                          if (iact_size_x_reg > ((x_line_repetition_cycle * CLUSTERS) + cl_x + cl_y * CLUSTER_COLUMNS) * PE_COLUMNS) begin
+                            compute_cluster_i_reg[((cl_x * CLUSTER_ROWS)+ cl_y) * PES+:PES] <= compute_mask_reg[((cl_x * CLUSTER_ROWS)+ cl_y) * PES+:PES];
+                          end else begin
+                            compute_cluster_i_reg[((cl_x * CLUSTER_ROWS)+ cl_y) * PES+:PES] <= 0;
+                          end
+                        end
+                      end
+                    end
+                  end
                 end
                 if (finished_cycles == needed_cycles_i_reg - 1) begin
                   fsm_last_state    <= COMPUTING;
@@ -775,6 +813,7 @@ module OpenEye_Parallel #(
             //////////////////////////////////
             .iact_choose_i(iact_choose_cluster_i_w),
             .psum_choose_i(psum_choose_cluster_i_w),
+            .gemm_mode_i  (gemm_mode_reg),
             .compute_i    (compute_cluster_i_w),
 
             ///Router Modes
@@ -886,6 +925,7 @@ module OpenEye_Parallel #(
       assign compute_i_w               = compute_i_reg;
       assign status_reg_enable_i_w     = status_reg_enable_i_reg;
       assign data_mode_i_w             = data_mode_i_reg;
+      assign gemm_mode_i_w             = gemm_mode_i_reg;
       assign fraction_bit_i_w          = fraction_bit_i_reg;
       assign needed_cycles_i_w         = needed_cycles_i_reg;
       assign needed_x_cls_i_w          = needed_x_cls_i_reg;
@@ -914,6 +954,7 @@ module OpenEye_Parallel #(
       assign compute_i_w               = compute_i;
       assign status_reg_enable_i_w     = status_reg_enable_i;
       assign data_mode_i_w             = data_mode_i;
+      assign gemm_mode_i_w             = gemm_mode_i;
       assign fraction_bit_i_w          = fraction_bit_i;
       assign needed_cycles_i_w         = needed_cycles_i;
       assign needed_x_cls_i_w          = needed_x_cls_i;

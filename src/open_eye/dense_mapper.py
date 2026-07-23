@@ -141,12 +141,42 @@ class DenseMapper(LayerMapper):
             "needed_wght_cycles": 1,
             "needed_cycles": layer_params.needed_refreshes_mx[layer_repetition][0],
             "trans_cycles_psum": layer_params.trans_cycles_psum,
+            # GET_WGHT's exit condition (fsm_cycle == trans_cycles_wght - 1)
+            # counts one DMA word per cycle, so this must equal the actual
+            # weight stream's word count. dense/gemm never packed this
+            # register at all (conv_mapper.py is the only mapper that did,
+            # via layer_parameters.calculate_transmission_cycles() - a
+            # conv-only method using conv-specific geometry), which left
+            # trans_cycles_wght defaulting to 0 and GET_WGHT hanging
+            # forever. Read directly from the weight mapper rather than
+            # re-deriving conv's formula for dense's different layout -
+            # this runs before make_stream()'s own call to the same
+            # get_wght_stream(), so it's an extra (cheap, deterministic)
+            # invocation, not a duplicate of stream construction.
+            "trans_cycles_wght": len(self.WghtStreamCreator.get_wght_stream()),
+            # GET_IACT's exit condition (fsm_cycle == trans_cycles_iact - 1)
+            # replaced the old inline computation
+            # ceil(iact_size_x*iact_size_y*iact_channels / IACT_WORDS_IN_RAM) - 1,
+            # using the same iact_size_x=1/iact_size_y/iact_size_c values
+            # packed just below - never packed by dense/gemm, which left
+            # trans_cycles_iact defaulting to 0 and GET_IACT hanging forever.
+            "trans_cycles_iact": math.ceil(1 * layer_params.iact_size_y * (layer_params.used_iact_per_PE * params.NUM_GLB_WGHT * layer_params.diff_iact_layer) / params.IACT_WORDS_IN_RAM),
+            # Process 5's weight-send phase (hdl/OpenEye_FPGA.v) uses this as
+            # the upper bound of its wght_buffer_rd_addr sweep and the
+            # window width of the wght_enable_i broadcast pulse to every PE
+            # (fsm_sending_cycle in (1, wghts_per_pe+2]). dense/gemm never
+            # packed it (only conv_mapper.py did, from the same commit that
+            # added the register), leaving it 0 and collapsing that window
+            # to a single cycle - only the first weight word ever reached
+            # each PE's weight-address SPad, leaving every other address
+            # read back X and stalling PE.v's CALCULATING state forever.
+            "used_wght_per_PE": layer_params.used_wght_per_PE,
             "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
             "iact_channels_per_pe": layer_params.used_iact_per_PE,
             "fc_size_reg": layer_params.iact_size_x,
             "iact_size_x": 1,
             "iact_size_y": layer_params.iact_size_y,
-            "iact_size_c": layer_params.used_iact_per_PE * paras.NUM_GLB_WGHT * layer_params.diff_iact_layer,
+            "iact_size_c": layer_params.used_iact_per_PE * params.NUM_GLB_WGHT * layer_params.diff_iact_layer,
             "padding_x": layer_params.padding_x,
             "padding_y": layer_params.padding_y,
             "psum_size_x":math.ceil(layer_params.iact_size_x/layer_params.strideX),
@@ -184,6 +214,7 @@ class DenseMapper(LayerMapper):
             "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
             "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
             "pooling_mode": 0,
+            "gemm_mode": getattr(layer_params, "gemm_mode", 0),
             "test_reg": 0
             })
             
@@ -232,6 +263,7 @@ class DenseMapper(LayerMapper):
             storage[strdic.status_dict["skipPsum"]] = layer_params.skipPsum
             storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
             storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
+            storage[strdic.status_dict["gemm_mode"]] = getattr(layer_params, "gemm_mode", 0)
             # Router configurations as nested structures for parallel access
             storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
             storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params, layer_params)

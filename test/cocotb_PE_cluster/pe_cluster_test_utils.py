@@ -26,6 +26,7 @@ def get_verilog_sources(hdl_dir):
         os.path.join(hdl_dir, "PE_cluster.v"),
         os.path.join(hdl_dir, "RST_SYNC.v"),
         os.path.join(hdl_dir, "PE.v"),
+        os.path.join(hdl_dir, "PE_simple.v"),
         os.path.join(hdl_dir, "adder.v"),
         os.path.join(hdl_dir, "data_pipeline.v"),
         os.path.join(hdl_dir, "multiplier.v"),
@@ -75,30 +76,69 @@ async def reset_all_signals(ptp,dut):
     # After deasserting reset, we wait 3 clock cycles
     await Timer(3*ptp.clk_cycle, units="ns")
 
-async def send_data_params(ptp, dut, iactsize_x, iactsize_y,wghtsize_x):
+def use_pe_simple():
+    """True when the cluster is compiled with the dense PE_simple.v variant.
+
+    Selected by the PE_MODULE env var that the GEMM pytest runner exports.
+    PE_simple.v has a different config-word bit layout and dense weight packing
+    than the sparsity-capable PE.v, so the testbench feed branches on this.
+    """
+    return os.environ.get("PE_MODULE", "PE") == "PE_simple"
+
+
+async def send_data_params(ptp, dut, iactsize_x, iactsize_y, wghtsize_x):
     # List all needed parameters
-    stride_reg = 1
-    wght_addr_max_reg = (iactsize_x * iactsize_y) + 2
-    filters_reg_i = wghtsize_x
-    channel_reg_i = iactsize_y
+    stride_reg      = 1
+    filters_reg_i   = wghtsize_x          # M0 output channels
+    channel_reg_i   = iactsize_y          # C0
     iact_addr_max_i = iactsize_x
 
-    data_reg_i =  0
     # Enable the params reading
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.enable_stream_i), 1))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.enable_stream_i), 1))
 
-    data_reg_i =  (wght_addr_max_reg << 4) + (stride_reg << 1)
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
-    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-    data_reg_i =  (filters_reg_i << 4) + (channel_reg_i << 0)
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
-    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-    data_reg_i =  (iact_addr_max_i << 0)
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
-    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+    if use_pe_simple():
+        # PE_simple.v config-word layout (matches hdl/PE_simple.v stream FSM):
+        #   FIRST  : [11:9]=stride, [8:1]=wght_addr_max
+        #   SECOND : [11:7]=M0,     [6:3]=C0
+        #   THIRD  : [iact_bw:1]=iact_addr_max, [0]=data_mode
+        # Dense weights occupy N*M0 values, PARALLEL_MACS per loaded word.
+        n_terms       = iactsize_x * iactsize_y
+        pmacs         = int(dut.PARALLEL_MACS.value)
+        wght_words    = int(math.ceil((n_terms * wghtsize_x) / pmacs))
+        wght_addr_max = wght_words - 1            # last weight-word index
+        iact_addr_max = n_terms - 1               # last iact index
+
+        data_reg_i = (stride_reg << 9) | (wght_addr_max << 1)
+        cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        data_reg_i = (filters_reg_i << 7) | (channel_reg_i << 3)
+        cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        data_reg_i = (iact_addr_max << 1)
+        cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        # FOURTH params (fraction bits / line repetitions): unused for GEMM
+        cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), 0))
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+    else:
+        # PE.v (sparse) config-word layout:
+        #   FIRST  : [7:4]=wght_addr_max, [3:1]=stride
+        #   SECOND : [8:4]=M0,            [3:0]=C0
+        #   THIRD  : [3:0]=iact_addr_max
+        wght_addr_max_reg = (iactsize_x * iactsize_y) + 2
+
+        data_reg_i = (wght_addr_max_reg << 4) + (stride_reg << 1)
+        cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        data_reg_i = (filters_reg_i << 4) + (channel_reg_i << 0)
+        cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        data_reg_i = (iact_addr_max_i << 0)
+        cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
     # Disable the params reading
-    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.enable_stream_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.enable_stream_i), 0))
     await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
    
 def send_to_wght_spad(ptp, spad, dut):
@@ -176,13 +216,21 @@ def send_to_iact_spad(ptp, spad, dut, words):
     current_storage_position = 0
     offset = 0
     data_array = [[],[]]
+    # PE.v (sparse) unpacks two 12-bit iact values per 24-bit transfer; PE_simple
+    # consumes one 8-bit value per transfer (low bits of the bus). Match the
+    # packing to whichever PE the cluster was compiled with.
+    if use_pe_simple():
+        words_per_transmit = 1
+        word_stride        = int(dut.DATA_IACT_BITWIDTH.value)  # 8
+    else:
+        words_per_transmit = int(math.floor(24 / 12))
+        word_stride        = 12
     # Send data over multiple clock cycles
-    words_per_transmit = int(math.floor(24 / 12))
     for cycle in range(int(dut.IACT_DATA_WORDS.value)):
         # Calculate how many words fit in one transmission
         # Pack multiple words into this transmission
         for writing_cycle in range(words_per_transmit):
-            offset = 12 * writing_cycle  # Bit position for this word
+            offset = word_stride * writing_cycle  # Bit position for this word
             # Sequential mode: pack words sequentially
             current_storage_position = int(writing_cycle+ math.floor(cycle / words_per_transmit) * words_per_transmit)
             try:

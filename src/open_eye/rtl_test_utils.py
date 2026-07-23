@@ -186,6 +186,21 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
 
         # Data format and quantization settings
         cocotb.start_soon(set_input(ptp,(dut.data_mode_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["data_mode"]]))
+
+        # Dataflow selection: 0 = row-stationary (default), 1 = output-stationary GEMM.
+        # Guarded so testbenches for DUTs without the port keep working.
+        if hasattr(dut, "gemm_mode_i"):
+            gemm_mode_value = stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["gemm_mode"]]
+            if gemm_mode_value == []:
+                gemm_mode_value = 0
+            cocotb.start_soon(set_input(ptp,(dut.gemm_mode_i), gemm_mode_value))
+
+        # Raw weight stream flag: dense/FC and GEMM layers send uncompressed
+        # weights whose all-zero words must be stored, not skipped.
+        if hasattr(dut, "raw_wght_i"):
+            raw_wght_value = 1 if (getattr(lp, "fully_connected", 0) or
+                                   getattr(lp, "gemm_mode", 0)) else 0
+            cocotb.start_soon(set_input(ptp,(dut.raw_wght_i), raw_wght_value))
         cocotb.start_soon(set_input(ptp,(dut.fraction_bit_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["realfactor"]]))
 
         # Computation control parameters

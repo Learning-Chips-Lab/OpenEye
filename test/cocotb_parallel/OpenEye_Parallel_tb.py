@@ -9,7 +9,7 @@ sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
-import test.test_utils.test_utils_main as ptu
+import open_eye.test_utils_main as ptu
 import open_eye.rtl_test_utils as rtl_test_utils
 import open_eye.timing_parameters as tp
 import open_eye.generic_test_utils as gtu
@@ -77,11 +77,14 @@ async def single_layer_test(dut):
         kernelsize_x = int((os.getenv("KERNEL_SIZE_X")))
         kernelsize_y = int((os.getenv("KERNEL_SIZE_Y")))
     except:
+        kernelsize_x = 1
+        kernelsize_y = 1
         logger.debug("KERNEL_SIZE_X and KERNEL_SIZE_Y not set")
 
     try:
         inputsize = int((os.getenv("INPUT_SIZE")))
     except:
+        inputsize = 1
         logger.debug("INPUT_SIZE not set")
 
     try:
@@ -93,11 +96,13 @@ async def single_layer_test(dut):
     try:
         strides = (int((os.getenv("STRIDE"))),int((os.getenv("STRIDE"))))
     except:
+        strides = (1, 1)
         logger.debug("STRIDE not set")
 
     try:
         channels = int((os.getenv("INPUT_CHANNELS")))
     except:
+        channels = 1
         logger.debug("INPUT_CHANNELS not set")
 
 
@@ -139,7 +144,7 @@ async def single_layer_test(dut):
 
     #Here If-Condition test, wether use model or single Layer
     if(use_random):
-        model = data_create.create_layer(layer_mode, filters, kernelsize, inputsize, strides, channels, outputsize)
+        model = data_create.create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize, inputsize, strides, channels, outputsize)
     else:
         model = tflite2model.create_model_from_tflite(use_random)
     #load_model_function

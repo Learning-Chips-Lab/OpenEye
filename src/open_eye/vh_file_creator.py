@@ -64,22 +64,18 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
         - NUM_GLB_WGHT: Number of global weight buffers
     """
     gtu.delete_files_in_directory('demo/')
-    if (gtu.load_env_to_variable("TOPLEVEL", "OpenEye_FPGA") == "OpenEye_FPGA") :
-        with open(filename, 'w') as txt_file:
-            txt_file.write(f"parameter CLUSTER_ROWS  = {openeye_parameter.Clusters_Y},\n")
-            txt_file.write(f"parameter CLUSTER_COLUMNS  = {openeye_parameter.Clusters_X},\n")
-            txt_file.write(f"parameter NUM_GLB_IACT  = {openeye_parameter.NUM_GLB_IACT},\n")
-            txt_file.write(f"parameter NUM_GLB_PSUM  = {openeye_parameter.NUM_GLB_PSUM},\n")
-            txt_file.write(f"parameter NUM_GLB_WGHT = {openeye_parameter.NUM_GLB_WGHT},\n")
-            txt_file.write(f"parameter IACT_RAM_CELLS = {openeye_parameter.IACT_RAM_CELLS},\n")
-            txt_file.write(f"parameter BUFFER_WIDTH = {openeye_parameter.BUFFER_WIDTH},\n")
-            txt_file.write(f"parameter BRANCHES = {openeye_parameter.BRANCHES},\n")
-            txt_file.write(f"parameter QUANT_AMOUNT = {openeye_parameter.QUANT_AMOUNT},\n")
-            txt_file.write(f"parameter DATA_PSUM_BITWIDTH = {openeye_parameter.DATA_PSUM_BITWIDTH},\n")
-            txt_file.write(f"parameter TRANS_WORDS = {openeye_parameter.TRANS_WORDS},\n")
-    else :
-        with open(filename, 'w') as txt_file:
-            txt_file.write(f"parameter PARALLEL_MACS = {openeye_parameter.PARALLEL_MACS},\n")
+    with open(filename, 'w') as txt_file:
+        txt_file.write(f"parameter CLUSTER_ROWS  = {openeye_parameter.Clusters_Y},\n")
+        txt_file.write(f"parameter CLUSTER_COLUMNS  = {openeye_parameter.Clusters_X},\n")
+        txt_file.write(f"parameter NUM_GLB_IACT  = {openeye_parameter.NUM_GLB_IACT},\n")
+        txt_file.write(f"parameter NUM_GLB_PSUM  = {openeye_parameter.NUM_GLB_PSUM},\n")
+        txt_file.write(f"parameter NUM_GLB_WGHT = {openeye_parameter.NUM_GLB_WGHT},\n")
+        txt_file.write(f"parameter IACT_RAM_CELLS = {openeye_parameter.IACT_RAM_CELLS},\n")
+        txt_file.write(f"parameter BUFFER_WIDTH = {openeye_parameter.BUFFER_WIDTH},\n")
+        txt_file.write(f"parameter BRANCHES = {openeye_parameter.BRANCHES},\n")
+        txt_file.write(f"parameter QUANT_AMOUNT = {openeye_parameter.QUANT_AMOUNT},\n")
+        txt_file.write(f"parameter DATA_PSUM_BITWIDTH = {openeye_parameter.DATA_PSUM_BITWIDTH},\n")
+        txt_file.write(f"parameter TRANS_WORDS = {openeye_parameter.TRANS_WORDS},\n")
 
 def create_vh_file_from_envvars(
     file_path_vh: Optional[str] = None,
@@ -101,6 +97,7 @@ def create_vh_file_from_envvars(
     file_path_vh = file_path_vh or gtu.load_env_to_variable("VH_PATH", os.getcwd())
     file_path_hdl = file_path_hdl or gtu.load_env_to_variable("HDL_PATH", hdl_dir)
     toplevel = toplevel or gtu.load_env_to_variable("TOPLEVEL", "")
+
     # Create parameter file
     openeye_parameter = oep.get_oep(serial=False)
     pre_param_path = os.path.join(file_path_vh, "pre_parameters.vh")

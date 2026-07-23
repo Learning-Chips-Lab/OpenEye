@@ -258,6 +258,7 @@ class LayerParameters(object):
         self.needed_total_transmissions = 1    # Total all transmissions
         self.psum_delay = 0                    # Partial sum delay cycles
         self.fully_connected = 0               # Dense layer flag
+        self.gemm_mode = 0                     # Dataflow: 0 = row-stationary, 1 = output-stationary GEMM
         self.store_in_psum = 0                 # Store in psum memory flag
         self.limit_increase = 0                # Amount of Iact Storages, that incrase adresses
         self.limit_increase_mod = 0            # Module amount of Iact Storages, that incrase adresses
@@ -310,6 +311,10 @@ class LayerParameters(object):
         elif "dense" in layer.name:
             logger.debug("Dense Layer")
             self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
+
+        elif "gemm" in layer.name or "matmul" in layer.name:
+            logger.debug("GEMM Layer (output-stationary)")
+            self.write_gemm_layer(layer_parameters, layer, params, layer_number, max_layers)
 
         elif "pooling2d" in layer.name:
             logger.debug("Pooling Layer")
@@ -885,11 +890,12 @@ class LayerParameters(object):
                     self.used_psum_per_PE = int(self.used_wght_per_PE/self.used_iact_per_PE)
                 case _:
                     # Multi-cluster: use tiling factor
-                    self.used_wght_per_PE = math.ceil(self.filters/wght_factor)*self.used_iact_per_PE
+                    self.used_wght_per_PE = math.ceil(self.filters/wght_factor/params.PARALLEL_MACS)*self.used_iact_per_PE
                     self.used_psum_per_PE = int(self.filters/wght_factor)
 
             # Calculate weight transmission iterations based on mode
-            self.wght_transmissions_pe = math.ceil(self.channels/(self.used_channels*self.kernel_per_pe_cluster)) * math.ceil(self.filters *self.used_iact_per_PE / self.used_wght_per_PE / self.different_kernels_per_calculation)
+            self.wght_transmissions_pe = math.ceil(self.channels/(self.used_channels*self.kernel_per_pe_cluster)) * math.ceil(self.filters * self.used_iact_per_PE / self.used_wght_per_PE / self.different_kernels_per_calculation)
+
         # === Calculate Partial Sum Transmissions ===
         if(math.ceil(self.used_iact_per_PE/self.used_wght_per_PE) <= params.Psums_per_PE):
             # Partial sums fit in PE memory - single transmission
@@ -988,15 +994,18 @@ class LayerParameters(object):
     def  calculate_transmission_cycles(self, params):
         self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_Bit_AXI)
         self.trans_cycles_iact = math.ceil(self.iact_size_x*self.iact_size_y*self.channels / params.IACT_WORDS_IN_RAM)
-        missing_cycles = (self.iact_cycles_one_word_all_ram - (self.trans_cycles_iact % self.iact_cycles_one_word_all_ram))%self.iact_cycles_one_word_all_ram
+        missing_cycles = self.iact_cycles_one_word_all_ram - (self.trans_cycles_iact % self.iact_cycles_one_word_all_ram)
         self.trans_cycles_iact =  self.trans_cycles_iact + missing_cycles
 
         self.wght_cycles_one_word_all_ram = math.ceil((params.Clusters*params.NUM_GLB_WGHT*params.WGHT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_Bit_AXI)
-        self.trans_cycles_wght = self.needed_wght_transmissions *  math.ceil(self.used_wght_per_PE/params.PARALLEL_MACS) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * 24 / params.DMA_Bit_AXI)
-
+        print("LP")
+        print(self.wght_cycles_one_word_all_ram)
+        self.trans_cycles_wght = self.needed_wght_transmissions * (self.used_iact_per_PE * (math.ceil(self.filters / params.PARALLEL_MACS))) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * 24 / params.DMA_Bit_AXI)
+        self.trans_cycles_wght = self.trans_cycles_wght
+        print(self.trans_cycles_wght)
         
-        temp = math.ceil(params.NUM_GLB_PSUM * (params.Clusters * params.DATA_PSUM_BITWIDTH/params.DMA_Bit_AXI))
-        self.trans_cycles_psum = self.filters * self.iact_size_y * self.iact_x_line_repetitions * temp
+        temp = math.ceil(params.NUM_GLB_PSUM * (params.DATA_PSUM_BITWIDTH/params.DMA_Bit_AXI))
+        self.trans_cycles_psum = self.needed_wght_cycles * self.filters * self.iact_size_y * self.iact_x_line_repetitions * temp
 
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
         """Compute all configuration parameters for a Conv2D layer.
@@ -1369,6 +1378,12 @@ class LayerParameters(object):
             self.quantize[f][0] = 1
             self.quantize[f][1] = 4
         self.fully_connected = 1
+        # Global dataflow selection: with DATAFLOW="output_stationary" the
+        # dense layer runs with gemm_mode=1 so PE row j is hard-wired to iact
+        # GLB bank j (output-stationary GEMM datapath) instead of relying on
+        # the iact_choose pattern produced by the converter.
+        if getattr(params, "DATAFLOW", "row_stationary") == "output_stationary":
+            self.gemm_mode = 1
         self.output_cycles = 1
         self.y_lines_per_calculation = 1
         self.kernel_size = [0]
@@ -1397,6 +1412,14 @@ class LayerParameters(object):
         temp = math.ceil(self.iact_size_x/(params.PEs_Y*temp))
         self.needed_wght_transmissions = math.ceil(temp/params.Clusters_Y)
         self.used_iact_per_PE = math.ceil(self.iact_size_x/(self.needed_wght_transmissions*params.Clusters_Y*params.PEs_Y))
+        # Hardware constraint of the iact converter FC path: iact_channels
+        # per PE must be an even value >= 4. Odd values leave a half-filled
+        # buffer word whose phantom slot corrupts the element indexing, and
+        # values <= 2 take a broken special case (empirical: K sweeps in
+        # test_gemm_layer.py; used_iact 2/3/5 fail, 4/6 work). Round up; the
+        # padded positions carry zero iacts and zero weights, which is exact
+        # (requires the raw_wght zero-operand fix).
+        self.used_iact_per_PE = max(4, self.used_iact_per_PE + (self.used_iact_per_PE % 2))
         self.used_wght_per_PE = self.used_iact_per_PE * math.ceil(self.filters/params.Clusters_X/params.PARALLEL_MACS)*params.PARALLEL_MACS
         self.diff_iact_layer = math.ceil(self.iact_size_x/(params.NUM_GLB_WGHT*self.used_iact_per_PE))
         self.used_psum_per_PE = math.ceil(self.used_wght_per_PE/self.used_iact_per_PE)
@@ -1459,11 +1482,11 @@ class LayerParameters(object):
         self.iteration_for_kernels = math.ceil(self.diff_iact_layer_next_layer / self.different_kernels_per_calculation)
         self.buffer_cycles_for_x_iact = params.Clusters_Y
         self.iact_converter_max_cycles = 1
+        print(self.used_iact_per_PE)
         self.iact_buffer_words_per_write = math.ceil(self.used_iact_per_PE/2) * self.needed_Iact_writes
         
         self.iact_size_c = self.used_iact_per_PE * params.NUM_GLB_WGHT * self.diff_iact_layer
 
-        self.trans_cycles_iact = math.ceil(self.iact_size_x*self.iact_size_y*self.channels / params.IACT_WORDS_IN_RAM)
         self.trans_cycles_wght = params.NUM_GLB_WGHT * params.Clusters_Y * self.needed_wght_transmissions * (self.used_iact_per_PE * (math.ceil(self.filters / params.PARALLEL_MACS)))
         self.trans_cycles_psum = self.filters
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
@@ -1477,6 +1500,32 @@ class LayerParameters(object):
         logger.debug("Needed transmissions WGHT    : " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions PSUM    : " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions TOTAL   : " + str(self.needed_total_transmissions))
+        return
+
+    def write_gemm_layer(self, layer_parameters, layer, params, layer_number, max_layers):
+        """Compute configuration parameters for a GEMM layer (output-stationary).
+
+        A GEMM layer computes C = A x B (+ bias). The mapping reuses the dense
+        layer machinery: the inner dimension K is split across cluster rows,
+        PE rows and the per-PE iact SPad, while each PE keeps its output tile
+        stationary in the local psum SPad. In contrast to the dense path the
+        gemm_mode flag is always set, which makes the PE clusters bind iact
+        GLB bank j to PE row j in hardware (see PE_cluster.gemm_mode_i).
+
+        Args:
+            layer_parameters (list): Previously computed parameters for other layers
+            layer: Layer object with input/kernel/output shapes (dense-compatible)
+            params: OpenEye hardware parameters
+            layer_number (int): Index of this layer (0-indexed)
+            max_layers (int): Total number of layers in network
+
+        Note:
+            Sets fully_connected = 1 (shared FPGA datapath) and gemm_mode = 1
+            (output-stationary routing).
+        """
+        self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
+        self.layer_name = "Gemm"
+        self.gemm_mode = 1
         return
 
     def write_pooling_layer(self, layer_parameters, layer, params, layer_number, max_layers):

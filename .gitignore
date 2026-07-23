@@ -302,3 +302,7 @@ doc/demo_notebooks/mnist_pytorch_cocotb/*
 # other files
 paper/*
 literature/*
+
+# coding assistance
+*.vscode
+CLAUDE.md

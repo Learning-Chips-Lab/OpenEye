@@ -214,7 +214,14 @@ module data_pipeline_wght #(
 
     output reg [ SECOND_SPAD_ADDR_BITWIDTH-1 : 0] second_spad_addr_o,
     output reg [          SECOND_SPAD_DATA-1 : 0] second_spad_data_o,
-    output reg                                    second_spad_en_o
+    output reg                                    second_spad_en_o,
+
+    // raw_mode_i: 1 = the incoming stream carries raw (uncompressed) weight
+    // words, e.g. dense/GEMM layers. All-zero words are then legitimate data
+    // and must be stored like any other word. 0 = compressed sparse format
+    // (default): all-zero words are per-PE stream-length padding emitted by
+    // the serializer and are skipped (historic behaviour).
+    input                                         raw_mode_i
 );
 
   // ---------------------------------------------------------------------------
@@ -492,7 +499,7 @@ module data_pipeline_wght #(
       //     includes the word being written now).
       //   - When enable_delay is low: reset second_spad_addr_o to 0.
       // -----------------------------------------------------------------------
-      if (enable_delay & (data_storage_2 != 0)) begin
+      if (enable_delay & ((data_storage_2 != 0) | raw_mode_i)) begin
         first_spad_en_o       <= 1;
         second_spad_en_o      <= 1;
         second_spad_data_o    <= premade_spad_2_output;
@@ -501,8 +508,11 @@ module data_pipeline_wght #(
           first_spad_addr_o  <= first_spad_addr_o + 1;
           first_spad_words_o <= first_spad_addr_o + 2;
         end
-        if (second_spad_data_o != 0) begin
-          // Non-zero second SPAD word: advance address (sparse: skip zeros).
+        if ((second_spad_data_o != 0) | (raw_mode_i & second_spad_en_o)) begin
+          // Advance write address when the previous cycle stored a word.
+          // Sparse: non-zero output is the previous-write indicator (zero
+          // words are never stored). Raw: zero words are stored too, so the
+          // registered write enable indicates the previous write instead.
           second_spad_addr_o    <= second_spad_addr_o + 1;
         end
         first_spad_data_o     <= first_spad_data_delay;
@@ -552,7 +562,7 @@ module data_pipeline_wght #(
       //   Reset data_storage_1 to -filters_w (sentinel so next burst starts
       //   at the right offset) and overhead_pos to filters_w.
       // -----------------------------------------------------------------------
-      if (enable_i == 1 & (data_i != 0)) begin
+      if (enable_i == 1 & ((data_i != 0) | raw_mode_i)) begin
         compute_sent       <= 0;
         overhead_delay_reg <= overhead_reg;  // snapshot before this cycle's update
         if (compute_sent) begin

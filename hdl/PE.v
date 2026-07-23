@@ -368,6 +368,20 @@
 ///                              [3:0]=channel count/iact_addr_max
 ///                              Format varies by config FSM state (see configuration phase above)
 ///
+/// FSM State Transitions and Descriptions:
+///
+/// Configuration Streaming FSM (current_state_stream):
+///    State 0: FIRST_PARAMS  - Receives stride[3:1], wght_addr_max[7:4]
+///                             Waits for enable_stream_i pulse
+///                             Next: SECOND_PARAMS
+///    State 1: SECOND_PARAMS - Receives filters[8:4], channels[3:0]
+///                             Next: THIRD_PARAMS (if enable_stream_i)
+///                             Timeout: FIRST_PARAMS (if not enabled within window)
+///    State 2: THIRD_PARAMS  - Receives iact_addr_max configuration
+///                             Next: FOURTH_PARAMS
+///    State 3: FOURTH_PARAMS - Final configuration state (reserved for future expansion)
+///                             Next: Returns to FIRST_PARAMS for reconfiguration
+///
 /// Main Computation FSM (current_state_computing):
 ///    State 0: IDLE          - Initial state after reset or completion
 ///                             Waiting for data loading to complete (iact_set && wght_set)
@@ -458,18 +472,15 @@
 
 module PE #(
 
-  `ifdef USE_INTERNAL_PARAMS_PE
-    parameter integer PARALLEL_MACS = 2,
-  `else
-    `include "parameters.vh"
-      // Defaultvalues
-  `endif
     parameter IS_TOPLEVEL = 1,
     parameter SERIAL      = 1,
 
+    parameter integer PARALLEL_MACS = 2,
 
-    parameter integer SPARSITY_EN = 0,  // 1=sparse mode (default), 0=dense mode
-    parameter integer USE_DSP     = 0,  // 0=standard multiplier+adder (default), 1=DSP48 slice optimization
+    parameter integer SPARSITY_EN      = 1,  // 1=sparse mode (default), 0=dense mode
+    parameter integer USE_DSP          = 0,  // 0=standard multiplier+adder (default), 1=DSP48 slice optimization
+    // Approach 3: when 1, expose horizontal iact pass-through ports for systolic GEMM dataflow
+    parameter integer SYSTOLIC_GEMM_EN = 0,
 
     parameter integer DATA_IACT_BITWIDTH     = 8,
     parameter integer DATA_WGHT_BITWIDTH     = 8,
@@ -527,7 +538,15 @@ module PE #(
     input                                             psum_ready_i,
     input                                             compute_i,
     input                                             enable_stream_i,
-    input      [                                 8:0] data_stream_i
+    input      [                                11:0] data_stream_i,
+    // Approach 3: horizontal iact pass-through for systolic GEMM
+    // Active only when SYSTOLIC_GEMM_EN=1; otherwise tied to 0 / ignored
+    input      [         DATA_IACT_BITWIDTH-1:0]      iact_pass_data_i,
+    input                                             iact_pass_enable_i,
+    output                                            iact_pass_ready_o,
+    output     [         DATA_IACT_BITWIDTH-1:0]      iact_pass_data_o,
+    output                                            iact_pass_enable_o,
+    input                                             iact_pass_ready_i
 );
 
   // ============================================================================
@@ -571,6 +590,7 @@ module PE #(
   reg                                   psum_enable_2;          // Second delay stage for serial mode
   reg  [     TRANS_BITWIDTH_PSUM-1 : 0] psum_data_1_delay;     // Delayed psum input data 1
   reg  [     TRANS_BITWIDTH_PSUM-1 : 0] psum_data_2_delay;     // Delayed psum input data 2
+  wire [   2*TRANS_BITWIDTH_PSUM-1 : 0] psum_data_combined_w;  // Combined psum for parallel mode
 
   // Control and handshaking signals
   reg                                   mux_iact_ready;         // Ready signal for iact multiplexer
@@ -586,12 +606,12 @@ module PE #(
   wire                                  data_set;               // Both iact and wght data ready
 
   // Input activation multiplexer signals
-  wire  [       TRANS_BITWIDTH_IACT-1:0] mux_iact_a_o_w;        // Mux data output (selected iact data)
+  wire  [       TRANS_BITWIDTH_IACT-1:0] mux_iact_a_o_w;       // Mux data output (selected iact data)
   wire                                   mux_iact_b_o_w;        // Mux enable output (selected enable)
   wire                                   mux_iact_c_i_w;        // Mux ready input
 
   // Configuration and addressing registers
-  wire [          IACT_ADDR_DATA-1 : 0] iact_addr_max_reg;     // Max number of iact addresses
+  reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_max_reg;     // Max number of iact addresses
 
   // Pipeline registers for input activation data (3-stage delay line)
   reg  [      DATA_IACT_BITWIDTH-1 : 0] iact_data_current_3;   // Pipeline stage 3 (feeds multipliers)
@@ -685,12 +705,18 @@ module PE #(
   // Computation control and configuration registers
   // [SPARSITY_EN=1 only] Weight data validity flag (always true in dense mode)
   reg                                   values_valid;           // Flag: current values are valid (not zero)
-  wire [                         4 : 0] filters_reg_M0;            // Number of filters configured, in Eyeriss-Paper referenced as M0
-  wire [                         3 : 0] channel_reg_C0;            // Number of channels configured, in Eyeriss-Paper referenced as C0
+  reg  [                         4 : 0] filters_reg_M0;            // Number of filters configured, in Eyeriss-Paper referenced as M0
+  reg  [                         3 : 0] channel_reg_C0;            // Number of channels configured, in Eyeriss-Paper referenced as C0
   wire                                  psum_data_SPad_en_a_w_i;// Internal write enable port A
   wire                                  psum_data_SPad_en_b_w_i;// Internal write enable port B
-  wire [                           3:0] iact_x_line_repetitions;
+  reg                                   raw_wght_reg;           // 1 = raw (uncompressed) weight stream: keep all-zero weight words
+  reg  [                           3:0] iact_x_line_repetitions;
 
+  // Configuration streaming FSM
+  reg  [                           1:0] current_state_stream;   // Config stream state
+  // Approach 3: systolic pass-through (reg when SYSTOLIC_GEMM_EN=1, wire otherwise)
+  reg  [         DATA_IACT_BITWIDTH-1:0] iact_pass_data_reg;    // Registered iact value to forward
+  reg                                    iact_pass_enable_reg;   // Registered enable to forward
 
   // Output formatting
   wire [        DATA_PSUM_BITWIDTH-1:0] output_adder;          // Combined output from both adders
@@ -714,6 +740,42 @@ module PE #(
     end
   end
 `endif
+
+  // ============================================================================
+  // Approach 3: Systolic iact pass-through logic
+  // ============================================================================
+  // When SYSTOLIC_GEMM_EN=1, each PE registers the incoming iact value and
+  // forwards it one cycle later to the next PE in the same row.  The PE also
+  // captures iact_pass_data_i into iact_data_current_3 so the standard MAC
+  // pipeline uses the streamed value rather than the local SPad.
+  generate
+    if (SYSTOLIC_GEMM_EN) begin : gen_systolic_pass
+      // One pipeline register: accept → hold for one cycle → forward
+      always @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+          iact_pass_data_reg   <= {DATA_IACT_BITWIDTH{1'b0}};
+          iact_pass_enable_reg <= 1'b0;
+        end else begin
+          iact_pass_data_reg   <= iact_pass_data_i;
+          iact_pass_enable_reg <= iact_pass_enable_i;
+        end
+      end
+      // Outputs: forward delayed value downstream
+      assign iact_pass_data_o   = iact_pass_data_reg;
+      assign iact_pass_enable_o = iact_pass_enable_reg;
+      // Always ready to accept (single-register, no backpressure in this dataflow)
+      assign iact_pass_ready_o  = 1'b1;
+    end else begin : gen_no_systolic_pass
+      // Tie off all outputs when feature is disabled; drive regs to avoid X
+      initial begin
+        iact_pass_data_reg   = {DATA_IACT_BITWIDTH{1'b0}};
+        iact_pass_enable_reg = 1'b0;
+      end
+      assign iact_pass_data_o   = {DATA_IACT_BITWIDTH{1'b0}};
+      assign iact_pass_enable_o = 1'b0;
+      assign iact_pass_ready_o  = 1'b0;
+    end
+  endgenerate
 
   // ============================================================================
   // FSM State Definitions
@@ -797,10 +859,12 @@ module PE #(
   endgenerate
 
   // Multiplier inputs: weights go to factor 1, iact goes to factor 2
+  // Approach 3: in systolic mode use the pass-through value instead of the SPad pipeline
   assign mult_1_fac_1 = wght_data_spad_pay_1;
   assign mult_2_fac_1 = wght_data_spad_pay_2;
-  assign mult_1_fac_2 = iact_data_current_3;  // Both multipliers use same iact value
-  assign mult_2_fac_2 = iact_data_current_3;
+  // Approach 3: in systolic mode use the pass-through value instead of the SPad pipeline
+  assign mult_1_fac_2 = (SYSTOLIC_GEMM_EN && iact_pass_enable_i) ? iact_pass_data_i : iact_data_current_3;
+  assign mult_2_fac_2 = (SYSTOLIC_GEMM_EN && iact_pass_enable_i) ? iact_pass_data_i : iact_data_current_3;
 
   // Data forwarding/bypass detection logic (detects read-after-write hazards)
   // These signals indicate when the data being read is the same location just written
@@ -831,6 +895,7 @@ module PE #(
   assign psum_spad_data_b_i = adder_2_o_w;
 
   // Combine delayed psum inputs for parallel mode
+  assign psum_data_combined_w = {psum_data_2_delay, psum_data_1_delay};
 
   // Psum SPad read address calculation
   // During output: use base address directly
@@ -864,25 +929,60 @@ module PE #(
   assign psum_ready_o = psum_ready_i & psum_select;
 
   // Calculated ceiled filters from filters depending on PARALLEL_MACS
-  reg [(3*9)-1:0] stream_data;
-  assign channel_reg_C0 = stream_data[12:9];
-  assign filters_reg_M0 = stream_data[17:13];
-  assign iact_addr_max_reg = stream_data[21:18];
-  assign iact_x_line_repetitions = stream_data[25:22];
+
   // ============================================================================
-  // Configuration Parameter Streaming
+  // Configuration Parameter Streaming FSM
   // ============================================================================
-  // This process receives configuration parameters via the data_stream_i interface
-  // Parameters are received in sequential and stored in stream_data
+  // This FSM receives configuration parameters via the data_stream_i interface
+  // Parameters are received in four sequential states and stored in registers
   always @(posedge clk_i, negedge rst_ni) begin
     if (!rst_ni) begin
-      stream_data <= 0;
+      raw_wght_reg            <= 0;
+      current_state_stream    <= 0;
+      iact_addr_max_reg       <= 0;
+      iact_x_line_repetitions <= 0;
+      filters_reg_M0          <= 0;
+      channel_reg_C0          <= 0;
     end else begin
-      if (enable_stream_i) begin
-        stream_data[8:0]   <= data_stream_i;
-        stream_data[17:9]  <= stream_data[8:0];
-        stream_data[26:18] <= stream_data[17:9];
-      end
+      case (current_state_stream)
+        FIRST_PARAMS: begin
+          // Receive first set of parameters: stride, weight address max
+          if (enable_stream_i) begin
+            current_state_stream  <= SECOND_PARAMS;
+            raw_wght_reg            <= data_stream_i[9];      // Raw (uncompressed) weight stream flag
+          end
+        end
+        SECOND_PARAMS: begin
+          // Receive second set: filter count, channel count
+          if (enable_stream_i) begin
+            current_state_stream <= THIRD_PARAMS;
+            filters_reg_M0          <= data_stream_i[8:4];     // Number of filters
+            channel_reg_C0          <= data_stream_i[3:0];     // Number of channels
+          end else begin
+            current_state_stream <= FIRST_PARAMS;           // Timeout: restart
+          end
+        end
+        THIRD_PARAMS: begin
+          // Receive third set: input activation address max
+          if (enable_stream_i) begin
+            iact_addr_max_reg       <= data_stream_i[3:0];     // Max iact addresses
+            iact_x_line_repetitions <= data_stream_i[7:4];
+            current_state_stream    <= FOURTH_PARAMS;
+          end else begin
+            current_state_stream <= FIRST_PARAMS;           // Timeout: restart
+          end
+        end
+        FOURTH_PARAMS: begin
+          // Fourth parameter state (currently unused, returns to FIRST)
+          if (enable_stream_i) begin
+            current_state_stream <= FIRST_PARAMS;
+          end else begin
+            current_state_stream <= FIRST_PARAMS;
+          end
+        end
+        default: begin
+        end
+      endcase
     end
   end
 
@@ -1431,7 +1531,7 @@ module PE #(
               // Rationale: When iact_addr_SPad_data_r == current+1, we've reached
               // the end of the activation sequence. Transition to output state.
               // Reuse Values of PSUM SPad
-              if (((iact_addr_SPad_data_r == iact_addr_current+1) | (iact_addr_count == 0)) & (wght_data_vec >= wght_data_end) | (iact_addr_count > iact_addr_SPad_data_r)) begin
+              if ((((iact_addr_SPad_data_r == iact_addr_current+1) | (iact_addr_count == 0)) & (wght_data_vec >= wght_data_end) | (iact_addr_count > iact_addr_SPad_data_r))) begin
                 // All activations processed, prepare for psum output
                 current_state_computing <= WAIT_TO_SEND_PSUM; // Transition state
                 wght_addr_vec           <= 0;                  // Clear weight pointer
@@ -1903,13 +2003,11 @@ module PE #(
           LOADING_1: begin
             current_state_computing <= CALCULATING;
             iact_data_current_3     <= iact_data_spad_pay;
-            if (PARALLEL_MACS >= filters_reg_M0 ) begin
+            if (0 >=  filters_reg_M0 - PARALLEL_MACS) begin
               iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
             end else begin
               wght_filter <= wght_filter + PARALLEL_MACS;
             end
-            psum_spad_addr_a_mem <= 0;
-            psum_spad_addr_b_mem <= 1;
           end
 
           // ==================================================================
@@ -1924,14 +2022,14 @@ module PE #(
             // Default signal setup
             // ---------------------------------------------------------------
             computing             <= 1;
-            computing_1           <= computing;
-            computing_2           <= computing_1;
+            computing_1           <= 1;
+            computing_2           <= 1;
             iact_data_current_3   <= iact_data_spad_pay;
             iact_addr_SPad_en_r   <= 0;
             iact_data_SPad_en_r   <= !mux_iact_ready;
             wght_addr_SPad_en_r   <= 0;           // No weight addr SPad in dense mode
-            psum_data_SPad_en_a_r <= 1;
-            psum_data_SPad_en_b_r <= 1;
+            psum_data_SPad_en_a_r <= computing;
+            psum_data_SPad_en_b_r <= computing;
             psum_data_SPad_en_a_w <= psum_data_SPad_en_a_r;
             psum_data_SPad_en_b_w <= psum_data_SPad_en_b_r;
             reuse_psum_spad_a     <= 0;
@@ -1975,7 +2073,7 @@ module PE #(
               wght_filter          <= 0;
               iact_channel         <= iact_channel + 1;
               iact_data_SPad_addr  <= iact_data_SPad_addr + 1;
-              if (((channel_reg_C0 * iact_addr_max_reg) - 1 == iact_channel)) begin
+              if (((channel_reg_C0 * first_spad_words_iact_S) - 1 == iact_channel )) begin
                 iact_channel            <= 0;
                 current_state_computing <= WAIT_TO_SEND_PSUM;
                 wght_ready_o            <= 1;
@@ -1987,14 +2085,9 @@ module PE #(
                 psum_data_SPad_en_b_w <= 1;
               end
             end
-            if (computing) begin
-              psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1;
-              psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
-              if (PARALLEL_MACS == 1) begin
-                psum_spad_addr_a_mem  <= psum_spad_addr_a_mem + 1;
-              end
-            end
-            if (wght_filter == PARALLEL_MACS) begin
+            psum_spad_addr_a_mem  <= psum_spad_addr_b_r + 1;
+            psum_spad_addr_b_mem  <= psum_spad_addr_b_r + 2;
+            if (wght_filter == 2) begin
               psum_spad_addr_a_mem <= 0;
               psum_spad_addr_b_mem <= 1;
             end
@@ -2058,8 +2151,8 @@ module PE #(
             psum_data_SPad_en_b_r <= computing;
             psum_data_SPad_en_a_w <= 1;
             if (computing) begin
-              psum_spad_addr_a_mem <= psum_spad_addr_a_mem + PARALLEL_MACS;
-              psum_spad_addr_b_mem <= psum_spad_addr_b_mem + PARALLEL_MACS;
+              psum_spad_addr_a_mem <= psum_spad_addr_a_mem + 2;
+              psum_spad_addr_b_mem <= psum_spad_addr_b_mem + 2;
             end else begin
               psum_spad_addr_a_mem <= 0;
               if (SERIAL == 1) begin
@@ -2134,8 +2227,8 @@ module PE #(
                   use_psum_2 <= 0;
                 end
               end else begin
-                psum_spad_addr_a_mem <= psum_spad_addr_a_r + PARALLEL_MACS;
-                psum_spad_addr_b_mem <= psum_spad_addr_b_r + PARALLEL_MACS;
+                psum_spad_addr_a_mem <= psum_spad_addr_a_r + 2;
+                psum_spad_addr_b_mem <= psum_spad_addr_b_r + 2;
                 if (used_psum_memory[(psum_spad_addr_a_r)] == 1) begin
                   use_psum_1                             <= 1;
                   used_psum_memory[(psum_spad_addr_a_r)] <= 0;
@@ -2405,7 +2498,10 @@ module PE #(
 
       .second_spad_addr_o(second_spad_wght_addr_w),
       .second_spad_data_o(second_spad_wght_data_w),
-      .second_spad_en_o  (second_spad_wght_en_w)
+      .second_spad_en_o  (second_spad_wght_en_w),
+
+      // Raw (dense/GEMM) weight streams carry legitimate all-zero words
+      .raw_mode_i(raw_wght_reg)
   );
 
   // Input Activation Data Pipeline
@@ -2413,7 +2509,7 @@ module PE #(
   // two-level SPad structure (address SPad + data SPad) for sparse storage
   data_pipeline_iact #(
       .DATA_WIDTH      (TRANS_BITWIDTH_IACT),
-      .SPARSITY_EN     (SPARSITY_EN),
+      //.SPARSITY_EN     (SPARSITY_EN),
       .FIRST_SPAD_ADDR (IACT_ADDR_ADDR),
       .FIRST_SPAD_DATA (IACT_ADDR_DATA),
       .SECOND_SPAD_ADDR(IACT_DATA_ADDR),
@@ -2582,21 +2678,13 @@ module PE #(
   // ============================================================================
   // Selects between psum from SPad (for accumulation) or external psum (from router/other PE)
   if (SERIAL) begin : gen_serial_psum_multiplexer
-    wire [PARALLEL_MACS*TRANS_BITWIDTH_PSUM-1 : 0] psum_data_combined_w;
-    assign psum_data_combined_w = PARALLEL_MACS == 1 ? psum_data_1_delay : {psum_data_2_delay, psum_data_1_delay};
-    wire [PARALLEL_MACS*TRANS_BITWIDTH_PSUM-1 : 0] psum_mult_combined_w;
-    assign psum_mult_combined_w = PARALLEL_MACS == 1 ? mult_1_o_w : {mult_2_o_w, mult_1_o_w};
-    wire [PARALLEL_MACS*TRANS_BITWIDTH_PSUM-1 : 0] psum_addr_combined_w;
-    assign adder_1_summand_2 = psum_addr_combined_w[$bits(adder_1_summand_2)-1 : 0];
-
-    assign adder_2_summand_2 = (PARALLEL_MACS > 1) ? psum_addr_combined_w[2*$bits(adder_1_summand_2)-1 : $bits(adder_1_summand_2)] : 0;
     mux2 #(
         .DATA_WIDTH(TRANS_BITWIDTH_PSUM * PARALLEL_MACS)
     ) mux_psum (
         .a_in (psum_data_combined_w),
-        .b_in (psum_mult_combined_w),
+        .b_in ({mult_2_o_w, mult_1_o_w}),
         .sel_i(psum_select),
-        .y_o  (psum_addr_combined_w)
+        .y_o  ({adder_2_summand_2, adder_1_summand_2})
     );
   end else begin : gen_parallel_psum_multiplexer
     mux2 #(

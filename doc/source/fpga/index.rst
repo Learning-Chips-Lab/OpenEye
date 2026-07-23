@@ -21,3 +21,4 @@ FPGA platform with DMA burst interfaces and block-RAM buffers.
    generate_blocks
    data_paths
    simulation
+   deployment

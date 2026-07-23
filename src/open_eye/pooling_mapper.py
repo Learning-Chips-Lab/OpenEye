@@ -173,6 +173,7 @@ class PoolingMapper(LayerMapper):
         "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
         "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
         "pooling_mode": layer_params.pooling_mode,
+        "gemm_mode": 0,
         "test_reg": 0
         })
 

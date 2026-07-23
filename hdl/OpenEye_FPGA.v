@@ -133,10 +133,23 @@ module OpenEye_FPGA #(
     parameter DATA_IACT_BITWIDTH = 8,
     parameter DATA_WGHT_BITWIDTH = 8,
 
-    parameter TRANSMISSIONS       = 6,
+    // Number of 64-bit DMA words gating GET_PARAMETERS's write-cycle loop
+    // into dma_storage's status-word shift register (see dma_storage.v's
+    // "Pipelined Shift Register Architecture": every transmission must be
+    // written or the whole chain misaligns by one word, corrupting every
+    // field). Must equal the generated regmap_params.vh's own TRANSMISSIONS
+    // constant (currently 8, from test/cocotb_fpga/regmap.yaml's field
+    // list) - OpenEye_FPGA.v does not `include regmap_params.vh (it only
+    // consumes dma_storage's decoded output wires), so this count has to be
+    // kept in sync by hand whenever fields are added to regmap.yaml.
+    parameter TRANSMISSIONS       = 8,
     parameter TRANS_BITWIDTH_IACT = 24,
     parameter TRANS_BITWIDTH_WGHT = 24,
-    parameter TRANS_BITWIDTH_PSUM = 32,
+    // Per-PE psum transfer width. Must match PE.v's internal
+    // TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * (SERIAL ? 1 : PARALLEL_MACS);
+    // a fixed value (was 32) mismatches the generated DATA_PSUM_BITWIDTH (e.g.
+    // 20) and prunes the psum bus feeding each PE, corrupting results.
+    parameter TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * (SERIAL == 1 ? 1 : PARALLEL_MACS),
     parameter DATA_IACT_OVERHEAD  = 4,
 
     parameter PES = NUM_GLB_PSUM * NUM_GLB_WGHT,
@@ -215,13 +228,7 @@ module OpenEye_FPGA #(
     localparam WGHT_RAM_CELLS = CLUSTERS * NUM_GLB_WGHT,
     localparam integer WGHT_CYCLES_ONE_WORD_ALL_CELLS = ((WGHT_RAM_CELLS * WGHT_RAM_CELLS_WORD_BITWIDTH) + DMA_BITWIDTH - 1) / DMA_BITWIDTH,
     localparam WGHT_CELL_INPUT_WIDTH = WGHT_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
-    localparam integer WGHT_ONE_WORD_ALL_RAM = ((CLUSTERS*WGHT_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH,
-
-    localparam integer PSUM_RAM_CELLS = CLUSTERS * NUM_GLB_PSUM/2,
-    localparam integer PSUM_CYCLES_ONE_WORD_ALL_CELLS = ((PSUM_RAM_CELLS * PSUM_RAM_CELLS_WORD_BITWIDTH) + DMA_BITWIDTH - 1) / DMA_BITWIDTH,
-    localparam         PSUM_CELL_INPUT_WIDTH = PSUM_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
-    localparam integer PSUM_ONE_WORD_ALL_RAM = ((CLUSTERS*PSUM_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH
-
+    localparam integer WGHT_ONE_WORD_ALL_RAM = ((CLUSTERS*WGHT_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH
 
 ) (
     //Clock and Reset
@@ -337,6 +344,7 @@ reg [1023:0] fst_path;
                                                  // Formula: (1 << N) - 1 where N = ceil((kernels * y_lines * ceil(iact_size_x/NUM_GLB_PSUM)) / 1)
   wire [7:0]needed_psum_storage_cycles_reg;      // How many PSUM accumulation passes are required before the final result is complete (from dma_storage).
   wire      pooling_mode;
+  wire      gemm_mode;                    // Dataflow select from dma_storage: 0 = row-stationary conv, 1 = output-stationary GEMM.
   reg [7:0] debug_reg;                           // Scratch debug register; written with small integer literals inside RECEIVE_PSUMS_TO_IACT to mark which packing branch was taken.
 
   // -----------------------------------------------------------------------
@@ -423,7 +431,7 @@ reg [1023:0] fst_path;
   // Used during GET_IACT to distribute incoming DMA words across the 32
   // double-buffer cells in a round-robin fashion.
   // -----------------------------------------------------------------------
-  reg  [ 3:0] current_buffer;   // Index of the cell currently being written (0–31); increments each DMA word.
+  reg [$clog2(IACT_RAM_CELLS)-1:0] current_buffer;   // Index of the cell currently being written (0–31); increments each DMA word, wraps at IACT_RAM_CELLS.
   wire [11:0] iact_size_x;       // Feature map width in pixels (from dma_storage).
   wire [ 7:0] iact_size_y;       // Feature map height in pixels (from dma_storage).
   wire [11:0] iact_size_c;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
@@ -435,7 +443,7 @@ reg [1023:0] fst_path;
   wire [ 7:0] iact_channel_max_cycles;          // Total number of channel batches per layer pass (from dma_storage).
   wire [10:0] iact_needed_cycles;               // Number of iact streaming cycles for one spatial position (from dma_storage).
 
-  reg [$clog2(CLUSTER_ROWS+1)-1:0] iact_router_counter; // Counts how many cluster-row sweeps have been performed within the current iact delivery; wraps at needed_y_cls_reg.
+  reg [$clog2(CLUSTER_ROWS+1):0] iact_router_counter; // Counts how many cluster-row sweeps have been performed within the current iact delivery; wraps at needed_y_cls_reg.
 
   // -----------------------------------------------------------------------
   // Iact Double-Buffer Cell Arrays
@@ -1632,34 +1640,68 @@ reg [1023:0] fst_path;
                 fsm_cycle   <= fsm_cycle + 1;
                 reset_cycle <= 0;
                 dma_data_i  <= data_dma_i_reg;
-                if (fsm_cycle < (TRANSMISSIONS+1)) begin
+                // write_dma_en is itself a registered (nonblocking) signal,
+                // so it takes effect one cycle after this condition is
+                // checked - by the time it deasserts, dma_storage's shift
+                // register has already received exactly TRANSMISSIONS
+                // pushes (fsm_cycle 0..TRANSMISSIONS-1). Using
+                // TRANSMISSIONS+1 here (as the other TRANSMISSIONS+1 uses
+                // below do, for the separate compute_mask_reg/PE-bitmap
+                // phase boundary) pushes one extra, stale word into the
+                // shift chain, permanently misaligning every decoded field
+                // by one transmission slot - harmless on the old
+                // non-shifting dma_storage architecture (an extra write to
+                // an already-terminal per-field register is a no-op), but
+                // corrupting on the new pipelined shift-register one.
+                if (fsm_cycle < TRANSMISSIONS) begin
                     write_dma_en   <= 1;
                 end
+                // Shifted from TRANSMISSIONS+1 to TRANSMISSIONS to match the
+                // write_dma_en fix above: dma_storage now correctly
+                // receives exactly TRANSMISSIONS words (fsm_cycle
+                // 1..TRANSMISSIONS), so the PE-bitmap phase starts one
+                // cycle earlier than before. Leaving this at TRANSMISSIONS+1
+                // read the bitmap from the wrong word and delayed the
+                // GET_PARAMETERS->GET_ROUTER_CONFIG transition by one DMA
+                // word, which then made GET_ROUTER_CONFIG (which reads
+                // data_dma_i_reg directly, not through dma_storage's shift
+                // chain) skip the first router_mode_iact word entirely.
                 for (a = 0; a < PES * CLUSTERS; a = a + 1) begin
-                  if (fsm_cycle >= (TRANSMISSIONS+1) & (((fsm_cycle - (TRANSMISSIONS+1)) * DMA_BITWIDTH <= a) & ((fsm_cycle - 4) * DMA_BITWIDTH > a))) begin
+                  if (fsm_cycle >= TRANSMISSIONS & (((fsm_cycle - TRANSMISSIONS) * DMA_BITWIDTH <= a) & ((fsm_cycle - 4) * DMA_BITWIDTH > a))) begin
                     compute_mask_reg[a] <= data_dma_i_reg[a%DMA_BITWIDTH];
                   end
                 end
-                if (fsm_cycle == ((TRANSMISSIONS+1) + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
+                if (fsm_cycle == (TRANSMISSIONS + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
                   fsm_last_state     <= GET_PARAMETERS;
-                  if (!skipIact_reg) begin
-                    fsm_current_state <= GET_IACT;
-                    for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                      iact_buffer_addr_reg[a] <= ~0;
-                    end
-                  wght_buffer_wr_addr <= ~0;
+                  // CLUSTERS != 1 must route through GET_ROUTER_CONFIG first
+                  // (it loads router_mode_iact/wght/psum, then itself
+                  // transitions to GET_IACT/GET_WGHT/GET_OFFSET using this
+                  // same skipIact_reg/max_pooling logic - see the
+                  // GET_ROUTER_CONFIG exit below). Previously the skipIact_reg
+                  // and max_pooling branches below were unconditional and,
+                  // being nonblocking assignments to the same state register,
+                  // always overwrote the GET_ROUTER_CONFIG target - so
+                  // router_mode_psum (and _iact/_wght) never got loaded for
+                  // any multi-cluster configuration.
+                  if (CLUSTERS != 1) begin
+                    fsm_current_state  <= GET_ROUTER_CONFIG;
                   end else begin
-                    fsm_current_state <= GET_WGHT;
-                  end
-                  if (max_pooling) begin
-                    ready_dma_o       <= 0;
-                    fsm_current_state <= GET_OFFSET;
+                    if (!skipIact_reg) begin
+                      fsm_current_state <= GET_IACT;
+                      for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+                        iact_buffer_addr_reg[a] <= ~0;
+                      end
+                      wght_buffer_wr_addr <= ~0;
+                    end else begin
+                      fsm_current_state <= GET_WGHT;
+                    end
+                    if (max_pooling) begin
+                      ready_dma_o       <= 0;
+                      fsm_current_state <= GET_OFFSET;
+                    end
                   end
                   fsm_cycle          <= 0;
                   psum_x_with_add_up <= psum_size_x + add_up;
-                  if (CLUSTERS != 1) begin
-                    fsm_current_state  <= GET_ROUTER_CONFIG;
-                  end
                   if (max_pooling) begin
                     for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
                       iact_buffer_en_r[a] <= 1;
@@ -1701,6 +1743,10 @@ reg [1023:0] fst_path;
               fsm_last_state        <= GET_ROUTER_CONFIG;
               if (!skipIact_reg) begin
                 fsm_current_state <= GET_IACT;
+                for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+                  iact_buffer_addr_reg[a] <= ~0;
+                end
+                wght_buffer_wr_addr <= ~0;
               end else begin
                 fsm_current_state <= GET_WGHT;
               end
@@ -2589,7 +2635,7 @@ reg [1023:0] fst_path;
             end
             for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
               if (a == buffer_addr_upper_limit) begin
-                iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
+                iact_buffer_addr_reg[a]      <= iact_buffer_addr_reg[a] + 1;
                 buffer_addr_temp_reg[a] <= buffer_addr_temp_reg[a] + 1;
               end
             end
@@ -2704,8 +2750,7 @@ reg [1023:0] fst_path;
       .ROUTER_MODES_PSUM(ROUTER_MODES_PSUM),
       .QUANT_AMOUNT(QUANT_AMOUNT),
       .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
-      .PSUM_PER_PE(PSUM_PER_PE),
-      .PSUM_CYCLES_ONE_WORD_ALL_CELLS(PSUM_CYCLES_ONE_WORD_ALL_CELLS)
+      .PSUM_PER_PE(PSUM_PER_PE)
   ) psum_pipeline_inst (
       .clk_i(clk_i),
       .rst_n(rst_n),
@@ -3095,7 +3140,8 @@ reg [1023:0] fst_path;
         .cluster_per_conv_cycle(cluster_per_conv_cycle),
         .iact_converter_max_cycles(iact_converter_max_cycles),
         .iact_buffer_words_per_write(iact_buffer_words_per_write),
-        .pooling_mode(pooling_mode)
+        .pooling_mode(pooling_mode),
+        .gemm_mode(gemm_mode)
     );
 
 
@@ -3230,6 +3276,10 @@ reg [1023:0] fst_path;
         //Ports for Hyperparameters
         .status_reg_enable_i          (status_reg_enable_reg),
         .data_mode_i                  (data_mode_reg),
+        .gemm_mode_i                  (gemm_mode),
+        // Dense/FC and GEMM layers stream raw (uncompressed) weights;
+        // all-zero weight words must then be stored, not skipped.
+        .raw_wght_i                   (fully_connected_layer | gemm_mode),
         .fraction_bit_i               (fraction_bit_reg),
         .needed_cycles_i              (needed_cycles),
         .needed_x_cls_i               (needed_x_cls_reg),

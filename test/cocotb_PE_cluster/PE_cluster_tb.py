@@ -75,13 +75,17 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
     while int(dut.pe_router_psum_enable_o.value) != (2**int(dut.PE_COLUMNS.value))-1:
         await Timer(clk_cycle, unit=clk_cycle_unit)
     
-    # now we can read out the psums and compare them to the expected values
-    cocotb.start_soon(get_psum(ptp, dut, iacts_array, wghts_array, psum_array))
-    
+    # now we can read out the psums and compare them to the expected values.
+    # Await the thread so its internal PSUM-vs-reference assertion is enforced;
+    # an orphaned start_soon would let the test pass even on a mismatch.
+    get_psum_thread = cocotb.start_soon(get_psum(ptp, dut, iacts_array, wghts_array, psum_array))
+
     # check if all enable signals are 0
     while int(dut.pe_router_psum_enable_o.value) != 0:
         await Timer(clk_cycle, unit=clk_cycle_unit)
-    
+
+    await get_psum_thread
+
     # finally check if reset is still 1
     assert dut.rst_ni.value == 1, "rst_ni is not 1!"
 
@@ -217,75 +221,81 @@ async def get_psum(ptp, dut, iacts_array, wghts_array, psum_array):
                             + wght[pe_y][current_iact + iact_line][wght_x]
                             * iact[pe_x + pe_y][iact_y][iact_x]
                         )
-                        if (pe_x == 1) & (wght_x == 0):
-                            print(
-                                "Iact is ", iact[pe_x + pe_y][iact_y][iact_x]
-                            )
-                            print(
-                                "Wght is ",
-                                wght[pe_y][current_iact + iact_line][wght_x]
-
-                            )
-                            print(
-                                "Partial is ",
-                                wght[pe_y][current_iact + iact_line][wght_x]
-                                * iact[pe_x + pe_y][iact_y][iact_x],
-                            )
-                            print("Control is ", control[pe_x][wght_x])
                     current_iact = current_iact + 1
                 iact_line = current_iact + iact_line
                 current_iact = 0
             iact_line = 0
-    print(control)
-    thread = []
+
     global first_error_found
-    first_error_found = 0
-
-    for pe_x in range(int(dut.PE_COLUMNS.value)):
-        thread.append(cocotb.start_soon(check_psum(dut, pe_x, control[pe_x], ptp)))
-
-    for pe_x in range(int(dut.PE_COLUMNS.value)):
-        await thread[pe_x]
-    print("First error is: " + str(first_error_found))
+    first_error_found = check_psum(
+        await capture_psums(dut, ptp), control, int(dut.PE_COLUMNS.value))
     assert first_error_found == 0, "Outcoming Partial Sums are not equal to Calculated data!"
 
-async def check_psum(dut, pe_x, control, ptp):
-    current_control = 0
-    global first_error_found
-    while int(int(dut.pe_router_psum_enable_o.value)/(2**pe_x))%2 == 1:
-        # Make sure there are no X values for gate level simulation
+
+async def capture_psums(dut, ptp):
+    """
+    Sample every PE column's PSUM output lane on each clock, in lockstep,
+    for as long as that column's enable bit is asserted.
+
+    Returns a list (one entry per column) of signed 20-bit PSUM words in the
+    order the hardware emitted them.  Sampling all columns together is what
+    keeps the per-column streams time-aligned; reading them in independent
+    coroutines (as the previous implementation did) skewed the sampling and
+    only ever validated the last column.
+    """
+    pe_columns = int(dut.PE_COLUMNS.value)
+    psum_bits  = int(dut.TRANS_BITWIDTH_PSUM.value)
+    captured   = [[] for _ in range(pe_columns)]
+
+    while int(dut.pe_router_psum_enable_o.value) != 0:
+        # No X values allowed (matters for gate-level simulation).
         assert 'x' not in dut.pe_router_psum_data_o.value, "x values in PSUM"
-        
-        if ((int(int(dut.pe_router_psum_data_o.value)/(2**(20*pe_x)))%(2**20)) == control[current_control]):
-            print(
-            "PSUM("
-            + str(int(int(dut.pe_router_psum_data_o.value)/(2**(20*pe_x)))%(2**20))
-            + ") is equal to control("
-            + str(control[current_control])
-            + "), "
-            + str(current_control + 1)
-            + ". PSUM Value, "
-            + str(pe_x + 1)
-            + ". PE_X"
-            )
-        else:
-            print(
-            "PSUM("
-            + str(int(int(dut.pe_router_psum_data_o.value)/(2**(20*pe_x)))%(2**20))
-            + ") is not equal to control("
-            + str(control[current_control])
-            + "), "
-            + str(current_control + 1)
-            + ". PSUM Value, "
-            + str(pe_x + 1)
-            + ". PE_X"
-            )
-            first_error_found = 1
-        current_control = current_control + 1
+        enable = int(dut.pe_router_psum_enable_o.value)
+        data   = int(dut.pe_router_psum_data_o.value)
+        for pe_x in range(pe_columns):
+            if (enable >> pe_x) & 1:
+                raw = (data >> (psum_bits * pe_x)) % (2 ** psum_bits)
+                # interpret as signed two's complement
+                if raw >= 2 ** (psum_bits - 1):
+                    raw -= 2 ** psum_bits
+                captured[pe_x].append(raw)
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+
+    return captured
+
+
+def check_psum(captured, control, pe_columns):
+    """
+    Compare captured PSUM streams against the reference control values.
+    Returns 0 if every emitted word matches, 1 otherwise.
+    """
+    first_error_found = 0
+    for pe_x in range(pe_columns):
+        for idx, value in enumerate(captured[pe_x]):
+            expected = int(control[pe_x][idx])
+            status = "equal to" if value == expected else "not equal to"
+            print(
+                "PSUM(" + str(value) + ") is " + status + " control("
+                + str(expected) + "), " + str(idx + 1)
+                + ". PSUM Value, " + str(pe_x + 1) + ". PE_X"
+            )
+            if value != expected:
+                first_error_found = 1
+    print("First error is: " + str(first_error_found))
+    return first_error_found
 
 async def send_wght(ptp, dut, data_array):
     global signals_dict
+    # PE_simple.v reads weights densely: PARALLEL_MACS lanes packed at
+    # DATA_WGHT_BITWIDTH granularity, every weight present (no zero-skip and no
+    # sparse overhead bits). PE.v (sparse) packs at DATA_WGHT_BITWIDTH +
+    # DATA_WGHT_IGNORE_ZEROS and compresses zeros. Branch the packing to match.
+    if pctu.use_pe_simple():
+        wght_offset  = int(dut.DATA_WGHT_BITWIDTH.value)
+        ignore_zeros = False
+    else:
+        wght_offset  = int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value)
+        ignore_zeros = True
     spad_data = [0 for _ in range(int(dut.PE_ROWS.value))]
     for glb_cluster in range(int(dut.PE_ROWS.value)):
         spad_data[glb_cluster] = generate_spad(
@@ -294,8 +304,8 @@ async def send_wght(ptp, dut, data_array):
             int(dut.WGHT_DATA_WORDS.value),  # Convert LogicArray to int
             int(dut.DATA_WGHT_BITWIDTH.value),  # Convert LogicArray to int
             False,  # Packed mode (not SISD)
-            int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value),  # Convert to int
-            True  # Ignore zeros
+            wght_offset,
+            ignore_zeros
         )
     wght_transmission = []
     for glb_cluster in range(int(dut.PE_ROWS.value)):
