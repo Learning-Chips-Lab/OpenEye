@@ -161,6 +161,16 @@ class DenseMapper(LayerMapper):
             # packed just below - never packed by dense/gemm, which left
             # trans_cycles_iact defaulting to 0 and GET_IACT hanging forever.
             "trans_cycles_iact": math.ceil(1 * layer_params.iact_size_y * (layer_params.used_iact_per_PE * params.NUM_GLB_WGHT * layer_params.diff_iact_layer) / params.IACT_WORDS_IN_RAM),
+            # Process 5's weight-send phase (hdl/OpenEye_FPGA.v) uses this as
+            # the upper bound of its wght_buffer_rd_addr sweep and the
+            # window width of the wght_enable_i broadcast pulse to every PE
+            # (fsm_sending_cycle in (1, wghts_per_pe+2]). dense/gemm never
+            # packed it (only conv_mapper.py did, from the same commit that
+            # added the register), leaving it 0 and collapsing that window
+            # to a single cycle - only the first weight word ever reached
+            # each PE's weight-address SPad, leaving every other address
+            # read back X and stalling PE.v's CALCULATING state forever.
+            "used_wght_per_PE": layer_params.used_wght_per_PE,
             "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
             "iact_channels_per_pe": layer_params.used_iact_per_PE,
             "fc_size_reg": layer_params.iact_size_x,
