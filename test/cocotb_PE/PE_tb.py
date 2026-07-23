@@ -484,7 +484,7 @@ async def send_wght(ptp, dut, data_array):
         spad_data,
         dut.wght_data_i,
         int(dut.WGHT_DATA_ADDR.value),  # Convert LogicArray to int
-        int(dut.TRANS_BITWIDTH_WGHT.value),  # Convert LogicArray to int
+        int(dut.WGHT_DATA_DATA.value),  # Convert LogicArray to int
         int(dut.WGHT_DATA_DATA.value),  # Convert LogicArray to int
         False,  # Sequential mode
     )
