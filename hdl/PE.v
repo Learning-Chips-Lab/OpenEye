@@ -458,13 +458,10 @@
 
 module PE #(
 
-  `ifdef USE_INTERNAL_PARAMS_PE
-    parameter integer PARALLEL_MACS = 2,
-    parameter integer SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
-  `else
-    `include "parameters.vh"
-      // Defaultvalues
-  `endif
+    parameter integer PARALLEL_MACS      = 2,
+    parameter integer SPARSITY_EN        = 1,  // 1=sparse mode (default), 0=dense mode
+    parameter integer NUM_GLB_IACT       = 3,
+    parameter integer DATA_PSUM_BITWIDTH = 20,
     parameter IS_TOPLEVEL = 1,
     parameter SERIAL      = 1,
 
@@ -475,7 +472,6 @@ module PE #(
 
     parameter integer DATA_IACT_BITWIDTH     = 8,
     parameter integer DATA_WGHT_BITWIDTH     = 8,
-    parameter integer DATA_PSUM_BITWIDTH     = 20,
     parameter integer DATA_IACT_OVERHEAD     = 4,
     parameter integer DATA_WGHT_IGNORE_ZEROS = 4,
 
@@ -489,8 +485,6 @@ module PE #(
 
     parameter integer TRANS_BITWIDTH_IACT     = 24, // 3 * 8 bit data OR 2 * 12 bit data OR 6 * 4 bit addresses
     parameter integer TRANS_BITWIDTH_WGHT     = 15, // 3 * 8 bit weight OR 2 * 12 bit weight OR 3 * 8 bit addresses
-
-    parameter integer NUM_GLB_IACT = 1,
 
     // local parameters
     localparam integer IACT_ADDR_DATA = $clog2(IACT_DATA_ADDR),

@@ -437,7 +437,14 @@ reg [1023:0] fst_path;
   // Used during GET_IACT to distribute incoming DMA words across the 32
   // double-buffer cells in a round-robin fashion.
   // -----------------------------------------------------------------------
-  reg  [ 3:0] current_buffer;   // Index of the cell currently being written (0–31); increments each DMA word.
+  // Shared between GET_IACT (wraps at IACT_ONE_WORD_ALL_RAM) and GET_WGHT
+  // (wraps at WGHT_ONE_WORD_ALL_RAM) - must be wide enough for whichever
+  // modulus is larger, or the counter silently overflows/wraps early and
+  // wght_buffer_en_w/iact_buffer_en_w never assert (weight/iact staging
+  // RAM never written, downstream reads return X forever). A fixed 4-bit
+  // width happens to fit the default configs but silently breaks for any
+  // parameter set where either modulus exceeds 16.
+  reg [$clog2(IACT_ONE_WORD_ALL_RAM > WGHT_ONE_WORD_ALL_RAM ? IACT_ONE_WORD_ALL_RAM : WGHT_ONE_WORD_ALL_RAM)-1:0] current_buffer;   // Index of the cell currently being written; increments each DMA word.
   wire [11:0] iact_size_x;       // Feature map width in pixels (from dma_storage).
   wire [ 7:0] iact_size_y;       // Feature map height in pixels (from dma_storage).
   wire [11:0] iact_size_c;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
