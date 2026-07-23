@@ -699,7 +699,7 @@ module PE #(
   wire [                         3 : 0] channel_reg_C0;            // Number of channels configured, in Eyeriss-Paper referenced as C0
   wire                                  psum_data_SPad_en_a_w_i;// Internal write enable port A
   wire                                  psum_data_SPad_en_b_w_i;// Internal write enable port B
-  reg                                   raw_wght_reg;           // 1 = raw (uncompressed) weight stream: keep all-zero weight words
+  wire                                  raw_wght_w;           // 1 = raw (uncompressed) weight stream: keep all-zero weight words
   reg  [                           3:0] iact_x_line_repetitions;
 
   // Configuration streaming FSM
@@ -919,9 +919,10 @@ module PE #(
 
   // Calculated ceiled filters from filters depending on PARALLEL_MACS
   reg [(3*9)-1:0] stream_data;
-  assign channel_reg_C0 = stream_data[12:9];
-  assign filters_reg_M0 = stream_data[17:13];
-  assign iact_addr_max_reg = stream_data[21:18];
+  assign raw_wght_w              = wght_stream[8];
+  assign channel_reg_C0          = stream_data[12:9];
+  assign filters_reg_M0          = stream_data[17:13];
+  assign iact_addr_max_reg       = stream_data[21:18];
   assign iact_x_line_repetitions = stream_data[25:22];
   // ============================================================================
   // Configuration Parameter Streaming
@@ -2462,7 +2463,7 @@ module PE #(
       .second_spad_en_o  (second_spad_wght_en_w),
 
       // Raw (dense/GEMM) weight streams carry legitimate all-zero words
-      .raw_mode_i(raw_wght_reg)
+      .raw_mode_i(raw_wght_w)
   );
 
   // Input Activation Data Pipeline
