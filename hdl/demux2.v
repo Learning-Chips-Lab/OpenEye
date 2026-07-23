@@ -56,7 +56,7 @@ module demux2 #(
     input  [DATA_WIDTH-1:0] i
 );
 
-  assign a_out = sel_i & (i);
-  assign b_out = (!sel_i) & (i);
-
+  assign a_out = sel_i ? i : {DATA_WIDTH{1'b0}};
+  assign b_out = ~sel_i ? i : {DATA_WIDTH{1'b0}};
 endmodule
+
