@@ -212,6 +212,16 @@ class OpenEyeParameters(object):
         except:
             self.DATA_PSUM_BITWIDTH = 20        # Partial sum: 20 bits (signed accumulator)
 
+        try:
+            self.PARALLEL_MACS = int(os.getenv("PARALLEL_MACS"))
+        except:
+            self.PARALLEL_MACS = 2        # Parallel MACS: 2 (SIMD)
+
+        try:
+            self.SPARSITY_EN = int(os.getenv("SPARSITY_EN"))
+        except:
+            self.SPARSITY_EN = 1        # Sparsity enabled
+
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode
 
@@ -222,7 +232,6 @@ class OpenEyeParameters(object):
         # bank j (gemm_mode=1 in hardware) and each PE keeps its output tile
         # stationary in the local psum SPad. Overridable via DATAFLOW env var.
         self.DATAFLOW = os.getenv("DATAFLOW", "row_stationary")
-        self.PARALLEL_MACS = 2         # Number of MAC units operating in parallel per PE
 
         # === DATA BITWIDTH CONFIGURATION ===
         # Define bitwidths for all data types in the accelerator

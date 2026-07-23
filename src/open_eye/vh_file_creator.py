@@ -80,6 +80,7 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
     else :
         with open(filename, 'w') as txt_file:
             txt_file.write(f"parameter PARALLEL_MACS = {openeye_parameter.PARALLEL_MACS},\n")
+            txt_file.write(f"parameter SPARSITY_EN = {openeye_parameter.SPARSITY_EN},\n")
 
 def create_vh_file_from_envvars(
     file_path_vh: Optional[str] = None,
