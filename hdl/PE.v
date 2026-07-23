@@ -919,7 +919,7 @@ module PE #(
 
   // Calculated ceiled filters from filters depending on PARALLEL_MACS
   reg [(3*9)-1:0] stream_data;
-  assign raw_wght_w              = wght_stream[8];
+  assign raw_wght_w              = stream_data[8];
   assign channel_reg_C0          = stream_data[12:9];
   assign filters_reg_M0          = stream_data[17:13];
   assign iact_addr_max_reg       = stream_data[21:18];
