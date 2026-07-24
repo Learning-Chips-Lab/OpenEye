@@ -901,7 +901,16 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
     while (dut.enable_dma_o.value == 1):
 
         if(logging.DEBUG >= login_level):
-            txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(oep.PSUM_Trans_Bitwidth) + "\n")
+            try:
+                txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(oep.PSUM_Trans_Bitwidth) + "\n")
+            except ValueError:
+                # data_dma_o can read X here (not just a transient edge
+                # case - some psum_pipeline.v configs leave portions of
+                # the output genuinely unwritten). The functional capture
+                # below already tolerates this via its own try/except;
+                # mirror that here instead of crashing the whole test on
+                # the first X sample.
+                txt_file.write(str(dut.data_dma_o.value) + "\n")
         if(logging.DEBUG >= login_level):
             storage_file.write("f: " + str(f) + "\n")
         try:
