@@ -421,12 +421,14 @@ module OpenEye_Parallel #(
         FIRST_PARAMS: begin
           enable_stream_reg      <= 1;
           // PE.v's stream_data shift register only keeps the low 9 bits of
-          // each data_stream_i word (stream_data[8:0] <= data_stream_i), and
-          // decodes raw_wght_w from bit 8 of that first word. wght_addr_len_i_reg/
-          // stride_x_i_reg/data_mode_i_reg have no reader left in PE.v since the
-          // config-stream rewrite, so only bit 8 (raw_wght) matters here; the
-          // low 8 bits are don't-care padding.
-          data_stream_reg        <= {{3{1'd0}}, raw_wght_i_reg, {8{1'd0}}};
+          // each data_stream_i word (stream_data[8:0] <= data_stream_i);
+          // after the SECOND_PARAMS and THIRD_PARAMS cycles shift twice
+          // more, this cycle's word settles at stream_data[26:18], which
+          // PE.v reads as: bit 8 -> raw_wght_w, bits[7:4] -> iact_x_line_
+          // repetitions, bits[3:0] -> iact_addr_max_reg. So this word must
+          // carry those three fields now, not the old data_mode/stride_x/
+          // wght_addr_len set (which have no reader left in PE.v).
+          data_stream_reg        <= {{3{1'd0}}, raw_wght_i_reg, iact_x_line_repetitions_reg, kernel_size_y_i};
           fsm_transmission_state <= SECOND_PARAMS;
         end
         SECOND_PARAMS: begin
@@ -435,6 +437,13 @@ module OpenEye_Parallel #(
           fsm_transmission_state <= THIRD_PARAMS;
         end
         THIRD_PARAMS: begin
+          // This cycle's word ends up in stream_data[8:0] after the next
+          // shift, immediately overwritten by the following capture with
+          // nothing reading it in between - dead now that iact_addr_max_reg/
+          // iact_x_line_repetitions moved to FIRST_PARAMS above. Left as a
+          // no-op transmission (still needed to complete the 3-cycle
+          // handshake PE.v's stream_data logic expects) rather than removed,
+          // to avoid changing the cycle count consumers rely on elsewhere.
           enable_stream_reg      <= 1;
           data_stream_reg        <= {{2{1'd0}},iact_x_line_repetitions_reg,{kernel_size_y_i}};
           fsm_transmission_state <= IDLE_TRANSMI;
