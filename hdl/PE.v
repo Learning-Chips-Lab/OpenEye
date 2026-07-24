@@ -458,8 +458,13 @@
 
 module PE #(
 
-    parameter integer PARALLEL_MACS      = 2,
-    parameter integer SPARSITY_EN        = 1,  // 1=sparse mode (default), 0=dense mode
+    `ifdef USE_INTERNAL_PARAMS_PE
+      parameter integer PARALLEL_MACS = 2,
+      parameter integer SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
+    `else
+      `include "parameters.vh"
+        // Defaultvalues
+    `endif
     parameter integer NUM_GLB_IACT       = 3,
     parameter integer DATA_PSUM_BITWIDTH = 20,
     parameter IS_TOPLEVEL = 1,
