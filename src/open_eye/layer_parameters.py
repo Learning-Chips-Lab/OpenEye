@@ -1483,7 +1483,15 @@ class LayerParameters(object):
         self.iact_size_c = self.used_iact_per_PE * params.NUM_GLB_WGHT * self.diff_iact_layer
 
         self.trans_cycles_wght = params.NUM_GLB_WGHT * params.Clusters_Y * self.needed_wght_transmissions * (self.used_iact_per_PE * (math.ceil(self.filters / params.PARALLEL_MACS)))
-        self.trans_cycles_psum = self.filters
+        # Must equal len(DensePsumStreamMapper.get_psum_stream()): the test
+        # harness sends each DMA section on a fixed schedule with no flow
+        # control, so GET_BIAS (psum_pipeline.v) must consume exactly this
+        # many cycles or it desyncs with the quantize/offset sections that
+        # follow. psum_pipeline.v's fully_connected_layer branch advances the
+        # bias buffer address every cycle (one bias word per cycle), so this
+        # is simply the stream length, not scaled by
+        # PSUM_CYCLES_ONE_WORD_ALL_CELLS like Conv's packed-word scheme.
+        self.trans_cycles_psum = self.used_psum_per_PE * 2
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))
