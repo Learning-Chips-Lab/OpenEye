@@ -420,8 +420,13 @@ module OpenEye_Parallel #(
         end
         FIRST_PARAMS: begin
           enable_stream_reg      <= 1;
-          // Bit 9 carries the raw-weight-stream flag (see PE FIRST_PARAMS)
-          data_stream_reg        <= {{2{1'd0}}, raw_wght_i_reg, wght_addr_len_i_reg, stride_x_i_reg, data_mode_i_reg};
+          // PE.v's stream_data shift register only keeps the low 9 bits of
+          // each data_stream_i word (stream_data[8:0] <= data_stream_i), and
+          // decodes raw_wght_w from bit 8 of that first word. wght_addr_len_i_reg/
+          // stride_x_i_reg/data_mode_i_reg have no reader left in PE.v since the
+          // config-stream rewrite, so only bit 8 (raw_wght) matters here; the
+          // low 8 bits are don't-care padding.
+          data_stream_reg        <= {{3{1'd0}}, raw_wght_i_reg, {8{1'd0}}};
           fsm_transmission_state <= SECOND_PARAMS;
         end
         SECOND_PARAMS: begin

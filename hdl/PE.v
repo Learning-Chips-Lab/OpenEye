@@ -913,7 +913,15 @@ module PE #(
 
   // Calculated ceiled filters from filters depending on PARALLEL_MACS
   reg [(3*9)-1:0] stream_data;
-  assign raw_wght_w              = stream_data[8];
+  // raw_wght is captured in cycle 1 (data_stream_i bit 8, landing in
+  // stream_data[8:0]), but two more shifts follow (cycle 2 and cycle 3),
+  // each moving stream_data[8:0] up by 9 bits. By the time all three
+  // config-stream cycles have completed, the original bit has propagated
+  // to stream_data[26] (8 + 9 + 9), not stream_data[8] - that position now
+  // holds cycle 3's data instead. Reading stream_data[8] here read whatever
+  // the config stream sent two cycles later, making raw_wght_w effectively
+  // always 0 for any config where cycle 3 doesn't happen to set bit 8.
+  assign raw_wght_w              = stream_data[26];
   assign channel_reg_C0          = stream_data[12:9];
   assign filters_reg_M0          = stream_data[17:13];
   assign iact_addr_max_reg       = stream_data[21:18];
