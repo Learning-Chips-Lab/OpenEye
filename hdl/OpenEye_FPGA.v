@@ -478,9 +478,6 @@ reg [1023:0] fst_path;
   reg send_data_reg;                                                             // One-cycle pulse that triggers the data-flow process to begin streaming to OpenEye_Parallel.
   wire store_in_psum;                                                            // When 1: keep psums in psum_buffer for further accumulation instead of sending them out (from dma_storage).
   wire iact_converter_ready_w[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];          // Per-converter ready signal; high when the converter has finished its current batch.
-  reg [2:0] iact_converter_n_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];       // Legacy converter counter (unused in current path; kept for compatibility).
-  reg [BUFFER_WIDTH-1:0] iact_converter_mem_addr_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0]; // Legacy converter memory address (unused; kept for compatibility).
-  reg [3:0] iact_converter_mem_off_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0]; // Legacy converter memory offset (unused; kept for compatibility).
 
   reg converters_ready; // Combinatorial flag set in START_CONVERTER: AND of all iact_converter_ready_w signals. Transitions to CONVERT_IACT when high.
 

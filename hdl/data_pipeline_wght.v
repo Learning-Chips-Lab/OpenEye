@@ -185,6 +185,7 @@
 //                       delayed write cycle (enable_delay && data_storage_2 != 0).
 
 module data_pipeline_wght #(
+    parameter PARALLEL_MACS             = 2,
     parameter DATA_WIDTH                = 24,
     parameter FIRST_SPAD_ADDR           = 16,
     parameter FIRST_SPAD_DATA           = 4,
@@ -283,18 +284,18 @@ module data_pipeline_wght #(
   //   overhead tags from both sub-words indicating additional non-zero entries).
   //   When overhead_reg + overhead_next_word >= filters_w, it wraps by
   //   subtracting filters_w (filter-boundary crossing detected).
-  reg         [$clog2(SECOND_OVERHEAD_WIDTH)  :0] overhead_reg;
+  reg         [    SECOND_OVERHEAD_WIDTH - 1 :0] overhead_reg;
 
   // overhead_delay_reg: one-cycle delayed copy of overhead_reg (before the
   //   current cycle's update).  Used in the combinational overhead_output
   //   computation to reconstruct the correct tag for data_storage_2.
-  reg         [$clog2(SECOND_OVERHEAD_WIDTH)  :0] overhead_delay_reg;
+  reg         [   SECOND_OVERHEAD_WIDTH - 1  :0] overhead_delay_reg;
 
   // overhead_new_calc_reg: snapshot of overhead_reg taken at the start of
   //   the current enable_i cycle (before incrementing).  Used in the
   //   enable_delay path to detect whether a filter boundary was crossed
   //   during the previous cycle (overhead_new_calc_reg >= filters_w).
-  reg         [$clog2(SECOND_OVERHEAD_WIDTH)  :0] overhead_new_calc_reg;
+  reg         [    SECOND_OVERHEAD_WIDTH - 1 :0] overhead_new_calc_reg;
 
   // compute_delay: one-cycle delayed copy of compute_i.
   //   Triggers a second pipeline-flush step one cycle after compute_i:
@@ -321,7 +322,7 @@ module data_pipeline_wght #(
   //   input_words_w[0] = data_i[11:0]   (first sub-word)
   //   input_words_w[1] = data_i[23:12]  (second sub-word)
   //   Each sub-word: { overhead_tag[3:0], weight_byte[7:0] }
-  wire        [             SECOND_SPAD_DATA-1:0] input_words_w [0:2-1];
+  wire        [             SECOND_SPAD_DATA-1:0] input_words_w [0:PARALLEL_MACS-1];
 
   // overhead_w: total overhead contribution from both sub-words in the
   //   current data_i word.
@@ -377,20 +378,28 @@ module data_pipeline_wght #(
   // next_channel_counter: signed comparison to detect filter-boundary crossing.
   //   Positive (>= 0) means the accumulated count has reached filters_w,
   //   so the first SPAD address should step and counters reset.
-  assign next_channel_counter = first_spad_data_o + ((temp_acc_overhead + overhead_w)/2) - data_storage_1 - filters_w;
+  assign next_channel_counter = first_spad_data_o + ((temp_acc_overhead + overhead_w)/PARALLEL_MACS) - data_storage_1 - filters_w;
 
   // Unpack data_i into two 12-bit sub-words.
   genvar w_gen;
-  for (w_gen = 0; w_gen < 2; w_gen = w_gen + 1) begin
+  for (w_gen = 0; w_gen < PARALLEL_MACS; w_gen = w_gen + 1) begin
     assign input_words_w[w_gen] = data_i[(12*w_gen)+:12];
   end
 
   // overhead_w: total overhead (non-zero position count) contributed by
   //   both sub-words in the current data_i word.
+
+  wire [3:0] overhead_temp [PARALLEL_MACS-1:0];
   if (SPARSITY_EN) begin
-    assign overhead_w = input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH]
-                    + input_words_w[1][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH];
+    assign overhead_temp[0] = input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH];
+    for (w_gen = 0; w_gen < PARALLEL_MACS-1; w_gen = w_gen + 1) begin
+      assign overhead_temp[w_gen+1] = input_words_w[w_gen+1][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH] + overhead_temp[w_gen];
+    end
+    assign overhead_w = overhead_temp[PARALLEL_MACS-1];
   end else begin
+    for (w_gen = 0; w_gen < PARALLEL_MACS; w_gen = w_gen + 1) begin
+      assign overhead_temp[w_gen] = 0;
+    end
     assign overhead_w = 0;
   end
 
@@ -577,24 +586,24 @@ module data_pipeline_wght #(
         first_spad_data_delay <= first_spad_data_delay + 1'd1;
 
         // Update overhead accumulator and detect filter-boundary wrap.
-        overhead_reg          <= overhead_reg + 2 + overhead_w;
+        overhead_reg          <= overhead_reg + PARALLEL_MACS + overhead_w;
         overhead_new_calc_reg <= overhead_reg;  // snapshot for delayed-write path
         if (overhead_reg + overhead_next_word >= filters_w) begin
           // Filter boundary: wrap overhead_reg by subtracting filters_w.
-          overhead_reg <= 2 + overhead_reg + overhead_w - filters_w;
+          overhead_reg <= PARALLEL_MACS + overhead_reg + overhead_w - filters_w;
           if (overhead_reg == filters_w + 1) begin
             // Overshoot by exactly 1: apply extra correction.
-            overhead_reg <= 2 + overhead_reg + overhead_w - filters_w - 1;
+            overhead_reg <= PARALLEL_MACS + overhead_reg + overhead_w - filters_w - 1;
             over_ending  <= 1;
           end
           if (overhead_reg < filters_w) begin
             // Look-ahead: update new_calc for the delayed path as well.
-            overhead_new_calc_reg <= overhead_reg + 2 + overhead_next_word;
+            overhead_new_calc_reg <= overhead_reg + PARALLEL_MACS + overhead_next_word;
           end
         end
 
-        temp_acc_overhead     <= temp_acc_overhead + $bits(temp_acc_overhead)'(overhead_w);
-        overhead_pos          <= overhead_pos + 2;
+        temp_acc_overhead <= temp_acc_overhead + $bits(temp_acc_overhead)'(overhead_w);
+        overhead_pos      <= overhead_pos + PARALLEL_MACS;
 
         // Wrap address_temp_2 and cycle_counter at SECOND_SPAD depth.
         if (address_temp_2 == SECOND_SPAD_ADDR - 1) begin

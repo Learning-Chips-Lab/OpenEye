@@ -39,8 +39,8 @@
 ///     rst_ni  - Asynchronous reset (active low)
 ///
 ///   Data Path:
-///     data_i[DATA_BITWIDTH-1:0] - Input data to be delayed
-///     data_o[DATA_BITWIDTH-1:0] - Delayed data output
+///     data_i[DATA_BITWIDTH-1 : 0] - Input data to be delayed
+///     data_o[DATA_BITWIDTH-1 : 0] - Delayed data output
 ///
 ///   Control Signals:
 ///     enable_i - Input data valid signal
@@ -65,73 +65,97 @@
 module delay_cluster #(
     parameter integer DATA_BITWIDTH = 20
 ) (
-    input clk_i,
-    input rst_ni,
+    input                       clk_i,
+    input                       rst_ni,
 
-    output                       ready_o,
-    input  [DATA_BITWIDTH-1 : 0] data_i,
-    input                        enable_i,
+    input  [DATA_BITWIDTH-1:0] data_i,
+    input                       enable_i,
+    input                       ready_i,
 
-    input                        ready_i,
-    output [DATA_BITWIDTH-1 : 0] data_o,
-    output                       enable_o,
-
-    input [3 : 0] delay_psum_glb_i
-
+    output [DATA_BITWIDTH-1:0] data_o,
+    output                      enable_o,
+    output                      ready_o,
+    input [3:0]                 delay_psum_glb_i
 );
-  reg  [8*DATA_BITWIDTH-1 : 0] data_s;
-  reg  [                7 : 0] enable_s;
-  reg  [                7 : 0] ready_s;
 
-  wire [8*DATA_BITWIDTH-1 : 0] data_w;
-  wire [                7 : 0] enable_w;
-  wire [                7 : 0] ready_w;
+  // Delay stages (8 stages for 0-8 cycles)
+  localparam integer NUM_STAGES = 8;
 
-  assign data_w = {{7 * DATA_BITWIDTH{1'b0}}, data_i};
-  assign enable_w = {{7{1'b0}}, enable_i};
-  assign ready_w = {{7{1'b0}}, ready_i};
+  // Delay registers for data, enable, and ready signals
+  reg [NUM_STAGES*DATA_BITWIDTH-1:0] data_regs;
+  reg [NUM_STAGES-1:0]               enable_regs;
+  reg [NUM_STAGES-1:0]               ready_regs;
 
-  assign data_o = (delay_psum_glb_i== 0) ? data_i :
-                (delay_psum_glb_i== 1) ? data_s[1*DATA_BITWIDTH-1 : 0] :
-                (delay_psum_glb_i== 2) ? data_s[2*DATA_BITWIDTH-1 : 1*DATA_BITWIDTH] :
-                (delay_psum_glb_i== 3) ? data_s[3*DATA_BITWIDTH-1 : 2*DATA_BITWIDTH] :
-                (delay_psum_glb_i== 4) ? data_s[4*DATA_BITWIDTH-1 : 3*DATA_BITWIDTH] :
-                (delay_psum_glb_i== 5) ? data_s[5*DATA_BITWIDTH-1 : 4*DATA_BITWIDTH] :
-                (delay_psum_glb_i== 6) ? data_s[6*DATA_BITWIDTH-1 : 5*DATA_BITWIDTH] :
-                (delay_psum_glb_i== 7) ? data_s[7*DATA_BITWIDTH-1 : 6*DATA_BITWIDTH] :
-                (delay_psum_glb_i== 8) ? data_s[8*DATA_BITWIDTH-1 : 7*DATA_BITWIDTH] : 0;
+  // Register for the current stage (updated on each clock cycle)
+  reg [NUM_STAGES*DATA_BITWIDTH-1:0] data_stage;
+  reg [NUM_STAGES-1:0]               enable_stage;
+  reg [NUM_STAGES-1:0]               ready_stage;
 
-  assign enable_o = (delay_psum_glb_i== 0) ? enable_i :
-                  (delay_psum_glb_i== 1) ? enable_s[0] :
-                  (delay_psum_glb_i== 2) ? enable_s[1] :
-                  (delay_psum_glb_i== 3) ? enable_s[2] :
-                  (delay_psum_glb_i== 4) ? enable_s[3] :
-                  (delay_psum_glb_i== 5) ? enable_s[4] :
-                  (delay_psum_glb_i== 6) ? enable_s[5] :
-                  (delay_psum_glb_i== 7) ? enable_s[6] :
-                  (delay_psum_glb_i== 8) ? enable_s[7] : 0;
-
-  assign ready_o = (delay_psum_glb_i== 0) ? ready_i :
-                 (delay_psum_glb_i== 1) ? ready_s[0] :
-                 (delay_psum_glb_i== 2) ? ready_s[1] :
-                 (delay_psum_glb_i== 3) ? ready_s[2] :
-                 (delay_psum_glb_i== 4) ? ready_s[3] :
-                 (delay_psum_glb_i== 5) ? ready_s[4] :
-                 (delay_psum_glb_i== 6) ? ready_s[5] :
-                 (delay_psum_glb_i== 7) ? ready_s[6] :
-                 (delay_psum_glb_i== 8) ? ready_s[7] : 0;
-
-
-  always @(posedge clk_i, negedge rst_ni) begin
-    if (!rst_ni) begin : reset
-      data_s   <= 0;
-      enable_s <= 0;
-      ready_s  <= 0;
+  // Generate shift register update logic
+  generate
+    genvar i;
+    for (i = 0; i < NUM_STAGES; i = i + 1) begin : gen_data_shift
+      if (i == 0) begin
+        assign data_stage[i*DATA_BITWIDTH +: DATA_BITWIDTH] = data_i;
     end else begin
-      data_s   <= (data_s << DATA_BITWIDTH) + data_w;
-      enable_s <= (enable_s << 1) + enable_w;
-      ready_s  <= (ready_s << 1) + ready_w;
+        assign data_stage[i*DATA_BITWIDTH +: DATA_BITWIDTH] = data_regs[(i-1)*DATA_BITWIDTH +: DATA_BITWIDTH];
+    end
+  end
+  endgenerate
+
+  generate
+    for (i = 0; i < NUM_STAGES; i = i + 1) begin : gen_enable_shift
+      if (i == 0) begin
+        assign enable_stage[i] = enable_i;
+      end else begin
+        assign enable_stage[i] = enable_regs[i-1];
+      end
+    end
+  endgenerate
+
+  generate
+    for (i = 0; i < NUM_STAGES; i = i + 1) begin : gen_ready_shift
+      if (i == 0) begin
+        assign ready_stage[i] = ready_i;
+      end else begin
+        assign ready_stage[i] = ready_regs[i-1];
+      end
+    end
+  endgenerate
+
+  // Update registers on clock edge
+  always @(posedge clk_i, negedge rst_ni) begin
+    if (!rst_ni) begin
+      data_regs  <= '0;
+      enable_regs <= '0;
+      ready_regs  <= '0;
+    end else begin
+      data_regs  <= data_stage;
+      enable_regs <= enable_stage;
+      ready_regs <= ready_stage;
+    end
+  end
+
+  // Output multiplexer
+  // Select appropriate delay stage based on delay_psum_glb_i
+  always @(*) begin
+    if (delay_psum_glb_i == 0) begin
+      data_o    = data_i;
+      enable_o  = enable_i;
+      ready_o   = ready_i;
+    end else if (delay_psum_glb_i <= NUM_STAGES) begin
+      // Valid delay: 1-8 cycles
+      integer idx = delay_psum_glb_i - 1;
+      data_o    = data_regs[idx*DATA_BITWIDTH +: DATA_BITWIDTH];
+      enable_o  = enable_regs[idx];
+      ready_o   = ready_regs[idx];
+    end else begin
+      // Invalid delay: output zeros (protection)
+      data_o    = '0;
+      enable_o  = 1'b0;
+      ready_o   = 1'b0;
     end
   end
 
 endmodule
+
