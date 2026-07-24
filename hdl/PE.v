@@ -2108,23 +2108,26 @@ module PE #(
       );
     end
   end else begin : gen_parallel_spad
+    // PARALLEL_MACS is fixed at 2 in parallel (non-SERIAL) mode, so port A
+    // carries lane 0 and port B carries lane 1 of the same per-lane arrays
+    // the serial branch above indexes with its genvar loop.
     SPad_DP_RW #(
         .DATA_WIDTH(PSUM_DATA),
         .ADDR_WIDTH(PSUM_ADDR_BITWIDTH)
     ) psum_SPad (
         .clk_i     (clk_i),
-        .re_a_i    (psum_data_SPad_en_r[pmc] || psum_enable_i),
-        .re_b_i    (psum_data_SPad_en_b_r || psum_enable_i),
-        .we_a_i    (psum_data_SPad_en_w_i[pmc]),
-        .we_b_i    (psum_data_SPad_en_b_w_i),
-        .addr_r_a_i(psum_spad_addr_r[pmc]),
-        .addr_r_b_i(psum_spad_addr_b_r),
-        .addr_w_a_i(psum_spad_addr_w[pmc]),
-        .addr_w_b_i(psum_spad_addr_b_w),
-        .data_a_i  (psum_spad_data_a_i),
-        .data_b_i  (psum_spad_data_b_i),
-        .data_a_o  (psum_spad_data_a_o),
-        .data_b_o  (psum_spad_data_b_o)
+        .re_a_i    (psum_data_SPad_en_r[0] || psum_enable_i),
+        .re_b_i    (psum_data_SPad_en_r[1] || psum_enable_i),
+        .we_a_i    (psum_data_SPad_en_w_i[0]),
+        .we_b_i    (psum_data_SPad_en_w_i[1]),
+        .addr_r_a_i(psum_spad_addr_r[0]),
+        .addr_r_b_i(psum_spad_addr_r[1]),
+        .addr_w_a_i(psum_spad_addr_w[0]),
+        .addr_w_b_i(psum_spad_addr_w[1]),
+        .data_a_i  (psum_spad_data_i[0]),
+        .data_b_i  (psum_spad_data_i[1]),
+        .data_a_o  (psum_spad_data_o[0]),
+        .data_b_o  (psum_spad_data_o[1])
     );
   end
 

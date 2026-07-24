@@ -28,6 +28,7 @@ def get_verilog_sources(hdl_dir):
         os.path.join(hdl_dir, "PE.v"),
         os.path.join(hdl_dir, "PE_simple.v"),
         os.path.join(hdl_dir, "adder.v"),
+        os.path.join(hdl_dir, "adder_tree.v"),
         os.path.join(hdl_dir, "data_pipeline.v"),
         os.path.join(hdl_dir, "multiplier.v"),
         os.path.join(hdl_dir, "mux2.v"),

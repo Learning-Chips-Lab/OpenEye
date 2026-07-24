@@ -72,9 +72,9 @@ module delay_cluster #(
     input                       enable_i,
     input                       ready_i,
 
-    output [DATA_BITWIDTH-1:0] data_o,
-    output                      enable_o,
-    output                      ready_o,
+    output reg [DATA_BITWIDTH-1:0] data_o,
+    output reg                      enable_o,
+    output reg                      ready_o,
     input [3:0]                 delay_psum_glb_i
 );
 
