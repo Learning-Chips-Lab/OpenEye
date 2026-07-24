@@ -271,6 +271,7 @@ module psum_pipeline #(
                 end
               end
             end
+            fsm_x_cl_psum <= 0;
           end
           if (GET_BIAS == fsm_current_state) begin
             if (enable_dma_i_reg) begin
@@ -280,21 +281,56 @@ module psum_pipeline #(
                 fsm_psum_cycle <= 0;
                 psum_cnt       <= psum_buffer_addr_array[0][0][0] + 1;
               end
-              psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
-              for (g_psum = 0; g_psum < PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1; g_psum = g_psum + 1) begin
-                psum_buffer_data_w[DMA_BITWIDTH*(1+g_psum)+:DMA_BITWIDTH] <= psum_buffer_data_w[DMA_BITWIDTH*g_psum+:DMA_BITWIDTH];
-              end
-              psum_buffer_en_w <= 0;
-              if (psum_cycle_count == PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1) begin
-                psum_cycle_count <= 0;
-                for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                  for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                    for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                      psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
-                    end
+              // Dense/FC bias loading (DensePsumStreamMapper.get_psum_stream)
+              // sends one bias word per DMA cycle, cycling through all
+              // CLUSTER_COLUMNS x-clusters' values for the current filter
+              // index before moving to the next filter - unlike Conv's
+              // packed-wide-word scheme that needs
+              // PSUM_CYCLES_ONE_WORD_ALL_CELLS cycles to gather one advance's
+              // worth of data. Write the current cycle's word into just its
+              // cc slot (broadcast across cr/g, which all share one bias
+              // value per filter) and advance the shared address only after
+              // CLUSTER_COLUMNS cycles, so trans_cycles_psum can equal the
+              // actual DMA stream length the test harness sends (fixed
+              // lockstep schedule, no flow control) instead of being inflated
+              // by PSUM_CYCLES_ONE_WORD_ALL_CELLS and starving later
+              // sections.
+              if (fully_connected_layer) begin
+                for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
+                  for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                    psum_buffer_data_w[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cr_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_psum*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS] <= data_dma_i_reg[TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0];
                   end
                 end
-                psum_buffer_en_w <= ~0;
+                psum_buffer_en_w <= 0;
+                fsm_x_cl_psum <= fsm_x_cl_psum + 1;
+                if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
+                  fsm_x_cl_psum <= 0;
+                  for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                    for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
+                      for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                        psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
+                      end
+                    end
+                  end
+                  psum_buffer_en_w <= ~0;
+                end
+              end else begin
+                psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
+                for (g_psum = 0; g_psum < PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1; g_psum = g_psum + 1) begin
+                  psum_buffer_data_w[DMA_BITWIDTH*(1+g_psum)+:DMA_BITWIDTH] <= psum_buffer_data_w[DMA_BITWIDTH*g_psum+:DMA_BITWIDTH];
+                end
+                psum_buffer_en_w <= 0;
+                if (psum_cycle_count == PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1) begin
+                  psum_cycle_count <= 0;
+                  for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                    for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
+                      for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                        psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
+                      end
+                    end
+                  end
+                  psum_buffer_en_w <= ~0;
+                end
               end
             end
           end

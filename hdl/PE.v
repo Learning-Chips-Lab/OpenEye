@@ -458,13 +458,10 @@
 
 module PE #(
 
-  `ifdef USE_INTERNAL_PARAMS_PE
-    parameter integer PARALLEL_MACS = 2,
-    parameter integer SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
-  `else
-    `include "parameters.vh"
-      // Defaultvalues
-  `endif
+    parameter integer PARALLEL_MACS      = 2,
+    parameter integer SPARSITY_EN        = 1,  // 1=sparse mode (default), 0=dense mode
+    parameter integer NUM_GLB_IACT       = 3,
+    parameter integer DATA_PSUM_BITWIDTH = 20,
     parameter IS_TOPLEVEL = 1,
     parameter SERIAL      = 1,
 
@@ -475,7 +472,6 @@ module PE #(
 
     parameter integer DATA_IACT_BITWIDTH     = 8,
     parameter integer DATA_WGHT_BITWIDTH     = 8,
-    parameter integer DATA_PSUM_BITWIDTH     = 20,
     parameter integer DATA_IACT_OVERHEAD     = 4,
     parameter integer DATA_WGHT_IGNORE_ZEROS = 4,
 
@@ -489,8 +485,6 @@ module PE #(
 
     parameter integer TRANS_BITWIDTH_IACT     = 24, // 3 * 8 bit data OR 2 * 12 bit data OR 6 * 4 bit addresses
     parameter integer TRANS_BITWIDTH_WGHT     = 16, // 3 * 8 bit weight OR 2 * 12 bit weight OR 3 * 8 bit addresses
-
-    parameter integer NUM_GLB_IACT = 1,
 
     // local parameters
     localparam integer IACT_WORDWIDTH_SINGLE = SPARSITY_EN == 1 ? (DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD) : DATA_IACT_BITWIDTH,
@@ -891,7 +885,15 @@ module PE #(
 
   // Calculated ceiled filters from filters depending on PARALLEL_MACS
   reg [(3*9)-1:0] stream_data;
-  assign raw_wght_w              = stream_data[8];
+  // raw_wght is captured in cycle 1 (data_stream_i bit 8, landing in
+  // stream_data[8:0]), but two more shifts follow (cycle 2 and cycle 3),
+  // each moving stream_data[8:0] up by 9 bits. By the time all three
+  // config-stream cycles have completed, the original bit has propagated
+  // to stream_data[26] (8 + 9 + 9), not stream_data[8] - that position now
+  // holds cycle 3's data instead. Reading stream_data[8] here read whatever
+  // the config stream sent two cycles later, making raw_wght_w effectively
+  // always 0 for any config where cycle 3 doesn't happen to set bit 8.
+  assign raw_wght_w              = stream_data[26];
   assign channel_reg_C0          = stream_data[12:9];
   assign filters_reg_M0          = stream_data[17:13];
   assign iact_addr_max_reg       = stream_data[21:18];

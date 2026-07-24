@@ -239,7 +239,7 @@ module OpenEye_Cluster #(
     output [                    NUM_GLB_PSUM-1:0] ready_src_bottom_psum,
 
     input                                         enable_stream_i,
-    input [                                  8:0] data_stream_i,
+    input [                                 11:0] data_stream_i,
 
     input [  $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i,
     input [    $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i,

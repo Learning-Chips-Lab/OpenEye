@@ -121,19 +121,25 @@ async def send_data_params(ptp, dut, iactsize_x, iactsize_y, wghtsize_x):
         cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), 0))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     else:
-        # PE.v (sparse) config-word layout:
-        #   FIRST  : [7:4]=wght_addr_max, [3:1]=stride
-        #   SECOND : [8:4]=M0,            [3:0]=C0
-        #   THIRD  : [3:0]=iact_addr_max
-        wght_addr_max_reg = (iactsize_x * iactsize_y) + 2
-
-        data_reg_i = (wght_addr_max_reg << 4) + (stride_reg << 1)
+        # PE.v (sparse) config-word layout. PE.v shifts each 9-bit
+        # data_stream_i word through a 3-cycle register (stream_data);
+        # by the time all 3 cycles have arrived, cycle 1's word has
+        # shifted up to stream_data[26:18] and cycle 3's word is sitting
+        # unread in stream_data[8:0] (nothing consumes it). The bit
+        # layout PE.v actually decodes is:
+        #   FIRST  : [8]=raw_wght, [7:4]=iact_x_line_repetitions, [3:0]=iact_addr_max
+        #   SECOND : [8:4]=M0 (filters),                          [3:0]=C0 (channels)
+        #   THIRD  : unused (dead cycle, still sent to complete the handshake)
+        # raw_wght is left 0 here: send_wght() above packs weights with
+        # ignore_zeros=True (sparse zero-skip encoding), which is only
+        # correct when PE.v's raw_mode_i is 0.
+        data_reg_i = (iact_addr_max_i << 0)
         cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         data_reg_i = (filters_reg_i << 4) + (channel_reg_i << 0)
         cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        data_reg_i = (iact_addr_max_i << 0)
+        data_reg_i = 0
         cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
