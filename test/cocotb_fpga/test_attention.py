@@ -143,7 +143,7 @@ def test_attention_fpga(SEQ_LEN, D_MODEL, NUM_HEADS, CLUSTER_ROWS, DATAFLOW,
         module=module,
         sim_build=target_dir,
         testcase="start_test_attention",
-        defines={"NO_TRACE": "TRUE"},
+        defines={"NO_TRACE": "TRUE", "USE_INTERNAL_PARAMS_PE": "TRUE"},
         force_compile=True,
         simulator="icarus",
         extra_env={

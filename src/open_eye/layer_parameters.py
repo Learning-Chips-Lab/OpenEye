@@ -1482,7 +1482,20 @@ class LayerParameters(object):
         
         self.iact_size_c = self.used_iact_per_PE * params.NUM_GLB_WGHT * self.diff_iact_layer
 
-        self.trans_cycles_wght = params.NUM_GLB_WGHT * params.Clusters_Y * self.needed_wght_transmissions * (self.used_iact_per_PE * (math.ceil(self.filters / params.PARALLEL_MACS)))
+        # Must equal len(DenseWghtStreamMapper.get_wght_stream()). That
+        # stream is built per-PE by create_pe_data_wght_stream, which packs
+        # ceil(used_wght_per_PE/2) transmission words per PE (it breaks out
+        # of its packing loop once line_counter reaches that count - the
+        # Wghts_per_PE constant it otherwise iterates up to is unrelated to
+        # any single layer's actual weight count), and
+        # create_complete_wght_stream then time-multiplexes every
+        # (cl_y, router) pair - i.e. Clusters_Y * NUM_GLB_WGHT copies - into
+        # the flat stream for SERIAL mode. The previous formula used
+        # used_iact_per_PE in place of used_wght_per_PE/2 and folded in
+        # Clusters_Y in a way that didn't match this construction, so it
+        # silently mis-sized the stream and left GET_WGHT reading stale/X
+        # data for the back portion of the weight load.
+        self.trans_cycles_wght = self.needed_wght_transmissions * params.Clusters_Y * params.NUM_GLB_WGHT * math.ceil(self.used_wght_per_PE / 2)
         # Must equal len(DensePsumStreamMapper.get_psum_stream()): the test
         # harness sends each DMA section on a fixed schedule with no flow
         # control, so GET_BIAS (psum_pipeline.v) must consume exactly this

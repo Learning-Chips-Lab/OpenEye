@@ -107,7 +107,7 @@ def test_gemm_layer(
         module=module,
         sim_build=target_dir,
         testcase="start_test_fpga",
-        defines={"NO_TRACE": "TRUE"},
+        defines={"NO_TRACE": "TRUE", "USE_INTERNAL_PARAMS_PE": "TRUE"},
         force_compile=True,
         waves=True,
         simulator="icarus",
