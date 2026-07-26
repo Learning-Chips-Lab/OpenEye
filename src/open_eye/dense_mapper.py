@@ -155,12 +155,18 @@ class DenseMapper(LayerMapper):
             # invocation, not a duplicate of stream construction.
             "trans_cycles_wght": len(self.WghtStreamCreator.get_wght_stream()),
             # GET_IACT's exit condition (fsm_cycle == trans_cycles_iact - 1)
-            # replaced the old inline computation
-            # ceil(iact_size_x*iact_size_y*iact_channels / IACT_WORDS_IN_RAM) - 1,
-            # using the same iact_size_x=1/iact_size_y/iact_size_c values
-            # packed just below - never packed by dense/gemm, which left
-            # trans_cycles_iact defaulting to 0 and GET_IACT hanging forever.
-            "trans_cycles_iact": math.ceil(1 * layer_params.iact_size_y * (layer_params.used_iact_per_PE * params.NUM_GLB_WGHT * layer_params.diff_iact_layer) / params.IACT_WORDS_IN_RAM),
+            # counts one DMA word per cycle, so - same reasoning as
+            # trans_cycles_wght above - this must equal the actual iact
+            # stream's word count. The previous formula
+            # (used_iact_per_PE*NUM_GLB_WGHT*diff_iact_layer/IACT_WORDS_IN_RAM)
+            # didn't match IactStreamMapper.get_iact_stream()'s own
+            # transmissions count (iact_size_x rounded up to a
+            # NUM_GLB_IACT*used_iact_per_PE multiple, then packed
+            # DMA_Bit_AXI/IACT_Bitwidth values per word), undercounting it and
+            # leaving GET_IACT exit early with most of the iact buffer never
+            # loaded. Read directly from the iact mapper instead of
+            # re-deriving the formula, mirroring trans_cycles_wght.
+            "trans_cycles_iact": len(self.IactStreamCreator.get_iact_stream()),
             # Process 5's weight-send phase (hdl/OpenEye_FPGA.v) uses this as
             # the upper bound of its wght_buffer_rd_addr sweep and the
             # window width of the wght_enable_i broadcast pulse to every PE
