@@ -164,13 +164,23 @@ class DenseMapper(LayerMapper):
             # Process 5's weight-send phase (hdl/OpenEye_FPGA.v) uses this as
             # the upper bound of its wght_buffer_rd_addr sweep and the
             # window width of the wght_enable_i broadcast pulse to every PE
-            # (fsm_sending_cycle in (1, wghts_per_pe+2]). dense/gemm never
-            # packed it (only conv_mapper.py did, from the same commit that
-            # added the register), leaving it 0 and collapsing that window
-            # to a single cycle - only the first weight word ever reached
-            # each PE's weight-address SPad, leaving every other address
-            # read back X and stalling PE.v's CALCULATING state forever.
-            "used_wght_per_PE": layer_params.used_wght_per_PE,
+            # (fsm_sending_cycle in (1, wghts_per_pe+2]). wght_buffer holds
+            # one packed PARALLEL_MACS-wide word per address (data_pipeline_wght
+            # advances its own SPad address once per word, extracting both
+            # packed values from it), so this must be an address/word count
+            # (ceil(used_wght_per_PE/PARALLEL_MACS)), matching what
+            # conv_mapper.py packs for the same register - not the raw
+            # per-PE value count. dense/gemm never packed it at all before
+            # (only conv_mapper.py did, from the same commit that added the
+            # register), leaving it 0 and collapsing the window to a single
+            # cycle - only the first weight word ever reached each PE's
+            # weight-address SPad, leaving every other address read back X
+            # and stalling PE.v's CALCULATING state forever. Packing the raw
+            # (unclamped) value count instead of the word count fixed that
+            # hang but left the window twice as wide as the buffer actually
+            # holds valid data for, so the back half of every weight load
+            # still read stale/X buffer content.
+            "used_wght_per_PE": math.ceil(layer_params.used_wght_per_PE / params.PARALLEL_MACS),
             "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
             "iact_channels_per_pe": layer_params.used_iact_per_PE,
             "fc_size_reg": layer_params.iact_size_x,
