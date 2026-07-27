@@ -11,6 +11,7 @@ VH_PATH = $(abspath $(PWD))
 # use VHDL_SOURCES for VHDL files
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/PE.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/adder.v)
+VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/adder_tree.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/data_pipeline_wght.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/data_pipeline_iact.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/dsp_unit.v)
