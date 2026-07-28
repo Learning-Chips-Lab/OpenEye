@@ -17,7 +17,6 @@ registers:
   - {name: trans_cycles_wght, width: 16}
   - {name: trans_cycles_psum, width: 16}
   - {name: iact_converter_buffer_addr_max_cycles, width: 8}
-  - {name: iact_channels_per_pe, width: 8}
   - {name: fc_size_reg, width: 14}
   - {name: iact_size_x, width: 12}
   - {name: iact_size_y, width: 8}
@@ -44,7 +43,7 @@ registers:
   - {name: needed_y_cls_reg, width: ceil(log2(int(CLUSTER_ROWS)+1))}
   - {name: needed_iact_cycles_reg, width: 4}
   - {name: wght_addr_len_reg, width: 5}
-  - {name: iact_addr_len_reg, width: 4}
+  - {name: iact_channels_per_pe, width: 4}
   - {name: send_data_out, width: 1}
   - {name: needed_iact_buffer_words, width: int(BUFFER_WIDTH)}
   - {name: add_up_reg, width: 3}

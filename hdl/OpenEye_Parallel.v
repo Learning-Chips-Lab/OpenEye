@@ -197,7 +197,7 @@ module OpenEye_Parallel #(
     input      [                                          3:0] needed_iact_cycles_i,
     input      [                    $clog2(PSUM_PER_PE+1)-1:0] filters_i,
     input      [                                         11:0] iact_size_x_i,
-    input      [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_addr_len_i,
+    input      [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_channels_per_pe_i,
     input      [               $clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_i,
     input      [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i,
     input      [                         $clog2(AF_MODES)-1:0] af_cluster_mode_i,
@@ -308,7 +308,7 @@ module OpenEye_Parallel #(
   wire [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i_w;
   wire [                                          3:0] needed_iact_cycles_i_w;
   wire [                    $clog2(PSUM_PER_PE+1)-1:0] filters_i_w;
-  wire [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_addr_len_i_w;
+  wire [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_channels_per_pe_i_w;
   wire [               $clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_i_w;
   wire [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i_w;
   wire [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i_w;
@@ -336,7 +336,7 @@ module OpenEye_Parallel #(
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i_reg;
   reg  [                                          3:0] needed_iact_cycles_i_reg;
   reg  [                    $clog2(PSUM_PER_PE+1)-1:0] filters_i_reg;
-  reg  [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_addr_len_i_reg;
+  reg  [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_channels_per_pe_i_reg;
   reg  [               $clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_i_reg;
   reg  [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i_reg;
   reg  [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i_reg;
@@ -433,7 +433,7 @@ module OpenEye_Parallel #(
         end
         SECOND_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{filters_i_reg}, {iact_addr_len_i_reg}};
+          data_stream_reg        <= {{filters_i_reg}, {iact_channels_per_pe_i_reg}};
           fsm_transmission_state <= THIRD_PARAMS;
         end
         THIRD_PARAMS: begin
@@ -445,7 +445,7 @@ module OpenEye_Parallel #(
           // handshake PE.v's stream_data logic expects) rather than removed,
           // to avoid changing the cycle count consumers rely on elsewhere.
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{2{1'd0}},iact_x_line_repetitions_reg,{kernel_size_y_i}};
+          data_stream_reg        <= 0;
           fsm_transmission_state <= IDLE_TRANSMI;
         end
         default: begin
@@ -495,7 +495,7 @@ module OpenEye_Parallel #(
       needed_iact_cycles_i_reg       <= 0;
       filters_i_reg                  <= 0;
       iact_size_x_reg                <= 0;
-      iact_addr_len_i_reg            <= 0;
+      iact_channels_per_pe_i_reg            <= 0;
       bano_cluster_mode_i_reg        <= 0;
       af_cluster_mode_i_reg          <= 0;
       pooling_cluster_mode_i_reg     <= 0;
@@ -533,7 +533,7 @@ module OpenEye_Parallel #(
       needed_iact_cycles_i_reg    <= needed_iact_cycles_i;
       filters_i_reg               <= filters_i;
       iact_size_x_reg             <= iact_size_x_i;
-      iact_addr_len_i_reg         <= iact_addr_len_i;
+      iact_channels_per_pe_i_reg         <= iact_channels_per_pe_i;
       bano_cluster_mode_i_reg     <= bano_cluster_mode_i;
       af_cluster_mode_i_reg       <= {NUM_GLB_PSUM{af_cluster_mode_i}};
       pooling_cluster_mode_i_reg  <= pooling_cluster_mode_i;
@@ -927,7 +927,7 @@ module OpenEye_Parallel #(
       assign needed_y_cls_i_w          = needed_y_cls_i_reg;
       assign needed_iact_cycles_i_w    = needed_iact_cycles_i_reg;
       assign filters_i_w               = filters_i_reg;
-      assign iact_addr_len_i_w         = iact_addr_len_i_reg;
+      assign iact_channels_per_pe_i_w         = iact_channels_per_pe_i_reg;
       assign wght_addr_len_i_w         = wght_addr_len_i_reg;
       assign bano_cluster_mode_i_w     = bano_cluster_mode_i_reg;
       assign af_cluster_mode_i_w       = af_cluster_mode_i_reg;
@@ -956,7 +956,7 @@ module OpenEye_Parallel #(
       assign needed_y_cls_i_w          = needed_y_cls_i;
       assign needed_iact_cycles_i_w    = needed_iact_cycles_i;
       assign filters_i_w               = filters_i;
-      assign iact_addr_len_i_w         = iact_addr_len_i;
+      assign iact_channels_per_pe_i_w  = iact_channels_per_pe_i;
       assign wght_addr_len_i_w         = wght_addr_len_i;
       assign bano_cluster_mode_i_w     = bano_cluster_mode_i;
       assign af_cluster_mode_i_w       = {NUM_GLB_PSUM{af_cluster_mode_i}};

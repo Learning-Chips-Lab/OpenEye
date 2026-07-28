@@ -126,18 +126,19 @@ module delay_cluster #(
   // Update registers on clock edge
   always @(posedge clk_i, negedge rst_ni) begin
     if (!rst_ni) begin
-      data_regs  <= '0;
+      data_regs   <= '0;
       enable_regs <= '0;
       ready_regs  <= '0;
     end else begin
-      data_regs  <= data_stage;
+      data_regs   <= data_stage;
       enable_regs <= enable_stage;
-      ready_regs <= ready_stage;
+      ready_regs  <= ready_stage;
     end
   end
 
   // Output multiplexer
   // Select appropriate delay stage based on delay_psum_glb_i
+  integer idx;
   always @(*) begin
     if (delay_psum_glb_i == 0) begin
       data_o    = data_i;
@@ -145,7 +146,7 @@ module delay_cluster #(
       ready_o   = ready_i;
     end else if (delay_psum_glb_i <= NUM_STAGES) begin
       // Valid delay: 1-8 cycles
-      integer idx = delay_psum_glb_i - 1;
+      idx       = delay_psum_glb_i - 1;
       data_o    = data_regs[idx*DATA_BITWIDTH +: DATA_BITWIDTH];
       enable_o  = enable_regs[idx];
       ready_o   = ready_regs[idx];

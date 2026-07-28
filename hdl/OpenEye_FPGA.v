@@ -324,7 +324,6 @@ reg [1023:0] fst_path;
   wire [$clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg; // Number of active cluster rows for this layer (from dma_storage).
   wire [3:0] needed_iact_cycles_reg;             // Number of iact router broadcast cycles per spatial position (from dma_storage).
   wire [$clog2(PSUM_PER_PE+1)-1:0] filters; // Output filters per PE batch; also the psum address stride (from dma_storage).
-  wire [$clog2(IACT_ADDR_PER_PE+1)-1:0] iact_addr_len_reg; // Iact address scratchpad length per PE (from dma_storage).
   wire [$clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_reg; // Weight address scratchpad length per PE (from dma_storage).
   reg [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_reg; // Batch-normalisation mode bits per psum GLB (set in GET_PARAMETERS, forwarded to OpenEye_Parallel).
   reg [$clog2(AF_MODES)-1:0] af_cluster_mode_reg;  // Activation-function mode (set in GET_PARAMETERS, forwarded to OpenEye_Parallel).
@@ -450,7 +449,7 @@ reg [1023:0] fst_path;
   wire [11:0] iact_size_c;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
   wire [11:0] psum_size_x;       // Output map width in pixels (from dma_storage).
   wire [ 7:0] psum_size_y;       // Output map height in pixels (from dma_storage).
-  wire [ 7:0] iact_channels_per_pe;             // Channels assigned to one PE (from dma_storage).
+  wire [ 3:0] iact_channels_per_pe;             // Channels assigned to one PE (from dma_storage).
   wire [ 3:0] iact_channels_per_pe_next_layer;  // Channel count for the next layer (from dma_storage); used when routing psums back as iact.
   reg  [ 4:0] iact_channels_counter;             // Counts which channel batch [0..iact_channel_max_cycles-1] is currently being processed.
   wire [ 7:0] iact_channel_max_cycles;          // Total number of channel batches per layer pass (from dma_storage).
@@ -1096,15 +1095,15 @@ reg [1023:0] fst_path;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       //Reset Registers
-      sending_data                   <= 0;
-      fsm_sending_cycle              <= 0;
-      wght_enable_i_reg              <= 0;
+      sending_data                <= 0;
+      fsm_sending_cycle           <= 0;
+      wght_enable_i_reg           <= 0;
       wght_buffer_en_r            <= 0;
       wght_buffer_rd_addr         <= 0;
       wght_buffer_rd_addr_storage <= 0;
-      compute_reg                    <= 0;
-      wght_sendable                  <= 0;
-      flat_help_var_send              = 0;
+      compute_reg                 <= 0;
+      wght_sendable               <= 0;
+      flat_help_var_send           = 0;
       for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
         prepared_iact[a] <= 0;
       end
@@ -1123,7 +1122,7 @@ reg [1023:0] fst_path;
       compute_reg <= 0;
       if (send_data_reg | sending_data) begin
         sending_data <= 1;
-        fsm_sending_cycle <= fsm_sending_cycle + 1;
+        fsm_sending_cycle <= fsm_sending_cycle + PARALLEL_MACS;
         if (!sending_data) begin
           for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
             for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
@@ -3134,7 +3133,6 @@ reg [1023:0] fst_path;
         .needed_y_cls_reg(needed_y_cls_reg),
         .needed_iact_cycles_reg(needed_iact_cycles_reg),
         .wght_addr_len_reg(wght_addr_len_reg),
-        .iact_addr_len_reg(iact_addr_len_reg),
         .send_data_out(send_data_out),
         .needed_iact_buffer_words(needed_iact_buffer_words),
         .add_up_reg(add_up),
@@ -3295,7 +3293,7 @@ reg [1023:0] fst_path;
         .needed_iact_cycles_i         (needed_iact_cycles_reg),
         .iact_size_x_i                (iact_size_x),
         .filters_i                    (filters),
-        .iact_addr_len_i              (iact_addr_len_reg),
+        .iact_channels_per_pe_i       (iact_channels_per_pe),
         .wght_addr_len_i              (wght_addr_len_reg),
         .bano_cluster_mode_i          (bano_cluster_mode_reg),
         .af_cluster_mode_i            (af_cluster_mode_reg),

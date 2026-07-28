@@ -898,11 +898,11 @@ module PE #(
   // holds cycle 3's data instead. Reading stream_data[8] here read whatever
   // the config stream sent two cycles later, making raw_wght_w effectively
   // always 0 for any config where cycle 3 doesn't happen to set bit 8.
-  assign raw_wght_w              = stream_data[26];
   assign channel_reg_C0          = stream_data[12:9];
   assign filters_reg_M0          = stream_data[17:13];
   assign iact_addr_max_reg       = stream_data[21:18];
   assign iact_x_line_repetitions = stream_data[25:22];
+  assign raw_wght_w              = stream_data[26];
   // ============================================================================
   // Configuration Parameter Streaming
   // ============================================================================

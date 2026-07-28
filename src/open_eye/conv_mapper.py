@@ -182,7 +182,7 @@ class ConvMapper(LayerMapper):
         "needed_y_cls_reg": layer_params.used_Y_cluster,
         "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
         "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
-        "iact_addr_len_reg": layer_params.used_iact_addr_per_PE,
+        "iact_channels_per_pe": layer_params.used_channels,
         "send_data_out": layer_params.send_values_out,
         "needed_iact_buffer_words": layer_params.needed_iact_buffer_words,
         "add_up_reg":layer_params.add_up,

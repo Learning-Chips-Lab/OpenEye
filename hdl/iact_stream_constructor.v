@@ -94,7 +94,7 @@ module iact_stream_constructor #(
     input      [                           14-1:0] fc_size_i,
     input signed [                         12-1:0] iact_size_x_i,
     input signed [                          8-1:0] iact_size_y_i,
-    input signed [                          8-1:0] iact_channels_i,
+    input signed [                          4-1:0] iact_channels_i,
     input      [                            8-1:0] x_lines_i,
     input      [                            8-1:0] needed_wght_cycles_i,
     input      [                            4-1:0] needed_iact_router_cycles_i,

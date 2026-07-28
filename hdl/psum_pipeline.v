@@ -404,13 +404,13 @@ module psum_pipeline #(
                 end
               end
             end
-            if (fsm_psum_cycle >= {{10{1'd0}},filters}) begin
+            if (fsm_psum_cycle > {{10{1'd0}},filters}) begin
               psum_buffer_en_r    <= 0;
               fsm_psum_last_state    <= CALCULATE_PSUM;
               fsm_psum_current_state <= PSUM_GET_RESULTS;
               results_ready           <= 0;
               fsm_psum_cycle         <= 0;
-              psum_enable_i_reg      <= {(NUM_GLB_PSUM*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
+              psum_enable_i_reg      <= 0;
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
