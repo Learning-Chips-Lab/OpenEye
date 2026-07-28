@@ -171,7 +171,7 @@ class WghtStreamMapper(object):
             # Convert SPAD data to transmission bitstream
             wght_stream = self.create_complete_wght_stream(storage)
         chunk = self.params.Clusters * self.params.NUM_GLB_WGHT
-        wght_stream = gtu.transform_n_to_m_chunked(wght_stream,24,self.params.DMA_Bit_AXI, chunk)
+        wght_stream = gtu.transform_n_to_m_chunked(wght_stream,24,self.params.DMA_BITWIDTH, chunk)
         n = self.layer_params.wght_cycles_one_word_all_ram
         temp = []
         for i in range(0, len(wght_stream), n):
@@ -820,13 +820,13 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         # truncated away every cluster beyond the first via
         # transform_n_to_m_chunked's masking.
         elem_bits = 24 * self.params.Clusters_X
-        wght_stream = gtu.transform_n_to_m_chunked(wght_stream, elem_bits, self.params.DMA_Bit_AXI, 3)
+        wght_stream = gtu.transform_n_to_m_chunked(wght_stream, elem_bits, self.params.DMA_BITWIDTH, 3)
         # layer_params.wght_cycles_one_word_all_ram is only ever set by
         # calculate_transmission_cycles(), a conv-only method Dense never
         # calls; compute the same value directly from params here instead
         # of depending on that (see WghtStreamMapper.get_wght_stream's
         # base-class version for the formula this mirrors).
-        n = math.ceil((self.params.Clusters * self.params.NUM_GLB_WGHT * self.params.WGHT_RAM_CELLS_WORD_BITWIDTH) / self.params.DMA_Bit_AXI)
+        n = math.ceil((self.params.Clusters * self.params.NUM_GLB_WGHT * self.params.WGHT_RAM_CELLS_WORD_BITWIDTH) / self.params.DMA_BITWIDTH)
         temp = []
         for i in range(0, len(wght_stream), n):
             part = wght_stream[i : i + n]

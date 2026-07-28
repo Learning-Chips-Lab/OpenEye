@@ -102,10 +102,16 @@ def create_vh_file_from_envvars(
     file_path_vh = file_path_vh or gtu.load_env_to_variable("VH_PATH", os.getcwd())
     file_path_hdl = file_path_hdl or gtu.load_env_to_variable("HDL_PATH", hdl_dir)
     toplevel = toplevel or gtu.load_env_to_variable("TOPLEVEL", "")
+    print(toplevel)
+    if(toplevel == "OpenEye_FPGA") :
+      suffix = "_FPGA"
+    else :
+        suffix = "_PE"
+    print(suffix)
     # Create parameter file
     openeye_parameter = oep.get_oep(serial=False)
-    pre_param_path = os.path.join(file_path_vh, "pre_parameters.vh")
-    param_path = os.path.join(file_path_vh, "parameters.vh")
+    pre_param_path = os.path.join(file_path_vh, "pre_parameters" + suffix + ".vh")
+    param_path = os.path.join(file_path_vh, "parameters.vh" + suffix + ".vh")
     
     create_vh_file(openeye_parameter, pre_param_path)
     

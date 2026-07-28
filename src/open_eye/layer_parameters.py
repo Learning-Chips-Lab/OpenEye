@@ -262,6 +262,8 @@ class LayerParameters(object):
         self.store_in_psum = 0                 # Store in psum memory flag
         self.limit_increase = 0                # Amount of Iact Storages, that incrase adresses
         self.limit_increase_mod = 0            # Module amount of Iact Storages, that incrase adresses
+        self.lower_bound = 0,
+        self.upper_bound = 0,
         self.iteration_for_kernels = 1         # Amount of iterations per kernel
         self.needed_wght_cycles = 1            # Number of cycles for wght
         self.fsm_psum_limit = 1                # Number of cycles for psum
@@ -991,16 +993,16 @@ class LayerParameters(object):
         self.iact_converter_buffer_addr_max_cycles = math.ceil(self.used_channels / 2) * self.needed_Iact_writes
 
     def  calculate_transmission_cycles(self, params):
-        self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_Bit_AXI)
+        self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_BITWIDTH)
         self.trans_cycles_iact = math.ceil(self.iact_size_x*self.iact_size_y*self.channels / params.IACT_WORDS_IN_RAM)
         missing_cycles = (self.iact_cycles_one_word_all_ram - (self.trans_cycles_iact % self.iact_cycles_one_word_all_ram))%self.iact_cycles_one_word_all_ram
         self.trans_cycles_iact =  self.trans_cycles_iact + missing_cycles
 
-        self.wght_cycles_one_word_all_ram = math.ceil((params.Clusters*params.NUM_GLB_WGHT*params.WGHT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_Bit_AXI)
-        self.trans_cycles_wght = self.needed_wght_transmissions *  math.ceil(self.used_wght_per_PE/params.PARALLEL_MACS) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * 24 / params.DMA_Bit_AXI)
+        self.wght_cycles_one_word_all_ram = math.ceil((params.Clusters*params.NUM_GLB_WGHT*params.WGHT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_BITWIDTH)
+        self.trans_cycles_wght = self.needed_wght_transmissions *  math.ceil(self.used_wght_per_PE/params.PARALLEL_MACS) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * 24 / params.DMA_BITWIDTH)
 
         
-        temp = math.ceil(params.NUM_GLB_PSUM * (params.Clusters * params.DATA_PSUM_BITWIDTH/params.DMA_Bit_AXI))
+        temp = math.ceil(params.NUM_GLB_PSUM * (params.Clusters * params.DATA_PSUM_BITWIDTH/params.DMA_BITWIDTH))
         self.trans_cycles_psum = self.filters * self.iact_size_y * self.iact_x_line_repetitions * temp
 
     def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
@@ -1056,7 +1058,7 @@ class LayerParameters(object):
             self.used_iact_addr_per_PE = self.used_channels
 
         # Calculate DMA streaming cycles for input data
-        self.iact_stream_cycles = math.ceil(self.input_shape[1] * self.input_shape[2] * self.input_shape[3] / params.NUM_BUFFER / (params.DMA_Bit_AXI//params.IACT_Bitwidth))
+        self.iact_stream_cycles = math.ceil(self.input_shape[1] * self.input_shape[2] * self.input_shape[3] / params.NUM_BUFFER / (params.DMA_BITWIDTH//params.IACT_Bitwidth))
 
         # Calculate channel iteration metrics
         self.diff_iact_layer = math.ceil(self.input_shape[3]/self.used_channels)
@@ -1089,7 +1091,7 @@ class LayerParameters(object):
 
         # Calculate data field lengths for DMA
         self.iact_addr_len = 1
-        self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_Bit_AXI/params.Clusters_X)/params.IACT_WOH_Bitwidth))
+        self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_BITWIDTH/params.Clusters_X)/params.IACT_WOH_Bitwidth))
 
         # === Phase 8: Calculate GLB transmissions ===
         self.calculate_glb_transmissions(params)
@@ -1169,6 +1171,9 @@ class LayerParameters(object):
             self.iact_buffer_words_per_write = self.needed_Iact_writes * self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1) * (4//2) 
         else:
             self.iact_buffer_words_per_write = self.needed_Iact_writes * (4//2)
+
+        self.lower_bound = (self.padding_y * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions) - 1
+        self.upper_bound = (self.padding_y+self.iact_size_y) * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions
         
         # === Phase 9: Finalize calculations ===
         self.calculate_transmission_cycles(params)
@@ -1271,7 +1276,7 @@ class LayerParameters(object):
             if((self.output_shape[2] % params.PEs_X)== 0):
                 self.used_X_cluster = 1
             
-            self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_Bit_AXI/2)/params.IACT_WOH_Bitwidth))
+            self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_BITWIDTH/2)/params.IACT_WOH_Bitwidth))
 
             self.psum_transmissions_glb = math.ceil(((math.ceil(self.output_shape[1]/params.NUM_GLB_PSUM) * \
                                     self.output_shape[2]) / \
@@ -1454,7 +1459,7 @@ class LayerParameters(object):
         self.needed_iact_transmissions = self.iact_transmissions_pe * self.iact_transmissions_glb
         self.Used_refreshes = self.iact_transmissions_pe * self.wght_transmissions_pe * self.psum_transmissions_pe
 
-        self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_Bit_AXI/2)/params.IACT_WOH_Bitwidth))
+        self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_BITWIDTH/2)/params.IACT_WOH_Bitwidth))
         self.psum_delay = int(max([((self.used_wght_per_PE/2/self.used_iact_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
         self.used_wght_addr_per_PE = (self.used_iact_per_PE) + 2
         if (self.used_wght_addr_per_PE >= 16):
@@ -1505,6 +1510,8 @@ class LayerParameters(object):
         # is simply the stream length, not scaled by
         # PSUM_CYCLES_ONE_WORD_ALL_CELLS like Conv's packed-word scheme.
         self.trans_cycles_psum = self.used_psum_per_PE * 2
+        self.lower_bound = (self.padding_y * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions) - 1
+        self.upper_bound = (self.padding_y+self.iact_size_y) * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))

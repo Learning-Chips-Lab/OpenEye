@@ -190,6 +190,8 @@ class ConvMapper(LayerMapper):
         "buffer_cycles_for_x_iact" : layer_params.buffer_cycles_for_x_iact,
         "start_param_array" : layer_params.start_param_array,
         "limit_increase" : layer_params.limit_increase,
+        "lower_bound" : layer_params.lower_bound,
+        "upper_bound" : layer_params.upper_bound,
         "initial_upper_limit": layer_params.initial_upper_limit,
         "iteration_for_kernels": layer_params.iteration_for_kernels,
         "fsm_psum_limit": layer_params.fsm_psum_limit,
@@ -209,8 +211,8 @@ class ConvMapper(LayerMapper):
 
             # === PE ENABLE BITMAP TRANSMISSION ===
             # Split PE bitmap into AXI-width segments and append to DMA stream
-            for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
-                segment = bitstring[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI]
+            for x in range(math.ceil(params.PE_Complete/params.DMA_BITWIDTH)):
+                segment = bitstring[x*params.DMA_BITWIDTH:(x+1)*params.DMA_BITWIDTH]
                 dma_storage.append(int(segment[::-1], 2))
 
             # === ROUTER CONFIGURATION TRANSMISSION ===
@@ -253,62 +255,67 @@ class ConvMapper(LayerMapper):
             storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
 
         return storage
-
-    def write_quantize(self, params, layer_params, layer_repetition):
-        """Generate quantization parameters for the layer.
-
-        Packs quantization values into DMA transmission format. Each DMA line contains
-        two quantization parameter pairs, with 16 pairs total (32 values).
-
-        Args:
-            params: Hardware configuration parameters
-            layer_params: Layer-specific parameters containing quantization values
-            layer_repetition: Current repetition index for the layer
-
-        Returns:
-            list: 16 DMA words containing packed quantization parameters, where each word
-                  contains two quantization parameter pairs at specific bit offsets.
+    def write_quant_and_offset(self, params, layer_params, layer_repetition):
         """
-        dma_line = 0
-        dma_storage = []
-        for f in range(math.ceil(params.QUANT_AMOUNT/2)):
-            dma_line = 0
-            dma_line = dma_line + (layer_params.quantize[2*f][0] << 0)
-            dma_line = dma_line + (layer_params.quantize[2*f][1] << 25)
-            dma_line = dma_line + (layer_params.quantize[2*f+1][0] << 32)
-            dma_line = dma_line + (layer_params.quantize[2*f+1][1] << 57)
+        Generates unified quantization and offset parameters packed for shift-register streaming.
+        
+        Layout per Filter (LSB -> MSB):
+        - Offset   : OFFSET_WIDTH bits
+        - Exponent : EXPONENT_WIDTH bits
+        - Mantissa : MANTISSA_WIDTH bits
+        
+        Shift behavior:
+        Filter 0 lands at the lowest bit-positions (quant_reg[0 +: ENTRY_WIDTH]).
+        To achieve this with a left-shift register (`quant_reg <= {quant_reg, new_data}`),
+        the highest filter blocks (e.g. Filter N-1 down to Filter 0) must be transmitted FIRST,
+        or the streaming array must be sliced accordingly.
+        """
+        offset_w = getattr(params, 'OFFSET_WIDTH', 8)
+        exp_w    = getattr(params, 'EXPONENT_WIDTH', 7)
+        mant_w   = getattr(params, 'MANTISSA_WIDTH', 25)
+        
+        entry_w  = offset_w + exp_w + mant_w  # e.g. 8 + 7 + 25 = 40 Bits per filter
+        dma_w    = params.DMA_BITWIDTH        # e.g. 64 Bits
+        
+        total_bits = params.QUANT_AMOUNT * entry_w
+        
+        # 1. Pack ALL filter data into one giant bitfield (Filter 0 at LSB)
+        packed_bitstream = 0
+        for f in range(params.QUANT_AMOUNT):
+            mant   = layer_params.quantize[f][0]  # Mantissa
+            exp    = layer_params.quantize[f][1]  # Exponent
+            offset = layer_params.offset[f]       # Zero-Point Offset
             
-            dma_storage.append(dma_line)
-        return dma_storage
-    
-    def write_offset(self, params, layer_params, layer_repetition):
-        """Generate offset parameters for the layer.
-
-        Packs 32 offset values into DMA transmission format. Each DMA line contains
-        8 offset values packed at 8-bit intervals.
-
-        Args:
-            params: Hardware configuration parameters
-            layer_params: Layer-specific parameters containing offset values
-            layer_repetition: Current repetition index for the layer
-
-        Returns:
-            list: 4 DMA words containing packed offset parameters, where each word
-                  contains 8 consecutive offset values at 8-bit intervals.
-        """
-        dma_line = 0
+            # Combine offset | exp | mant for filter `f`
+            filter_entry = (offset & ((1 << offset_w) - 1)) | \
+                        ((exp    & ((1 << exp_w) - 1)) << offset_w) | \
+                        ((mant   & ((1 << mant_w) - 1)) << (offset_w + exp_w))
+            
+            # Shift into the global bitstream at position `f * entry_w`
+            packed_bitstream |= (filter_entry << (f * entry_w))
+            
+        # 2. Slice the bitstream into DMA words
+        # Because your Verilog shifts incoming words from lower to higher indices:
+        #   quant_reg[(a+1)*DMA_BITWIDTH +: DMA_BITWIDTH] <= quant_reg[a*DMA_BITWIDTH +: DMA_BITWIDTH]
+        # The FIRST word sent will end up at the HIGHEST index.
+        # Therefore, we chunk from MSB down to LSB!
+        
+        num_dma_words = math.ceil(total_bits / dma_w)
         dma_storage = []
-        for f in range(math.ceil(params.QUANT_AMOUNT/8)):
-            dma_line = 0
-            dma_line = dma_line + (layer_params.offset[8*f] << 0)
-            dma_line = dma_line + (layer_params.offset[8*f+1] << 8)
-            dma_line = dma_line + (layer_params.offset[8*f+2] << 16)
-            dma_line = dma_line + (layer_params.offset[8*f+3] << 24)
-            dma_line = dma_line + (layer_params.offset[8*f+4] << 32)
-            dma_line = dma_line + (layer_params.offset[8*f+5] << 40)
-            dma_line = dma_line + (layer_params.offset[8*f+6] << 48)
-            dma_line = dma_line + (layer_params.offset[8*f+7] << 56)
-            dma_storage.append(dma_line)
+        
+        # Calculate top padded length
+        total_padded_bits = num_dma_words * dma_w
+        
+        for i in range(num_dma_words):
+            # Extract word starting from the top bits down to bottom
+            shift_amount = total_padded_bits - (i + 1) * dma_w
+            if shift_amount >= 0:
+                word = (packed_bitstream >> shift_amount) & ((1 << dma_w) - 1)
+            else:
+                # Handle edge alignment if total_bits isn't perfectly divisible
+                word = (packed_bitstream << abs(shift_amount)) & ((1 << dma_w) - 1)
+                
+            dma_storage.append(word)
         return dma_storage
     
     def write_router_iact(self, params, layer_params):
@@ -380,7 +387,7 @@ class ConvMapper(LayerMapper):
                                 else:
                                     storage[cl_x][cl_y][router] = 33
                     router_cycle = router_cycle + 1
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Iact_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Iact_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
@@ -431,7 +438,7 @@ class ConvMapper(LayerMapper):
                         else:
                             storage[cl_x][cl_y][router] = 1
                     router_cycle = router_cycle + 1
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Wght_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Wght_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
@@ -499,7 +506,7 @@ class ConvMapper(LayerMapper):
                                 else:
                                     storage[cl_x][cl_y][router] = 2
                     router_cycle = router_cycle + 1
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Psum_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Psum_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0

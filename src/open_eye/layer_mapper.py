@@ -95,7 +95,7 @@ class LayerMapper(object):
     Note:
         This is an abstract base class. Subclasses must implement:
         - write_working_parameters(): Generate layer-specific hardware configuration
-        - write_quantize() and write_offset(): Generate quantization parameters
+        - write_quant_and_offset(): Generate quantization parameters
     """
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, inputstream_mapper = None, weightstream_mapper = None, bias_mapper = None):
         """Initialize the layer mapper with hardware parameters and stream mappers.
@@ -174,7 +174,7 @@ class LayerMapper(object):
             - IactStreamCreator.get_iact_stream() for input activations
             - WghtStreamCreator.get_wght_stream() for weights
             - PsumStreamCreator.get_psum_stream() for biases/partial sums
-            - write_quantize() and write_offset() for post-processing parameters
+            - write_quant_and_offset() for post-processing parameters
         """
         # Generate working parameters and hardware configuration
         self.storage[strdic.stream_parallel_dict["status"]] = self.write_working_parameters(self.params, self.layer_params, self.layer_repetition)
@@ -198,9 +198,7 @@ class LayerMapper(object):
             self.storage[strdic.stream_parallel_dict["psum"]] = []
 
         # Generate quantization and offset parameters
-        self.storage[strdic.stream_parallel_dict["quantize"]] = self.write_quantize(self.params, self.layer_params, self.layer_repetition)
-        self.storage[strdic.stream_parallel_dict["offset"]] = self.write_offset(self.params, self.layer_params, self.layer_repetition)
-
+        self.storage[strdic.stream_parallel_dict["quantize"]] = self.write_quant_and_offset(self.params, self.layer_params, self.layer_repetition)
         # Log progress for this layer transmission
         logger.info("Stream finished: " + str(self.layer_repetition + 1) + " of " + str(self.layer_params.needed_total_transmissions))
 

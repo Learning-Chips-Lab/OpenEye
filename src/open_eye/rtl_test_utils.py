@@ -322,11 +322,6 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["quantize"]][data_word]))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-        # Send offset parameters
-        for data_word in range(len(stream[strdic.stream_parallel_dict["offset"]])):
-            cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["offset"]][data_word]))
-            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-
         # Complete DMA transfer
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))

@@ -119,7 +119,7 @@ module OpenEye_FPGA #(
       parameter CLUSTER_COLUMNS = 2,
       parameter TRANS_WORDS = 8,
   `else
-    `include "parameters.vh"
+    `include "parameters_FPGA.vh"
       // Defaultvalues
   `endif
     parameter IS_TOPLEVEL   = 1,
@@ -211,6 +211,11 @@ module OpenEye_FPGA #(
     //Pooling Features
     parameter AVERAGE_POOLING = 0,
 
+    //Quantization Width
+    parameter integer OFFSET_WIDTH = 8,
+    parameter integer EXPONENT_WIDTH = 7,  
+    parameter integer MANTISSA_WIDTH = 25,
+
     localparam FINAL_DATA_IACT_BITWIDTH = SPARSITY_EN ? 4 + DATA_IACT_BITWIDTH : DATA_IACT_BITWIDTH,
     localparam FINAL_DATA_WGHT_BITWIDTH = SPARSITY_EN ? 4 + DATA_WGHT_BITWIDTH : DATA_WGHT_BITWIDTH,
 
@@ -233,8 +238,9 @@ module OpenEye_FPGA #(
     localparam integer PSUM_RAM_CELLS = CLUSTERS * NUM_GLB_PSUM/2,
     localparam integer PSUM_CYCLES_ONE_WORD_ALL_CELLS = ((PSUM_RAM_CELLS * PSUM_RAM_CELLS_WORD_BITWIDTH) + DMA_BITWIDTH - 1) / DMA_BITWIDTH,
     localparam         PSUM_CELL_INPUT_WIDTH = PSUM_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
-    localparam integer PSUM_ONE_WORD_ALL_RAM = ((CLUSTERS*PSUM_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH
-
+    localparam integer PSUM_ONE_WORD_ALL_RAM = ((CLUSTERS*PSUM_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH,
+    localparam integer QUANT_TRANS_CYCLES = (((OFFSET_WIDTH + EXPONENT_WIDTH + MANTISSA_WIDTH) * QUANT_AMOUNT) + DMA_BITWIDTH - 1)/DMA_BITWIDTH,
+    localparam integer QUANT_TRANS_WIDTH = QUANT_TRANS_CYCLES * DMA_BITWIDTH
 
 ) (
     //Clock and Reset
@@ -393,6 +399,8 @@ reg [1023:0] fst_path;
   wire [8-1:0] limit_increase;            // How many cells the active window advances per y-line step.
   wire [8-1:0] initial_upper_limit;       // Initial amount of Iact Clusters, that change in the first iteration
   reg [8-1:0] limit_increase_reg;         // How many cells the active window advances per y-line step in the psum to iact operation.
+  wire [9:0] lower_bound;
+  wire [9:0] upper_bound;
   reg [4-1:0] overhang_discrepancy;       // Fractional part of (cells_per_line); accumulated to detect when an extra cell (+overhang) is needed.
   reg [4-1:0] overhang_counter;           // Running total of fractional increments; generates overhang pulse when >= WORDS_PER_CYCLE*4.
   reg         overhang;                   // Extra +1 added to upper_limit in the current step when overhang_counter wraps.
@@ -597,14 +605,13 @@ reg [1023:0] fst_path;
   localparam GET_WGHT             = 4'd4;  // Receive weight words from host into wght_buffer_; also compute iact_converter_max_cycles.
   localparam GET_BIAS             = 4'd5;  // Receive bias (initial psum) values from host into psum_buffer_.
   localparam GET_QUANTIZE         = 4'd6;  // Receive 16 DMA words of per-filter quantization (mantissa + exponent) into quant_mant / quant_exp.
-  localparam GET_OFFSET           = 4'd7;  // Receive 4 DMA words of per-filter zero-point offsets into quant_offset; then go to START_CONVERTER.
-  localparam START_CONVERTER      = 4'd8;  // Poll converters_ready (AND of all iact_converter_ready_w); transition to CONVERT_IACT when all are idle.
-  localparam CONVERT_IACT         = 4'd9;  // Drive iact_stream_constructors through all y-line / channel cycles; advance the buffer address sliding window.
-  localparam WAIT_CYCLE           = 4'd10; // Allow the iact converter pipeline to drain (16 extra cycles); pulse send_data_reg to start the weight-send process.
-  localparam WAIT_FOR_RESULTS     = 4'd11; // Wait while OpenEye_Parallel computes; count iterations via current_cycle; transition to GET_PARAMETERS on last_data_o.
-  localparam RECEIVE_PSUMS_TO_IACT= 4'd12; // Receive quantized psums from the PSUM FSM and write them into the iact double-buffer as next-layer activations.
-  localparam MAXPOOLING_READ      = 4'd13; // Read 2×2 pixel groups from the iact buffer; accumulate running max in pooling_regs via a 3-stage comparator tree.
-  localparam MAXPOOLING_SEND      = 4'd14; // Write max-pooled results from pooling_regs back into the iact buffer cells for subsequent processing.
+  localparam START_CONVERTER      = 4'd7;  // Poll converters_ready (AND of all iact_converter_ready_w); transition to CONVERT_IACT when all are idle.
+  localparam CONVERT_IACT         = 4'd8;  // Drive iact_stream_constructors through all y-line / channel cycles; advance the buffer address sliding window.
+  localparam WAIT_CYCLE           = 4'd9; // Allow the iact converter pipeline to drain (16 extra cycles); pulse send_data_reg to start the weight-send process.
+  localparam WAIT_FOR_RESULTS     = 4'd10; // Wait while OpenEye_Parallel computes; count iterations via current_cycle; transition to GET_PARAMETERS on last_data_o.
+  localparam RECEIVE_PSUMS_TO_IACT= 4'd11; // Receive quantized psums from the PSUM FSM and write them into the iact double-buffer as next-layer activations.
+  localparam MAXPOOLING_READ      = 4'd12; // Read 2×2 pixel groups from the iact buffer; accumulate running max in pooling_regs via a 3-stage comparator tree.
+  localparam MAXPOOLING_SEND      = 4'd13; // Write max-pooled results from pooling_regs back into the iact buffer cells for subsequent processing.
 
   // PSUM FSM State Encoding
   // The PSUM FSM (fsm_psum_current_state) runs concurrently with the main FSM
@@ -1276,10 +1283,16 @@ reg [1023:0] fst_path;
   // Quantization formula applied in SEND_PSUM_TO_IACT state:
   //   q[f] = (quant_mant[f] * (psum + quant_offset[f])) >>> quant_exp[f]
   // Result is clamped to signed 8-bit before writing back to the iact buffer.
-  reg [ 7:0] quant_offset [QUANT_AMOUNT-1:0]; // Per-filter zero-point offset (8-bit, added to raw psum).
-  reg [ 6:0] quant_exp    [QUANT_AMOUNT-1:0]; // Per-filter right-shift exponent (7-bit; applied after multiply).
-  reg [24:0] quant_mant   [QUANT_AMOUNT-1:0]; // Per-filter scale mantissa (25-bit; multiplied with shifted psum).
-
+  reg  [QUANT_TRANS_WIDTH-1:0] quant_reg;
+  wire [  OFFSET_WIDTH-1:0]    quant_offset [QUANT_AMOUNT-1:0]; // Per-filter zero-point offset (8-bit, added to raw psum).
+  wire [EXPONENT_WIDTH-1:0]    quant_exp    [QUANT_AMOUNT-1:0]; // Per-filter right-shift exponent (7-bit; applied after multiply).
+  wire [MANTISSA_WIDTH-1:0]    quant_mant   [QUANT_AMOUNT-1:0]; // Per-filter scale mantissa (25-bit; multiplied with shifted psum).
+  genvar quant_count;
+  for (quant_count = 0; quant_count < QUANT_AMOUNT; quant_count=quant_count+1) begin
+    assign quant_offset[quant_count] = quant_reg[(quant_count*(OFFSET_WIDTH+EXPONENT_WIDTH+MANTISSA_WIDTH))+:OFFSET_WIDTH];
+    assign quant_exp[quant_count]    = quant_reg[OFFSET_WIDTH+(quant_count*(OFFSET_WIDTH+EXPONENT_WIDTH+MANTISSA_WIDTH))+:OFFSET_WIDTH];
+    assign quant_mant[quant_count]   = quant_reg[OFFSET_WIDTH+EXPONENT_WIDTH+(quant_count*(OFFSET_WIDTH+EXPONENT_WIDTH+MANTISSA_WIDTH))+:OFFSET_WIDTH];
+  end
   //#######################
   // Wires: Iact Buffer Interface (iact_stream_constructor → RAM_SP cells)
   // These wires are the unpacked per-cell signals that the generate blocks below
@@ -1427,11 +1440,6 @@ reg [1023:0] fst_path;
   //  GET_QUANTIZE  (fsm_cycle 0..15)
   //    Receives 16 DMA words containing per-filter quantization parameters;
   //    unpacks quant_mant and quant_exp from each 64-bit word (32-bit each).
-  //    Transitions to GET_OFFSET.
-  //
-  //  GET_OFFSET  (fsm_cycle 0..3)
-  //    Receives 4 DMA words containing per-filter zero-point offsets;
-  //    unpacks quant_offset[0..31] (8-bit each, 8 per word).
   //    Transitions to START_CONVERTER.
   //
   //  START_CONVERTER
@@ -1542,11 +1550,7 @@ reg [1023:0] fst_path;
         pooling_stage_3[a] <= 0;
       end
       pooling_stage_4 <= 0;
-      for (a = 0; a < QUANT_AMOUNT; a = a + 1) begin
-        quant_offset[a] <= 0;
-        quant_exp[a]    <= 0;
-        quant_mant[a]   <= 0;
-      end
+      quant_reg       <= 0;
 
       for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
         iact_buffer_en_w[a]      <= 0;
@@ -1634,12 +1638,8 @@ reg [1023:0] fst_path;
             pooling_stage_3[a] <= -128;
           end
           pooling_stage_4 <= -128;
-          for (a = 0; a < QUANT_AMOUNT; a = a + 1) begin
-            quant_offset[a] <= 0;
-            quant_exp[a]    <= 0;
-            quant_mant[a]   <= 0;
-          end
-          write_dma_en <= 0;
+          quant_reg       <= 0;
+          write_dma_en    <= 0;
           if (enable_dma_i_reg) begin
             if (!ready_dma_o) begin
               early_stream_start <= 1;
@@ -1700,7 +1700,7 @@ reg [1023:0] fst_path;
                     end
                     if (max_pooling) begin
                       ready_dma_o       <= 0;
-                      fsm_current_state <= GET_OFFSET;
+                      fsm_current_state <= GET_QUANTIZE;
                     end
                   end
                   fsm_cycle          <= 0;
@@ -1758,7 +1758,7 @@ reg [1023:0] fst_path;
               end
               if (max_pooling) begin
                 ready_dma_o       <= 0;
-                fsm_current_state <= GET_OFFSET;
+                fsm_current_state <= GET_QUANTIZE;
               end
             end
           end
@@ -1945,16 +1945,16 @@ reg [1023:0] fst_path;
         //   transitions to GET_OFFSET.
         // -------------------------------------------------------------------
         GET_QUANTIZE: begin
-          choose_iact_buffer  <= choose_iact_buffer_input;
-          overhang_counter    <= overhang_discrepancy;
-          ready_dma_o         <= 1;
-          wght_buffer_en_w <= 0;
+          choose_iact_buffer <= choose_iact_buffer_input;
+          overhang_counter   <= overhang_discrepancy;
+          ready_dma_o        <= 1;
+          wght_buffer_en_w   <= 0;
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
-            quant_exp[2*fsm_cycle]    <= data_dma_i_reg[31:25];
-            quant_mant[2*fsm_cycle]   <= data_dma_i_reg[24:0];
-            quant_exp[2*fsm_cycle+1]  <= data_dma_i_reg[63:57];
-            quant_mant[2*fsm_cycle+1] <= data_dma_i_reg[56:32];
+            quant_reg[0+:DMA_BITWIDTH] <= data_dma_i_reg;
+            for (a = 0; a < QUANT_TRANS_CYCLES - 1; a=a+1) begin
+              quant_reg[(a+1)*DMA_BITWIDTH+:DMA_BITWIDTH] <= quant_reg[a*DMA_BITWIDTH+:DMA_BITWIDTH];
+            end
           end
           if (max_pooling) begin
             ready_dma_o <= 0;
@@ -1962,58 +1962,10 @@ reg [1023:0] fst_path;
               iact_buffer_en_r[a] <= 1;
             end
           end
-          if ((fsm_cycle == (QUANT_AMOUNT/2) - 1) & enable_dma_i_reg) begin
+          if ((fsm_cycle == QUANT_TRANS_CYCLES - 1) & enable_dma_i_reg) begin
+            ready_dma_o       <= 0;
             fsm_cycle         <= 0;
             fsm_last_state    <= GET_QUANTIZE;
-            fsm_current_state <= GET_OFFSET;
-          end
-        end
-
-        // -------------------------------------------------------------------
-        // GET_OFFSET
-        // Receives 4 DMA words of per-filter zero-point offsets, then
-        // transitions to either START_CONVERTER or MAXPOOLING_READ.
-        //
-        // - Asserts ready_dma_o; clears wght_buffer_en_w.
-        // - On each enable_dma_i_reg pulse:
-        //   * Increments fsm_cycle.
-        //   * Unpacks 8 × 8-bit offsets from the 64-bit DMA word:
-        //       quant_offset[8*fsm_cycle+0..7] = bits[7:0]..[63:56].
-        // - max_pooling fast-exit: immediately deasserts ready_dma_o,
-        //   resets select_ram_counter / ram_counter_storage, sets
-        //   fsm_cycle = 2, and jumps to MAXPOOLING_READ.
-        // - Normal exit after 4 words (fsm_cycle == 3):
-        //   * Clears fsm_cycle.
-        //   * Deasserts ready_dma_o.
-        //   * Advances buffer_addr_upper_limit by limit_increase_reg.
-        //   * Transitions to START_CONVERTER (or MAXPOOLING_READ if pooling).
-        // -------------------------------------------------------------------
-        GET_OFFSET: begin
-          ready_dma_o         <= 1;
-          wght_buffer_en_w <= 0;
-          if (enable_dma_i_reg) begin
-            fsm_cycle <= fsm_cycle + 1;
-            quant_offset[8*fsm_cycle]   <= data_dma_i_reg[7:0];
-            quant_offset[8*fsm_cycle+1] <= data_dma_i_reg[15:8];
-            quant_offset[8*fsm_cycle+2] <= data_dma_i_reg[23:16];
-            quant_offset[8*fsm_cycle+3] <= data_dma_i_reg[31:24];
-            quant_offset[8*fsm_cycle+4] <= data_dma_i_reg[39:32];
-            quant_offset[8*fsm_cycle+5] <= data_dma_i_reg[47:40];
-            quant_offset[8*fsm_cycle+6] <= data_dma_i_reg[55:48];
-            quant_offset[8*fsm_cycle+7] <= data_dma_i_reg[63:56];
-          end
-          if (max_pooling) begin
-            ready_dma_o         <= 0;
-            fsm_cycle           <= 2;
-            fsm_last_state      <= GET_OFFSET;
-            fsm_current_state   <= MAXPOOLING_READ;
-            select_ram_counter  <= 0;
-            ram_counter_storage <= 0;
-          end
-          if ((fsm_cycle == (QUANT_AMOUNT/8) - 1) & enable_dma_i_reg) begin
-            fsm_cycle         <= 0;
-            ready_dma_o       <= 0;
-            fsm_last_state    <= GET_OFFSET;
             fsm_current_state <= START_CONVERTER;
             buffer_addr_upper_limit <= initial_upper_limit;
             if (max_pooling) begin
@@ -2122,8 +2074,8 @@ reg [1023:0] fst_path;
             iact_converter_enc_enable <= 1;
             select_ram_counter        <= 0;
           end
-          if ((iact_converter_cycles + 1 > (padding_y * buffer_cycles_for_x_iact * iact_x_line_repetitions))) begin // Lower bound
-            if ((iact_converter_cycles < ((padding_y+iact_size_y) * buffer_cycles_for_x_iact * iact_x_line_repetitions))) begin // Upper bound
+          if ((iact_converter_cycles > lower_bound)) begin
+            if ((iact_converter_cycles < upper_bound)) begin
               past_padding <= 1;
               if ((iact_converter_buffer_addr_cycles >= (iact_converter_buffer_addr_max_cycles) - 1) | iact_buffer_next_addr) begin
                 if (past_padding == 1) begin
@@ -3140,6 +3092,8 @@ reg [1023:0] fst_path;
         .buffer_cycles_for_x_iact(buffer_cycles_for_x_iact),
         .start_param_array(start_param_array),
         .limit_increase(limit_increase),
+        .lower_bound(lower_bound),
+        .upper_bound(upper_bound),
         .initial_upper_limit(initial_upper_limit),
         .iteration_for_kernels(iteration_for_kernels),
         .fsm_psum_limit(fsm_psum_limit),

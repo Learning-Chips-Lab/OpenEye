@@ -162,7 +162,7 @@ class DenseMapper(LayerMapper):
             # didn't match IactStreamMapper.get_iact_stream()'s own
             # transmissions count (iact_size_x rounded up to a
             # NUM_GLB_IACT*used_iact_per_PE multiple, then packed
-            # DMA_Bit_AXI/IACT_Bitwidth values per word), undercounting it and
+            # DMA_BITWIDTH/IACT_Bitwidth values per word), undercounting it and
             # leaving GET_IACT exit early with most of the iact buffer never
             # loaded. Read directly from the iact mapper instead of
             # re-deriving the formula, mirroring trans_cycles_wght.
@@ -223,6 +223,8 @@ class DenseMapper(LayerMapper):
             "buffer_cycles_for_x_iact" : layer_params.buffer_cycles_for_x_iact,
             "start_param_array" : layer_params.start_param_array,
             "limit_increase" : layer_params.limit_increase,
+            "lower_bound" : layer_params.lower_bound,
+            "upper_bound" : layer_params.upper_bound,
             "initial_upper_limit": layer_params.initial_upper_limit,
             "iteration_for_kernels": layer_params.iteration_for_kernels,
             "fsm_psum_limit": layer_params.fsm_psum_limit,
@@ -241,8 +243,8 @@ class DenseMapper(LayerMapper):
 
             # === PE ENABLE BITMAP TRANSMISSION ===
             # Split PE bitmap into AXI-width segments and append to DMA stream
-            for x in range(math.ceil(params.PE_Complete/params.DMA_Bit_AXI)):
-                segment = bitstring[x*params.DMA_Bit_AXI:(x+1)*params.DMA_Bit_AXI]
+            for x in range(math.ceil(params.PE_Complete/params.DMA_BITWIDTH)):
+                segment = bitstring[x*params.DMA_BITWIDTH:(x+1)*params.DMA_BITWIDTH]
                 dma_storage.append(int(segment[::-1], 2))
 
             # === ROUTER CONFIGURATION TRANSMISSION ===
@@ -394,7 +396,7 @@ class DenseMapper(LayerMapper):
                     router_cycle = router_cycle + 1
 
                     # Check if current DMA word is full
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Iact_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Iact_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
@@ -449,7 +451,7 @@ class DenseMapper(LayerMapper):
                     router_cycle = router_cycle + 1
 
                     # Check if current DMA word is full
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Wght_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Wght_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
@@ -527,7 +529,7 @@ class DenseMapper(LayerMapper):
                     router_cycle = router_cycle + 1
 
                     # Check if current DMA word is full
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Psum_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Psum_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0

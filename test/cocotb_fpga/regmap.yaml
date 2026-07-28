@@ -51,6 +51,8 @@ registers:
   - {name: buffer_cycles_for_x_iact, width: 8}
   - {name: start_param_array, width: int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)}
   - {name: limit_increase, width: 8}
+  - {name: lower_bound, width: 10}
+  - {name: upper_bound, width: 10}
   - {name: initial_upper_limit, width: 8}
   - {name: iteration_for_kernels, width: 4}
   - {name: fsm_psum_limit, width: 17}

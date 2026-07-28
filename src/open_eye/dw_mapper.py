@@ -281,7 +281,7 @@ class DWMapper(LayerMapper):
                     router_cycle = router_cycle + 1
 
                     # In serial mode, flush line when it's full
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Iact_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Iact_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
@@ -341,7 +341,7 @@ class DWMapper(LayerMapper):
                     router_cycle = router_cycle + 1
 
                     # In serial mode, flush line when full
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Wght_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Wght_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0
@@ -393,7 +393,7 @@ class DWMapper(LayerMapper):
                     router_cycle = router_cycle + 1
 
                     # In serial mode, flush line when full
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_Bit_AXI/params.Psum_Router_Bits))):
+                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Psum_Router_Bits))):
                         router_cycle = 0
                         storage.append(line)
                         line = 0

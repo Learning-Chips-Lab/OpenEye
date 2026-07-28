@@ -45,8 +45,7 @@ stream_parallel_dict = {
   "iact": 1,            # Input activation data (parallel port)
   "wght": 2,            # Weight data (parallel port)
   "psum": 3,            # Partial sum data (parallel port)
-  "quantize": 4,        # Quantization parameters (scale, shift pairs)
-  "offset": 5           # Output offset parameters
+  "quantize": 4        # Quantization parameters (scale, shift pairs)
 }
 ```
 

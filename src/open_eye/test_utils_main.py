@@ -205,7 +205,7 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                             for router in range(params.Psum_Routers):
                                 for psum_pe in range(int((layer_params.filters*(layer_repetition%layer_params.needed_wght_transmissions)/layer_params.needed_wght_transmissions)/2),\
                                     int((layer_params.filters*(1+(layer_repetition%layer_params.needed_wght_transmissions))/layer_params.needed_wght_transmissions)/2)):
-                                    for counter in range(params.DMA_Bit_AXI//params.DATA_PSUM_BITWIDTH):
+                                    for counter in range(params.DMA_BITWIDTH//params.DATA_PSUM_BITWIDTH):
                                         x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % layer_params.output_shape[2]))
                                         y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / layer_params.output_shape[2]))
                                         if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[2])):
@@ -213,7 +213,7 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                                                 dma_line = dma_line + (calculated_results[2 * psum_pe + counter][x_cor][y_cor] << (params.DATA_PSUM_BITWIDTH * counter))
                                             else:
                                                 dma_line = dma_line
-                                    file_dma_ref[layer_repetition].write(bin(dma_line)[2:].zfill(params.DMA_Bit_AXI) + "\n")
+                                    file_dma_ref[layer_repetition].write(bin(dma_line)[2:].zfill(params.DMA_BITWIDTH) + "\n")
                                     dma_line = 0
                 file_dma_ref[layer_repetition].close()
         else:

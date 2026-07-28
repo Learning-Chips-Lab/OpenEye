@@ -124,7 +124,7 @@ class IactStreamMapper(object):
             # Skip activation loading if layer parameters indicate it's not needed
             if (self.layer_params.skipIact == 0):
                 bitwidth = self.params.IACT_Bitwidth
-                dma_bitwidth = self.params.DMA_Bit_AXI
+                dma_bitwidth = self.params.DMA_BITWIDTH
                 values_per_word = dma_bitwidth // bitwidth
 
                 # Transpose from [C][H][W] to [H][W][C] for row-major ordering
@@ -834,7 +834,7 @@ class DenseIactStreamMapper(IactStreamMapper):
             iact_stream = []
             if (layer_params.skipIact == 0) :
                 bitwidth = params.IACT_Bitwidth
-                dma_bitwidth = params.DMA_Bit_AXI
+                dma_bitwidth = params.DMA_BITWIDTH
                 values_per_word = dma_bitwidth // bitwidth
                 # iact_size_x is the flattened feature count K; input_shape may
                 # be 2D (standalone Dense/GEMM) or 4D (after conv), so it is

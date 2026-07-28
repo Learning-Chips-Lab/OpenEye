@@ -462,7 +462,7 @@ module PE #(
       parameter integer PARALLEL_MACS = 2,
       parameter integer SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
     `else
-      `include "parameters.vh"
+      `include "parameters_PE.vh"
         // Defaultvalues
     `endif
     parameter integer NUM_GLB_IACT       = 3,

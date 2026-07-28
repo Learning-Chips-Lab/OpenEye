@@ -102,7 +102,7 @@ class OpenEyeParameters(object):
         Router_Modes_WGHT (int): Number of routing modes for weight path.
         Router_Modes_PSUM (int): Number of routing modes for partial sum path.
 
-        DMA_Bit_AXI (int): AXI bus width for DMA transfers (64 bits).
+        DMA_BITWIDTH (int): AXI bus width for DMA transfers (64 bits).
         FSM_CYCLE_BITWIDTH (int): Bitwidth for FSM cycle counter (1024 bits).
         FSM_STATES (int): Number of FSM states in control logic (9).
         Iact_Router_Bits (int): Bitwidth for activation router configuration (6 bits).
@@ -302,7 +302,7 @@ class OpenEyeParameters(object):
         # === DMA AND CONTROL CONFIGURATION ===
         # Parameters for DMA transfers and FSM control logic
 
-        self.DMA_Bit_AXI = 64          # AXI bus width for DMA transfers (64 bits)
+        self.DMA_BITWIDTH = 64          # AXI bus width for DMA transfers (64 bits)
         self.FSM_CYCLE_BITWIDTH = 1024 # Bitwidth for FSM cycle counter (1024 bits)
         self.FSM_STATES = 9            # Number of states in control FSM
 
@@ -318,6 +318,13 @@ class OpenEyeParameters(object):
         self.PSUM_RAM_CELLS_WORD_BITWIDTH = 64
         self.DATA_IACT_BITWIDTH = 8
         self.IACT_WORDS_IN_RAM = self.IACT_RAM_CELLS_WORD_BITWIDTH//self.DATA_IACT_BITWIDTH
+
+        # === QUANTIZATION PARAMETER BITWIDTHS ===
+        # Bitwidths for per-filter quantization scale and offset factors
+
+        self.OFFSET_WIDTH = 8          # Bitwidth for zero-point offset (8 bits)
+        self.EXPONENT_WIDTH = 7        # Bitwidth for right-shift exponent (7 bits)
+        self.MANTISSA_WIDTH = 25       # Bitwidth for scale mantissa (25 bits)
 
 
 
@@ -346,7 +353,7 @@ def get_oep(serial = False):
 
         >>> # Get parameters for serial DMA mode
         >>> params_serial = get_oep(serial=True)
-        >>> print(f"DMA bus width: {params_serial.DMA_Bit_AXI} bits")
+        >>> print(f"DMA bus width: {params_serial.DMA_BITWIDTH} bits")
 
     """
     openeye_parameter = OpenEyeParameters(serial)

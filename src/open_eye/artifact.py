@@ -83,7 +83,7 @@ FLAG_HAS_INPUT_PATCH = 0x1
 
 # Section order used by generic_test_utils.create_stream_file and the
 # serial DMA transmission.
-_SECTION_ORDER = ["status", "iact", "wght", "psum", "quantize", "offset"]
+_SECTION_ORDER = ["status", "iact", "wght", "psum", "quantize"]
 
 
 def fnv1a32(data):

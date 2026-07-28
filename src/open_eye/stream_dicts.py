@@ -51,8 +51,7 @@ stream_parallel_dict = {
   "iact": 1,
   "wght": 2,
   "psum": 3,
-  "quantize": 4,
-  "offset": 5 
+  "quantize": 4
 }
 
 # further refinement of the status data (index in sub-list)

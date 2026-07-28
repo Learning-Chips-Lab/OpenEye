@@ -147,8 +147,6 @@ def create_stream_file(stream, layer_number, layer_repetition):
         f_dump.write(f'{v}\n')
     for v in stream[strdic.stream_parallel_dict["quantize"]]:
         f_dump.write(f'{v}\n')
-    for v in stream[strdic.stream_parallel_dict["offset"]]:
-        f_dump.write(f'{v}\n')
         
     f_dump.close()
 
