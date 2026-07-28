@@ -843,7 +843,7 @@ module psum_pipeline #(
         fsm_psum_last_state         <= PSUM_SEND_RESULTS;
         fsm_psum_current_state      <= PSUM_IDLE;
         fsm_psum_cycle              <= 0;
-        psum_buffer_addr_storage <= 0;
+        psum_buffer_addr_storage    <= 0;
         storage_cycles              <= 0;
         psum_router_set_reg         <= 1;
         iact_channel_counter_reg    <= 0;
@@ -858,7 +858,7 @@ module psum_pipeline #(
         last_data_reg               <= 0;
         fsm_x_cl_psum               <= 0;
         fsm_y_cl_psum               <= 0;
-        psum_buffer_en_r         <= 0;
+        psum_buffer_en_r            <= 0;
         finished_cycles_psum        <= 0;
         fsm_psum_r                  <= 0;
         fsm_x_cl_psum               <= 0;

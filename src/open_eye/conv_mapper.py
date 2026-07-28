@@ -201,7 +201,8 @@ class ConvMapper(LayerMapper):
         "pooling_mode": 0,
         "gemm_mode": getattr(layer_params, "gemm_mode", 0),
         "test_reg": 0,
-        "used_wght_per_PE": layer_params.used_wght_per_PE
+        "used_wght_per_PE": layer_params.used_wght_per_PE,
+        "overhang_discrepancy": layer_params.overhang_discrepancy
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===

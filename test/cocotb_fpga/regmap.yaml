@@ -63,6 +63,8 @@ registers:
   - {name: gemm_mode, width: 1}
   - {name: test_reg, width: 20}
   - {name: used_wght_per_PE, width: int(BUFFER_WIDTH)}
+  - {name: overhang_discrepancy, width: 4}
+
 
 
 

@@ -275,6 +275,7 @@ class LayerParameters(object):
         self.trans_cycles_wght = 1             # Needed transmissions cycles for wght
         self.trans_cycles_psum = 1             # Needed transmissions cycles for psum
         self.iact_cycles_one_word_all_ram = 1
+        self.overhang_discrepancy = 0
 
         # === Control Flags ===
         self.send_values_out = 1               # Send outputs to DRAM
@@ -1174,7 +1175,11 @@ class LayerParameters(object):
 
         self.lower_bound = (self.padding_y * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions) - 1
         self.upper_bound = (self.padding_y+self.iact_size_y) * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions
-        
+
+        if (self.channels == 1) :
+            self.overhang_discrepancy  = (self.iact_size_x*2)%(params.WORDS_PER_CYCLE*4)
+        else :
+            self.overhang_discrepancy  = (self.iact_size_x*self.used_channels)%(params.WORDS_PER_CYCLE*4)
         # === Phase 9: Finalize calculations ===
         self.calculate_transmission_cycles(params)
         self.calculate_needed_refreshes_mx(params)
@@ -1512,6 +1517,7 @@ class LayerParameters(object):
         self.trans_cycles_psum = self.used_psum_per_PE * 2
         self.lower_bound = (self.padding_y * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions) - 1
         self.upper_bound = (self.padding_y+self.iact_size_y) * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions
+        self.overhang_discrepancy = (self.used_channels*params.NUM_GLB_WGHT)%(params.WORDS_PER_CYCLE*4)
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))

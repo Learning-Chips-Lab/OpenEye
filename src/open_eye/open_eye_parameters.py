@@ -326,6 +326,8 @@ class OpenEyeParameters(object):
         self.EXPONENT_WIDTH = 7        # Bitwidth for right-shift exponent (7 bits)
         self.MANTISSA_WIDTH = 25       # Bitwidth for scale mantissa (25 bits)
 
+        self.WORDS_PER_CYCLE = 2
+
 
 
 
