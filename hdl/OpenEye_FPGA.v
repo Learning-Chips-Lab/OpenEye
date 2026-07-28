@@ -393,18 +393,18 @@ reg [1023:0] fst_path;
   // selects which physical half (ping / pong) of each cell is active,
   // allowing one half to be written while the other is being read.
   // -----------------------------------------------------------------------
-  reg buffer_select;       // Legacy / unused; choose_iact_buffer is the active double-buffer selector.
-  reg [8-1:0] buffer_addr_upper_limit; // Index of the cell just past the upper edge of the active write window (mod IACT_RAM_CELLS).
-  reg [8-1:0] buffer_addr_lower_limit; // Index of the first cell in the active write window (mod IACT_RAM_CELLS).
+  reg          buffer_select;       // Legacy / unused; choose_iact_buffer is the active double-buffer selector.
+  reg [8-1:0]  buffer_addr_upper_limit; // Index of the cell just past the upper edge of the active write window (mod IACT_RAM_CELLS).
+  reg [8-1:0]  buffer_addr_lower_limit; // Index of the first cell in the active write window (mod IACT_RAM_CELLS).
   wire [8-1:0] limit_increase;            // How many cells the active window advances per y-line step.
   wire [8-1:0] initial_upper_limit;       // Initial amount of Iact Clusters, that change in the first iteration
-  reg [8-1:0] limit_increase_reg;         // How many cells the active window advances per y-line step in the psum to iact operation.
-  wire [9:0] lower_bound;
-  wire [9:0] upper_bound;
-  reg [4-1:0] overhang_discrepancy;       // Fractional part of (cells_per_line); accumulated to detect when an extra cell (+overhang) is needed.
-  reg [4-1:0] overhang_counter;           // Running total of fractional increments; generates overhang pulse when >= WORDS_PER_CYCLE*4.
-  reg         overhang;                   // Extra +1 added to upper_limit in the current step when overhang_counter wraps.
-  reg         overhang_delay;             // One-cycle delayed version of overhang; applied to lower_limit one cycle after upper_limit.
+  reg [8-1:0]  limit_increase_reg;         // How many cells the active window advances per y-line step in the psum to iact operation.
+  wire [9:0]   lower_bound;
+  wire [9:0]   upper_bound;
+  wire [4-1:0] overhang_discrepancy;       // Fractional part of (cells_per_line); accumulated to detect when an extra cell (+overhang) is needed.
+  reg [4-1:0]  overhang_counter;           // Running total of fractional increments; generates overhang pulse when >= WORDS_PER_CYCLE*4.
+  reg          overhang;                   // Extra +1 added to upper_limit in the current step when overhang_counter wraps.
+  reg          overhang_delay;             // One-cycle delayed version of overhang; applied to lower_limit one cycle after upper_limit.
 
   // -----------------------------------------------------------------------
   // Weight Staging Buffer Control
@@ -1519,7 +1519,6 @@ reg [1023:0] fst_path;
       iact_ready                            <= 0;
       buffer_addr_upper_limit            <= 0;
       limit_increase_reg                    <= 0;
-      overhang_discrepancy                  <= 0;
       overhang_counter                      <= 0;
       overhang                              <= 0;
       overhang_delay                        <= 0;
@@ -1904,23 +1903,17 @@ reg [1023:0] fst_path;
         GET_BIAS: begin
           status_reg_enable_reg <= 0;
           ready_dma_o           <= 1;
-          wght_buffer_en_w   <= 0;
+          wght_buffer_en_w      <= 0;
+          overhang              <= 0;
+          overhang_delay        <= 0;
           if (fsm_psum_cycle == trans_cycles_psum - 1) begin
             fsm_last_state         <= GET_BIAS;
             fsm_current_state      <= GET_QUANTIZE;
-            wght_buffer_wr_addr <= 0;
-            if (iact_channels_per_pe == 1) begin
-              overhang_discrepancy   <= (iact_size_x*2)%(WORDS_PER_CYCLE[7:0]*4);
-            end else begin
-              overhang_discrepancy   <= (iact_size_x*iact_channels_per_pe)%(WORDS_PER_CYCLE[7:0]*4);
-            end
-            overhang               <= 0;
-            overhang_delay         <= 0;
+            fsm_cycle              <= 0;
+            wght_buffer_wr_addr    <= 0;
             if (fully_connected_layer) begin
-              overhang_discrepancy <= ((iact_channels_per_pe*NUM_GLB_WGHT)%(WORDS_PER_CYCLE[7:0]*4));
               overhang             <= 4;
             end
-            fsm_cycle <= 0;
           end
         end
 
@@ -2112,7 +2105,6 @@ reg [1023:0] fst_path;
               iact_channels_counter <= iact_channels_counter + 1;
               if (iact_channels_counter == (iact_channel_max_cycles - 1)) begin
                 fsm_current_state     <= WAIT_CYCLE;
-                overhang_discrepancy  <= 0;
                 iact_channels_counter <= 0;
                 fsm_cycle             <= 0;
                 past_padding          <= 0;
@@ -2164,7 +2156,6 @@ reg [1023:0] fst_path;
                 buffer_addr_upper_limit <= (((iact_size_x+1)/8))%IACT_RAM_CELLS;
               end
               buffer_addr_lower_limit <= 0;
-              overhang_discrepancy       <= 0;
 
               iact_buffer_data_w <= 0;
             end
@@ -2287,7 +2278,7 @@ reg [1023:0] fst_path;
                           iact_buffer_data_w[IACT_WORDS_IN_RAM*8*a+IACT_WORDS_IN_RAM*b+:8] <=
                           quantized_value_reg[((word / 4) + ((a-ram_counter_storage) * 2) + overhang_discrepancy - ram_iact_modulo)%8];
                         end
-                        overhang_discrepancy <= (overhang_discrepancy + ram_iact_modulo)%8;
+                        //overhang_discrepancy <= (overhang_discrepancy + ram_iact_modulo)%8;
                       end
                     //Regular
                     end else begin
@@ -2324,9 +2315,6 @@ reg [1023:0] fst_path;
                           iact_buffer_data_w[IACT_WORDS_IN_RAM*8*a+IACT_WORDS_IN_RAM*b+:8] <= 
                           quantized_value_reg[((word / 4) + limit_increase_reg + ((a-ram_counter_storage) * 2) - overhang_discrepancy)%8];
                         
-                        end
-                        if (select_ram_counter - ram_counter_storage + iact_channels_per_pe_next_layer == (psum_size_x/2)) begin
-                          overhang_discrepancy <= 0;
                         end
                       end
                     end
@@ -3101,6 +3089,7 @@ reg [1023:0] fst_path;
         .iact_converter_max_cycles(iact_converter_max_cycles),
         .iact_buffer_words_per_write(iact_buffer_words_per_write),
         .pooling_mode(pooling_mode),
+        .overhang_discrepancy(overhang_discrepancy),
         .gemm_mode(gemm_mode)
     );
 
