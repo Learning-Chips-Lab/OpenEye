@@ -21,6 +21,7 @@ import sys
 from typing import Optional, Union
 import open_eye.open_eye_parameters as oep
 import open_eye.generic_test_utils as gtu
+import json
 
 directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
@@ -65,6 +66,12 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
     """
     gtu.delete_files_in_directory('demo/')
     if (gtu.load_env_to_variable("TOPLEVEL", "OpenEye_FPGA") == "OpenEye_FPGA") :
+        try:
+            with open("shared_config.json", "r") as f:
+                config_data = json.load(f)
+                TRANSMISSIONS = config_data.get("TRANSMISSIONS", 8)
+        except FileNotFoundError:
+            TRANSMISSIONS = 8
         with open(filename, 'w') as txt_file:
             txt_file.write(f"parameter CLUSTER_ROWS  = {openeye_parameter.Clusters_Y},\n")
             txt_file.write(f"parameter CLUSTER_COLUMNS  = {openeye_parameter.Clusters_X},\n")
@@ -77,6 +84,8 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
             txt_file.write(f"parameter QUANT_AMOUNT = {openeye_parameter.QUANT_AMOUNT},\n")
             txt_file.write(f"parameter DATA_PSUM_BITWIDTH = {openeye_parameter.DATA_PSUM_BITWIDTH},\n")
             txt_file.write(f"parameter TRANS_WORDS = {openeye_parameter.TRANS_WORDS},\n")
+            txt_file.write(f"parameter DMA_BITWIDTH = {openeye_parameter.DMA_BITWIDTH},\n")
+            txt_file.write(f"parameter TRANSMISSIONS = {TRANSMISSIONS},\n")
     else :
         with open(filename, 'w') as txt_file:
             txt_file.write(f"parameter PARALLEL_MACS = {openeye_parameter.PARALLEL_MACS},\n")
@@ -111,7 +120,7 @@ def create_vh_file_from_envvars(
     # Create parameter file
     openeye_parameter = oep.get_oep(serial=False)
     pre_param_path = os.path.join(file_path_vh, "pre_parameters" + suffix + ".vh")
-    param_path = os.path.join(file_path_vh, "parameters.vh" + suffix + ".vh")
+    param_path = os.path.join(file_path_vh, "parameters" + suffix + ".vh")
     
     create_vh_file(openeye_parameter, pre_param_path)
     

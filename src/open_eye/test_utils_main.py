@@ -193,6 +193,7 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
     dma_line = 0
     
     output_order = []
+    words_per_transmission = params.DMA_BITWIDTH//params.DATA_PSUM_BITWIDTH
     if "Depthwise" in str(layer_params.layer_name):
         if(params.SERIAL):
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
@@ -203,13 +204,13 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                     for cl_y in range(params.Clusters_Y):
                         for cl_x in range(params.Clusters_X):
                             for router in range(params.Psum_Routers):
-                                for psum_pe in range(int((layer_params.filters*(layer_repetition%layer_params.needed_wght_transmissions)/layer_params.needed_wght_transmissions)/2),\
-                                    int((layer_params.filters*(1+(layer_repetition%layer_params.needed_wght_transmissions))/layer_params.needed_wght_transmissions)/2)):
-                                    for counter in range(params.DMA_BITWIDTH//params.DATA_PSUM_BITWIDTH):
+                                for psum_pe in range(int((layer_params.filters*(layer_repetition%layer_params.needed_wght_transmissions)/layer_params.needed_wght_transmissions)/words_per_transmission),\
+                                    int((layer_params.filters*(1+(layer_repetition%layer_params.needed_wght_transmissions))/layer_params.needed_wght_transmissions)/words_per_transmission)):
+                                    for counter in range(words_per_transmission):
                                         x_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) % layer_params.output_shape[2]))
                                         y_cor= int(((router + cl_x * params.PEs_X + cl_y * params.Clusters_X * params.PEs_X + refresh * params.Clusters_Y * params.Clusters_X * params.PEs_X ) / layer_params.output_shape[2]))
                                         if((x_cor < layer_params.output_shape[1]) & (y_cor < layer_params.output_shape[2])):
-                                            if(calculated_results[2 * psum_pe + counter][x_cor][y_cor] >= 0):
+                                            if(calculated_results[words_per_transmission * psum_pe + counter][x_cor][y_cor] >= 0):
                                                 dma_line = dma_line + (calculated_results[2 * psum_pe + counter][x_cor][y_cor] << (params.DATA_PSUM_BITWIDTH * counter))
                                             else:
                                                 dma_line = dma_line
@@ -525,6 +526,7 @@ def refresh_position(x_cor, y_cor, filter, y_line_counter, kernel_counter, layer
     return x_cor, y_cor, filter, y_line_counter, kernel_counter
 
 def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref):
+    words_per_transmission = params.DMA_BITWIDTH//params.DATA_PSUM_BITWIDTH
     filter_cycles = ((layer_params.filters//layer_params.used_psum_per_PE)//layer_params.different_kernels_per_calculation)
     output_number = layer_params.iact_size_y*layer_params.iact_size_x*layer_params.filters
     needed_refreshes = math.ceil(output_number / (layer_params.iact_size_x * layer_params.different_kernels_per_calculation * layer_params.y_lines_per_calculation) / layer_params.used_psum_per_PE)
@@ -549,18 +551,18 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                             kernel_counter = kernel_counter + 1
                             x_cor = les.x_start
                             filter = filter + 1
-                    for router in range(0, params.Psum_Routers, 2) :
-                        partial_result_a, partial_result_b = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH), gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
-                        for counter in range(params.PARALLEL_MACS) :
+                    for _ in range(0, params.Psum_Routers, words_per_transmission) :
+                        temp_string = ""
+                        for _ in range(words_per_transmission) :
                                 array.append((x_cor,y_cor,filter))
                                 if (kernel_counter < layer_params.different_kernels_per_calculation) :
                                     if((x_cor < layer_params.psum_size_x) & (y_cor < layer_params.psum_size_y)) :
-                                        if (counter == 0):
-                                            partial_result_b = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],params.DATA_PSUM_BITWIDTH)
-                                        else:
-                                            partial_result_a = gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],params.DATA_PSUM_BITWIDTH)
+                                        try:
+                                            temp_string =gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],params.DATA_PSUM_BITWIDTH) +  temp_string
+                                        except:
+                                            temp_string = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH) + temp_string
                                         x_cor = x_cor + 1
-                        file_dma_ref.write(partial_result_a + partial_result_b + "\n")
+                        file_dma_ref.write(temp_string+ "\n")
             filter = filter + 1
         if ((filter >= layer_params.filters)) :
             if (x_cor >= layer_params.psum_size_x) :

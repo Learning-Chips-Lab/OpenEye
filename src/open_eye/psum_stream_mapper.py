@@ -119,18 +119,21 @@ class PsumStreamMapper(object):
         if (self.params.SERIAL):
             # === SERIAL MODE: LINEAR STREAM GENERATION ===
             # Calculate how many times to replicate each bias value
-            block_length = ((self.params.NUM_GLB_PSUM//2) * self.params.Clusters)//self.layer_params.different_kernels_per_calculation
             psum_stream = []
-
+            words_per_transmission = min(2,self.params.DMA_BITWIDTH//self.params.DATA_PSUM_BITWIDTH)
+            block_length = ((self.params.NUM_GLB_PSUM//words_per_transmission) * self.params.Clusters)//self.layer_params.different_kernels_per_calculation
             # Generate bias stream for each output position and filter
             for k in range (self.layer_params.iact_x_line_repetitions) :
                 for j in range(self.layer_params.iact_size_y) :
                     for i in range(self.layer_params.filters) :
                         # Convert bias to two's complement
+                        temp = 0
                         bias_bit = gtu.to_twos_complement(self.dram_bias[i], self.params.DATA_PSUM_BITWIDTH)
-                        # Pack two values into a 40-bit word and replicate
-                        packed_value = bias_bit + (bias_bit * 2**self.params.DATA_PSUM_BITWIDTH)
-                        psum_stream.extend([packed_value] * block_length)
+                        for j in range(words_per_transmission) :
+                            temp = bias_bit + (temp * 2**self.params.DATA_PSUM_BITWIDTH)
+                            # Pack two values into a 40-bit word and replicate
+                            packed_value = bias_bit + (bias_bit * 2**self.params.DATA_PSUM_BITWIDTH)
+                        psum_stream.extend([temp] * block_length)
         else:
             # === PARALLEL MODE: CLUSTER-BASED STREAM GENERATION ===
             # Create 3D structure: [cluster_x][cluster_y][router]

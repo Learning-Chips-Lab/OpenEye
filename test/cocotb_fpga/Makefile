@@ -129,6 +129,8 @@ export BUFFER_WIDTH=12
 export QUANT_AMOUNT=32
 export TRANS_WORDS = 4
 
+export DMA_BITWIDTH = 64
+
 export
 run:
 	@python -m open_eye.generator . ../../hdl/include ../../hdl

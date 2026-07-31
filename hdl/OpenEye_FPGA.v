@@ -118,6 +118,8 @@ module OpenEye_FPGA #(
       parameter DATA_PSUM_BITWIDTH = 32,
       parameter CLUSTER_COLUMNS = 2,
       parameter TRANS_WORDS = 8,
+      parameter DMA_BITWIDTH  = 64,
+      parameter TRANSMISSIONS = 8,
   `else
     `include "parameters_FPGA.vh"
       // Defaultvalues
@@ -142,7 +144,6 @@ module OpenEye_FPGA #(
     // list) - OpenEye_FPGA.v does not `include regmap_params.vh (it only
     // consumes dma_storage's decoded output wires), so this count has to be
     // kept in sync by hand whenever fields are added to regmap.yaml.
-    parameter TRANSMISSIONS       = 8,
     parameter TRANS_BITWIDTH_IACT = 24,
     parameter TRANS_BITWIDTH_WGHT = 24,
     // Per-PE psum transfer width. Must match PE.v's internal
@@ -175,7 +176,6 @@ module OpenEye_FPGA #(
     parameter ROUTER_MODES_WGHT = 1,
     parameter ROUTER_MODES_PSUM = 3,
 
-    parameter DMA_BITWIDTH  = 64,
 
     parameter BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR = BUFFER_WIDTH,
     parameter real FSM_IACT_RTR_CCLS_A = (CLUSTERS * NUM_GLB_IACT),
@@ -240,7 +240,9 @@ module OpenEye_FPGA #(
     localparam         PSUM_CELL_INPUT_WIDTH = PSUM_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
     localparam integer PSUM_ONE_WORD_ALL_RAM = ((CLUSTERS*PSUM_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH,
     localparam integer QUANT_TRANS_CYCLES = (((OFFSET_WIDTH + EXPONENT_WIDTH + MANTISSA_WIDTH) * QUANT_AMOUNT) + DMA_BITWIDTH - 1)/DMA_BITWIDTH,
-    localparam integer QUANT_TRANS_WIDTH = QUANT_TRANS_CYCLES * DMA_BITWIDTH
+    localparam integer QUANT_TRANS_WIDTH = QUANT_TRANS_CYCLES * DMA_BITWIDTH,
+
+    localparam integer PSUM_OUTPUT_WORDS = DMA_BITWIDTH == 64? 2 : 1
 
 ) (
     //Clock and Reset
@@ -772,219 +774,161 @@ reg [1023:0] fst_path;
   reg [$clog2(CLUSTER_ROWS+1)-1:0] fsm_row_offset; // Interleave offset; cycles 0..needed_y_cls_reg-1.
   integer a, b, word, line;
   always @(posedge clk_i, negedge rst_n) begin
-    if (!rst_n) begin
-      param_array_reg                 <= 0;
-      fsm_iact_params                 <= 0;
-      fsm_iact_params_y_line          <= 0;
-      fsm_iact_params_kernel          <= 0;
-      iact_converter_x                <= 0;
-      iact_converter_y                <= 0;
-      iact_converter_c                <= 0;
-      fsm_row                         <= 0;
-      fsm_row_offset                  <= 0;
+  if (!rst_n) begin
+    param_array_reg               <= 0;
+    fsm_iact_params               <= 0;
+    fsm_iact_params_y_line        <= 0;
+    fsm_iact_params_kernel        <= 0;
+    iact_converter_x              <= 0;
+    iact_converter_y              <= 0;
+    iact_converter_c              <= 0;
+    fsm_row                       <= 0;
+    fsm_row_offset                <= 0;
+    for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
+      for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
+        iact_converter_params_reg[a][b] <= 0;
+        iact_converter_en_cfg_reg[a][b] <= 0;
+      end
+    end
+  end else begin
+    for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
+      for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
+        iact_converter_en_cfg_reg[a][b] <= 0;
+      end
+    end
+
+    if (GET_PARAMETERS == fsm_last_state) begin
+      param_array_reg <= start_param_array;
+      fsm_iact_params <= CLUSTER_ROWS;
+    end else begin
+      if (!((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state))) begin
+        if (iact_converter_params_enable) begin
+          for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
+            for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
+              if (param_array_reg[(a+(b*CLUSTER_COLUMNS))] == 1) begin
+                if (iact_converter_cycles <= ((iact_converter_max_cycles - 1))) begin
+                  iact_converter_en_cfg_reg[a][b] <= 1;
+                end
+              end
+            end
+          end
+          param_array_reg <= ((kernels_per_calc * iact_size_x / NUM_GLB_PSUM) | param_array_reg>>(CLUSTERS-(kernels_per_calc * iact_size_x / NUM_GLB_PSUM)));
+          param_array_reg <= ((param_array_reg << 2) | param_array_reg>>(CLUSTERS-2));
+          
+          if (fsm_current_state == CONVERT_IACT) begin
+            fsm_iact_params <= fsm_iact_params + kernels_per_calc * ((iact_size_x - 1 + (2 * NUM_GLB_PSUM)) / (2 * NUM_GLB_PSUM));
+          end
+        end else begin
+          param_array_reg <= conv_array_reg;
+        end
+      end
+      if ( ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) ? 
+           (fsm_iact_params > 0) : 
+           (iact_converter_params_enable | (fsm_iact_params > 0)) ) begin
+        
+        if (fsm_iact_params > 0) begin
+          fsm_iact_params <= fsm_iact_params - 1;
+        end
+
+        for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin 
+          iact_converter_params_reg[a][fsm_row][35:32] <= fsm_row_offset;
+          iact_converter_params_reg[a][fsm_row][15:8]  <= iact_size_x;
+          iact_converter_params_reg[a][fsm_row][7:0]   <= iact_converter_c;
+
+          if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
+            iact_converter_en_cfg_reg[a][fsm_row] <= 1;
+          end
+
+          if (fully_connected_layer) begin
+            iact_converter_params_reg[a][fsm_row][31:24] <= iact_converter_x;
+            iact_converter_params_reg[a][fsm_row][23:16] <= iact_converter_y;
+          end else begin
+            if ((a != 0) & ((iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x)) begin
+              iact_converter_params_reg[a][fsm_row][31:24] <= 0;
+            end else begin
+              iact_converter_params_reg[a][fsm_row][31:24] <= iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0] * stride_x_reg;
+            end
+            
+            if ((a != 0) & ((iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
+              iact_converter_params_reg[a][fsm_row][23:16] <= iact_converter_y + 1;
+            end else begin
+              iact_converter_params_reg[a][fsm_row][23:16] <= iact_converter_y;
+            end
+          end
+        end
+        fsm_row <= fsm_row + needed_y_cls_reg;
+        if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
+          fsm_row        <= fsm_row_offset + 1;
+          fsm_row_offset <= fsm_row_offset + 1;
+          if (fsm_row_offset == needed_y_cls_reg - 1) begin
+            fsm_row        <= 0;
+            fsm_row_offset <= 0;
+          end
+        end
+        iact_converter_x <= iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS * stride_x_reg);
+        if (((((iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS * stride_x_reg)) * iact_x_line_repetitions) >= iact_size_x * needed_y_cls_reg) | (fully_connected_layer))) begin
+          iact_converter_x <= 0;
+          if (((iact_converter_x + NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x) & (!fully_connected_layer) & (kernels_per_calc != 1) & (stride_x_reg * NUM_GLB_PSUM[7:0] < iact_size_x)) begin
+            iact_converter_x <= NUM_GLB_PSUM[7:0] * stride_x_reg;
+          end
+          fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
+          if (fsm_iact_params_kernel == kernels_per_calc - 1) begin
+            fsm_iact_params_kernel <= 0;
+            fsm_iact_params_y_line <= fsm_iact_params_y_line + 1;
+            if (fsm_iact_params_y_line == y_lines_per_calc - 1) begin
+              fsm_iact_params_y_line <= 0;
+              fsm_row_offset         <= 0;
+              if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
+                iact_converter_c <= iact_converter_c + 1;
+              end else begin
+                fsm_iact_params <= 0;
+              end
+              if (!fully_connected_layer) begin
+                if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) fsm_iact_params <= 0;
+                fsm_row <= 0;
+                if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) iact_converter_c <= iact_converter_c + iact_channels_per_pe;
+              end
+            end
+            
+            if (!((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state))) begin
+               iact_converter_c <= iact_converter_c + iact_channels_per_pe;
+               if (fully_connected_layer) begin
+                iact_converter_c <= iact_converter_c + 1;
+               end
+            end
+
+            // Channel Wrap-around
+            if (iact_converter_c + iact_channels_per_pe == iact_size_c) begin
+              iact_converter_c <= 0;
+              iact_converter_y <= iact_converter_y + 1;
+              if (iact_converter_y + 1 >= iact_size_y) begin
+                iact_converter_y <= 0;
+              end
+            end
+          end
+        end
+      end
+    end
+    
+    // 4. Reset Cycle auswerten
+    if (reset_cycle) begin
+      param_array_reg  <= 0;
+      fsm_iact_params  <= 0;
+      iact_converter_x <= 0;
+      iact_converter_y <= 0;
+      iact_converter_c <= 0;
+      fsm_row          <= 0;
+      fsm_row_offset   <= 0;
       for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
         for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
           iact_converter_params_reg[a][b] <= 0;
           iact_converter_en_cfg_reg[a][b] <= 0;
         end
       end
-    end else begin
-      if (GET_PARAMETERS == fsm_last_state) begin
-        param_array_reg <= start_param_array;
-        fsm_iact_params <= CLUSTER_ROWS;
-      end else begin
-        for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
-          for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
-            iact_converter_en_cfg_reg[a][b] <= 0;
-          end
-        end
-        if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
-          if (fsm_iact_params > 0) begin
-            fsm_iact_params  <= fsm_iact_params - 1;
-            for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin 
-              iact_converter_params_reg[a
-              ][fsm_row][35:32] <= fsm_row_offset;
-              if (fully_connected_layer) begin
-                iact_converter_params_reg[a
-                ][fsm_row][31:24] <= iact_converter_x;
-                  iact_converter_params_reg[a
-                  ][fsm_row][23:16] <= iact_converter_y;
-              end else begin
-                if ((a != 0) & ((iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x)) begin
-                  iact_converter_params_reg[a
-                  ][fsm_row][31:24] <= 0;
-                end else begin
-                  iact_converter_params_reg[a
-                  ][fsm_row][31:24] <= iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0] * stride_x_reg;
-                end
-                if ((a != 0) & ((iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
-                  iact_converter_params_reg[a
-                  ][fsm_row][23:16] <= iact_converter_y + 1;
-                end else begin
-                  iact_converter_params_reg[a
-                  ][fsm_row][23:16] <= iact_converter_y;
-                end
-              end
-
-              iact_converter_params_reg[a
-              ][fsm_row][15:8] <= iact_size_x;
-
-              iact_converter_params_reg[a
-              ][fsm_row][7:0] <= iact_converter_c;
-
-              iact_converter_en_cfg_reg[a
-              ][fsm_row] <= 1;
-            end
-            fsm_row <= fsm_row + needed_y_cls_reg;
-            if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
-              fsm_row <= fsm_row_offset + 1;
-              fsm_row_offset <= fsm_row_offset + 1;
-              if (fsm_row_offset == needed_y_cls_reg - 1) begin
-                fsm_row        <= 0;
-                fsm_row_offset <= 0;
-              end
-            end
-            iact_converter_x <= iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS * stride_x_reg);
-            if ((((iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS * stride_x_reg)) * iact_x_line_repetitions) >= iact_size_x * needed_y_cls_reg)
-             | (fully_connected_layer)) begin
-              iact_converter_x <= 0;
-              if (((iact_converter_x + NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x) & (!fully_connected_layer) & (kernels_per_calc != 1) & (stride_x_reg * NUM_GLB_PSUM[7:0] < iact_size_x)) begin
-                iact_converter_x <= NUM_GLB_PSUM[7:0] * stride_x_reg;
-              end
-              fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
-              if (fsm_iact_params_kernel == kernels_per_calc - 1) begin
-                fsm_iact_params_kernel <= 0;
-                fsm_iact_params_y_line <= fsm_iact_params_y_line + 1;
-                if (fsm_iact_params_y_line == y_lines_per_calc - 1) begin
-                  fsm_iact_params_y_line <= 0;
-                  fsm_row_offset         <= 0;
-                  iact_converter_c       <= iact_converter_c + 1;
-                  if (!fully_connected_layer) begin
-                    fsm_iact_params  <= 0;
-                    fsm_row          <= 0;
-                    iact_converter_c <= iact_converter_c + iact_channels_per_pe;
-                  end
-                end
-                if (iact_converter_c + iact_channels_per_pe == iact_size_c) begin
-                  iact_converter_c <= 0;
-                  iact_converter_y <= iact_converter_y + 1;
-                  if (iact_converter_y + 1 >= iact_size_y) begin
-                  iact_converter_y <= 0;
-                  end
-                end
-              end
-            end
-          end
-        end else begin
-          for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
-            for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
-              iact_converter_en_cfg_reg[a][b] <= 0;
-            end
-          end
-          if (iact_converter_params_enable) begin
-            for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
-              for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
-                if (param_array_reg[(a+(b*CLUSTER_COLUMNS))] == 1) begin
-                  if (iact_converter_cycles <= ((iact_converter_max_cycles - 1))) begin //Include Padding
-                    iact_converter_en_cfg_reg[a][b] <= 1;
-                  end
-                end
-              end
-            end
-            param_array_reg <= ((kernels_per_calc * iact_size_x / NUM_GLB_PSUM) | param_array_reg>>(CLUSTERS-(kernels_per_calc * iact_size_x / NUM_GLB_PSUM)));
-            param_array_reg <= ((param_array_reg << 2) | param_array_reg>>(CLUSTERS-2));
-          end
-          if ((iact_converter_params_enable) | (fsm_iact_params > 0)) begin
-            if (fsm_iact_params > 0) begin
-              fsm_iact_params <= fsm_iact_params - 1;
-            end
-            if (iact_converter_params_enable & (fsm_current_state == CONVERT_IACT)) begin
-              fsm_iact_params <= fsm_iact_params + kernels_per_calc * ((iact_size_x - 1 + (2 * NUM_GLB_PSUM)) / (2 * NUM_GLB_PSUM));
-            end
-            if (fsm_iact_params > 0) begin
-              for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin 
-                iact_converter_params_reg[a
-                ][fsm_row][31:24] <= iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0] * stride_x_reg;
-                if ((a != 0) & ((iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
-                  iact_converter_params_reg[a
-                  ][fsm_row][23:16] <= iact_converter_y + 1;
-                end else begin
-                  iact_converter_params_reg[a
-                  ][fsm_row][23:16] <= iact_converter_y;
-                end
-                if ((a != 0) & ((iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x)) begin
-                  iact_converter_params_reg[a
-                  ][fsm_row][31:24] <= 0;
-                end else begin
-                  iact_converter_params_reg[a
-                  ][fsm_row][31:24] <= iact_converter_x + a[7:0] * NUM_GLB_PSUM[7:0] * stride_x_reg;
-                end
-                iact_converter_params_reg[a
-                ][fsm_row][7:0] <= iact_converter_c;
-              end
-              fsm_row <= fsm_row + needed_y_cls_reg;
-              if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
-                fsm_row <= fsm_row_offset + 1;
-                fsm_row_offset <= fsm_row_offset + 1;
-                if (fsm_row_offset == needed_y_cls_reg - 1) begin
-                  fsm_row        <= 0;
-                  fsm_row_offset <= 0;
-                end
-              end
-              iact_converter_x <= iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS * stride_x_reg);
-              if (((iact_converter_x + (NUM_GLB_PSUM * CLUSTER_COLUMNS * stride_x_reg)) * iact_x_line_repetitions >= iact_size_x)) begin
-                iact_converter_x <= 0;
-                if ((iact_converter_x + NUM_GLB_PSUM[7:0] * stride_x_reg) >= iact_size_x & (!fully_connected_layer) & (kernels_per_calc != 1)) begin
-                  iact_converter_x <= NUM_GLB_PSUM[7:0] * stride_x_reg;
-                end
-                fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
-                if (fsm_iact_params_kernel == kernels_per_calc - 1) begin
-                  fsm_iact_params_kernel <= 0;
-                  fsm_iact_params_y_line <= fsm_iact_params_y_line + 1;
-                  if (fsm_iact_params_y_line == y_lines_per_calc - 1) begin
-                    fsm_iact_params_y_line <= 0;
-                    fsm_iact_params        <= 0;
-                    if (!fully_connected_layer) begin
-                      fsm_row <= 0;
-                    end
-                    fsm_row_offset <= 0;
-                  end
-                  iact_converter_c <= iact_converter_c + iact_channels_per_pe;
-                  if (fully_connected_layer) begin
-                    iact_converter_c <= iact_converter_c + 1;
-                  end
-                  if (iact_converter_c == iact_size_c - iact_channels_per_pe) begin
-                    iact_converter_c <= 0;
-                    iact_converter_y <= iact_converter_y + 1;
-                    if (iact_converter_y >= iact_size_y - 1) begin
-                    iact_converter_y <= 0;
-                    end
-                  end
-                end
-              end
-            end
-          end else begin
-            param_array_reg <= conv_array_reg;
-          end
-        end
-        if (reset_cycle) begin
-          param_array_reg  <= 0;
-          fsm_iact_params  <= 0;
-          iact_converter_x <= 0;
-          iact_converter_y <= 0;
-          iact_converter_c <= 0;
-          fsm_row          <= 0;
-          fsm_row_offset   <= 0;
-          for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
-            for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
-              iact_converter_params_reg[a][b] <= 0;
-              iact_converter_en_cfg_reg[a][b] <= 0;
-            end
-          end
-        end
-      end
     end
+    
   end
+end
 
   // -----------------------------------------------------------------------
   // Process 4: Iact Converter Store Enable
@@ -1351,7 +1295,6 @@ reg [1023:0] fst_path;
   reg        psum_transmitted;           // Handshake flag: 1 once psum_ready_o from OpenEye_Parallel confirms receipt.
   reg        psum_router_set_reg;        // High once psum router modes have been updated for the output phase.
   reg        start_new_cycle;            // Single-cycle pulse: triggers a new compute iteration (transitions PSUM_IDLE→WAIT_TO_SEND_READY_SIGNAL).
-  reg        last_data_reg;              // Registered copy of last_data_o; indicates the final psum output is on the bus.
 
   // --- PSUM FSM cluster sweep pointers ---
   reg [$clog2(CLUSTER_COLUMNS)-1:0]   fsm_x_cl_psum;    // Column-cluster index during result sweep.
@@ -2697,7 +2640,8 @@ reg [1023:0] fst_path;
       .QUANT_AMOUNT(QUANT_AMOUNT),
       .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
       .PSUM_PER_PE(PSUM_PER_PE),
-      .PSUM_CYCLES_ONE_WORD_ALL_CELLS(PSUM_CYCLES_ONE_WORD_ALL_CELLS)
+      .PSUM_CYCLES_ONE_WORD_ALL_CELLS(PSUM_CYCLES_ONE_WORD_ALL_CELLS),
+      .PSUM_OUTPUT_WORDS(PSUM_OUTPUT_WORDS)
   ) psum_pipeline_inst (
       .clk_i(clk_i),
       .rst_n(rst_n),
@@ -2755,7 +2699,6 @@ reg [1023:0] fst_path;
       .psum_transmitted(psum_transmitted),
       .psum_router_set_reg(psum_router_set_reg),
       .start_new_cycle(start_new_cycle),
-      .last_data_reg(last_data_reg),
       .psum_cnt(psum_cnt),
       .current_filter(current_filter)
   );

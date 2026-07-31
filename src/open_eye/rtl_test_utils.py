@@ -687,25 +687,26 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
         reordered_matrix = [matrix[i] for i in cluster_order]
         flat_list = [item for row in reordered_matrix for item in row]
         """
+        words = (oep.DMA_BITWIDTH//oep.DATA_PSUM_BITWIDTH)
         dut._log.info("Output Stream started")
         used_clusters_per_calc = math.ceil(layer_parameters.iact_size_x / 4) * 4
         values_per_transmission = math.ceil(layer_parameters.different_kernels_per_calculation*used_clusters_per_calc/2)
         transmissions_per_cycle = (oep.Clusters_Y * oep.Clusters_X * oep.PEs_X)//2
         current_cycle = 0
         read_data = 1
-        chance = 30
+        chance = 100
         while (dut.enable_dma_o.value == 1):
             if (read_data):
                 if(logging.DEBUG >= login_level):
                     try:
-                        txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(oep.PSUM_Trans_Bitwidth) + "\n")
+                        txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(oep.DMA_BITWIDTH) + "\n")
                     except:
                         txt_file.close()
                         storage_file.close()
                         logger.error("Error writing output txt-file")
                         raise Exception("X detected.")
                 if (current_cycle < values_per_transmission):
-                    for i in range(2):
+                    for i in range(words):
                         if(logging.DEBUG >= login_level):
                             storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
                         try:
@@ -715,7 +716,7 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                         except:
                             pass
                         x = x + 1
-                    if (current_cycle % math.ceil(oep.PEs_X/2) == math.ceil(oep.PEs_X/2) - 1):
+                    if (current_cycle % math.ceil(oep.PEs_X/words) == math.ceil(oep.PEs_X/words) - 1):
                         if(x >= layer_parameters.iact_size_x):
                             x = 0
                             f = f + 1
@@ -725,7 +726,7 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                                 if(y >= layer_parameters.iact_size_y):
                                     y = 0
                 else:
-                    for i in range(2):
+                    for i in range(words):
                         if(logging.DEBUG >= login_level):
                             storage_file.write("Empty storage line." + "\n")
                 current_cycle = current_cycle + 1
@@ -799,6 +800,7 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
     if(logging.DEBUG >= login_level):
         storage_file.write(" f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
     cocotb.start_soon(send_enable_dw(ptp, dut, layer_parameters, layer_repetition, oep))
+    words = (oep.DMA_BITWIDTH//oep.DATA_PSUM_BITWIDTH)
     while (dut.psum_enable_o.value == 0):
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     dut._log.info("Output Stream started")
@@ -809,12 +811,14 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
                 for router in reversed(range(oep.NUM_GLB_PSUM)):
                     if(layer_parameters.computing_mx[oep.Clusters_X-x_cluster-1][oep.Clusters_Y-y_cluster-1][0][oep.NUM_GLB_PSUM-router-1]== 1):
                         lower_limit = (x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * self.PSUM_Trans_Bitwidth + y_cluster * oep.NUM_GLB_PSUM * self.PSUM_Trans_Bitwidth + router * self.PSUM_Trans_Bitwidth)
-                        upper_limit = lower_limit + self.PSUM_Trans_Bitwidth - 1
+                        upper_limit = lower_limit - 1
+                        for _ in range(words - 1):
+                            upper_limit = lower_limit + self.PSUM_Trans_Bitwidth - 1
                         outputvalue = dut.psum_data_o.value[lower_limit:upper_limit]
 
                         if(logging.DEBUG >= login_level):
-                            txt_file.write(bin(outputvalue)[2:].zfill(self.PSUM_Trans_Bitwidth) + "\n")
-                        for i in range(2):
+                            txt_file.write(bin(outputvalue)[2:].zfill(oep.DMA_BITWIDTH) + "\n")
+                        for i in range(words):
                             try:
                                 f = output_order[layer_repetition][les.current_position][0]
                                 x = output_order[layer_repetition][les.current_position][1]

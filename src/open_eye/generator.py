@@ -15,6 +15,7 @@ from pathlib import Path
 import sys
 import os
 import math
+import json
 
 # Context for evaluating expressions in YAML (e.g., "ceil(log2(CLUSTER_ROWS))")
 context = {
@@ -62,7 +63,11 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     with open(YAML_FILE, "r") as f:
         config = yaml.safe_load(f)
 
-    dma_bitwidth = int(config["dma_bitwidth"])
+    try:
+        DMA_BITWIDTH = int(os.getenv("DMA_BITWIDTH"))
+    except:
+        DMA_BITWIDTH = 64 
+    dma_bitwidth = DMA_BITWIDTH
     registers = config["registers"]
     env_ctx = dict(os.environ)
     comb_ctx = context | env_ctx
@@ -97,6 +102,12 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
 
     num_transmissions = len(transmissions)
 
+    config_data = {
+        "TRANSMISSIONS": num_transmissions
+    }
+
+    with open("shared_config.json", "w") as f:
+        json.dump(config_data, f)
     # 1) Write Verilog parameter file (regmap_params.vh)
     with open(VERILOG_PARAMS_OUT, "w+") as vf:
         vf.write("`ifndef REGMAP_PARAMS_VH\n`define REGMAP_PARAMS_VH\n\n")
@@ -219,5 +230,4 @@ if __name__ == "__main__":
         output_pathpy = sys.argv[4]
     except:
         output_pathpy = None
-
     create_regmap_params_vh_file(path, output_pathvh, output_pathv, output_pathpy)

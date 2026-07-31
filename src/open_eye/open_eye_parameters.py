@@ -222,6 +222,11 @@ class OpenEyeParameters(object):
         except:
             self.SPARSITY_EN = 1        # Sparsity enabled
 
+        try:
+            self.DMA_BITWIDTH = int(os.getenv("DMA_BITWIDTH"))
+        except:
+            self.DMA_BITWIDTH = 64          # AXI bus width for DMA transfers (64 bits)
+
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode
 
@@ -302,7 +307,6 @@ class OpenEyeParameters(object):
         # === DMA AND CONTROL CONFIGURATION ===
         # Parameters for DMA transfers and FSM control logic
 
-        self.DMA_BITWIDTH = 64          # AXI bus width for DMA transfers (64 bits)
         self.FSM_CYCLE_BITWIDTH = 1024 # Bitwidth for FSM cycle counter (1024 bits)
         self.FSM_STATES = 9            # Number of states in control FSM
 

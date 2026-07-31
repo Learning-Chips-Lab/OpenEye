@@ -53,7 +53,7 @@ def twos_complement(binary_str, bits):
         val = val - (1 << bits)
     return val
 
-def open_ref_txts(params, layer_params, layer, layer_number, dram):
+def open_ref_txts(layer_params, layer, layer_number):
     file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
     for layer_repetition in range(layer_params.needed_total_transmissions):
         file_dma_ref[layer_repetition] = open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
@@ -103,16 +103,28 @@ def check_results(params, file_1,file_2):
         lines2 = f2.readlines()
 
     # Compare the two lists line by line and print any differences
+    words = (params.DMA_BITWIDTH//params.DATA_PSUM_BITWIDTH)
+    line1_words = [0 for _ in range (words)]
+    line2_words = [0 for _ in range (words)]
+    error_line1 = ""
+    error_line2 = ""
     for i, (line1, line2) in enumerate(zip(lines1, lines2)) :
         if line1 != line2:
             if (int(line1.strip()) != 0) :
                 logger.error(f'Difference found at line {i + 1}:')
-                line1_first = line1.strip()[:params.DATA_PSUM_BITWIDTH]
-                line1_second = line1.strip()[params.DATA_PSUM_BITWIDTH:]
-                line2_first = line2.strip()[:params.DATA_PSUM_BITWIDTH]
-                line2_second = line2.strip()[params.DATA_PSUM_BITWIDTH:]
-                logger.error(f'ReferenceData: {line1.strip()}' + "   " + str(twos_complement(line1_first, params.DATA_PSUM_BITWIDTH)) + " " + str(twos_complement(line1_second, params.DATA_PSUM_BITWIDTH)))
-                logger.error(f'Output Stream: {line2.strip()}' + "   " + str(twos_complement(line2_first, params.DATA_PSUM_BITWIDTH)) + " " + str(twos_complement(line2_second, params.DATA_PSUM_BITWIDTH)))
+
+                for x in range(words) :
+                    line1_words[x] = line1.strip()[(x)*params.DATA_PSUM_BITWIDTH:(x+1)*params.DATA_PSUM_BITWIDTH]
+                    line2_words[x] = line2.strip()[(x)*params.DATA_PSUM_BITWIDTH:(x+1)*params.DATA_PSUM_BITWIDTH]
+
+                error_line1 = f'ReferenceData: {line1.strip()}' + "   " 
+                error_line2 = f'ReferenceData: {line2.strip()}' + "   " 
+                for x in range(words) :
+                    error_line1 = error_line1 + str(twos_complement(line1_words[x], params.DATA_PSUM_BITWIDTH)) + " "
+                for x in range(words) :
+                    error_line2 = error_line2 + str(twos_complement(line2_words[x], params.DATA_PSUM_BITWIDTH)) + " "
+                logger.error(error_line1)
+                logger.error(error_line2)
 
                 return False
         

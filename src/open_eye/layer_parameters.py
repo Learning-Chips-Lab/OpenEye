@@ -995,7 +995,7 @@ class LayerParameters(object):
 
     def  calculate_transmission_cycles(self, params):
         self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_BITWIDTH)
-        self.trans_cycles_iact = math.ceil(self.iact_size_x*self.iact_size_y*self.channels / params.IACT_WORDS_IN_RAM)
+        self.trans_cycles_iact = math.ceil(params.IACT_Bitwidth*self.iact_size_x*self.iact_size_y*self.channels / params.DMA_BITWIDTH)
         missing_cycles = (self.iact_cycles_one_word_all_ram - (self.trans_cycles_iact % self.iact_cycles_one_word_all_ram))%self.iact_cycles_one_word_all_ram
         self.trans_cycles_iact =  self.trans_cycles_iact + missing_cycles
 
