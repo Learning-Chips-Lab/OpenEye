@@ -132,6 +132,12 @@ async def initialize_test_pe_cluster(dut):
     wghtsize_x = int(os.environ["WGHTSIZE_X"])
     sparse_iact = int(os.environ["SPARSE_IACT"])
     sparse_wght = int(os.environ["SPARSE_WGHT"])
+    # Debug info: log environment and DUT parameter summary
+    dut._log.info(f"Env IACTSIZE_X={iactsize_x} IACTSIZE_Y={iactsize_y} WGHTSIZE_X={wghtsize_x} SPARSE_IACT={sparse_iact} SPARSE_WGHT={sparse_wght} SEED={os.environ.get('SEED')}")
+    try:
+        dut._log.info(f"DUT PE_ROWS={int(dut.PE_ROWS.value)} PE_COLUMNS={int(dut.PE_COLUMNS.value)} NUM_GLB_IACT={int(dut.NUM_GLB_IACT.value)} TRANS_BITWIDTH_IACT={int(dut.TRANS_BITWIDTH_IACT.value)}")
+    except Exception:
+        dut._log.info("DUT runtime parameters not available for logging")
     np.random.seed(int(os.environ["SEED"]))
     pe_iact_cycles = math.ceil((int(dut.PE_ROWS.value) + int(dut.PE_COLUMNS.value) - 1)/int(dut.NUM_GLB_IACT.value))
     wghtsize_y = iactsize_x * iactsize_y
@@ -249,7 +255,19 @@ async def capture_psums(dut, ptp):
 
     while int(dut.pe_router_psum_enable_o.value) != 0:
         # No X values allowed (matters for gate-level simulation).
-        assert 'x' not in dut.pe_router_psum_data_o.value, "x values in PSUM"
+        psum_val = dut.pe_router_psum_data_o.value
+        enable_val = dut.pe_router_psum_enable_o.value
+        ready_val = dut.pe_router_psum_ready_o.value
+        psum_str = str(psum_val)
+        if 'x' in psum_str.lower():
+            dut._log.error(f"Detected X in PSUM data: {psum_str}")
+            dut._log.error(f"Enable: {str(enable_val)} Ready: {str(ready_val)}")
+            # Log per-column slices to help debugging
+            for pe_x in range(pe_columns):
+                start = psum_bits * pe_x
+                end = start + psum_bits - 1
+                dut._log.error(f"Column {pe_x}: bits [{end}:{start}] = {psum_str[start:end+1] if len(psum_str) > end else 'N/A'}")
+            raise AssertionError(f"x values in PSUM: {psum_str}")
         enable = int(dut.pe_router_psum_enable_o.value)
         data   = int(dut.pe_router_psum_data_o.value)
         for pe_x in range(pe_columns):
@@ -294,8 +312,12 @@ async def send_wght(ptp, dut, data_array):
         wght_offset  = int(dut.DATA_WGHT_BITWIDTH.value)
         ignore_zeros = False
     else:
-        wght_offset  = int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_IGNORE_ZEROS.value)
-        ignore_zeros = True
+        if (int(dut.SPARSITY_EN.value) == 1): 
+            wght_offset  = int(dut.DATA_WGHT_BITWIDTH.value) + int(dut.DATA_WGHT_OVERHEAD.value)
+            ignore_zeros = True
+        else:
+            wght_offset  = int(dut.DATA_WGHT_BITWIDTH.value)
+            ignore_zeros = False
     spad_data = [0 for _ in range(int(dut.PE_ROWS.value))]
     for glb_cluster in range(int(dut.PE_ROWS.value)):
         spad_data[glb_cluster] = generate_spad(
@@ -303,7 +325,7 @@ async def send_wght(ptp, dut, data_array):
             int(dut.WGHT_ADDR_WORDS.value),  # Convert LogicArray to int
             int(dut.WGHT_DATA_WORDS.value),  # Convert LogicArray to int
             int(dut.DATA_WGHT_BITWIDTH.value),  # Convert LogicArray to int
-            False,  # Packed mode (not SISD)
+            ((int(dut.PARALLEL_MACS.value))== 1),  # Packed mode (not SISD)
             wght_offset,
             ignore_zeros
         )

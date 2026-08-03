@@ -97,6 +97,13 @@ async def send_data_params(ptp, dut, iactsize_x, iactsize_y, wghtsize_x):
     # Enable the params reading
     cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.enable_stream_i), 1))
 
+    # Log DUT compile-time/run-time configuration for easier debugging
+    try:
+        cocotb.log.info(f"DUT PARALLEL_MACS = {int(dut.PARALLEL_MACS.value)}")
+    except Exception:
+        cocotb.log.info(f"DUT PARALLEL_MACS not available on DUT instance")
+    cocotb.log.info(f"Environment SPARSITY_EN = {os.environ.get('SPARSITY_EN', 'unset')}" )
+
     if use_pe_simple():
         # PE_simple.v config-word layout (matches hdl/PE_simple.v stream FSM):
         #   FIRST  : [11:9]=stride, [8:1]=wght_addr_max
@@ -173,7 +180,7 @@ def send_to_wght_spad(ptp, spad, dut):
     offset = 0
     data_array = [[],[]]
     # Send data over multiple clock cycles
-    words_per_transmit = int(math.floor(24 / 24))
+    words_per_transmit = 1
     for cycle in range(int(dut.WGHT_DATA_WORDS.value)):
         # Calculate how many words fit in one transmission
         # Pack multiple words into this transmission
@@ -198,7 +205,8 @@ def send_to_wght_spad(ptp, spad, dut):
             data_array[0].append(0)
 
         sending_data = 0
-    return data_array   
+    return data_array
+ 
 def send_to_iact_spad(ptp, spad, dut, words):
     """
     Generic function to transmit SPAD data over a limited-width bus.
@@ -228,10 +236,13 @@ def send_to_iact_spad(ptp, spad, dut, words):
     # packing to whichever PE the cluster was compiled with.
     if use_pe_simple():
         words_per_transmit = 1
-        word_stride        = int(dut.DATA_IACT_BITWIDTH.value)  # 8
+        word_stride        = int(dut.DATA_IACT_BITWIDTH.value)
     else:
-        words_per_transmit = int(math.floor(24 / 12))
-        word_stride        = 12
+        words_per_transmit = 2
+        if (int(dut.SPARSITY_EN.value) == 1): 
+            word_stride        = int(dut.DATA_IACT_BITWIDTH.value) + int(dut.DATA_IACT_OVERHEAD.value)
+        else:
+            word_stride        = int(dut.DATA_IACT_BITWIDTH.value)
     # Send data over multiple clock cycles
     for cycle in range(int(dut.IACT_DATA_WORDS.value)):
         # Calculate how many words fit in one transmission

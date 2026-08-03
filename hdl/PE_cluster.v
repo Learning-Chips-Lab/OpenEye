@@ -155,24 +155,29 @@ module PE_cluster #(
     //Set parameters
     parameter  IS_TOPLEVEL            = 1,
     parameter  SERIAL                 = 1,
-    parameter  PARALLEL_MACS          = 2,
+    `ifdef USE_INTERNAL_PARAMS_PE_cluster
+      parameter  PARALLEL_MACS          = 2,
+      parameter  SPARSITY_EN            = 1,  // 1=sparse mode (default), 0=dense mode
+    `else
+      `include "parameters_PE_cluster.vh"
+    `endif
     parameter  TOP_CLUSTER            = 1,
-    parameter  SPARSITY_EN            = 1,  // 1=sparse mode (default), 0=dense mode
     // Approach 3: set to 1 to add horizontal iact pass-through ports for systolic GEMM
     parameter  SYSTOLIC_GEMM_EN       = 0,
     parameter  DATA_IACT_BITWIDTH     = 8,
     parameter  DATA_PSUM_BITWIDTH     = 20,
     parameter  DATA_WGHT_BITWIDTH     = 8,
     parameter  DATA_IACT_OVERHEAD     = 4,
+    parameter  DATA_WGHT_OVERHEAD     = 4,
     parameter  DATA_WGHT_IGNORE_ZEROS = 4,
-    parameter  TRANS_BITWIDTH_IACT    = 24,
-    parameter  TRANS_BITWIDTH_WGHT    = 24,
+    parameter  TRANS_BITWIDTH_IACT    = 16,
+    parameter  TRANS_BITWIDTH_WGHT    = 8,
     parameter  TRANS_BITWIDTH_PSUM    = 20,
     parameter  NUM_GLB_IACT           = 3,
     parameter  IACT_ADDR_WORDS        = 9,
     parameter  IACT_DATA_WORDS        = 16,
     parameter  WGHT_ADDR_WORDS        = 16,
-    parameter  WGHT_DATA_WORDS        = 96,
+    parameter  WGHT_DATA_WORDS        = 192,
     parameter  PSUM_WORDS             = 32,
     parameter  PE_ROWS                = 3,
     parameter  PE_COLUMNS             = 4,
@@ -293,7 +298,7 @@ module PE_cluster #(
         wire                             iact_pass_ready_o_w;
         // Approach 2: in GEMM mode override iact_select so row j → GLB bank j
         wire [$clog2(NUM_GLB_IACT+1)-1:0] iact_sel_w;
-        assign iact_sel_w = gemm_mode_i
+        assign iact_sel_w = gemm_mode_i & SYSTOLIC_GEMM_EN
             ? j[$clog2(NUM_GLB_IACT+1)-1:0]
             : iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(NUM_GLB_IACT+1)-1
                             :(i+j*PE_COLUMNS)*$clog2(NUM_GLB_IACT+1)];

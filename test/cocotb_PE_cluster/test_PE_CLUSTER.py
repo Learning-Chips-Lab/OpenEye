@@ -16,7 +16,7 @@ tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
 
 import pe_cluster_test_utils as pctu
-from open_eye import hdl_dir, test_dir, open_eye_dir
+from open_eye import hdl_dir, test_dir, open_eye_dir, vh_file_creator
 
 
 #As ref:
@@ -47,7 +47,9 @@ sparse_wght = 0 # Weight sparsity: 0 = no sparsity, 1 = fully sparse
 @pytest.mark.parametrize("SPARSE_IACT", [0,10,20,30])
 @pytest.mark.parametrize("SPARSE_WGHT", [0,10,20,30,40,50,60])
 @pytest.mark.parametrize("SEED", range(0, 16))
-def test_pe_cluster_conv(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,SEED,request):
+@pytest.mark.parametrize("PARALLEL_MACS", [1, 2])
+@pytest.mark.parametrize("SPARSITY_EN", [0, 1])
+def test_pe_cluster_conv(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_WGHT,SEED,PARALLEL_MACS,SPARSITY_EN,request):
     dut = 'PE_cluster'
     module = 'PE_cluster_tb'
     toplevel = dut
@@ -55,6 +57,12 @@ def test_pe_cluster_conv(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_
     nodeid = request.node.nodeid.replace("::", "_").replace("/", "_").replace("[","_").replace("]","_")
     target_dir = os.path.join(test_dir, '.temp/' + nodeid)
     os.makedirs(target_dir, exist_ok=True)
+
+    # ensure compile-time parameters are generated from environment
+    os.environ["PARALLEL_MACS"] = str(PARALLEL_MACS)
+    os.environ["SPARSITY_EN"] = str(SPARSITY_EN)
+    # generate parameters.vh (touches top-level if changed)
+    vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel="PE_cluster")
 
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],
@@ -79,6 +87,8 @@ def test_pe_cluster_conv(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SPARSE_IACT,SPARSE_
                     ,"WGHTSIZE_Y" : str(IACTSIZE_X*IACTSIZE_Y)
                     ,"SPARSE_IACT" : str(SPARSE_IACT)
                     ,"SPARSE_WGHT" : str(SPARSE_WGHT)
+                    ,"PARALLEL_MACS" : str(PARALLEL_MACS)
+                    ,"SPARSITY_EN" : str(SPARSITY_EN)
                     ,"COCOTB_TRACE": "1"
                     ,"SEED" : str(SEED)}
     )

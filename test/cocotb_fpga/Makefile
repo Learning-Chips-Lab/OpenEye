@@ -8,6 +8,8 @@ SIM ?= icarus
 #EXTRA_ARGS += --trace --trace-fst --trace-structs
 #COMPILE_ARGS += --trace --trace-fst --trace-structs
 COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE
+COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE_cluster
+
 TOPLEVEL_LANG ?= verilog
 WAVEFORM=on
 

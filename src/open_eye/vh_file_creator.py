@@ -86,7 +86,11 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
             txt_file.write(f"parameter TRANS_WORDS = {openeye_parameter.TRANS_WORDS},\n")
             txt_file.write(f"parameter DMA_BITWIDTH = {openeye_parameter.DMA_BITWIDTH},\n")
             txt_file.write(f"parameter TRANSMISSIONS = {TRANSMISSIONS},\n")
-    else :
+    if (gtu.load_env_to_variable("TOPLEVEL", "PE_cluster") == "PE_cluster") :
+        with open(filename, 'w') as txt_file:
+            txt_file.write(f"parameter PARALLEL_MACS = {openeye_parameter.PARALLEL_MACS},\n")
+            txt_file.write(f"parameter SPARSITY_EN = {openeye_parameter.SPARSITY_EN},\n")
+    if (gtu.load_env_to_variable("TOPLEVEL", "PE") == "PE") :
         with open(filename, 'w') as txt_file:
             txt_file.write(f"parameter PARALLEL_MACS = {openeye_parameter.PARALLEL_MACS},\n")
             txt_file.write(f"parameter SPARSITY_EN = {openeye_parameter.SPARSITY_EN},\n")
@@ -114,9 +118,10 @@ def create_vh_file_from_envvars(
     print(toplevel)
     if(toplevel == "OpenEye_FPGA") :
       suffix = "_FPGA"
-    else :
+    if(toplevel == "PE_cluster") :
+        suffix = "_PE_cluster"
+    if(toplevel == "PE") :
         suffix = "_PE"
-    print(suffix)
     # Create parameter file
     openeye_parameter = oep.get_oep(serial=False)
     pre_param_path = os.path.join(file_path_vh, "pre_parameters" + suffix + ".vh")

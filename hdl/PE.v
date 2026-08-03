@@ -664,7 +664,7 @@ module PE #(
   wire [                         3 : 0] first_spad_words_iact_S;// # of words in iact addr SPad, in Eyeriss-Paper referenced as S
   wire [                         4 : 0] second_spad_words_iact; // # of words in iact data SPad
   wire [                         4 : 0] first_spad_words_wght;  // # of words in wght addr SPad
-  wire [                         6 : 0] second_spad_words_wght; // # of words in wght data SPad
+  wire [ WGHT_DATA_ADDR_BITWIDTH-1 : 0] second_spad_words_wght; // # of words in wght data SPad
 
   // Computation control and configuration registers
   // [SPARSITY_EN=1 only] Weight data validity flag (always true in dense mode)
