@@ -88,12 +88,13 @@ export INPUT_SIZE_Y=2
 export STRIDE=1
 export INPUT_CHANNELS=8
 export OUTPUT_SIZE=10
-#Amout of parallel MACs
-export PARALLEL_MACS=2
 export USE_RANDOM_VALUES=1
 export USE_SPARSE_IACTS=0
 export USE_SPARSE_WEIGHTS=0
+export ONLY_FILES=0
 
+#Amout of parallel MACs
+export PARALLEL_MACS=2
 #Actual Datawidth of Data
 export DATA_IACT_BITWIDTH=8
 export DATA_PSUM_BITWIDTH=32
@@ -125,7 +126,6 @@ export WGHT_PER_PE=96
 export PE_WGHT_ADDR_ADDR=16
 export PSUM_PER_PE=32
 
-export ONLY_FILES=0
 export BRANCHES=1
 export BUFFER_WIDTH=12
 export QUANT_AMOUNT=32

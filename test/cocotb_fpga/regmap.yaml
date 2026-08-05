@@ -28,7 +28,6 @@ registers:
   - {name: iact_needed_cycles, width: 11}
   - {name: kernels_per_calc, width: 5}
   - {name: y_lines_per_calc, width: 4}
-  - {name: output_cycles, width: 8}
   - {name: store_in_psum, width: 1}
   - {name: max_pooling, width: 1}
   - {name: fully_connected_layer, width: 1}
@@ -61,8 +60,8 @@ registers:
   - {name: iact_buffer_words_per_write, width: 12}
   - {name: pooling_mode, width: 1}
   - {name: gemm_mode, width: 1}
-  - {name: test_reg, width: 20}
   - {name: used_wght_per_PE, width: int(BUFFER_WIDTH)}
+  - {name: psum_output_words, width: 16}
   - {name: overhang_discrepancy, width: 4}
 
 

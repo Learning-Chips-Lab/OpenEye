@@ -565,9 +565,7 @@ reg [1023:0] fst_path;
   wire [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_o_w;   // Result psum bus from OpenEye_Parallel; written to psum_buffer in PSUM_GET_RESULTS.
   wire [CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_o;                       // Valid signal for psum_data_o_w; used to gate psum_buffer writes.
   reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i_reg;                     // Ready signal sent back to OpenEye_Parallel; asserted all-ones in WAIT_TO_SEND_READY_SIGNAL.
-
-  wire [8-1:0] output_cycles;    // Number of output read cycles per filter group (from dma_storage); determines when PSUM_SEND_RESULTS finishes.
-  wire [5-1:0] kernels_per_calc; // Filters computed per calculation batch (from dma_storage).
+wire [5-1:0] kernels_per_calc; // Filters computed per calculation batch (from dma_storage).
   wire [4-1:0] y_lines_per_calc; // Output rows calculated per batch (from dma_storage).
 
   wire [ 7:0] needed_wght_cycles;                                           // Weight cycling period (from dma_storage); how many iact batches share the same weights.
@@ -1313,6 +1311,7 @@ end
   reg [7:0] quantized_value_reg [TRANS_WORDS-1:0]; // Quantized output bytes [0..7]; one per parallel filter.
 
   reg [7:0] current_filter; // Index of the filter group currently being quantized/output [0..filters-1].
+  wire[15:0]psum_output_words; // Amoutn of Output words for streaming
 
   // --- Wires from iact_stream_constructor instances to OpenEye_Parallel ---
   // These buses aggregate the per-instance outputs from all CLUSTER_COLUMNS×CLUSTER_ROWS
@@ -2666,7 +2665,6 @@ end
       .needed_psum_storage_cycles_reg(needed_psum_storage_cycles_reg),
       .iact_channel_max_cycles(iact_channel_max_cycles),
       .iact_channels_per_pe_next_layer(iact_channels_per_pe_next_layer),
-      .output_cycles(output_cycles),
       .filters(filters),
       .psum_x_with_add_up(psum_x_with_add_up),
       .iteration_for_kernels(iteration_for_kernels),
@@ -2700,7 +2698,8 @@ end
       .psum_router_set_reg(psum_router_set_reg),
       .start_new_cycle(start_new_cycle),
       .psum_cnt(psum_cnt),
-      .current_filter(current_filter)
+      .current_filter(current_filter),
+      .output_words(psum_output_words)
   );
 
   // -----------------------------------------------------------------------
@@ -3000,7 +2999,6 @@ end
         .iact_needed_cycles(iact_needed_cycles),
         .kernels_per_calc(kernels_per_calc),
         .y_lines_per_calc(y_lines_per_calc),
-        .output_cycles(output_cycles),
         .store_in_psum(store_in_psum),
         .max_pooling(max_pooling),
         .fully_connected_layer(fully_connected_layer),
@@ -3033,6 +3031,7 @@ end
         .iact_buffer_words_per_write(iact_buffer_words_per_write),
         .pooling_mode(pooling_mode),
         .overhang_discrepancy(overhang_discrepancy),
+        .psum_output_words(psum_output_words),
         .gemm_mode(gemm_mode)
     );
 
