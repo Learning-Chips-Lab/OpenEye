@@ -694,7 +694,7 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
         transmissions_per_cycle = (oep.Clusters_Y * oep.Clusters_X * oep.PEs_X)//2
         current_cycle = 0
         read_data = 1
-        chance = 100
+        chance = 90
         while (dut.enable_dma_o.value == 1):
             if (read_data):
                 if(logging.DEBUG >= login_level):
