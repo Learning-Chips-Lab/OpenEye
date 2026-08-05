@@ -133,6 +133,7 @@ module OpenEye_Parallel #(
     parameter  NUM_GLB_PSUM        = 4,
     parameter  NUM_GLB_WGHT        = 3,
     parameter  PE_ROWS             = 3,
+    parameter  PARALLEL_MACS       = 2,
 `endif
     ///Set parameters
     parameter  IS_TOPLEVEL         = 1,
@@ -767,6 +768,7 @@ module OpenEye_Parallel #(
         OpenEye_Cluster #(
             .IS_TOPLEVEL       (0),
             .SERIAL            (SERIAL),
+            .PARALLEL_MACS     (PARALLEL_MACS),
             .CLUSTER_COLUMNS   (CLUSTER_COLUMNS),
             .CLUSTER_ROWS      (CLUSTER_ROWS),
             .SPARSITY_EN       (SPARSITY_EN),

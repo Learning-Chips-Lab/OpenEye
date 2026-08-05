@@ -470,7 +470,6 @@ module PE #(
     parameter IS_TOPLEVEL = 1,
     parameter SERIAL      = 1,
 
-
     parameter integer USE_DSP          = 0,  // 0=standard multiplier+adder (default), 1=DSP48 slice optimization
     // Approach 3: when 1, expose horizontal iact pass-through ports for systolic GEMM dataflow
     parameter integer SYSTOLIC_GEMM_EN = 0,

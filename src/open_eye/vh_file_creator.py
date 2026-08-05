@@ -85,6 +85,7 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
             txt_file.write(f"parameter DATA_PSUM_BITWIDTH = {openeye_parameter.DATA_PSUM_BITWIDTH},\n")
             txt_file.write(f"parameter TRANS_WORDS = {openeye_parameter.TRANS_WORDS},\n")
             txt_file.write(f"parameter DMA_BITWIDTH = {openeye_parameter.DMA_BITWIDTH},\n")
+            txt_file.write(f"parameter PARALLEL_MACS = {openeye_parameter.PARALLEL_MACS},\n")
             txt_file.write(f"parameter TRANSMISSIONS = {TRANSMISSIONS},\n")
     if (gtu.load_env_to_variable("TOPLEVEL", "PE_cluster") == "PE_cluster") :
         with open(filename, 'w') as txt_file:

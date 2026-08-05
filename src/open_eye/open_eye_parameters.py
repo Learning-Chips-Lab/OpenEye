@@ -247,6 +247,7 @@ class OpenEyeParameters(object):
 
         # Bitwidths with overhead (WOH = With OverHead)
         # Additional 4 bits for metadata (e.g., validity, address info)
+
         self.IACT_WOH_Bitwidth = self.IACT_Bitwidth + 4  # Activation + overhead: 12 bits
         self.WGHT_WOH_Bitwidth = self.WGHT_Bitwidth + 4  # Weight + overhead: 12 bits
 
@@ -255,8 +256,8 @@ class OpenEyeParameters(object):
         self.WGHT_Addr_Bitwidth = 7    # Weight address: 7 bits (128 locations)
 
         # Transmission bitwidths for data movement across routers
-        self.IACT_Trans_Bitwidth = 24  # Activation transmission: 24 bits
-        self.WGHT_Trans_Bitwidth = 24  # Weight transmission: 24 bits
+        self.IACT_Trans_Bitwidth = 2 * self.IACT_WOH_Bitwidth  # Activation transmission: 24 bits
+        self.WGHT_Trans_Bitwidth = self.WGHT_WOH_Bitwidth * self.PARALLEL_MACS  # Weight transmission: 24 bits
         self.PSUM_Trans_Bitwidth = self.DATA_PSUM_BITWIDTH * self.PARALLEL_MACS  # PSUM transmission: 40 bits (2 MACs)
 
         # === DERIVED DIMENSIONS ===
@@ -318,7 +319,7 @@ class OpenEyeParameters(object):
         self.Psum_Router_Bits = 3      # Partial sum router config: 3 bits (8 modes)
 
         self.IACT_RAM_CELLS_WORD_BITWIDTH = 64
-        self.WGHT_RAM_CELLS_WORD_BITWIDTH = 24
+        self.WGHT_RAM_CELLS_WORD_BITWIDTH = self.WGHT_Trans_Bitwidth
         self.PSUM_RAM_CELLS_WORD_BITWIDTH = 64
         self.DATA_IACT_BITWIDTH = 8
         self.IACT_WORDS_IN_RAM = self.IACT_RAM_CELLS_WORD_BITWIDTH//self.DATA_IACT_BITWIDTH

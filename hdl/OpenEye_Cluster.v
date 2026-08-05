@@ -291,6 +291,7 @@ module OpenEye_Cluster #(
   PE_cluster #(
       .IS_TOPLEVEL(0),
       .SERIAL     (SERIAL),
+      .PARALLEL_MACS(PARALLEL_MACS),
       .TOP_CLUSTER(TOP_CLUSTER),
       .SPARSITY_EN(SPARSITY_EN),
 

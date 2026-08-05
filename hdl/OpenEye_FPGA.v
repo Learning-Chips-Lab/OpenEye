@@ -120,13 +120,13 @@ module OpenEye_FPGA #(
       parameter TRANS_WORDS = 8,
       parameter DMA_BITWIDTH  = 64,
       parameter TRANSMISSIONS = 8,
+      parameter PARALLEL_MACS = 2,
   `else
     `include "parameters_FPGA.vh"
       // Defaultvalues
   `endif
     parameter IS_TOPLEVEL   = 1,
     parameter SERIAL        = 1,
-    parameter PARALLEL_MACS = 2,
     parameter SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
 
     parameter ADDR_IACT_BITWIDTH = 4,
@@ -145,7 +145,7 @@ module OpenEye_FPGA #(
     // consumes dma_storage's decoded output wires), so this count has to be
     // kept in sync by hand whenever fields are added to regmap.yaml.
     parameter TRANS_BITWIDTH_IACT = 24,
-    parameter TRANS_BITWIDTH_WGHT = 24,
+    parameter TRANS_BITWIDTH_WGHT = 12,
     // Per-PE psum transfer width. Must match PE.v's internal
     // TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * (SERIAL ? 1 : PARALLEL_MACS);
     // a fixed value (was 32) mismatches the generated DATA_PSUM_BITWIDTH (e.g.
@@ -2926,7 +2926,7 @@ end
       for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen=j_gen+1) begin : PSUM_RAM_Y
         for (g_gen = 0; g_gen < NUM_GLB_PSUM/2; g_gen=g_gen+1) begin : PSUM_RAM_GLB
           RAM_SP #(
-              .DataWidth(TRANS_BITWIDTH_PSUM*PARALLEL_MACS),
+              .DataWidth(TRANS_BITWIDTH_PSUM*2),
               .AddrWidth(BUFFER_WIDTH),
               .Pipelined(1)
           ) psum_buffer (
@@ -2934,8 +2934,8 @@ end
               .rd_en_i(psum_buffer_en_r[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen] & !psum_buffer_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen]),
               .wr_en_i(psum_buffer_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen]),
               .addr_i (psum_buffer_addr[i_gen*BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*BUFFER_WIDTH*NUM_GLB_PSUM/2+g_gen*BUFFER_WIDTH+:BUFFER_WIDTH]),
-              .data_i (psum_buffer_data_w[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS]),
-              .data_o (psum_buffer_data_r[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS])
+              .data_i (psum_buffer_data_w[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM*2]),
+              .data_o (psum_buffer_data_r[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM*2])
           );
         end
       end
@@ -3137,7 +3137,9 @@ end
 
         .ROUTER_MODES_IACT(ROUTER_MODES_IACT),
         .ROUTER_MODES_WGHT(ROUTER_MODES_WGHT),
-        .ROUTER_MODES_PSUM(ROUTER_MODES_PSUM)
+        .ROUTER_MODES_PSUM(ROUTER_MODES_PSUM),
+
+        .PARALLEL_MACS(PARALLEL_MACS)
 
     ) OpenEye_Parallel (
         //Clock and Reset Ports

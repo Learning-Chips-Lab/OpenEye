@@ -169,7 +169,6 @@ def transform_n_to_m_chunked(input_list, n, m, chunk_size):
     mask_n = (1 << n) - 1
     mask_m = (1 << m) - 1
     chunk_counter = 0
-
     for value in input_list:
         clean_value = value & mask_n
         bit_buffer |= (clean_value << buffer_length)

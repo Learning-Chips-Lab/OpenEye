@@ -284,18 +284,18 @@ module data_pipeline_wght #(
   //   overhead tags from both sub-words indicating additional non-zero entries).
   //   When overhead_reg + overhead_next_word >= filters_w, it wraps by
   //   subtracting filters_w (filter-boundary crossing detected).
-  reg         [    SECOND_OVERHEAD_WIDTH - 1 :0] overhead_reg;
+  reg         [        SECOND_OVERHEAD_WIDTH :0] overhead_reg;
 
   // overhead_delay_reg: one-cycle delayed copy of overhead_reg (before the
   //   current cycle's update).  Used in the combinational overhead_output
   //   computation to reconstruct the correct tag for data_storage_2.
-  reg         [   SECOND_OVERHEAD_WIDTH - 1  :0] overhead_delay_reg;
+  reg         [        SECOND_OVERHEAD_WIDTH :0] overhead_delay_reg;
 
   // overhead_new_calc_reg: snapshot of overhead_reg taken at the start of
   //   the current enable_i cycle (before incrementing).  Used in the
   //   enable_delay path to detect whether a filter boundary was crossed
   //   during the previous cycle (overhead_new_calc_reg >= filters_w).
-  reg         [    SECOND_OVERHEAD_WIDTH - 1 :0] overhead_new_calc_reg;
+  reg         [        SECOND_OVERHEAD_WIDTH :0] overhead_new_calc_reg;
 
   // compute_delay: one-cycle delayed copy of compute_i.
   //   Triggers a second pipeline-flush step one cycle after compute_i:

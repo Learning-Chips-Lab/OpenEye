@@ -1000,7 +1000,7 @@ class LayerParameters(object):
         self.trans_cycles_iact =  self.trans_cycles_iact + missing_cycles
 
         self.wght_cycles_one_word_all_ram = math.ceil((params.Clusters*params.NUM_GLB_WGHT*params.WGHT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_BITWIDTH)
-        self.trans_cycles_wght = self.needed_wght_transmissions *  math.ceil(self.used_wght_per_PE/params.PARALLEL_MACS) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * 24 / params.DMA_BITWIDTH)
+        self.trans_cycles_wght = self.needed_wght_transmissions *  math.ceil(self.used_wght_per_PE/params.PARALLEL_MACS) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * params.WGHT_Trans_Bitwidth / params.DMA_BITWIDTH)
 
         
         temp = math.ceil(params.NUM_GLB_PSUM * (params.Clusters * params.DATA_PSUM_BITWIDTH/params.DMA_BITWIDTH))
@@ -1506,7 +1506,7 @@ class LayerParameters(object):
         # Clusters_Y in a way that didn't match this construction, so it
         # silently mis-sized the stream and left GET_WGHT reading stale/X
         # data for the back portion of the weight load.
-        self.trans_cycles_wght = self.needed_wght_transmissions * params.Clusters_Y * params.NUM_GLB_WGHT * math.ceil(self.used_wght_per_PE / 2)
+        self.trans_cycles_wght = self.needed_wght_transmissions * params.Clusters_Y * params.NUM_GLB_WGHT * math.ceil(self.used_wght_per_PE / params.PARALLEL_MACS)
         # Must equal len(DensePsumStreamMapper.get_psum_stream()): the test
         # harness sends each DMA section on a fixed schedule with no flow
         # control, so GET_BIAS (psum_pipeline.v) must consume exactly this

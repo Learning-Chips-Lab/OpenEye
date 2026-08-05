@@ -94,7 +94,7 @@ export USE_SPARSE_WEIGHTS=0
 export ONLY_FILES=0
 
 #Amout of parallel MACs
-export PARALLEL_MACS=2
+export PARALLEL_MACS=1
 #Actual Datawidth of Data
 export DATA_IACT_BITWIDTH=8
 export DATA_PSUM_BITWIDTH=32
@@ -104,7 +104,7 @@ export DATA_WGHT_IGNORE_ZEROS=4
 
 #Datawidth for Transportation of Data
 export TRANS_BITWIDTH_IACT=24
-export TRANS_BITWIDTH_WGHT=24
+export TRANS_BITWIDTH_WGHT=12
 export TRANS_BITWIDTH_PSUM=32
 
 #Set Number of Router Clusters per Instance
