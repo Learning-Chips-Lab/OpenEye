@@ -54,6 +54,7 @@
 module iact_stream_constructor #(
     parameter  CALC_DATA_WIDTH     = 32,   // Calculation precision
     parameter  CLUSTER_COLUMNS     = 2,    // Number of PE cluster coloumns
+    parameter  SPARSITY_EN         = 1,    // Enabled Sparsity Overhead
     parameter  CLUSTER_ROWS        = 8,    // Number of PE cluster rows
     parameter  NUM_GLB_IACT        = 3,    // Global buffer interfaces
     parameter  PE_X                = 4,    // PE array width
@@ -67,7 +68,7 @@ module iact_stream_constructor #(
     localparam CLUSTERS            = CLUSTER_ROWS * CLUSTER_COLUMNS,
     localparam PES                 = PE_X * PE_Y,
     localparam IACT_WORDS_IN_RAM   = RAM_CELLS_WORDWIDTH / DATA_IACT_BITWIDTH,
-    localparam IACT_DATA_DATA      = DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD,
+    localparam IACT_DATA_DATA      = DATA_IACT_BITWIDTH + (DATA_IACT_OVERHEAD * SPARSITY_EN),
     localparam BITS_PER_ROUTER     = WORD_BITWIDTH / NUM_GLB_IACT,
     localparam WORDS_PER_TRANS     = BITS_PER_ROUTER / IACT_DATA_DATA,
     localparam IACT_CHOOSE_BITS    = $clog2(NUM_GLB_IACT+1),    
@@ -813,7 +814,9 @@ module iact_stream_constructor #(
       assign ram_data_o[r_gen * BITS_PER_ROUTER+:BITS_PER_ROUTER]=BUFFER[r_gen].ram_data_o_w;
       for (w_gen = 0; w_gen < WORDS_PER_TRANS; w_gen = w_gen + 1) begin
         assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA +:DATA_IACT_BITWIDTH]                      = mem_data_payload_reg[r_gen][w_gen];
-        assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA + DATA_IACT_BITWIDTH +:DATA_IACT_OVERHEAD] = mem_data_overhead_reg[r_gen][w_gen];
+        if (SPARSITY_EN == 1) begin
+          assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA + DATA_IACT_BITWIDTH +:DATA_IACT_OVERHEAD] = mem_data_overhead_reg[r_gen][w_gen];
+        end
       end
     end
     for (r_gen = 0; r_gen < RAM_CELLS; r_gen = r_gen + 1) begin

@@ -247,9 +247,12 @@ class OpenEyeParameters(object):
 
         # Bitwidths with overhead (WOH = With OverHead)
         # Additional 4 bits for metadata (e.g., validity, address info)
-
-        self.IACT_WOH_Bitwidth = self.IACT_Bitwidth + 4  # Activation + overhead: 12 bits
-        self.WGHT_WOH_Bitwidth = self.WGHT_Bitwidth + 4  # Weight + overhead: 12 bits
+        if (self.SPARSITY_EN == 1):
+            self.IACT_WOH_Bitwidth = self.IACT_Bitwidth + 4  # Activation + overhead: 12 bits
+            self.WGHT_WOH_Bitwidth = self.WGHT_Bitwidth + 4  # Weight + overhead: 12 bits
+        else:
+            self.IACT_WOH_Bitwidth = self.IACT_Bitwidth  # Activation
+            self.WGHT_WOH_Bitwidth = self.WGHT_Bitwidth  # Weight
 
         # Address bitwidths for memory indexing
         self.IACT_Addr_Bitwidth = 4    # Activation address: 4 bits (16 locations)

@@ -117,8 +117,8 @@ def check_results(params, file_1,file_2):
                     line1_words[x] = line1.strip()[(x)*params.DATA_PSUM_BITWIDTH:(x+1)*params.DATA_PSUM_BITWIDTH]
                     line2_words[x] = line2.strip()[(x)*params.DATA_PSUM_BITWIDTH:(x+1)*params.DATA_PSUM_BITWIDTH]
 
-                error_line1 = f'ReferenceData: {line1.strip()}' + "   " 
-                error_line2 = f'ReferenceData: {line2.strip()}' + "   " 
+                error_line1 = f'Reference Data: {line1.strip()}' + "   " 
+                error_line2 = f'Output Data   : {line2.strip()}' + "   " 
                 for x in range(words) :
                     error_line1 = error_line1 + str(twos_complement(line1_words[x], params.DATA_PSUM_BITWIDTH)) + " "
                 for x in range(words) :

@@ -652,24 +652,24 @@ module psum_pipeline #(
                   end
                 end
               end
-              if (psum_cycle_buffer_0 == output_words-1) begin
-                psum_cycle_buffer_0      <= 0;
-                for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                  for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                    for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                      psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= 0;
-                    end
+            end
+            if (psum_cycle_buffer_0 == output_words) begin
+              psum_cycle_buffer_0      <= 0;
+              for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
+                  for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                    psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= 0;
                   end
                 end
-                psum_buffer_en_r       <= 0;
-                last_data_o            <= 1;
-                finished_cycles_psum   <= 0;
-                fsm_psum_last_state    <= PSUM_SEND_RESULTS;
-                fsm_psum_current_state <= PSUM_IDLE;
-                fsm_psum_r             <= 0;
-                fsm_y_cl_psum          <= 0;
-                fsm_x_cl_psum          <= 0;
               end
+              psum_buffer_en_r       <= 0;
+              last_data_o            <= 1;
+              finished_cycles_psum   <= 0;
+              fsm_psum_last_state    <= PSUM_SEND_RESULTS;
+              fsm_psum_current_state <= PSUM_IDLE;
+              fsm_psum_r             <= 0;
+              fsm_y_cl_psum          <= 0;
+              fsm_x_cl_psum          <= 0;
             end
           end
           if (ready_dma_i == 0) begin

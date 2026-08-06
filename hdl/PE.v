@@ -1921,6 +1921,7 @@ module PE #(
                 psum_spad_addr_mem[pmc] <= psum_spad_addr_mem[pmc] + PARALLEL_MACS;
               end
             end else begin
+              wght_data_vec <= 0;
               for (pmc = 0; pmc < PARALLEL_MACS; pmc=pmc+1) begin
                 psum_spad_addr_mem[pmc] <= 0;
               end

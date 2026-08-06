@@ -426,13 +426,14 @@ module data_pipeline_iact #(
         //   - Wrap address_temp_2 to 0 at SECOND_SPAD_ADDR boundary; also
         //     reset cycle_counter to restart sub-word parsing.
         // -----------------------------------------------------------------
-        if (((cycle_counter == 0) & (data_i[SECOND_PAYLOAD_WIDTH-1:0] != 0)) |
-            ((cycle_counter != 0) & (current_data != 0))) begin
+        if ((((cycle_counter == 0) & (data_i[SECOND_PAYLOAD_WIDTH-1:0] != 0)) |
+            ((cycle_counter != 0) & (current_data != 0))) | (!SPARSITY_EN)) begin
           second_spad_words_o <= second_spad_words_o + 1;
           first_spad_data_o   <= overhead_reg + 1'd1;
           overhead_reg        <= overhead_reg + 1;
           second_spad_en_o    <= 1;
           address_temp_2      <= address_temp_2 + 1;
+          payload_reg         <= 0;
           if (address_temp_2 == SECOND_SPAD_ADDR - 1) begin
             address_temp_2 <= 0;
             cycle_counter  <= 0;

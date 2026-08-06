@@ -121,13 +121,15 @@ module OpenEye_FPGA #(
       parameter DMA_BITWIDTH  = 64,
       parameter TRANSMISSIONS = 8,
       parameter PARALLEL_MACS = 2,
+      parameter SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
+      parameter TRANS_BITWIDTH_IACT = 24,
+      parameter TRANS_BITWIDTH_WGHT = 8,
   `else
     `include "parameters_FPGA.vh"
       // Defaultvalues
   `endif
     parameter IS_TOPLEVEL   = 1,
     parameter SERIAL        = 1,
-    parameter SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
 
     parameter ADDR_IACT_BITWIDTH = 4,
     parameter ADDR_WGHT_BITWIDTH = 8,
@@ -144,8 +146,6 @@ module OpenEye_FPGA #(
     // list) - OpenEye_FPGA.v does not `include regmap_params.vh (it only
     // consumes dma_storage's decoded output wires), so this count has to be
     // kept in sync by hand whenever fields are added to regmap.yaml.
-    parameter TRANS_BITWIDTH_IACT = 24,
-    parameter TRANS_BITWIDTH_WGHT = 12,
     // Per-PE psum transfer width. Must match PE.v's internal
     // TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * (SERIAL ? 1 : PARALLEL_MACS);
     // a fixed value (was 32) mismatches the generated DATA_PSUM_BITWIDTH (e.g.
@@ -2838,6 +2838,7 @@ end
         iact_stream_constructor #(
             .CLUSTER_COLUMNS   (CLUSTER_COLUMNS),
             .CLUSTER_ROWS      (CLUSTER_ROWS),
+            .SPARSITY_EN       (SPARSITY_EN),
             .NUM_GLB_IACT      (NUM_GLB_IACT),
             .PE_X              (NUM_GLB_PSUM),
             .PE_Y              (NUM_GLB_WGHT),

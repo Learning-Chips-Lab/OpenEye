@@ -80,10 +80,10 @@ export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 export LAYER=Convolution
 #export LAYER=MobileNetV1
 #export LAYER=Pooling
-export NUM_FILTERS=16
+export NUM_FILTERS=8
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=8
+export INPUT_SIZE_X=4
 export INPUT_SIZE_Y=2
 export STRIDE=1
 export INPUT_CHANNELS=8
@@ -95,6 +95,7 @@ export ONLY_FILES=0
 
 #Amout of parallel MACs
 export PARALLEL_MACS=1
+export SPARSITY_EN=0
 #Actual Datawidth of Data
 export DATA_IACT_BITWIDTH=8
 export DATA_PSUM_BITWIDTH=32
@@ -103,8 +104,8 @@ export DATA_IACT_OVERHEAD=4
 export DATA_WGHT_IGNORE_ZEROS=4
 
 #Datawidth for Transportation of Data
-export TRANS_BITWIDTH_IACT=24
-export TRANS_BITWIDTH_WGHT=12
+export TRANS_BITWIDTH_IACT=16
+export TRANS_BITWIDTH_WGHT=8
 export TRANS_BITWIDTH_PSUM=32
 
 #Set Number of Router Clusters per Instance
