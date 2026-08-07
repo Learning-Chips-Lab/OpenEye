@@ -80,7 +80,7 @@ export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 export LAYER=Convolution
 #export LAYER=MobileNetV1
 #export LAYER=Pooling
-export NUM_FILTERS=8
+export NUM_FILTERS=16
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
 export INPUT_SIZE_X=4
@@ -128,11 +128,11 @@ export PE_WGHT_ADDR_ADDR=16
 export PSUM_PER_PE=32
 
 export BRANCHES=1
-export BUFFER_WIDTH=12
+export BUFFER_WIDTH=10
 export QUANT_AMOUNT=32
 export TRANS_WORDS = 4
 
-export DMA_BITWIDTH = 64
+export DMA_BITWIDTH = 32
 
 export
 run:

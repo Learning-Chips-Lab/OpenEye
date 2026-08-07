@@ -277,6 +277,7 @@ class LayerParameters(object):
         self.iact_cycles_one_word_all_ram = 1
         self.overhang_discrepancy = 0
         self.psum_output_words = 1             # Neede transmissions for output
+
         # === Control Flags ===
         self.send_values_out = 1               # Send outputs to DRAM
         self.skipIact = 0                      # Skip activation loading flag
@@ -287,6 +288,8 @@ class LayerParameters(object):
         # === Computing Matrix and Mode ===
         self.computing_mx = 0                  # 4D matrix of active PEs
         self.data_mode = 0                     # Data processing mode
+        self.iact_x_per_cluster = 0            # X Iacts per Cluster
+        self.psum_x_all_cluster = 0            # X Psum over all clusters
         self.y_lines_per_calculation = 1       # Y lines per computation cycle
         self.iact_x_line_repetitions = 1       # Cycles needed for computing a single x iact line
         self.different_kernels_per_calculation = 1 # Kernels per cycle
@@ -300,6 +303,16 @@ class LayerParameters(object):
         self.iact_x_lines = 3              # X-lines for activation storage
         self.quantize = [[0 for _ in range(2)]for _ in range(params.QUANT_AMOUNT)]  # Quantization params
         self.offset =  [0 for _ in range(params.QUANT_AMOUNT)]  # Quantization offsets
+
+        # === Programmable Adress Generation Unit ===
+        self.iact_read_inc_1 = 0
+        self.iact_read_inc_2 = 0
+        self.iact_read_inc_3 = 0
+        self.iact_read_inc_4 = 0
+        self.iact_write_inc_1 = 0
+        self.iact_write_inc_2 = 0
+        self.pagu_wght_limit = 0
+
 
         # === Layer Type Detection and Dispatch ===
         # Detect layer type from name and call appropriate initialization method
@@ -993,6 +1006,20 @@ class LayerParameters(object):
             self.iact_converter_buffer_addr_max_cycles = (self.kernel_size[1] + self.iact_size_y - 1) * self.iact_x_line_repetitions * math.ceil(self.used_channels / 2) * self.needed_Iact_writes
         self.iact_converter_buffer_addr_max_cycles = math.ceil(self.used_channels / 2) * self.needed_Iact_writes
 
+    def  get_pagu_values(self, params):
+        self.iact_read_inc_1 = int((self.iact_size_y + self.padding_y * 2) * self.needed_Iact_writes * math.ceil(self.used_channels/2))
+        self.iact_read_inc_2 = 0
+        self.iact_read_inc_3 = int(self.diff_iact_layer * self.needed_Iact_writes * (self.iact_size_y + self.padding_y * 2) * math.ceil(self.used_channels/2))
+        self.iact_read_inc_4 = int(self.needed_Iact_writes * math.ceil(self.used_channels/2) * self.y_lines_per_calculation * self.strideY)
+
+        if (self.used_channels == 1):
+            lines_in_words = ((self.iact_size_y+(self.padding_y*2)+1)/2)
+        else:
+            lines_in_words = (self.iact_size_y+(self.padding_y*2))
+
+        self.iact_write_inc_1 = lines_in_words * math.ceil(self.used_channels / 2) * self.needed_Iact_writes * self.diff_iact_layer
+        self.iact_write_inc_2 = math.ceil(self.used_channels/2) * self.needed_Iact_writes
+        self.pagu_wght_limit = int((self.iact_size_x%params.NUM_GLB_PSUM)+self.iact_size_x) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
     def  calculate_transmission_cycles(self, params):
         self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_BITWIDTH)
         self.trans_cycles_iact = math.ceil(params.IACT_Bitwidth*self.iact_size_x*self.iact_size_y*self.channels / params.DMA_BITWIDTH)
@@ -1042,7 +1069,7 @@ class LayerParameters(object):
         self.calculate_total_computations()
         self.check_for_multiple_lines_per_computation(params)
         self.calculate_single_cluster_computation(params)
-
+        self.iact_x_per_cluster = self.strideX * params.NUM_GLB_PSUM
         # === Phase 3: Calculate PE allocation ===
         # Determine if multiple kernels fit per PE cluster
         if (math.floor(params.PEs_Y/self.kernel_size[0]) > 1):
@@ -1181,10 +1208,12 @@ class LayerParameters(object):
         else :
             self.overhang_discrepancy  = (self.iact_size_x*self.used_channels)%(params.WORDS_PER_CYCLE*4)
         self.psum_output_words = int((self.output_cycles * self.filters * self.needed_wght_cycles * params.Clusters * params.NUM_GLB_PSUM) / math.ceil(params.DMA_BITWIDTH/32))
+        self.psum_x_all_cluster = self.different_kernels_per_calculation * (self.iact_size_x + self.add_up)
         # === Phase 9: Finalize calculations ===
         self.calculate_transmission_cycles(params)
         self.calculate_needed_refreshes_mx(params)
         self.calculate_fpga_parameters(params)
+        self.get_pagu_values(params)
         self.output_logger()
     def write_convdw_layer(self, layer, params):
         """Compute all configuration parameters for a Depthwise Convolution layer.

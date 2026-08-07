@@ -138,8 +138,8 @@ class ConvMapper(LayerMapper):
         from regmap_pack import pack_registers
         words = pack_registers({
         "wght_cycles_reg": layer_params.needed_wght_transmissions,
-        "stride_x_reg": layer_params.strideX,
-        "stride_y_reg": layer_params.strideY,
+        "stride_x": layer_params.strideX,
+        "stride_y": layer_params.strideY,
         "skipIact_reg": layer_params.skipIact,
         "skipWght_reg": layer_params.skipWght,
         "skipPsum_reg": layer_params.skipPsum,
@@ -159,6 +159,8 @@ class ConvMapper(LayerMapper):
         "iact_size_x": layer_params.iact_size_x,
         "iact_size_y": layer_params.iact_size_y,
         "iact_size_c": layer_params.channels,
+        "iact_x_per_cluster": layer_params.iact_x_per_cluster,
+        "psum_x_all_cluster": layer_params.psum_x_all_cluster,
         "padding_x": layer_params.padding_x,
         "padding_y": layer_params.padding_y,
         "psum_size_x":math.ceil(layer_params.iact_size_x/layer_params.strideX),
@@ -201,6 +203,13 @@ class ConvMapper(LayerMapper):
         "used_wght_per_PE": layer_params.used_wght_per_PE,
         "overhang_discrepancy": layer_params.overhang_discrepancy,
         "psum_output_words": layer_params.psum_output_words,
+        "iact_read_inc_1" : layer_params.iact_read_inc_1,
+        "iact_read_inc_2" : layer_params.iact_read_inc_2,
+        "iact_read_inc_3" : layer_params.iact_read_inc_3,
+        "iact_read_inc_4" : layer_params.iact_read_inc_4,
+        "iact_write_inc_1" : layer_params.iact_write_inc_1,
+        "iact_write_inc_2" : layer_params.iact_write_inc_2,
+        "pagu_wght_limit" : layer_params.pagu_wght_limit,
         "gemm_mode": getattr(layer_params, "gemm_mode", 0)
         })
 

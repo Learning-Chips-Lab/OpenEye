@@ -1,4 +1,4 @@
-dma_bitwidth: 64
+dma_bitwidth: 32
 registers:
   - {name: wght_cycles_reg, width: 8}
   - {name: stride_x_reg, width: 3}

@@ -58,6 +58,7 @@ module psum_pipeline #(
     input wire [7:0] output_cycles,
     input wire [5:0] filters,
     input wire [7:0] psum_x_with_add_up,
+    input wire [15:0] psum_x_all_cluster,
     input wire [3:0] iteration_for_kernels,
     input wire [17:0] needed_cycles,
     input wire [15:0] trans_cycles_psum,
@@ -576,7 +577,7 @@ module psum_pipeline #(
               pcb_inc_1            <= 1;
               pcb_inc_2            <= (calc_filters_wght * iact_x_line_repetitions);
               pcb_inc_3            <= iteration_for_kernels;
-              psum_cycle_limit_0   <= kernels_per_calc * psum_x_with_add_up;
+              psum_cycle_limit_0   <= psum_x_all_cluster;
               if (iact_size_x <= NUM_GLB_PSUM) begin
                 psum_cycle_limit_0   <= iact_channels_per_pe_next_layer;
               end
@@ -646,7 +647,7 @@ module psum_pipeline #(
                     for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                       for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
                         psum_buffer_en_r[cc_psum*CLUSTER_ROWS*NUM_GLB_PSUM/2+cr_psum*NUM_GLB_PSUM/2+g_psum] <= 1;
-                        psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
+                        psum_buffer_addr_array[cc_psum][cr_psum][g_psum]                                    <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                       end
                     end
                   end
@@ -809,13 +810,13 @@ module psum_pipeline #(
           if (psum_size_x > NUM_GLB_PSUM * CLUSTER_COLUMNS) begin
             if (iact_channels_per_pe_next_layer == 4) begin
               fsm_y_cl_psum <= next_fsm_y_cl_psum;
-              if (next_fsm_y_cl_psum >= CLUSTER_ROWS | (next_fsm_y_cl_psum*(NUM_GLB_PSUM*CLUSTER_COLUMNS) >= kernels_per_calc * psum_x_with_add_up)) begin
+              if (next_fsm_y_cl_psum >= CLUSTER_ROWS | (next_fsm_y_cl_psum*(NUM_GLB_PSUM*CLUSTER_COLUMNS) >= psum_x_all_cluster)) begin
                 fsm_y_cl_psum <= 0;
               end
             end else begin
               if ((psum_cycle_buffer_3 == psum_size_y  - 1)) begin
                 fsm_y_cl_psum <= next_fsm_y_cl_psum;
-                if (next_fsm_y_cl_psum >= CLUSTER_ROWS | (next_fsm_y_cl_psum*(NUM_GLB_PSUM*CLUSTER_COLUMNS) >= kernels_per_calc * psum_x_with_add_up)) begin
+                if (next_fsm_y_cl_psum >= CLUSTER_ROWS | (next_fsm_y_cl_psum*(NUM_GLB_PSUM*CLUSTER_COLUMNS) >= psum_x_all_cluster)) begin
                   fsm_y_cl_psum <= 0;
                 end
               end
@@ -826,7 +827,7 @@ module psum_pipeline #(
               if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
                 fsm_x_cl_psum <= 0;
                 fsm_y_cl_psum <= fsm_y_cl_psum + 1;
-                if (fsm_y_cl_psum ==fsm_y_cl_psum_offset +  kernels_per_calc/4 - 1) begin
+                if (fsm_y_cl_psum == fsm_y_cl_psum_offset +  kernels_per_calc/4 - 1) begin
                   fsm_y_cl_psum <= fsm_y_cl_psum_offset;
                   if (psum_cycle_buffer_3 == psum_size_y  - 1) begin
                     fsm_y_cl_psum        <= fsm_y_cl_psum + 1;

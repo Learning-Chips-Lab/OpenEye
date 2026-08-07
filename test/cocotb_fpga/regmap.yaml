@@ -1,8 +1,8 @@
 dma_bitwidth: 64
 registers:
   - {name: wght_cycles_reg, width: 8}
-  - {name: stride_x_reg, width: 3}
-  - {name: stride_y_reg, width: 3}
+  - {name: stride_x, width: 3}
+  - {name: stride_y, width: 3}
   - {name: skipIact_reg, width: 1}
   - {name: skipWght_reg, width: 1}
   - {name: skipPsum_reg, width: 1}
@@ -21,6 +21,8 @@ registers:
   - {name: iact_size_x, width: 12}
   - {name: iact_size_y, width: 8}
   - {name: iact_size_c, width: 12}
+  - {name: iact_x_per_cluster, width: 4}
+  - {name: psum_x_all_cluster, width: 16}
   - {name: padding_x, width: 4}
   - {name: padding_y, width: 4}
   - {name: psum_size_x, width: 12}
@@ -63,6 +65,14 @@ registers:
   - {name: used_wght_per_PE, width: int(BUFFER_WIDTH)}
   - {name: psum_output_words, width: 16}
   - {name: overhang_discrepancy, width: 4}
+  - {name: iact_read_inc_1, width: 12}
+  - {name: iact_read_inc_2, width: 12}
+  - {name: iact_read_inc_3, width: 12}
+  - {name: iact_read_inc_4, width: 12}
+  - {name: iact_write_inc_1, width: 12}
+  - {name: iact_write_inc_2, width: 12}
+  - {name: pagu_wght_limit, width: 10}
+  
 
 
 
