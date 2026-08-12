@@ -62,7 +62,7 @@ registers:
   - {name: iact_buffer_words_per_write, width: 12}
   - {name: pooling_mode, width: 1}
   - {name: gemm_mode, width: 1}
-  - {name: used_wght_per_PE, width: int(BUFFER_WIDTH)}
+  - {name: used_wght_per_PE, width: int(BUFFER_WIDTH_WGHT)}
   - {name: psum_output_words, width: 16}
   - {name: overhang_discrepancy, width: 4}
   - {name: iact_read_inc_1, width: 12}

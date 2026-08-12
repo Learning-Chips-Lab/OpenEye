@@ -83,10 +83,10 @@ export LAYER=Convolution
 export NUM_FILTERS=16
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=4
-export INPUT_SIZE_Y=2
+export INPUT_SIZE_X=16
+export INPUT_SIZE_Y=16
 export STRIDE=1
-export INPUT_CHANNELS=8
+export INPUT_CHANNELS=16
 export OUTPUT_SIZE=10
 export USE_RANDOM_VALUES=1
 export USE_SPARSE_IACTS=0
@@ -129,6 +129,8 @@ export PSUM_PER_PE=32
 
 export BRANCHES=1
 export BUFFER_WIDTH=10
+export BUFFER_WIDTH_PSUM = 14
+export BUFFER_WIDTH_WGHT = 12
 export QUANT_AMOUNT=32
 export TRANS_WORDS = 4
 

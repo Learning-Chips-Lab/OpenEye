@@ -185,11 +185,23 @@ class OpenEyeParameters(object):
             self.NUM_GLB_WGHT = 3  # Default: 3 global WGHT buffers per cluster
             self.PEs_Y = 3         # Default: 3 PEs vertically per cluster
 
-        # Number of Width of GLBs
+        # Width of IACT GLBs
         try:
             self.BUFFER_WIDTH = int(os.getenv("BUFFER_WIDTH"))
         except:
             self.BUFFER_WIDTH = 10
+
+        # Width of WGHT GLBs
+        try:
+            self.BUFFER_WIDTH_WGHT = int(os.getenv("BUFFER_WIDTH_WGHT"))
+        except:
+            self.BUFFER_WIDTH_WGHT = 12
+            
+        # Width of PSUM GLBs
+        try:
+            self.BUFFER_WIDTH_PSUM = int(os.getenv("BUFFER_WIDTH_PSUM"))
+        except:
+            self.BUFFER_WIDTH_PSUM = 14
 
         # Number of possible branches in one single net
         try:

@@ -107,7 +107,7 @@ module psum_pipeline #(
   localparam GET_BIAS = 4'd5;
 
   reg [7:0] storage_cycles;
-  reg [7:0] psum_cycle_buffer_0;
+  reg [15:0] psum_cycle_buffer_0;
   reg [7:0] psum_cycle_buffer_1;
   reg [7:0] psum_cycle_buffer_2;
   reg [7:0] psum_cycle_buffer_3;
@@ -121,7 +121,7 @@ module psum_pipeline #(
   reg [7:0] psum_cycle_inc_2;
   reg [7:0] psum_cycle_inc_3;
   reg [7:0] psum_cycle_inc_4;
-  reg [7:0] psum_cycle_limit_0;
+  reg [15:0] psum_cycle_limit_0;
   reg [7:0] psum_cycle_limit_1;
   reg [7:0] psum_cycle_limit_2;
   reg [7:0] psum_cycle_limit_3;
@@ -131,8 +131,8 @@ module psum_pipeline #(
   reg [11:0] pcb_inc_3;
   reg [3:0] fsm_psum_row_offset;
   reg [7:0] iact_channel_counter_reg;
-  reg [7:0] finished_cycles_psum;
-  reg [7:0] psum_buffer_addr_storage;
+  reg [17:0] finished_cycles_psum;
+  reg [BUFFER_WIDTH-1:0] psum_buffer_addr_storage;
   reg [BUFFER_WIDTH-1:0] psum_buffer_addr_array [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][NUM_GLB_PSUM/2-1:0];
   reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][NUM_GLB_PSUM/2-1:0] psum_buffer_en_w_int;
   reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][NUM_GLB_PSUM/2-1:0] psum_buffer_en_r_int;
@@ -625,7 +625,7 @@ module psum_pipeline #(
             data_dma_o_counter <= 0;
             fsm_psum_r         <= fsm_psum_r + PSUM_OUTPUT_WORDS;
             if ((fsm_psum_r ==(NUM_GLB_PSUM - PSUM_OUTPUT_WORDS)) | fully_connected_layer) begin
-              fsm_psum_r <= 0;
+              fsm_psum_r    <= 0;
               fsm_x_cl_psum <= fsm_x_cl_psum + 1;
               if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
                 fsm_x_cl_psum <= 0;
@@ -691,9 +691,9 @@ module psum_pipeline #(
                 psum_buffer_data_temp_reg <= psum_buffer_data_temp_reg >> DMA_BITWIDTH;
               end
               if (data_dma_o_counter == 1) begin
-                data_dma_o_q2             <= psum_buffer_data_temp_reg[0+:DMA_BITWIDTH];
+                data_dma_o_q2 <= psum_buffer_data_temp_reg[0+:DMA_BITWIDTH];
               end
-              psum_cycle_buffer_1       <= psum_cycle_buffer_1 + 1;
+              psum_cycle_buffer_1 <= psum_cycle_buffer_1 + 1;
               if (psum_cycle_buffer_1 == 0) begin
                 psum_buffer_data_temp_reg <= psum_buffer_data_r;
               end

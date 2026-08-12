@@ -561,7 +561,10 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                                             temp_string =gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],params.DATA_PSUM_BITWIDTH) +  temp_string
                                         except:
                                             temp_string = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH) + temp_string
-                                        x_cor = x_cor + 1
+                                    else:
+                                        temp_string = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH) + temp_string
+
+                                    x_cor = x_cor + 1
                         file_dma_ref.write(temp_string+ "\n")
             filter = filter + 1
         if ((filter >= layer_params.filters)) :

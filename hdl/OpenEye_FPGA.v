@@ -114,6 +114,8 @@ module OpenEye_FPGA #(
       parameter IACT_RAM_CELLS= 8,
       parameter BRANCHES      = 1,
       parameter BUFFER_WIDTH  = 10,
+      parameter BUFFER_WIDTH_PSUM = 14,
+      parameter BUFFER_WIDTH_WGHT = 12,
       parameter QUANT_AMOUNT  = 32,
       parameter DATA_PSUM_BITWIDTH = 32,
       parameter CLUSTER_COLUMNS = 2,
@@ -429,9 +431,9 @@ reg [1023:0] fst_path;
   // -----------------------------------------------------------------------
   reg                                                  wght_buffer_en_r;            // Read enable for the weight staging RAM.
   reg                                                  wght_buffer_en_w;            // Write enable for the weight staging RAM.
-  reg [BUFFER_WIDTH-1:0]                               wght_buffer_wr_addr;         // Write-address pointer; incremented each time a full weight row is assembled.
-  reg [BUFFER_WIDTH-1:0]                               wght_buffer_rd_addr;         // Read-address pointer; incremented each clock during the send phase.
-  reg [BUFFER_WIDTH-1:0]                               wght_buffer_rd_addr_storage; // Saved read address to rewind to the start of the current weight block after each channel batch.
+  reg [BUFFER_WIDTH_WGHT-1:0]                          wght_buffer_wr_addr;         // Write-address pointer; incremented each time a full weight row is assembled.
+  reg [BUFFER_WIDTH_WGHT-1:0]                          wght_buffer_rd_addr;         // Read-address pointer; incremented each clock during the send phase.
+  reg [BUFFER_WIDTH_WGHT-1:0]                          wght_buffer_rd_addr_storage; // Saved read address to rewind to the start of the current weight block after each channel batch.
   reg [WGHT_CELL_INPUT_WIDTH-1:0]                      wght_buffer_data_w;          // Write-data bus: assembled from pairs of DMA words, one row per cycle.
   wire [TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] wght_buffer_data_r;          // Read-data bus; directly assigned to wght_data_i_w → OpenEye_Parallel.
 
@@ -444,13 +446,13 @@ reg [1023:0] fst_path;
   // -----------------------------------------------------------------------
   reg  [CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_en_r;           // Per-buffer read-enable vector (one bit per RAM instance).
   reg  [CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_en_w;           // Per-buffer write-enable vector.
-  wire [BUFFER_WIDTH*CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_addr; // Flattened address bus; driven from psum_buffer_addr_array.
-  reg  [BUFFER_WIDTH-1:0] psum_buffer_addr_storage;              // Base address for the start of the current output page; advances by filters after each complete psum pass.
+  wire [BUFFER_WIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_addr; // Flattened address bus; driven from psum_buffer_addr_array.
+  reg  [BUFFER_WIDTH_PSUM-1:0] psum_buffer_addr_storage;              // Base address for the start of the current output page; advances by filters after each complete psum pass.
   reg  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_data_w;  // Write-data bus to all psum buffers; MUXed between bias-load and PE-output paths.
   wire [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_data_r;  // Read-data bus from all psum buffers; fed into OpenEye_Parallel or into the quantizer.
 
-  wire [BUFFER_WIDTH-1:0] wghts_per_pe;   // Total weight words loaded; used as the upper-bound of the weight-send loop.
-  reg  [BUFFER_WIDTH-1:0] psum_cnt; // Total psum words in one output pass; set at end of GET_BIAS from the bias buffer depth.
+  wire [BUFFER_WIDTH_WGHT-1:0] wghts_per_pe;   // Total weight words loaded; used as the upper-bound of the weight-send loop.
+  reg  [BUFFER_WIDTH_PSUM-1:0] psum_cnt; // Total psum words in one output pass; set at end of GET_BIAS from the bias buffer depth.
 
   // -----------------------------------------------------------------------
   // Iact Stream Loading Registers
@@ -2637,7 +2639,7 @@ end
       .PARALLEL_MACS(PARALLEL_MACS),
       .TRANS_WORDS(TRANS_WORDS),
       .TRANS_BITWIDTH_PSUM(TRANS_BITWIDTH_PSUM),
-      .BUFFER_WIDTH(BUFFER_WIDTH),
+      .BUFFER_WIDTH(BUFFER_WIDTH_PSUM),
       .DMA_BITWIDTH(DMA_BITWIDTH),
       .ROUTER_MODES_PSUM(ROUTER_MODES_PSUM),
       .QUANT_AMOUNT(QUANT_AMOUNT),
@@ -2851,7 +2853,7 @@ end
             .DATA_IACT_OVERHEAD(DATA_IACT_OVERHEAD),
             .RAM_CELLS         (IACT_RAM_CELLS),
             .WORD_BITWIDTH     (TRANS_BITWIDTH_IACT * NUM_GLB_IACT),
-            .ADDRWIDTH         (BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR)
+            .ADDRWIDTH         (14)
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
             .rst_ni                      (rst_n),
@@ -2909,7 +2911,7 @@ end
     // -------------------------------------------------------------------
     RAM_SP #(
         .DataWidth(TRANS_BITWIDTH_WGHT * CLUSTERS * NUM_GLB_WGHT),
-        .AddrWidth(BUFFER_WIDTH),
+        .AddrWidth(BUFFER_WIDTH_WGHT),
         .Pipelined(1)
     ) wght_buffer (
         .clk_i  (clk_i),
@@ -2942,13 +2944,13 @@ end
         for (g_gen = 0; g_gen < NUM_GLB_PSUM/2; g_gen=g_gen+1) begin : PSUM_RAM_GLB
           RAM_SP #(
               .DataWidth(TRANS_BITWIDTH_PSUM*2),
-              .AddrWidth(BUFFER_WIDTH),
+              .AddrWidth(BUFFER_WIDTH_PSUM),
               .Pipelined(1)
           ) psum_buffer (
               .clk_i  (clk_i),
               .rd_en_i(psum_buffer_en_r[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen] & !psum_buffer_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen]),
               .wr_en_i(psum_buffer_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen]),
-              .addr_i (psum_buffer_addr[i_gen*BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*BUFFER_WIDTH*NUM_GLB_PSUM/2+g_gen*BUFFER_WIDTH+:BUFFER_WIDTH]),
+              .addr_i (psum_buffer_addr[i_gen*BUFFER_WIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*BUFFER_WIDTH_PSUM*NUM_GLB_PSUM/2+g_gen*BUFFER_WIDTH_PSUM+:BUFFER_WIDTH_PSUM]),
               .data_i (psum_buffer_data_w[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM*2]),
               .data_o (psum_buffer_data_r[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM*2])
           );

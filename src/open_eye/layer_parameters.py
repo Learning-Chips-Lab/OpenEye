@@ -1020,6 +1020,7 @@ class LayerParameters(object):
         self.iact_write_inc_1 = lines_in_words * math.ceil(self.used_channels / 2) * self.needed_Iact_writes * self.diff_iact_layer
         self.iact_write_inc_2 = math.ceil(self.used_channels/2) * self.needed_Iact_writes
         self.pagu_wght_limit = int((self.iact_size_x%params.NUM_GLB_PSUM)+self.iact_size_x) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
+
     def  calculate_transmission_cycles(self, params):
         self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_BITWIDTH)
         self.trans_cycles_iact = math.ceil(params.IACT_Bitwidth*self.iact_size_x*self.iact_size_y*self.channels / params.DMA_BITWIDTH)
@@ -1162,24 +1163,29 @@ class LayerParameters(object):
         if (self.used_channels == 1):
             self.limit_increase = math.floor((self.iact_size_x*2)/(2*4))
             self.initial_upper_limit = self.limit_increase
+            self.overhang_discrepancy  = (self.iact_size_x*2)%(params.WORDS_PER_CYCLE*4)
         else:
-            words_per_iact_glb = 8
+            words_per_iact_glb = params.WORDS_PER_CYCLE*4
             if (self.buffer_cycles_for_x_iact == 1):
                 if (self.iact_x_line_repetitions == 1):
                     self.limit_increase = (self.iact_size_x*self.used_channels*self.strideX)//words_per_iact_glb
+                    self.overhang_discrepancy  = (self.iact_size_x*self.used_channels)%words_per_iact_glb
                     if (self.limit_increase == params.IACT_RAM_CELLS):
                         self.initial_upper_limit = 0
                     else:
                         self.initial_upper_limit = self.limit_increase + self.strideX
                 else:
-                    #self.limit_increase = (self.iact_size_x*self.used_channels*self.strideX)//words_per_iact_glb
-                    #self.limit_increase = math.ceil(self.limit_increase/self.iact_x_line_repetitions)
-                    self.limit_increase = (params.PEs_X*params.Clusters*self.strideX)//2
+                    self.limit_increase = (self.iact_size_x*self.used_channels*self.strideX)/words_per_iact_glb
+                    self.overhang_discrepancy  = math.floor(words_per_iact_glb*((self.limit_increase/self.iact_x_line_repetitions)%1))
+                    self.limit_increase = math.floor(self.limit_increase/self.iact_x_line_repetitions)
                     self.initial_upper_limit = self.limit_increase + self.strideX
+                    if (self.overhang_discrepancy != 0):
+                        self.initial_upper_limit = self.initial_upper_limit + 2
 
             else :
                 self.limit_increase = math.ceil(((params.Clusters_X*params.Clusters_Y*params.PEs_X*self.strideX)//self.buffer_cycles_for_x_iact)/(words_per_iact_glb//self.used_channels))
                 self.initial_upper_limit = self.limit_increase + 1
+
 
         self.iteration_for_kernels = math.ceil(self.diff_iact_layer_next_layer / self.different_kernels_per_calculation)
         self.needed_wght_cycles = math.ceil(self.filters/(self.used_psum_per_PE * self.different_kernels_per_calculation))
@@ -1196,18 +1202,14 @@ class LayerParameters(object):
             else:"""
             self.iact_converter_max_cycles = self.buffer_cycles_for_x_iact*self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1)
         if (self.buffer_cycles_for_x_iact == 1):
-            self.iact_buffer_words_per_write = self.needed_Iact_writes * self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1) * (4//2) 
+            self.iact_buffer_words_per_write = self.needed_Iact_writes * self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1) * (self.used_channels//2) 
         else:
-            self.iact_buffer_words_per_write = self.needed_Iact_writes * (4//2)
+            self.iact_buffer_words_per_write = self.needed_Iact_writes * (self.used_channels//2)
 
         self.lower_bound = (self.padding_y * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions) - 1
         self.upper_bound = (self.padding_y+self.iact_size_y) * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions
 
-        if (self.channels == 1) :
-            self.overhang_discrepancy  = (self.iact_size_x*2)%(params.WORDS_PER_CYCLE*4)
-        else :
-            self.overhang_discrepancy  = (self.iact_size_x*self.used_channels)%(params.WORDS_PER_CYCLE*4)
-        self.psum_output_words = int((self.output_cycles * self.filters * self.needed_wght_cycles * params.Clusters * params.NUM_GLB_PSUM) / math.ceil(params.DMA_BITWIDTH/32))
+        self.psum_output_words = int((self.output_cycles * self.filters * params.Clusters * params.NUM_GLB_PSUM) / math.ceil(params.DMA_BITWIDTH/32))
         self.psum_x_all_cluster = self.different_kernels_per_calculation * (self.iact_size_x + self.add_up)
         # === Phase 9: Finalize calculations ===
         self.calculate_transmission_cycles(params)
