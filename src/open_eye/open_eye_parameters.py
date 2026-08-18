@@ -304,8 +304,6 @@ class OpenEyeParameters(object):
         self.autofunction = 0          # Auto-function enable flag
         self.poolingmode = 1           # Pooling operation mode (1 = enabled)
 
-        # === BUFFER CONFIGURATION ===
-        self.NUM_BUFFER = 32           # Number of buffer entries for data staging
 
         # === GLOBAL MEMORY SIZES ===
         # Memory sizes for cluster-level storage (in words)

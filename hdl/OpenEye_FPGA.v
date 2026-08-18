@@ -119,7 +119,7 @@ module OpenEye_FPGA #(
       parameter QUANT_AMOUNT  = 32,
       parameter DATA_PSUM_BITWIDTH = 32,
       parameter CLUSTER_COLUMNS = 2,
-      parameter TRANS_WORDS = 8,
+      parameter TRANS_WORDS = 4,
       parameter DMA_BITWIDTH  = 64,
       parameter TRANSMISSIONS = 8,
       parameter PARALLEL_MACS = 2,
@@ -213,6 +213,11 @@ module OpenEye_FPGA #(
     //Pooling Features
     parameter AVERAGE_POOLING = 0,
 
+    //Channels per word
+    parameter CHANNELS_PER_WORD = 4,
+
+    //Channels per word
+    parameter X_AXIS_OUTPUT = 14,
     //Quantization Width
     parameter integer OFFSET_WIDTH = 8,
     parameter integer EXPONENT_WIDTH = 7,  
@@ -221,7 +226,8 @@ module OpenEye_FPGA #(
     localparam FINAL_DATA_IACT_BITWIDTH = SPARSITY_EN ? 4 + DATA_IACT_BITWIDTH : DATA_IACT_BITWIDTH,
     localparam FINAL_DATA_WGHT_BITWIDTH = SPARSITY_EN ? 4 + DATA_WGHT_BITWIDTH : DATA_WGHT_BITWIDTH,
 
-    localparam integer IACT_RAM_CELLS_WORD_BITWIDTH = DATA_IACT_BITWIDTH * 8,
+    localparam integer IACT_RAM_CELLS_VALUES_PER_WORD = 8,
+    localparam integer IACT_RAM_CELLS_WORD_BITWIDTH = DATA_IACT_BITWIDTH * IACT_RAM_CELLS_VALUES_PER_WORD,
     localparam integer WGHT_RAM_CELLS_WORD_BITWIDTH = FINAL_DATA_WGHT_BITWIDTH * PARALLEL_MACS * NUM_GLB_WGHT,
     localparam integer PSUM_RAM_CELLS_WORD_BITWIDTH = DATA_PSUM_BITWIDTH * 2,
 
@@ -244,8 +250,11 @@ module OpenEye_FPGA #(
     localparam integer QUANT_TRANS_CYCLES = (((OFFSET_WIDTH + EXPONENT_WIDTH + MANTISSA_WIDTH) * QUANT_AMOUNT) + DMA_BITWIDTH - 1)/DMA_BITWIDTH,
     localparam integer QUANT_TRANS_WIDTH = QUANT_TRANS_CYCLES * DMA_BITWIDTH,
 
-    localparam integer PSUM_OUTPUT_WORDS = DMA_BITWIDTH == 64? 2 : 1
+    localparam integer TEMP_WORDS_PSUM_TO_IACT = IACT_RAM_CELLS_VALUES_PER_WORD/TRANS_WORDS,
 
+    localparam integer TEMP_BITS_PSUM_TO_IACT = IACT_RAM_CELLS_VALUES_PER_WORD * DATA_IACT_BITWIDTH * TEMP_WORDS_PSUM_TO_IACT,
+
+    localparam integer PSUM_OUTPUT_WORDS = DMA_BITWIDTH == 64? 2 : 1
 ) (
     //Clock and Reset
     input clk_i,
@@ -397,6 +406,16 @@ reg [1023:0] fst_path;
   wire [11:0] iact_write_inc_1;
   wire [11:0] iact_write_inc_2;
   wire [ 9:0] pagu_wght_limit;
+  wire [8-1:0]psum_pagu_loop_limit_0;
+  wire [8-1:0]psum_pagu_loop_limit_1;
+  wire [8-1:0]psum_pagu_loop_limit_2;
+  wire [8-1:0]psum_pagu_loop_limit_3;
+  wire [8-1:0]psum_pagu_loop_limit_4;
+  wire [8-1:0]psum_pagu_addr_inc_0;
+  wire [8-1:0]psum_pagu_addr_inc_1;
+  wire [8-1:0]psum_pagu_addr_inc_2;
+  wire [8-1:0]psum_pagu_addr_inc_3;
+  wire [8-1:0]psum_pagu_addr_inc_4;
 
 
   // -----------------------------------------------------------------------
@@ -493,7 +512,7 @@ reg [1023:0] fst_path;
   wire fully_connected_layer;                                   // When 1: layer is a fully-connected (FC) layer; modifies iact packing and weight/psum addressing (from dma_storage).
   wire max_pooling;                                             // When 1: skip compute; instead run a 2×2 max-pool on the iact buffer (from dma_storage).
   reg [           BUFFER_WIDTH-1:0] iact_buffer_addr_reg      [IACT_RAM_CELLS-1:0]; // Per-cell read/write address; advanced by the sliding-window logic in CONVERT_IACT.
-  reg [           BUFFER_WIDTH-1:0] buffer_addr_temp_reg [IACT_RAM_CELLS-1:0]; // Saved address snapshot used to restart a cell's address in MAXPOOLING_SEND.
+  reg [           BUFFER_WIDTH-1:0] buffer_addr_temp_reg; // Saved address snapshot used to restart a cell's address in MAXPOOLING_SEND.
 
   // -----------------------------------------------------------------------
   // Iact Stream Constructor Control
@@ -520,6 +539,12 @@ reg [1023:0] fst_path;
   reg [3:0] iact_converter_mem_off_2_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [2:0] iact_converter_n_3_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [3:0] iact_converter_mem_off_3_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
+  reg [10-1:0] iact_to_psum_x_pos_counter;
+  reg [4-1:0] iact_to_psum_trans_counter;
+  reg [$clog2(IACT_RAM_CELLS*2)-1:0] iact_to_psum_storage_counter;
+  reg [TEMP_BITS_PSUM_TO_IACT-1:0] iact_to_psum_shift_reg;
+  reg [TEMP_BITS_PSUM_TO_IACT-1:0] iact_to_psum_mux_reg;
+  reg iact_to_psum_start_shifting;
 
   reg [CLUSTERS*NUM_GLB_IACT*TRANS_BITWIDTH_IACT - 1:0] iact_out_reg; // Legacy assembled iact output register (not driven in current path; kept for compatibility).
   reg iact_ready;                     // Legacy iact-ready flag (not used in current path).
@@ -1209,9 +1234,8 @@ end
 
   // --- Iact buffer address counters (main FSM Process 6) ---
   reg [15:0] select_ram_counter;  // Counts which of the 32 RAM_SP cells is currently being addressed
+  reg [15:0] select_ram_counter2;  // Counts which of the 32 RAM_SP cells is currently being addressed
                                   // during GET_IACT, CONVERT_IACT, RECEIVE_PSUMS_TO_IACT, and MAXPOOLING.
-  reg [15:0] ram_counter_storage; // Saved value of select_ram_counter at the start of a new iact batch;
-                                  // restored when the converter window resets.
   reg [ 7:0] select_ram_offset;   // Additional offset into the active RAM cell address (within one cell).
   reg [ 7:0] ram_iact_modulo;     // Modulo counter tracking position within a 64-bit RAM word
                                   // (used when packing multiple iact bytes into one word).
@@ -1226,14 +1250,15 @@ end
   //   pooling_stage_3[0..1]- third level: 4→2 values.
   //   pooling_stage_4      - final output: 2→1 maximum value.
   reg signed [ 7:0] pooling_regs    [31:0];
-  /*wire signed [ 7:0] debug_pooling_regs0;    // Simulation probe for pooling_regs[0].
-  assign debug_pooling_regs0 = pooling_regs[0];
-  wire signed [ 7:0] debug_pooling_regs1;    // Simulation probe for pooling_regs[1].
-  assign debug_pooling_regs1 = pooling_regs[1];*/
+  reg pooling_buffer_enable;
+  reg signed [DATA_IACT_BITWIDTH-1:0] pooling_buffer_new [CHANNELS_PER_WORD-1:0];
+  wire signed [DATA_IACT_BITWIDTH-1:0] pooling_buffer_old [CHANNELS_PER_WORD-1:0];
+  reg signed [DATA_IACT_BITWIDTH-1:0] pooling_buffer_old_q [CHANNELS_PER_WORD-1:0];
   reg signed [ 7:0] pooling_stage_1 [7:0];  // Pipeline stage 1: 32→8 max.
   reg signed [ 7:0] pooling_stage_2 [3:0];  // Pipeline stage 2: 8→4 max.
   reg signed [ 7:0] pooling_stage_3 [1:0];  // Pipeline stage 3: 4→2 max.
   reg signed [ 7:0] pooling_stage_4;         // Pipeline stage 4: 2→1 max (final result).
+  reg  [  IACT_RAM_CELLS_WORD_BITWIDTH*IACT_RAM_CELLS-1:0] iact_buffer_data_pool_temp;             // Temp reg from iact_buffer_data_r.
 
   // --- Per-filter quantization parameters (loaded in GET_QUANTIZE / GET_OFFSET) ---
   // Quantization formula applied in SEND_PSUM_TO_IACT state:
@@ -1259,7 +1284,7 @@ end
   reg                                                     iact_buffer_en_w   [IACT_RAM_CELLS-1:0]; // Per-cell write enable from FSM or converter.
   reg [                                 BUFFER_WIDTH-1:0] iact_buffer_addr   [IACT_RAM_CELLS-1:0]; // Per-cell address (half-width; MSB is buffer_select).
   reg [                        IACT_CELL_INPUT_WIDTH-1:0] iact_buffer_data_w;                      // Per-cell write data (64 bits).
-  wire [  IACT_RAM_CELLS_WORD_BITWIDTH*IACT_RAM_CELLS-1:0] iact_buffer_data_r;                      // Active-half read data: unpacked from iact_buffer_data_r.
+  wire [  IACT_RAM_CELLS_WORD_BITWIDTH*IACT_RAM_CELLS-1:0] iact_buffer_data_r;                     // Active-half read data: unpacked from iact_buffer_data_r.
 
   // --- PSUM send-phase registers (PSUM FSM Process 8) ---
   // These registers coordinate the multi-cycle sequence of reading psum results
@@ -1446,51 +1471,57 @@ end
   integer cr, cc, g;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
-      status_reg_enable_reg                 <= 0;
-      data_mode_reg                         <= 0;
-      fraction_bit_reg                      <= 0;
-      fsm_cycle                             <= 0;
-      fsm_last_state                        <= IDLE;
-      fsm_current_state                     <= GET_PARAMETERS;
-      fsm_x_cl                              <= 0;
-      fsm_y_cl                              <= 0;
-      fsm_iact_r                            <= 0;
-      fsm_wght_r                            <= 0;
-      buffer_select                         <= 0;
-      fifo_data_i                           <= 0;
-      fifo_read_i                           <= 0;
-      fifo_write_i                          <= 0;
-      bano_cluster_mode_reg                 <= 0;
-      af_cluster_mode_reg                   <= 0;
-      compute_mask_reg                      <= 0;
-      ready_dma_o                           <= 0;
+      status_reg_enable_reg              <= 0;
+      data_mode_reg                      <= 0;
+      fraction_bit_reg                   <= 0;
+      fsm_cycle                          <= 0;
+      fsm_last_state                     <= IDLE;
+      fsm_current_state                  <= GET_PARAMETERS;
+      fsm_x_cl                           <= 0;
+      fsm_y_cl                           <= 0;
+      fsm_iact_r                         <= 0;
+      fsm_wght_r                         <= 0;
+      buffer_select                      <= 0;
+      fifo_data_i                        <= 0;
+      fifo_read_i                        <= 0;
+      fifo_write_i                       <= 0;
+      bano_cluster_mode_reg              <= 0;
+      af_cluster_mode_reg                <= 0;
+      compute_mask_reg                   <= 0;
+      ready_dma_o                        <= 0;
       iact_buffer_data_w                 <= 0;
       wght_buffer_wr_addr                <= 0;
       wght_buffer_en_w                   <= 0;
       wght_buffer_data_w                 <= 0;
-      finished_cycles_iact                  <= 0;
+      finished_cycles_iact               <= 0;
       // iact converter
-      iact_out_reg                          <= 0;
-      iact_ready                            <= 0;
+      iact_out_reg                       <= 0;
+      iact_ready                         <= 0;
       buffer_addr_upper_limit            <= 0;
-      limit_increase_reg                    <= 0;
-      overhang_counter                      <= 0;
-      overhang                              <= 0;
-      overhang_delay                        <= 0;
+      limit_increase_reg                 <= 0;
+      overhang_counter                   <= 0;
+      overhang                           <= 0;
+      overhang_delay                     <= 0;
       buffer_addr_lower_limit            <= 0;
-      current_buffer                      <= 0;
-      iact_channels_counter                 <= 0;
-      reset_cycle                           <= 0;
-      select_ram_counter                    <= 0;
-      ram_counter_storage                   <= 0;
-      psum_x_with_add_up                    <= 0;
-      iact_converter_cycles                 <= 0;
-      iact_converter_buffer_addr_cycles     <= 0;
-      send_data_reg                         <= 0;
-      write_dma_en                          <= 0;
-      dma_data_i                            <= 0;
-      past_padding                          <= 0;
+      current_buffer                     <= 0;
+      iact_channels_counter              <= 0;
+      reset_cycle                        <= 0;
+      select_ram_counter                 <= 0;
+      select_ram_counter2                <= 0;
+      psum_x_with_add_up                 <= 0;
+      iact_converter_cycles              <= 0;
+      iact_converter_buffer_addr_cycles  <= 0;
+      send_data_reg                      <= 0;
+      write_dma_en                       <= 0;
+      dma_data_i                         <= 0;
+      past_padding                       <= 0;
       // Pooling
+      iact_buffer_data_pool_temp         <= 0;
+      pooling_buffer_enable              <= 0;
+      for (a = 0; a < CHANNELS_PER_WORD; a = a + 1) begin
+        pooling_buffer_new[a] <= 0;
+        pooling_buffer_old_q[a] <= 0;
+      end
       for (a = 0; a < 32; a = a + 1) begin
         pooling_regs[a] <= -128;
       end
@@ -1509,19 +1540,28 @@ end
       for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
         iact_buffer_en_w[a]      <= 0;
         iact_buffer_en_r[a]      <= 0;
-        iact_buffer_en_r[a]       <= 0;
-        iact_buffer_en_w[a]       <= 0;
-        iact_buffer_addr_reg[a]       <= 0;
-        buffer_addr_temp_reg [a] <= 0;
+        iact_buffer_en_r[a]      <= 0;
+        iact_buffer_en_w[a]      <= 0;
+        iact_buffer_addr_reg[a]  <= 0;
       end
+      buffer_addr_temp_reg         <= 0;
       iact_buffer_data_w           <= 0;
       choose_iact_buffer           <= 0;
       converters_ready              = 0;
       iact_converter_enc_enable    <= 0;
       iact_converter_params_enable <= 0;
       ram_iact_modulo              <= 0;
+      iact_to_psum_shift_reg       <= 0;
+      iact_to_psum_mux_reg         <= 0;
+      iact_to_psum_x_pos_counter   <= 0;
+      iact_to_psum_trans_counter   <= 0;
+      iact_to_psum_storage_counter <= 0;
+      iact_to_psum_start_shifting  <= 0;
 
     end else begin
+      for (a = 0; a < CHANNELS_PER_WORD; a = a + 1) begin
+        pooling_buffer_old_q[a] <= pooling_buffer_old[a];
+      end
       case (fsm_current_state)
 
         // -------------------------------------------------------------------
@@ -1574,8 +1614,8 @@ end
             iact_buffer_en_r[a]      <= 0;
             iact_buffer_en_w[a]      <= 0;
             iact_buffer_addr_reg[a]      <= 0;
-            buffer_addr_temp_reg[a] <= 0;
           end
+          buffer_addr_temp_reg    <= 0;
           iact_buffer_data_w <= 0;
           for (a = 0; a < 32; a = a + 1) begin
             pooling_regs[a] <= -128;
@@ -1890,6 +1930,16 @@ end
           overhang_counter   <= overhang_discrepancy;
           ready_dma_o        <= 1;
           wght_buffer_en_w   <= 0;
+          pooling_buffer_enable <= 1;
+          if (pooling_mode == 0) begin
+            for (a = 0; a < CHANNELS_PER_WORD; a = a + 1) begin
+              pooling_buffer_new[a] <= -128;
+            end
+          end else begin
+            for (a = 0; a < CHANNELS_PER_WORD; a = a + 1) begin
+              pooling_buffer_new[a] <= 0;
+            end
+          end
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
             quant_reg[0+:DMA_BITWIDTH] <= data_dma_i_reg;
@@ -1904,8 +1954,9 @@ end
             end
           end
           if ((fsm_cycle == QUANT_TRANS_CYCLES - 1) & enable_dma_i_reg) begin
-            ready_dma_o       <= 0;
-            fsm_cycle         <= 0;
+            ready_dma_o         <= 0;
+            fsm_cycle           <= 0;
+            pooling_buffer_enable <= 0;
             fsm_last_state    <= GET_QUANTIZE;
             fsm_current_state <= START_CONVERTER;
             buffer_addr_upper_limit <= initial_upper_limit;
@@ -1913,7 +1964,8 @@ end
               fsm_cycle           <= 2;
               fsm_current_state   <= MAXPOOLING_READ;
               select_ram_counter  <= 0;
-              ram_counter_storage <= 0;
+              select_ram_counter2 <= 0;
+              buffer_addr_temp_reg <= -1;
             end
           end
         end
@@ -1928,7 +1980,7 @@ end
         // - When all ready:
         //   * Transitions to CONVERT_IACT.
         //   * Clears past_padding (starts before the first real row).
-        //   * Resets select_ram_counter and ram_counter_storage to 0.
+        //   * Resets select_ram_counter to 0.
         //   * Enables all buffers read lines (iact_buffer_en_r all 1).
         //   * Resets all buffer address pointers to 0.
         //   * Special case (iact_size_c == 1): sets past_padding = 1
@@ -1948,7 +2000,6 @@ end
             fsm_current_state          <= CONVERT_IACT;
             past_padding               <= 0;
             select_ram_counter         <= 0;
-            ram_counter_storage        <= 0;
             for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
               iact_buffer_en_r[a] <= 1;
             end
@@ -2078,7 +2129,7 @@ end
         //       send_data_out = 1  -> WAIT_FOR_RESULTS (results go to host).
         //       send_data_out = 0  -> RECEIVE_PSUMS_TO_IACT (results loop back).
         //         Also initialises ram_iact_modulo, select_ram_counter,
-        //         ram_counter_storage, buffer address window parameters, and
+        //         buffer address window parameters, and
         //         clears all buffer data write registers.
         // -------------------------------------------------------------------
         WAIT_CYCLE: begin
@@ -2093,11 +2144,11 @@ end
             if (send_data_out) begin
               fsm_current_state <= WAIT_FOR_RESULTS;
             end else begin
-              fsm_current_state          <= RECEIVE_PSUMS_TO_IACT;
-              ram_iact_modulo            <= iact_size_x % (CLUSTER_COLUMNS*NUM_GLB_PSUM);
-              select_ram_offset          <= 0;
-              ram_counter_storage        <= 0;
-              select_ram_counter         <= 0;
+              fsm_current_state           <= RECEIVE_PSUMS_TO_IACT;
+              iact_to_psum_start_shifting <= 0;
+              ram_iact_modulo             <= iact_size_x % (CLUSTER_COLUMNS*NUM_GLB_PSUM);
+              select_ram_offset           <= 0;
+              select_ram_counter          <= 0;
               if (iact_channels_per_pe_next_layer == 4) begin
                 buffer_addr_upper_limit <= (((iact_size_x+1)/2))%IACT_RAM_CELLS;
               end else begin
@@ -2142,211 +2193,63 @@ end
         // -------------------------------------------------------------------
         RECEIVE_PSUMS_TO_IACT: begin
           if (fsm_psum_current_state == WAIT_FOR_SENDING_RESULTS) begin
-            choose_iact_buffer       <= choose_iact_buffer_output;
+            choose_iact_buffer <= choose_iact_buffer_output;
           end
-          if (single_iteration & (single_iteration2 == 0)) begin
-            iact_channels_counter <= iact_channels_counter + 1;
-            if (iact_channels_counter == iact_channel_max_cycles - 1) begin
-              iact_channels_counter <= 0;
-            end
-          end
+          //if (single_iteration & (single_iteration2 == 0)) begin
+          //  iact_channels_counter <= iact_channels_counter + 1;
+          //  if (iact_channels_counter == iact_channel_max_cycles - 1) begin
+          //    iact_channels_counter <= 0;
+          //  end
+          //end
           for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
             iact_buffer_en_w[a] <= 0;
             if (iact_buffer_en_w[a] == 1) begin
               iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
             end
           end
-          if ((fsm_psum_current_state == SEND_PSUM_TO_IACT) & (fsm_psum_cycle >= 3)) begin
-            fsm_cycle <= fsm_cycle + 1;
-            if (fsm_cycle >= 1) begin
-              if (iact_channels_per_pe_next_layer == 4) begin
-                select_ram_counter <= select_ram_counter + iact_channels_per_pe_next_layer;
-                if (select_ram_counter >= ram_counter_storage + (psum_x_with_add_up/2) - iact_channels_per_pe_next_layer) begin
-                  select_ram_counter <= select_ram_counter + iact_channels_per_pe_next_layer - (psum_x_with_add_up/2);
-                  iact_channels_counter <= iact_channels_counter + 1;
-                  if (iact_channels_counter == {4'd0,iact_channels_per_pe_next_layer} - 1) begin
-                    iact_channels_counter      <= 0;
-                    ram_counter_storage        <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up/2) - limit_increase_reg) % IACT_RAM_CELLS;
-                    select_ram_counter         <= (select_ram_counter + iact_channels_per_pe_next_layer - (add_up/2) - limit_increase_reg) % IACT_RAM_CELLS;
-                    buffer_addr_upper_limit <= (buffer_addr_upper_limit + (psum_size_x/2) + limit_increase_reg) % IACT_RAM_CELLS;
-                    buffer_addr_lower_limit <= buffer_addr_upper_limit;
-                    for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                      if (buffer_addr_upper_limit == buffer_addr_lower_limit) begin
-                        iact_buffer_en_w[a] <= 1;
-                      end else begin
-                        if (buffer_addr_upper_limit > buffer_addr_lower_limit) begin
-                          if ((a >= buffer_addr_lower_limit) & (a < buffer_addr_upper_limit)) begin
-                            iact_buffer_en_w[a] <= 1;
-                          end
-                        end else begin
-                          if ((a >= buffer_addr_lower_limit) | (a < buffer_addr_upper_limit)) begin
-                            iact_buffer_en_w[a] <= 1;
-                          end
-                        end
-                      end
-                      if (psum_size_x % 2) begin
-                        if ((a == (buffer_addr_upper_limit - 1)%IACT_RAM_CELLS) & !limit_increase_reg) begin
-                            iact_buffer_en_w[a] <= 0;
-                        end
-                        limit_increase_reg <= (limit_increase_reg + 1)%2;
-                        if (!limit_increase_reg) begin
-                          buffer_addr_lower_limit <= (buffer_addr_upper_limit - 1)%IACT_RAM_CELLS;
-                        end
-                      end
-                    end
-                  end
-                end
-                //Iterate over all RAMs and their words
-                for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                  for (word = 0; word < 8; word=word+1) begin
-                    //Wrapping around higher and lower edge
-                    if ((word == 1) & (a == 1)) begin debug_reg <= 0; end
-                    //Check for following conditions:
-                    if (
-                      //First: Is the Ram currently checked in the current order or in the next 3 (Sum:4) Always required!
-                      (select_ram_counter - ram_counter_storage + iact_channels_per_pe_next_layer  > (psum_x_with_add_up/2)) &
-                      //Then check, if at least one is true:
-                        //Check, wether it is wrapping over the window of iact x
-                        (((a >= (ram_counter_storage - ((1+limit_increase_reg)/2))) & (a < ram_counter_storage + ram_iact_modulo/2)) |
-                        //Check, wether it is wrapping over the regular RAM Cells
-                        (((a > (select_ram_counter + 1)%IACT_RAM_CELLS) | (a < (select_ram_counter + ram_iact_modulo)%IACT_RAM_CELLS)) &
-                        //Is it wrapping around over the regular RAM Cells?
-                        (((select_ram_counter)%32) + ram_iact_modulo >= IACT_RAM_CELLS)))
-                      ) begin
-                      if ((word == 1) & (a == 1)) begin debug_reg <= 1; end
-                      if ((word == (4 + {{24{1'd0}},iact_channels_counter} + limit_increase_reg*4) % 8 |
-                          (word == (    {{24{1'd0}},iact_channels_counter} + limit_increase_reg*4) % 8)) &
-                          !((a == buffer_addr_lower_limit) & (limit_increase_reg) & word >= 4)) begin
-                        if ((word == 1) & (a == 1)) begin debug_reg <= 2; end
-                        if (a < buffer_addr_lower_limit + select_ram_counter + 4 - (psum_x_with_add_up/2)) begin
-                          if ((word == 1) & (a == 1)) begin debug_reg <= 3; end
-                          iact_buffer_data_w[IACT_WORDS_IN_RAM*8*a+IACT_WORDS_IN_RAM*b+:8] <=
-                          quantized_value_reg[((word / 4) + limit_increase_reg + ((a-ram_counter_storage) * 2) + overhang_discrepancy - ram_iact_modulo)%8];
-                        end else begin
-                          iact_buffer_data_w[IACT_WORDS_IN_RAM*8*a+IACT_WORDS_IN_RAM*b+:8] <=
-                          quantized_value_reg[((word / 4) + ((a-ram_counter_storage) * 2) + overhang_discrepancy - ram_iact_modulo)%8];
-                        end
-                        //overhang_discrepancy <= (overhang_discrepancy + ram_iact_modulo)%8;
-                      end
-                    //Regular
-                    end else begin
-                      if ((word == 1) & (a == 1)) begin debug_reg <= 4; end
-                      if (
-                      //First check wether one of two conditions are met:
-                        // Is iact_size x even?
-                        ((psum_size_x % 2 == 0) &
-                        //Check wether the RAM is in correct position:
-                          // Is it in regular position
-                          ((a >= (select_ram_counter%IACT_RAM_CELLS)) & (a < (select_ram_counter%IACT_RAM_CELLS) + iact_channels_per_pe_next_layer)) |
-                          // Is it over the regular RAM cells
-                          (((a >= (select_ram_counter)%IACT_RAM_CELLS) | (a < (select_ram_counter + iact_channels_per_pe_next_layer)%IACT_RAM_CELLS)) & ((select_ram_counter%IACT_RAM_CELLS) >= IACT_RAM_CELLS - 4 + 1)))
-                        
-                        |
-                        
-                        // Is iact_size x odd?
-                        ((psum_size_x % 2 == 1) &
-                        //
-                        (((a >= buffer_addr_lower_limit) & (a < (buffer_addr_upper_limit))) |
-                        
-                        //
-                        ((a >= buffer_addr_lower_limit) | (a < (buffer_addr_upper_limit)) & (buffer_addr_lower_limit > buffer_addr_upper_limit)))) |
-                        //
-                        (((a >= (select_ram_counter)%IACT_RAM_CELLS) | (a < (select_ram_counter + iact_channels_per_pe_next_layer)%IACT_RAM_CELLS)) & ((select_ram_counter%IACT_RAM_CELLS) >= IACT_RAM_CELLS - 4 + 1))
-                      ) begin
-                        if ((word == 1) & (a == 1)) begin debug_reg <= 5; end
-                        //Check for current word matches the iact channel
-                        if ((word == (iact_channels_per_pe_next_layer + {{24{1'd0}},iact_channels_counter})) | (word == {{24{1'd0}},iact_channels_counter})
-                          & !((a == buffer_addr_lower_limit) & (limit_increase_reg) & word <= 3)
-                        ) begin
-                          if ((word == 1) & (a == 1)) begin debug_reg <= 6; end
+          if ((fsm_psum_current_state == SEND_PSUM_TO_IACT) & (fsm_psum_cycle >= 7)) begin
+            fsm_cycle                  <= fsm_cycle + 1;
+            iact_to_psum_x_pos_counter <= 0;
+            iact_to_psum_trans_counter <= iact_to_psum_trans_counter + 1;
 
-                          iact_buffer_data_w[IACT_WORDS_IN_RAM*8*a+IACT_WORDS_IN_RAM*b+:8] <= 
-                          quantized_value_reg[((word / 4) + limit_increase_reg + ((a-ram_counter_storage) * 2) - overhang_discrepancy)%8];
-                        
-                        end
-                      end
-                    end
+            if (iact_to_psum_start_shifting) begin
+              iact_to_psum_x_pos_counter <= iact_to_psum_x_pos_counter + 1;
+              if (iact_to_psum_x_pos_counter < iact_size_x) begin
+                iact_to_psum_storage_counter <= iact_to_psum_storage_counter + 1;
+                if (iact_to_psum_storage_counter == (2*IACT_RAM_CELLS)-1) begin
+                  iact_to_psum_storage_counter <= 0;
+                  for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+                    iact_buffer_en_w[a] <= 1;
                   end
-                end
-              end /*else if (iact_channels_per_pe_next_layer == 2) begin
-                select_ram_counter <= select_ram_counter + 1;
-                if (select_ram_counter == 16 - 1) begin
-                  select_ram_counter <= 0;
-                end
-                if (select_ram_counter == (CLUSTER_ROWS + ram_counter_storage - 1)%16) begin
-                  select_ram_counter    <= ram_counter_storage;
-                  iact_channels_counter <= iact_channels_counter + 1;
-                  if (iact_channels_counter == iact_channels_per_pe_next_layer - 1) begin
-                    iact_channels_counter <= 0;
-                    ram_counter_storage   <= select_ram_counter + 1;
-                    select_ram_counter    <= select_ram_counter + 1;
-                    if (select_ram_counter >= (IACT_RAM_CELLS/2) - 1) begin
-                      select_ram_counter  <= 0;
-                      ram_counter_storage <= 0;
-                    end
-                    for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                      if (buffer_addr_upper_limit == buffer_addr_lower_limit) begin
-                        iact_buffer_en_w[a] <= 1;
-                      end else begin
-                        if (buffer_addr_upper_limit > buffer_addr_lower_limit) begin
-                          if ((a >= buffer_addr_lower_limit) & (a < buffer_addr_upper_limit)) begin
-                            iact_buffer_en_w[a] <= 1;
-                          end
-                        end else begin
-                          if ((a >= buffer_addr_lower_limit) | (a < buffer_addr_upper_limit)) begin
-                            iact_buffer_en_w[a] <= 1;
-                          end
-                        end
-                      end
-                    end
-                    buffer_addr_lower_limit <= buffer_addr_upper_limit;
-                    buffer_addr_upper_limit <= (buffer_addr_upper_limit + CLUSTER_ROWS * 2) % 32;
-                  end
-                end
-                for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                  for (word = 0; word < 8; word=word+1) begin
-                    if ((a >= select_ram_counter * 2) & (a < (select_ram_counter + 1) * 2)) begin
-                      if ((word == (6 + iact_channels_counter)) |
-                          (word == (4 + iact_channels_counter)) |
-                          (word == (2 + iact_channels_counter)) |
-                          (word == iact_channels_counter)) begin
-                        buffer_data_w_reg[a][8*word+:8] <= quantized_value_reg[word / 2 + (a%2) * 4];
-                      end
-                    end
-                  end
-                end
-              end else if (iact_channels_per_pe_next_layer == 1) begin
-                overhang_discrepancy <= overhang_discrepancy + psum_size_x;
-                if (overhang_discrepancy >= 8 - psum_size_x) begin
-                  overhang_discrepancy <= overhang_discrepancy + psum_size_x - 8;
-                  select_ram_counter   <= select_ram_counter + 1;
-                  if (select_ram_counter == IACT_RAM_CELLS - 1) begin
-                    select_ram_counter <= 0;
-                  end
-                  iact_buffer_en_w[select_ram_counter] <= 1;
                 end
                 
-                for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                  for (word = 0; word < 8; word=word+1) begin
-                    if (!fully_connected_layer) begin
-                      if ((((psum_size_x + overhang_discrepancy+select_ram_counter*8) > (word+8*a)) &
-                      ((overhang_discrepancy+select_ram_counter*8) <= (word+8*a))) |
-                      (((psum_size_x + overhang_discrepancy+select_ram_counter*8) > IACT_RAM_CELLS*8) &
-                      ((psum_size_x + overhang_discrepancy+select_ram_counter*8) > (IACT_RAM_CELLS*8) + (word+8*a)))
-                      ) begin
-                        buffer_data_w_reg[a][8*word+:8] <= quantized_value_reg[((word+8*a)-(overhang_discrepancy+select_ram_counter*8))%8];
-                      end
-                    end else begin
-                      if (((word+8*a) == overhang_discrepancy + (select_ram_counter * 8))) begin
-                        buffer_data_w_reg[a][8*word+:8] <= quantized_value_reg[0];
-                      end
-                      if (((word+8*a) == filters + overhang_discrepancy + (select_ram_counter * 8))) begin
-                        buffer_data_w_reg[a][8*word+:8] <= quantized_value_reg[1];
-                      end
-                    end
-                  end
+                iact_buffer_data_w[((IACT_RAM_CELLS*2)-1)*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)] <= iact_to_psum_shift_reg[0+:(DATA_IACT_BITWIDTH*4)];
+                iact_to_psum_shift_reg[(4-1)*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)] <= 0;
+                for (b = 0; b < 4-1; b=b+1) begin
+                  iact_to_psum_shift_reg[b*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)] <= iact_to_psum_shift_reg[(b+1)*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)];
                 end
-              end*/
+                for (b = 0; b < 16-1; b=b+1) begin
+                  iact_buffer_data_w[((IACT_RAM_CELLS*2)-1-(b+1))*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)] <= iact_buffer_data_w[((IACT_RAM_CELLS*2)-1-b)*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)];
+                end
+              end
+            end
+
+            if (iact_to_psum_trans_counter == TRANS_WORDS) begin
+              iact_to_psum_trans_counter  <= 1;
+              iact_to_psum_shift_reg      <= iact_to_psum_mux_reg;
+              iact_to_psum_start_shifting <= 1;
+              if (iact_to_psum_x_pos_counter >= iact_size_x - 1) begin
+                iact_to_psum_x_pos_counter <= 0;
+              end
+            end            
+            for (a = 0; a < TRANS_WORDS; a=a+1) begin
+              iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*4)+(DATA_IACT_BITWIDTH*(4-1))+:DATA_IACT_BITWIDTH] <= quantized_value_reg[a];
+            end
+            for (a = 0; a < TRANS_WORDS; a=a+1) begin
+              for (b = 0; b < 4-1; b=b+1) begin
+                iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*4)+(DATA_IACT_BITWIDTH*(4-1)-((b+1)*DATA_IACT_BITWIDTH))+:DATA_IACT_BITWIDTH] <=
+                iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*4)+(DATA_IACT_BITWIDTH*(4-1)-(b*DATA_IACT_BITWIDTH))+:DATA_IACT_BITWIDTH];
+              end
             end
           end
           if ((fsm_psum_current_state == PSUM_IDLE) & (fsm_cycle >= 1)) begin
@@ -2407,7 +2310,6 @@ end
         //
         // Per 5-cycle loop (one pixel group at position iact_converter_cycles):
         // - Cycles 2-4: advance select_ram_counter (0..1) and
-        //   ram_counter_storage; also advance iact_channels_counter
         //   (0..iact_size_x-1).
         // - Feeds pooling_stage_1[0..7] from iact_buffer_data_r using a
         //   2×2 spatial window: word × line indexing with stride iact_size_x.
@@ -2428,37 +2330,21 @@ end
           fsm_cycle <= fsm_cycle + 1;
           if (fsm_cycle == 5) begin
             fsm_cycle             <= fsm_cycle;
-            iact_converter_cycles <= iact_converter_cycles + stride_x;
+            iact_converter_cycles <= iact_converter_cycles + 1;
+            pooling_buffer_enable <= 1;
           end
-          if (fsm_cycle >= 2) begin
-            select_ram_counter    <= select_ram_counter + 1;
-            if (select_ram_counter == 2 - 1) begin
-              select_ram_counter  <= 0;
-              ram_counter_storage <= ram_counter_storage + 1;
-            end
-            iact_channels_counter <= iact_channels_counter + 1;
-            if (iact_channels_counter == iact_size_x - 1) begin
-              iact_channels_counter <= 0;
-              ram_counter_storage <= ram_counter_storage + 1 + (iact_size_x/2);
+          iact_buffer_data_pool_temp <= iact_buffer_data_pool_temp >> IACT_RAM_CELLS_WORD_BITWIDTH;
+          select_ram_counter         <= select_ram_counter - 1;
+          if (select_ram_counter == 0) begin
+            select_ram_counter         <= IACT_RAM_CELLS - 1;
+            iact_buffer_data_pool_temp <= iact_buffer_data_r;
+            for (a = 0; a < IACT_RAM_CELLS; a = a + 1) begin
+              iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
             end
           end
-          if (pooling_mode == 0) begin 
-            for (word = 0; word < 2; word = word + 1) begin
-              for (line = 0; line < 2; line = line + 1) begin
-                for (a = 0; a < 2; a = a + 1) begin
-                  pooling_stage_1[a+2*line+4*word] <= iact_buffer_data_r[(8*((a*4)+(line*iact_size_x*4)+word+(select_ram_counter*2)+(ram_counter_storage*8)))
-                                                      %(IACT_RAM_CELLS*IACT_RAM_CELLS_WORD_BITWIDTH)+:8];
-                end
-              end
-            end
-          end else begin
-            if (AVERAGE_POOLING == 1) begin
-              for (line = 0; line < 2; line = line + 1) begin
-                for (a = 0; a < 4; a = a + 1) begin
-                  pooling_stage_1[a+4*line] <= iact_buffer_data_r[(8*((a*4)+(line*iact_size_x*4)+(select_ram_counter*2)+(ram_counter_storage*8)))
-                                                      %(IACT_RAM_CELLS*IACT_RAM_CELLS_WORD_BITWIDTH)+:8];
-                end
-              end
+          for (word = 0; word < 2; word = word + 1) begin
+            for (a = 0; a < 4; a = a + 1) begin
+              pooling_stage_1[(2*a)+word] <= iact_buffer_data_pool_temp[DATA_IACT_BITWIDTH*(a+(word*4))+:DATA_IACT_BITWIDTH];
             end
           end
           if (pooling_mode == 0) begin 
@@ -2468,21 +2354,10 @@ end
               end else begin
                 pooling_stage_2[a] <= pooling_stage_1[2*a+1];
               end
-            end
-            for (a = 0; a < 2; a = a + 1) begin
-              if (pooling_stage_2[2*a] >= pooling_stage_2[2*a+1]) begin
-                pooling_stage_3[a] <= pooling_stage_2[2*a];
+              if (pooling_stage_2[a] > pooling_buffer_old[a]) begin
+                pooling_buffer_new[a] <= pooling_stage_2[a];
               end else begin
-                pooling_stage_3[a] <= pooling_stage_2[2*a+1];
-              end
-            end
-            for (a = 0; a < 32; a = a + 1) begin
-              for (b = 0; b < 2; b = b + 1) begin
-              if (a == iact_converter_cycles + b & (fsm_cycle == 5)) begin
-                  if (pooling_regs[a] < pooling_stage_3[b]) begin
-                    pooling_regs[a] <= pooling_stage_3[b];
-                  end
-                end
+                pooling_buffer_new[a] <= pooling_buffer_old[a];
               end
             end
           end else begin
@@ -2505,32 +2380,21 @@ end
 
           //Ending Condition
           if (fsm_cycle == 5) begin
-            if (iact_converter_cycles >= 28 - 2) begin
+            if (iact_converter_cycles >= psum_size_x - 1) begin
               iact_channels_counter <= iact_channels_counter;
             end
-            if (iact_converter_cycles == 32 - 2) begin
-              select_ram_counter    <= 0;
-              ram_counter_storage   <= ram_counter_storage - 1;
-              fsm_cycle             <= 0;
-              iact_converter_cycles <= 0;
-              fsm_last_state        <= MAXPOOLING_READ;
-              fsm_current_state     <= MAXPOOLING_SEND;
-            end
-          end
-
-          if ((iact_converter_cycles < 30 - 2) & (fsm_cycle >= 3)) begin
-            if (select_ram_counter == 1) begin
-              buffer_addr_upper_limit <= (buffer_addr_upper_limit + (iact_size_x/2))%IACT_RAM_CELLS;
-            end else begin
-              buffer_addr_upper_limit <= (buffer_addr_upper_limit - (iact_size_x/2) + 1)%IACT_RAM_CELLS;
-              if (iact_channels_counter == 0) begin
-                buffer_addr_upper_limit <= (buffer_addr_upper_limit + 1)%IACT_RAM_CELLS;
+            if (iact_converter_cycles == (psum_size_x * 2)) begin
+              fsm_cycle               <= 0;
+              iact_converter_cycles   <= 0;
+              iact_buffer_data_w      <= 0;
+              fsm_last_state          <= MAXPOOLING_READ;
+              fsm_current_state       <= MAXPOOLING_SEND;
+              buffer_addr_temp_reg    <= iact_buffer_addr_reg[0];
+              for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+                iact_buffer_addr_reg[a] <= buffer_addr_temp_reg;
               end
-            end
-            for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-              if (a == buffer_addr_upper_limit) begin
-                iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
-                buffer_addr_temp_reg[a] <= buffer_addr_temp_reg[a] + 1;
+              for (a = 0; a < 4; a = a + 1) begin
+                  pooling_buffer_new[a] <= -128;
               end
             end
           end
@@ -2560,49 +2424,39 @@ end
         // -------------------------------------------------------------------
         MAXPOOLING_SEND: begin
           fsm_cycle <= fsm_cycle + 1;
-          for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-            iact_buffer_addr_reg[a] <= finished_cycles_iact/8;
-          end
-          for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+          pooling_buffer_enable   <= 1;
+          for (a = 0; a < IACT_RAM_CELLS; a = a + 1) begin
             iact_buffer_en_w[a] <= 0;
-            if (fsm_cycle <= 3) begin
-              if ((fsm_cycle +(finished_cycles_iact*4))%IACT_RAM_CELLS == a) begin
-                iact_buffer_en_w[a] <= 1;
-                for (b = 0; b < IACT_WORDS_IN_RAM; b=b+1) begin
-                  if (pooling_mode == 0) begin 
-                    iact_buffer_data_w[IACT_WORDS_IN_RAM*8*a+IACT_WORDS_IN_RAM*b+:8] <= pooling_regs[(8*fsm_cycle) + b];
-                  end else begin
-                    if (AVERAGE_POOLING == 1) begin
-                      iact_buffer_data_w[IACT_WORDS_IN_RAM*8*a+IACT_WORDS_IN_RAM*b+:8] <= pooling_regs[(8*fsm_cycle) + b]>>>4;
-                    end
-                  end
-                end
-              end
+          end
+          for (a = 0; a < 4; a = a + 1) begin
+            iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+((DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM)/2)+(8*a)+:8] <= pooling_buffer_old_q[a];
+          end
+          iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+(DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM/2)-1:0] <= iact_buffer_data_w >> 32;
+          
+          select_ram_counter2 <= select_ram_counter2 + 1;
+          if (select_ram_counter2 == 8 - 1) begin
+            select_ram_counter2 <= 0;
+            for (a = 0; a < IACT_RAM_CELLS; a = a + 1) begin
+              iact_buffer_en_w[a] <= 1;
+              iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
             end
           end
-          if (fsm_cycle >= 32/IACT_WORDS_IN_RAM) begin
-            fsm_cycle <= 0;
-            if (pooling_mode == 0) begin 
-              for (a = 0; a < 32; a = a + 1) begin
-                  pooling_regs[a] <= -128;
-              end
-            end else begin
-              if (AVERAGE_POOLING == 1) begin
-                for (a = 0; a < 32; a = a + 1) begin
-                    pooling_regs[a] <= 0;
-                end
-              end
-            end
+          if (fsm_cycle >= psum_size_x - 1) begin
             if (finished_cycles_iact == needed_cycles-1) begin
-              finished_cycles_iact   <= 0;
-              fsm_last_state    <= MAXPOOLING_SEND;
-              fsm_current_state <= GET_PARAMETERS;
-              iact_channels_counter <= 0;
+              if (select_ram_counter2 == 8 - 1) begin
+                fsm_cycle <= 0;
+                finished_cycles_iact  <= 0;
+                fsm_last_state        <= MAXPOOLING_SEND;
+                fsm_current_state     <= GET_PARAMETERS;
+                iact_channels_counter <= 0;
+              end
             end else begin
-              finished_cycles_iact  <= finished_cycles_iact + 1;
-              fsm_cycle             <= 0;
+              fsm_cycle               <= 5;
+              finished_cycles_iact    <= finished_cycles_iact + 1;
+              fsm_cycle               <= 0;
+              buffer_addr_temp_reg    <= iact_buffer_addr_reg[a];
               for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                iact_buffer_addr_reg[a] <= buffer_addr_temp_reg[a];
+                iact_buffer_addr_reg[a] <= buffer_addr_temp_reg;
               end
               fsm_last_state    <= MAXPOOLING_SEND;
               fsm_current_state <= MAXPOOLING_READ;
@@ -2627,7 +2481,7 @@ end
     assign quant_mant_flat[25*quant_flat_gen+:25] = quant_mant[quant_flat_gen];
   end
   for (quant_flat_gen = 0; quant_flat_gen < TRANS_WORDS; quant_flat_gen=quant_flat_gen+1) begin : gen_trans_quant_wires
-    assign quantized_value_flat[8*quant_flat_gen+:8] = quantized_value_reg[quant_flat_gen];
+    assign quantized_value_reg[quant_flat_gen] = quantized_value_flat[8*quant_flat_gen+:8];
   end
   psum_pipeline #(
       .CLUSTER_ROWS(CLUSTER_ROWS),
@@ -2706,7 +2560,40 @@ end
       .start_new_cycle(start_new_cycle),
       .psum_cnt(psum_cnt),
       .current_filter(current_filter),
-      .output_words(psum_output_words)
+      .output_words(psum_output_words),
+      .psum_cycle_loop_limit_0(psum_pagu_loop_limit_0),
+      .psum_cycle_loop_limit_1(psum_pagu_loop_limit_1),
+      .psum_cycle_loop_limit_2(psum_pagu_loop_limit_2),
+      .psum_cycle_loop_limit_3(psum_pagu_loop_limit_3),
+      .psum_cycle_loop_limit_4(psum_pagu_loop_limit_4),
+      .psum_cycle_addr_inc_0(psum_pagu_addr_inc_0),
+      .psum_cycle_addr_inc_1(psum_pagu_addr_inc_1),
+      .psum_cycle_addr_inc_2(psum_pagu_addr_inc_2),
+      .psum_cycle_addr_inc_3(psum_pagu_addr_inc_3),
+      .psum_cycle_addr_inc_4(psum_pagu_addr_inc_4)
+  );
+
+  genvar k_gen;
+  wire [CHANNELS_PER_WORD*DATA_IACT_BITWIDTH-1:0]pooling_buffer_new_flat;
+  wire [CHANNELS_PER_WORD*DATA_IACT_BITWIDTH-1:0]pooling_buffer_old_flat;
+  wire [4:0]limit_i;
+  assign limit_i = psum_size_x-1;
+  for (k_gen = 0; k_gen < CHANNELS_PER_WORD; k_gen=k_gen+1) begin : gen_ring_buffer_wires
+    assign pooling_buffer_old[k_gen] = pooling_buffer_old_flat[(k_gen*DATA_IACT_BITWIDTH)+:DATA_IACT_BITWIDTH];
+    assign pooling_buffer_new_flat[(k_gen*DATA_IACT_BITWIDTH)+:DATA_IACT_BITWIDTH] = pooling_buffer_new[k_gen];
+  end
+  
+  ring_buffer_pipelined #(
+      .DATA_WIDTH(DATA_IACT_BITWIDTH*CHANNELS_PER_WORD),
+      .ADDR_WIDTH(5)
+  ) ring_buffer_pipelined_inst (
+      .clk_i(clk_i),
+      .rst_n(rst_n),
+      .limit_i(limit_i),
+      .ready_i(pooling_buffer_enable),
+      .data_i(pooling_buffer_new_flat),
+      .data_o(pooling_buffer_old_flat),
+      .valid_o()
   );
 
   // -----------------------------------------------------------------------
@@ -2721,7 +2608,6 @@ end
   // The upper half (bits [2*IACT_RAM_CELLS*W-1:IACT_RAM_CELLS*W]) is unused because
   // choose_iact_buffer selects the active half at the RAM address level.
   // -----------------------------------------------------------------------
-  genvar k_gen;
   for (k_gen = 0; k_gen < IACT_RAM_CELLS; k_gen=k_gen+1) begin : gen_RAM_wires
     assign iact_buffer_addr[k_gen] = BRANCHES != 1 ? {choose_iact_buffer,iact_buffer_addr_reg[k_gen]} : iact_buffer_addr_reg[k_gen];
   end
@@ -2853,7 +2739,7 @@ end
             .DATA_IACT_OVERHEAD(DATA_IACT_OVERHEAD),
             .RAM_CELLS         (IACT_RAM_CELLS),
             .WORD_BITWIDTH     (TRANS_BITWIDTH_IACT * NUM_GLB_IACT),
-            .ADDRWIDTH         (14)
+            .ADDRWIDTH         (13)
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
             .rst_ni                      (rst_n),
@@ -3058,7 +2944,17 @@ end
         .iact_read_inc_4(iact_read_inc_4),
         .iact_write_inc_1(iact_write_inc_1),
         .iact_write_inc_2(iact_write_inc_2),
-        .pagu_wght_limit(pagu_wght_limit)
+        .pagu_wght_limit(pagu_wght_limit),
+        .psum_pagu_loop_limit_0(psum_pagu_loop_limit_0),
+        .psum_pagu_loop_limit_1(psum_pagu_loop_limit_1),
+        .psum_pagu_loop_limit_2(psum_pagu_loop_limit_2),
+        .psum_pagu_loop_limit_3(psum_pagu_loop_limit_3),
+        .psum_pagu_loop_limit_4(psum_pagu_loop_limit_4),
+        .psum_pagu_addr_inc_0(psum_pagu_addr_inc_0),
+        .psum_pagu_addr_inc_1(psum_pagu_addr_inc_1),
+        .psum_pagu_addr_inc_2(psum_pagu_addr_inc_2),
+        .psum_pagu_addr_inc_3(psum_pagu_addr_inc_3),
+        .psum_pagu_addr_inc_4(psum_pagu_addr_inc_4)
     );
 
 

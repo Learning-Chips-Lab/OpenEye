@@ -4,7 +4,7 @@
 // Auto-generated from ./regmap.yaml
 
 parameter DMA_BITWIDTH = 32;
-parameter TRANSMISSIONS = 20;
+parameter TRANSMISSIONS = 23;
 
 // Transmission 0 Offsets
 parameter PARAMETER_POS_0_0 = 0;
@@ -76,7 +76,7 @@ parameter PARAMETER_POS_10_6 = PARAMETER_POS_10_5 + 4;
 parameter PARAMETER_POS_11_0 = 0;
 parameter PARAMETER_POS_11_1 = PARAMETER_POS_11_0 + 4;
 parameter PARAMETER_POS_11_2 = PARAMETER_POS_11_1 + 1;
-parameter PARAMETER_POS_11_3 = PARAMETER_POS_11_2 + 10;
+parameter PARAMETER_POS_11_3 = PARAMETER_POS_11_2 + 9;
 parameter PARAMETER_POS_11_4 = PARAMETER_POS_11_3 + 3;
 
 // Transmission 12 Offsets
@@ -117,5 +117,21 @@ parameter PARAMETER_POS_18_1 = PARAMETER_POS_18_0 + 12;
 // Transmission 19 Offsets
 parameter PARAMETER_POS_19_0 = 0;
 parameter PARAMETER_POS_19_1 = PARAMETER_POS_19_0 + 12;
+parameter PARAMETER_POS_19_2 = PARAMETER_POS_19_1 + 10;
+
+// Transmission 20 Offsets
+parameter PARAMETER_POS_20_0 = 0;
+parameter PARAMETER_POS_20_1 = PARAMETER_POS_20_0 + 8;
+parameter PARAMETER_POS_20_2 = PARAMETER_POS_20_1 + 8;
+parameter PARAMETER_POS_20_3 = PARAMETER_POS_20_2 + 8;
+
+// Transmission 21 Offsets
+parameter PARAMETER_POS_21_0 = 0;
+parameter PARAMETER_POS_21_1 = PARAMETER_POS_21_0 + 8;
+parameter PARAMETER_POS_21_2 = PARAMETER_POS_21_1 + 8;
+parameter PARAMETER_POS_21_3 = PARAMETER_POS_21_2 + 8;
+
+// Transmission 22 Offsets
+parameter PARAMETER_POS_22_0 = 0;
 
 `endif // REGMAP_PARAMS_VH

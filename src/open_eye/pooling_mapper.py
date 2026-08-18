@@ -120,24 +120,31 @@ class PoolingMapper(LayerMapper):
         from regmap_pack import pack_registers
         words = pack_registers({
         "wght_cycles_reg": layer_params.needed_wght_transmissions,
-        "stride_x_reg": layer_params.strideX,
-        "stride_y_reg": layer_params.strideY,
+        "stride_x": layer_params.strideX,
+        "stride_y": layer_params.strideY,
         "skipIact_reg": layer_params.skipIact,
         "skipWght_reg": layer_params.skipWght,
         "skipPsum_reg": layer_params.skipPsum,
         "psum_q": layer_params.psum_delay,
-        "psum_delay_reg": layer_params.psum_delay,
         "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
         "kernel_size_x": layer_params.strideX,
         "kernel_size_y": layer_params.strideY,
         "x_lines_reg": layer_params.iact_x_lines,
         "needed_wght_cycles": math.ceil(layer_params.filters/(layer_params.used_psum_per_PE * layer_params.different_kernels_per_calculation)),
         "needed_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
+        "trans_cycles_iact": layer_params.trans_cycles_iact,
+        "trans_cycles_wght": layer_params.trans_cycles_wght,
+        "trans_cycles_psum": layer_params.trans_cycles_psum,
         "iact_converter_buffer_addr_max_cycles": layer_params.needed_cycles,
         "iact_channels_per_pe": layer_params.used_channels,
         "fc_size_reg":0,
         "iact_size_x":layer_params.iact_size_x,
         "iact_size_y": layer_params.iact_size_y,
+        "iact_size_c": layer_params.channels,
+        "iact_x_per_cluster": layer_params.iact_x_per_cluster,
+        "psum_x_all_cluster": layer_params.psum_x_all_cluster,
+        "padding_x": layer_params.padding_x,
+        "padding_y": layer_params.padding_y,
         "psum_size_x":math.ceil(layer_params.iact_size_x/layer_params.strideX),
         "psum_size_y": math.ceil(layer_params.iact_size_y/layer_params.strideY),
         "iact_needed_cycles": layer_params.iact_stream_cycles,
@@ -150,7 +157,7 @@ class PoolingMapper(LayerMapper):
         "choose_iact_buffer_output": layer_params.choose_iact_storage_output,
         "choose_iact_buffer_input": layer_params.choose_iact_storage_input,
         "iact_channels_per_pe_next_layer": layer_params.diff_iact_layer_next_layer,
-        "needed_psum_storage_cycles_reg": 0,#layer_params.psum_storage_cycles
+        "needed_psum_storage_cycles_reg": 0,
         "iact_channel_max_cycles": layer_params.diff_iact_layer,
         "input_activations": layer_params.used_iact_per_PE,
         "filters": layer_params.used_psum_per_PE,
@@ -173,8 +180,27 @@ class PoolingMapper(LayerMapper):
         "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
         "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
         "pooling_mode": layer_params.pooling_mode,
-        "gemm_mode": 0,
-        "test_reg": 0
+        "used_wght_per_PE": layer_params.used_wght_per_PE,
+        "overhang_discrepancy": layer_params.overhang_discrepancy,
+        "psum_output_words": layer_params.psum_output_words,
+        "iact_read_inc_1" : layer_params.iact_read_inc_1,
+        "iact_read_inc_2" : layer_params.iact_read_inc_2,
+        "iact_read_inc_3" : layer_params.iact_read_inc_3,
+        "iact_read_inc_4" : layer_params.iact_read_inc_4,
+        "iact_write_inc_1" : layer_params.iact_write_inc_1,
+        "iact_write_inc_2" : layer_params.iact_write_inc_2,
+        "pagu_wght_limit" : layer_params.pagu_wght_limit,
+        "psum_pagu_loop_limit_0" : layer_params.psum_pagu_loop_limit_0,
+        "psum_pagu_loop_limit_1" : layer_params.psum_pagu_loop_limit_1,
+        "psum_pagu_loop_limit_2" : layer_params.psum_pagu_loop_limit_2,
+        "psum_pagu_loop_limit_3" : layer_params.psum_pagu_loop_limit_3,
+        "psum_pagu_loop_limit_4" : layer_params.psum_pagu_loop_limit_4,
+        "psum_pagu_addr_inc_0" : layer_params.psum_pagu_addr_inc_0,
+        "psum_pagu_addr_inc_1" : layer_params.psum_pagu_addr_inc_1,
+        "psum_pagu_addr_inc_2" : layer_params.psum_pagu_addr_inc_2,
+        "psum_pagu_addr_inc_3" : layer_params.psum_pagu_addr_inc_3,
+        "psum_pagu_addr_inc_4" : layer_params.psum_pagu_addr_inc_4,
+        "gemm_mode": 0
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===
@@ -227,56 +253,69 @@ class PoolingMapper(LayerMapper):
             storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
 
         return storage
-    def write_quantize(self, params, layer_params, layer_repetition):
-        """Generate quantization parameters for pooling layer outputs.
-
-        This method would generate quantization parameters for pooling layer outputs,
-        but is currently not implemented for pooling operations as they typically don't
-        require additional quantization beyond what's already applied to input activations.
-
-        Args:
-            params: Hardware parameters
-            layer_params: Layer parameters with quantization information
-            layer_repetition (int): Current repetition index
-
-        Returns:
-            list: Empty list (quantization not used for pooling layers)
-
-        Note:
-            The method contains skeleton code for packing quantization parameters
-            into DMA lines, but always returns an empty list, indicating that
-            quantization is not applied for pooling operations.
-
+    
+    def write_quant_and_offset(self, params, layer_params, layer_repetition):
         """
-        dma_line = 0
+        Generates unified quantization and offset parameters packed for shift-register streaming.
+        
+        Layout per Filter (LSB -> MSB):
+        - Offset   : OFFSET_WIDTH bits
+        - Exponent : EXPONENT_WIDTH bits
+        - Mantissa : MANTISSA_WIDTH bits
+        
+        Shift behavior:
+        Filter 0 lands at the lowest bit-positions (quant_reg[0 +: ENTRY_WIDTH]).
+        To achieve this with a left-shift register (`quant_reg <= {quant_reg, new_data}`),
+        the highest filter blocks (e.g. Filter N-1 down to Filter 0) must be transmitted FIRST,
+        or the streaming array must be sliced accordingly.
+        """
+        offset_w = getattr(params, 'OFFSET_WIDTH', 8)
+        exp_w    = getattr(params, 'EXPONENT_WIDTH', 7)
+        mant_w   = getattr(params, 'MANTISSA_WIDTH', 25)
+        
+        entry_w  = offset_w + exp_w + mant_w  # e.g. 8 + 7 + 25 = 40 Bits per filter
+        dma_w    = params.DMA_BITWIDTH        # e.g. 64 Bits
+        
+        total_bits = params.QUANT_AMOUNT * entry_w
+        
+        # 1. Pack ALL filter data into one giant bitfield (Filter 0 at LSB)
+        packed_bitstream = 0
+        for f in range(params.QUANT_AMOUNT):
+            mant   = layer_params.quantize[f][0]  # Mantissa
+            exp    = layer_params.quantize[f][1]  # Exponent
+            offset = layer_params.offset[f]       # Zero-Point Offset
+            
+            # Combine offset | exp | mant for filter `f`
+            filter_entry = (offset & ((1 << offset_w) - 1)) | \
+                        ((exp    & ((1 << exp_w) - 1)) << offset_w) | \
+                        ((mant   & ((1 << mant_w) - 1)) << (offset_w + exp_w))
+            
+            # Shift into the global bitstream at position `f * entry_w`
+            packed_bitstream |= (filter_entry << (f * entry_w))
+            
+        # 2. Slice the bitstream into DMA words
+        # Because your Verilog shifts incoming words from lower to higher indices:
+        #   quant_reg[(a+1)*DMA_BITWIDTH +: DMA_BITWIDTH] <= quant_reg[a*DMA_BITWIDTH +: DMA_BITWIDTH]
+        # The FIRST word sent will end up at the HIGHEST index.
+        # Therefore, we chunk from MSB down to LSB!
+        
+        num_dma_words = math.ceil(total_bits / dma_w)
         dma_storage = []
-        # Pack quantization parameters (2 parameters per line, 16 lines total)
-        for f in range(math.ceil(16)):
-            dma_line = 0
-            dma_line = dma_line + (layer_params.quantize[2*f][0] << 0)    # bits 0-24: first quantize param 0
-            dma_line = dma_line + (layer_params.quantize[2*f][1] << 25)   # bits 25-31: first quantize param 1
-            dma_line = dma_line + (layer_params.quantize[2*f+1][0] << 32) # bits 32-56: second quantize param 0
-            dma_line = dma_line + (layer_params.quantize[2*f+1][1] << 57) # bits 57-63: second quantize param 1
-            dma_storage.append(dma_line)
-        # Return empty list - quantization not used for pooling
-        return []
-
-    def write_offset(self, params, layer_params, layer_repetition):
-        """Generate offset parameters for pooling layer.
-
-        This method would generate offset parameters if needed, but pooling operations
-        do not require offset configuration.
-
-        Args:
-            params: Hardware parameters
-            layer_params: Layer parameters
-            layer_repetition (int): Current repetition index
-
-        Returns:
-            list: Empty list (offsets not used for pooling layers)
-
-        """
-        return []
+        
+        # Calculate top padded length
+        total_padded_bits = num_dma_words * dma_w
+        
+        for i in range(num_dma_words):
+            # Extract word starting from the top bits down to bottom
+            shift_amount = total_padded_bits - (i + 1) * dma_w
+            if shift_amount >= 0:
+                word = (packed_bitstream >> shift_amount) & ((1 << dma_w) - 1)
+            else:
+                # Handle edge alignment if total_bits isn't perfectly divisible
+                word = (packed_bitstream << abs(shift_amount)) & ((1 << dma_w) - 1)
+                
+            dma_storage.append(word)
+        return dma_storage
     
     def write_router_iact(self, params, layer_params):
         """Generate input activation router configuration for pooling operations.

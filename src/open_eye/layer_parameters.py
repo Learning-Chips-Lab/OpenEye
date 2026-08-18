@@ -312,7 +312,16 @@ class LayerParameters(object):
         self.iact_write_inc_1 = 0
         self.iact_write_inc_2 = 0
         self.pagu_wght_limit = 0
-
+        self.psum_pagu_loop_limit_0 = 0
+        self.psum_pagu_loop_limit_1 = 0
+        self.psum_pagu_loop_limit_2 = 0
+        self.psum_pagu_loop_limit_3 = 0
+        self.psum_pagu_loop_limit_4 = 0
+        self.psum_pagu_addr_inc_0 = 0
+        self.psum_pagu_addr_inc_1 = 0
+        self.psum_pagu_addr_inc_2 = 0
+        self.psum_pagu_addr_inc_3 = 0
+        self.psum_pagu_addr_inc_4 = 0
 
         # === Layer Type Detection and Dispatch ===
         # Detect layer type from name and call appropriate initialization method
@@ -1021,6 +1030,21 @@ class LayerParameters(object):
         self.iact_write_inc_2 = math.ceil(self.used_channels/2) * self.needed_Iact_writes
         self.pagu_wght_limit = int((self.iact_size_x%params.NUM_GLB_PSUM)+self.iact_size_x) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
 
+        self.psum_pagu_loop_limit_0 = 4 - 1
+        self.psum_pagu_addr_inc_0 = 1
+
+        self.psum_pagu_loop_limit_1 = self.iact_x_line_repetitions * self.iact_size_y - 1
+        self.psum_pagu_addr_inc_1 = self.filters
+
+        self.psum_pagu_loop_limit_2 = math.ceil(self.filters/4) - 1
+        self.psum_pagu_addr_inc_2 = 4
+
+        self.psum_pagu_loop_limit_3 = 0
+        self.psum_pagu_addr_inc_3 = 0
+
+        self.psum_pagu_loop_limit_4 = 0
+        self.psum_pagu_addr_inc_4 = 0
+
     def  calculate_transmission_cycles(self, params):
         self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_BITWIDTH)
         self.trans_cycles_iact = math.ceil(params.IACT_Bitwidth*self.iact_size_x*self.iact_size_y*self.channels / params.DMA_BITWIDTH)
@@ -1087,7 +1111,7 @@ class LayerParameters(object):
             self.used_iact_addr_per_PE = self.used_channels
 
         # Calculate DMA streaming cycles for input data
-        self.iact_stream_cycles = math.ceil(self.input_shape[1] * self.input_shape[2] * self.input_shape[3] / params.NUM_BUFFER / (params.DMA_BITWIDTH//params.IACT_Bitwidth))
+        self.iact_stream_cycles = math.ceil(self.input_shape[1] * self.input_shape[2] * self.input_shape[3] / params.IACT_RAM_CELLS / (params.DMA_BITWIDTH//params.IACT_Bitwidth))
 
         # Calculate channel iteration metrics
         self.diff_iact_layer = math.ceil(self.input_shape[3]/self.used_channels)
@@ -1193,7 +1217,12 @@ class LayerParameters(object):
             psum_cycles = 2
         else:
             psum_cycles = 1
-        self.fsm_psum_limit = (((self.iact_size_x + self.add_up) * psum_cycles * self.different_kernels_per_calculation * self.needed_wght_cycles * self.used_psum_per_PE * self.iact_size_y)//8) + 12
+        if (layer_number != max_layers - 1):
+            self.fsm_psum_limit = math.ceil((self.iact_size_x + self.add_up) * self.filters * self.iact_size_y /4)
+            self.fsm_psum_limit = self.fsm_psum_limit + 11
+            
+        else:
+            self.fsm_psum_limit = (((self.iact_size_x + self.add_up) * psum_cycles * self.different_kernels_per_calculation * self.needed_wght_cycles * self.used_psum_per_PE * self.iact_size_y)//8) + 12
         if (self.channels == 1):
             self.iact_converter_max_cycles = math.ceil(self.buffer_cycles_for_x_iact*self.iact_x_line_repetitions*(self.iact_size_y +  self.kernel_size[1])/2)
         else:

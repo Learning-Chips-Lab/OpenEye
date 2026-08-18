@@ -361,17 +361,17 @@ def compare_iact_storage(ptp, dut, iact_ref, oep):
         for c in range(len(iact_ref)):
             for y in range(len(iact_ref[c])):
                 for x in range(len(iact_ref[c][y])):
-                    if(iact_ref[c][y][x] != dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[7 + (i * 8):(i * 8)].to_signed()):
+                    if(iact_ref[c][y][x] != dut.BUFFER_A[buffer%oep.IACT_RAM_CELLS].iact_layer_buffer.impl.mem[word].value[7 + (i * 8):(i * 8)].to_signed()):
                         logger.error("Error found in Iact storage; Channel: " + str(c) + " X: " + str(x) + " Y: " + str(y) + " buffer: " + str(buffer) + " word: " + str(word) + " i: " + str(i))
-                        logger.error("Ref-Value: " + str(iact_ref[c][y][x]) + " DUT-Value: " + str(dut.BUFFER_A[buffer%oep.NUM_BUFFER].iact_converter_buffer_SP.impl.mem[word].value[7 + (i * 8):(i * 8)].to_signed()))
+                        logger.error("Ref-Value: " + str(iact_ref[c][y][x]) + " DUT-Value: " + str(dut.BUFFER_A[buffer%oep.IACT_RAM_CELLS].iact_layer_buffer.impl.mem[word].value[7 + (i * 8):(i * 8)].to_signed()))
                         error_found = True
                     i = i + 4
                     if (i >= 8):
                         i = i - 8
                         buffer = buffer + 1
-                        if (buffer >= oep.NUM_BUFFER):
+                        if (buffer >= oep.IACT_RAM_CELLS):
                             word = word + 1
-                            buffer = buffer - oep.NUM_BUFFER
+                            buffer = buffer - oep.IACT_RAM_CELLS
             if ((c%4 == 3)):
                 buffer_reset = buffer
                 word_reset = word
@@ -388,11 +388,11 @@ def compare_iact_storage(ptp, dut, iact_ref, oep):
     except:
         for c in range(len(iact_ref)):
             word = c%8
-            buffer = math.floor(c/8)%oep.NUM_BUFFER
-            addr = math.floor(c/8/oep.NUM_BUFFER)
-            if(iact_ref[c] != dut.BUFFER_A[buffer].iact_converter_buffer_SP.impl.mem[addr].value[7 + (word * 8):(word * 8)].to_signed()):
+            buffer = math.floor(c/8)%oep.IACT_RAM_CELLS
+            addr = math.floor(c/8/oep.IACT_RAM_CELLS)
+            if(iact_ref[c] != dut.BUFFER_A[buffer].iact_layer_buffer.impl.mem[addr].value[7 + (word * 8):(word * 8)].to_signed()):
                 logger.error("Error found in Iact storage; Channel: " + str(c)  + " buffer: " + str(buffer) + " word: " + str(word) + " addr: " + str(addr))
-                logger.error("Ref-Value: " + str(iact_ref[c]) + " DUT-Value: " + str(dut.BUFFER_A[buffer].iact_converter_buffer_SP.impl.mem[addr].value[7 + (word * 8):(word * 8)].to_signed()))
+                logger.error("Ref-Value: " + str(iact_ref[c]) + " DUT-Value: " + str(dut.BUFFER_A[buffer].iact_layer_buffer.impl.mem[addr].value[7 + (word * 8):(word * 8)].to_signed()))
                 error_found = True
 
     if error_found:

@@ -107,9 +107,8 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             
         case "Pooling":
             channels = 4
-            x_axis = 14
-            y_axis = 4
-            filters = 16
+            x_axis = inputsize_x
+            y_axis = inputsize_y
 
             # 1. Convolutional Layer
             model.add(tf.keras.layers.Conv2D(
@@ -132,7 +131,6 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             ))
             x_axis = math.ceil(x_axis/pool_x_axis)
             y_axis = math.ceil(y_axis/pool_y_axis)
-            filters = 32*2
             model.add(tf.keras.layers.Conv2D(
                 filters, 
                 (3, 3), 

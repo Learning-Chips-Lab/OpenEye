@@ -72,6 +72,16 @@ registers:
   - {name: iact_write_inc_1, width: 12}
   - {name: iact_write_inc_2, width: 12}
   - {name: pagu_wght_limit, width: 10}
+  - {name: psum_pagu_loop_limit_0, width: 8}
+  - {name: psum_pagu_loop_limit_1, width: 8}
+  - {name: psum_pagu_loop_limit_2, width: 8}
+  - {name: psum_pagu_loop_limit_3, width: 8}
+  - {name: psum_pagu_loop_limit_4, width: 8}
+  - {name: psum_pagu_addr_inc_0, width: 8}
+  - {name: psum_pagu_addr_inc_1, width: 8}
+  - {name: psum_pagu_addr_inc_2, width: 8}
+  - {name: psum_pagu_addr_inc_3, width: 8}
+  - {name: psum_pagu_addr_inc_4, width: 8}
   
 
 

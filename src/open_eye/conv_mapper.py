@@ -168,6 +168,7 @@ class ConvMapper(LayerMapper):
         "iact_needed_cycles": layer_params.iact_stream_cycles,
         "kernels_per_calc": layer_params.different_kernels_per_calculation,
         "y_lines_per_calc": layer_params.y_lines_per_calculation,
+        "output_cycles": layer_params.output_cycles, 
         "store_in_psum": layer_params.store_in_psum,
         "max_pooling": layer_params.max_pooling,
         "fully_connected_layer": layer_params.fully_connected,
@@ -210,6 +211,16 @@ class ConvMapper(LayerMapper):
         "iact_write_inc_1" : layer_params.iact_write_inc_1,
         "iact_write_inc_2" : layer_params.iact_write_inc_2,
         "pagu_wght_limit" : layer_params.pagu_wght_limit,
+        "psum_pagu_loop_limit_0" : layer_params.psum_pagu_loop_limit_0,
+        "psum_pagu_loop_limit_1" : layer_params.psum_pagu_loop_limit_1,
+        "psum_pagu_loop_limit_2" : layer_params.psum_pagu_loop_limit_2,
+        "psum_pagu_loop_limit_3" : layer_params.psum_pagu_loop_limit_3,
+        "psum_pagu_loop_limit_4" : layer_params.psum_pagu_loop_limit_4,
+        "psum_pagu_addr_inc_0" : layer_params.psum_pagu_addr_inc_0,
+        "psum_pagu_addr_inc_1" : layer_params.psum_pagu_addr_inc_1,
+        "psum_pagu_addr_inc_2" : layer_params.psum_pagu_addr_inc_2,
+        "psum_pagu_addr_inc_3" : layer_params.psum_pagu_addr_inc_3,
+        "psum_pagu_addr_inc_4" : layer_params.psum_pagu_addr_inc_4,
         "gemm_mode": getattr(layer_params, "gemm_mode", 0)
         })
 
