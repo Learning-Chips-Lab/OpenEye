@@ -170,11 +170,11 @@ module psum_pipeline #(
   assign current_shift = quant_exp[current_filter];
 
   
-  wire [8-1:0] psum_cycle_addr_0_next;
-  wire [8-1:0] psum_cycle_addr_1_next;
-  wire [8-1:0] psum_cycle_addr_2_next;
-  wire [8-1:0] psum_cycle_addr_3_next;
-  wire [8-1:0] psum_cycle_addr_4_next;
+  wire [BUFFER_WIDTH-1:0] psum_cycle_addr_0_next;
+  wire [BUFFER_WIDTH-1:0] psum_cycle_addr_1_next;
+  wire [BUFFER_WIDTH-1:0] psum_cycle_addr_2_next;
+  wire [BUFFER_WIDTH-1:0] psum_cycle_addr_3_next;
+  wire [BUFFER_WIDTH-1:0] psum_cycle_addr_4_next;
   assign psum_cycle_addr_0_next = psum_cycle_addr_0 + psum_cycle_addr_inc_0;
   assign psum_cycle_addr_1_next = psum_cycle_addr_1 + psum_cycle_addr_inc_1;
   assign psum_cycle_addr_2_next = psum_cycle_addr_2 + psum_cycle_addr_inc_2;

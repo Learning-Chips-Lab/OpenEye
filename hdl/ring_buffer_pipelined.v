@@ -32,6 +32,7 @@ module ring_buffer_pipelined #(
 
     // Dynamic configuration
     input  wire [ADDR_WIDTH-1:0]  limit_i,  // Upper index boundary (wraps to 0 when reached)
+    input  wire                   set_pointer_start_i, // Resets the pointers
 
     // Handshake & Data Interface
     input  wire                   ready_i,  // Trigger: store data_i and fetch next entry
@@ -50,10 +51,15 @@ module ring_buffer_pipelined #(
     always @(posedge clk_i or negedge rst_n) begin
         if (!rst_n) begin
             wr_ptr <= 0;
-        end else if (ready_i) begin
-            wr_ptr <= wr_ptr + 1'b1;
-            if (wr_ptr == limit_i) begin
-                wr_ptr <= {ADDR_WIDTH{1'b0}};
+        end else begin
+            if (set_pointer_start_i) begin
+                wr_ptr <= 0;
+            end
+            if (ready_i) begin
+                wr_ptr <= wr_ptr + 1'b1;
+                if (wr_ptr == limit_i) begin
+                    wr_ptr <= {ADDR_WIDTH{1'b0}};
+                end
             end
         end
     end
@@ -62,10 +68,15 @@ module ring_buffer_pipelined #(
     always @(posedge clk_i or negedge rst_n) begin
         if (!rst_n) begin
             rd_ptr <= 2;
-        end else if (ready_i) begin
-            rd_ptr <= rd_ptr + 1'b1;
-            if (rd_ptr == limit_i) begin
-                rd_ptr <= {ADDR_WIDTH{1'b0}};
+        end else begin
+            if (set_pointer_start_i) begin
+                rd_ptr <= 2;
+            end
+            if (ready_i) begin
+                rd_ptr <= rd_ptr + 1'b1;
+                if (rd_ptr == limit_i) begin
+                    rd_ptr <= {ADDR_WIDTH{1'b0}};
+                end
             end
         end
     end

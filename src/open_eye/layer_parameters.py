@@ -1665,7 +1665,7 @@ class LayerParameters(object):
         else:
             self.used_channels = 4
         self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
-        self.iact_converter_buffer_addr_max_cycles = math.ceil((((self.iact_size_x*self.iact_size_y*self.diff_iact_layer)/32)/2)/2)
+        self.iact_converter_buffer_addr_max_cycles = math.ceil((((self.iact_size_y*self.diff_iact_layer))/(self.strideY*4)))
         return
 
     def print_layer_parameters(self, debug_file):
