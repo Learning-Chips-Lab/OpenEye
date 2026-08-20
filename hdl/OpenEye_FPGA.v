@@ -1236,7 +1236,7 @@ end
   reg [15:0] select_ram_counter2;  // Counts which of the 32 RAM_SP cells is currently being addressed
                                   // during GET_IACT, CONVERT_IACT, RECEIVE_PSUMS_TO_IACT, and MAXPOOLING.
   reg [ 7:0] select_ram_offset;   // Additional offset into the active RAM cell address (within one cell).
-  reg [ 7:0] ram_iact_modulo;     // Modulo counter tracking position within a 64-bit RAM word
+  reg [$clog2(IACT_RAM_CELLS)-1:0] select_iact_glb_addr_inc;     // Modulo counter tracking position within a 64-bit RAM word
                                   // (used when packing multiple iact bytes into one word).
 
   // --- Max-pooling pipeline registers (MAXPOOLING_READ state) ---
@@ -1314,12 +1314,17 @@ end
   reg [11:0] pcb_inc_2;                  // Composite psum buffer address word, stage 2: {sending_clusters, psum_cycle_buffer_2}.
   reg [11:0] pcb_inc_3;                  // Composite psum buffer address word, stage 3: {sending_clusters, psum_cycle_buffer_3}.
   reg [3:0] fsm_psum_row_offset;         // Row offset used when iterating over cluster rows in PSUM_GET_RESULTS.
-  reg       past_padding;                // Flag: high after crossing a padding boundary in the psum read sequence.
 
   // --- iact buffer next-address combinational signal ---
   // Asserted when the iact_stream_constructor is about to need the next buffer address
   // (one cycle before the current address window runs out).
-  wire      iact_buffer_next_addr;
+  reg signed [                                  8-1:0] current_x;
+  reg signed [                                  8-1:0] current_y;
+  reg        [           $clog2(2*IACT_RAM_CELLS)-1:0] current_pos_in_iact_glb;
+  reg        [                                  3-1:0] relative_pos;
+  reg        [                                    1:0] iact_channel_sending_cycle;
+  reg        [(4*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window;
+  reg        [(4*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window_q;
 
   reg [ 7:0] iact_channel_counter_reg;  // Registered copy of iact_channels_counter for cross-process use.
 
@@ -1358,15 +1363,6 @@ end
   wire [      $clog2(NUM_GLB_IACT+1)*CLUSTERS*PES-1:0] iact_choose_i_oep_w;  // Iact-source selector for each PE in each cluster.
   wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_oep_w;    // Packed iact data from all converters.
   wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;  // Per-GLB iact-valid flags from converters.
-
-  // iact_buffer_next_addr: combinational look-ahead signal.
-  // Asserted when the converter is one cycle away from needing a new buffer address:
-  //   - the addr-cycle counter is at max-1 (or = 0 when max_cycles = 1), AND
-  //   - the encoding-cycle counter is at 0 (start of a new word), AND
-  //   - the channel counter hasn't wrapped yet.
-  assign iact_buffer_next_addr = (((iact_converter_buffer_addr_cycles + 1 == iact_converter_buffer_addr_max_cycles) |
-            (iact_converter_buffer_addr_max_cycles == 1 & (iact_converter_buffer_addr_cycles == 0))) &
-            ((((iact_converter_cycles == 0) & (iact_channels_counter != iact_channel_max_cycles))) | (buffer_cycles_for_x_iact != 1)));
 
   // -----------------------------------------------------------------------
   // Process 6: Main FSM
@@ -1514,7 +1510,6 @@ end
       send_data_reg                      <= 0;
       write_dma_en                       <= 0;
       dma_data_i                         <= 0;
-      past_padding                       <= 0;
       // Pooling
       iact_buffer_data_pool_temp         <= 0;
       pooling_buffer_enable              <= 0;
@@ -1550,7 +1545,7 @@ end
       converters_ready              = 0;
       iact_converter_enc_enable    <= 0;
       iact_converter_params_enable <= 0;
-      ram_iact_modulo              <= 0;
+      select_iact_glb_addr_inc     <= 0;
       iact_to_psum_shift_reg       <= 0;
       iact_to_psum_mux_reg         <= 0;
       iact_to_psum_x_pos_counter   <= 0;
@@ -1558,7 +1553,13 @@ end
       iact_to_psum_storage_counter <= 0;
       iact_to_psum_start_shifting  <= 0;
       set_pointer_start            <= 0;
-
+      current_x                    <= 0;
+      current_y                    <= 0;
+      relative_pos                 <= 0;
+      current_pos_in_iact_glb      <= 0;
+      iact_input_window            <= 0;
+      iact_input_window_q          <= 0;
+      iact_channel_sending_cycle   <= 0;
     end else begin
       for (a = 0; a < CHANNELS_PER_WORD; a = a + 1) begin
         pooling_buffer_old_q[a] <= pooling_buffer_old[a];
@@ -1955,42 +1956,38 @@ end
         // - Recomputes converters_ready = AND of all ready flags.
         // - When all ready:
         //   * Transitions to CONVERT_IACT.
-        //   * Clears past_padding (starts before the first real row).
         //   * Resets select_ram_counter to 0.
         //   * Enables all buffers read lines (iact_buffer_en_r all 1).
         //   * Resets all buffer address pointers to 0.
-        //   * Special case (iact_size_c == 1): sets past_padding = 1
-        //     immediately (single-channel layers skip the padding ramp).
         //
         // This state may spin for multiple cycles if any converter is still
         // finishing a previous encoding run from the last iact batch.
         // -------------------------------------------------------------------
         START_CONVERTER: begin
-          converters_ready         = 1;
+          converters_ready = 1;
+          for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+            iact_buffer_addr_reg[a] <= 0;
+          end
+          for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+            iact_buffer_en_r[a] <= 1;
+          end
           for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
             for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
               converters_ready = converters_ready & iact_converter_ready_w[a][b];
             end
           end
           if (converters_ready == 1) begin
-            fsm_current_state          <= CONVERT_IACT;
-            past_padding               <= 0;
-            select_ram_counter         <= 0;
-            for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-              iact_buffer_en_r[a] <= 1;
-            end
-            if (fully_connected_layer) begin
-              for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                iact_buffer_addr_reg[a] <= ~0;
-              end
-            end else begin
-              for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                iact_buffer_addr_reg[a] <= ~0;
-              end
-            end
-            if ((iact_size_c == 1) | (kernel_size_x == 1)) begin
-              past_padding <= 1;
-            end
+            iact_channel_sending_cycle<= 0;
+            iact_converter_enc_enable <= 1;
+            select_iact_glb_addr_inc  <= 0;
+            current_x                 <= -padding_x;
+            current_y                 <= -padding_y;
+            current_pos_in_iact_glb   <= 0;
+            relative_pos              <= 0;
+            iact_input_window         <= 0;
+            iact_input_window_q       <= 0;
+            fsm_current_state         <= CONVERT_IACT;
+            select_ram_counter        <= 0;
           end
         end
 
@@ -2006,84 +2003,48 @@ end
         //     -> one spatial row of the input feature map
         //   iact_channels_counter [0..iact_channel_max_cycles-1]
         //     -> one channel batch
-        //
-        // Sliding address window management:
-        // - When iact_buffer_next_addr fires (look-ahead) or at the end of
-        //   a buffer-address cycle:
-        //   If within the valid row range [padding_y .. padding_y + iact_size_y]:
-        //     * Sets past_padding = 1 (encoding has reached real pixel rows).
-        //     * For each active cell in the sliding window
-        //       [buffer_addr_lower_limit .. buffer_addr_upper_limit]:
-        //       increments iact_buffer_addr_reg by 1 (advance read pointer).
-        //     * Advances upper_limit by (limit_increase + overhang).
-        //     * Advances lower_limit by (limit_increase + overhang_delay).
-        //     * Accumulates overhang_counter; when it exceeds WORDS_PER_CYCLE*4
-        //       sets overhang = 1 for the next step (handles fractional cells).
-        //
-        // Converter enables:
-        //   iact_converter_enc_enable / params_enable asserted for one cycle
-        //   on iact_buffer_next_addr (start of a new encoding word).
+        //        //
         //
         // Exit: when iact_channels_counter wraps at iact_channel_max_cycles,
-        //   clears all counters, resets past_padding, and goes to WAIT_CYCLE.
+        //   clears all counters, and goes to WAIT_CYCLE.
         // -------------------------------------------------------------------
         CONVERT_IACT: begin
-          fsm_cycle           <= fsm_cycle + 1;
-          select_ram_counter  <= 0;
-          if (past_padding & (select_ram_counter < iact_converter_buffer_addr_max_cycles)) begin
-            select_ram_counter <= select_ram_counter + 1;
-          end
-          if ((select_ram_counter >= (iact_converter_buffer_addr_max_cycles) - 1)) begin  
-            select_ram_counter <= 0;
-          end
-          iact_converter_params_enable <= 0;
-          iact_converter_enc_enable    <= 0;
-          if (iact_buffer_next_addr) begin
+          //TODO: Add pointer for multiple iact_glbs
+          fsm_cycle                 <= fsm_cycle + 1;
+          iact_converter_enc_enable <= 0;
+          if (fsm_cycle == 0) begin
             iact_converter_enc_enable <= 1;
-            select_ram_counter        <= 0;
           end
-          if ((iact_converter_cycles > lower_bound)) begin
-            if ((iact_converter_cycles < upper_bound)) begin
-              past_padding <= 1;
-              if ((iact_converter_buffer_addr_cycles >= (iact_converter_buffer_addr_max_cycles) - 1) | iact_buffer_next_addr) begin
-                if (past_padding == 1) begin
-                  for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                    if ((buffer_addr_upper_limit > buffer_addr_lower_limit) | (limit_increase == 0)) begin
-                      if (((a >= buffer_addr_lower_limit) & (a < buffer_addr_upper_limit))) begin
-                        iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
-                      end
-                    end else begin
-                      if (((a >= buffer_addr_lower_limit) | (a < buffer_addr_upper_limit))) begin
-                        iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
-                      end
-                    end
-                  end
-                  buffer_addr_upper_limit <= ((buffer_addr_upper_limit + limit_increase + overhang)%IACT_RAM_CELLS);
-                  buffer_addr_lower_limit <= buffer_addr_upper_limit;
-                  overhang                   <= 0;
-                  overhang_delay             <= overhang;
-                  overhang_counter           <= overhang_counter + overhang_discrepancy;
-                  if (overhang_counter + overhang_discrepancy >= (WORDS_PER_CYCLE[7:0]*4)) begin
-                    overhang_counter <= overhang_counter + overhang_discrepancy - (WORDS_PER_CYCLE[7:0]*4);
-                    overhang         <= 1;
+          iact_input_window          <= iact_buffer_data_r[current_pos_in_iact_glb*8*4+:8*4];
+          iact_channel_sending_cycle <= iact_channel_sending_cycle + 1;
+          if (iact_channel_sending_cycle == 1) begin
+            iact_channel_sending_cycle <= 0;
+            current_x <= current_x + NUM_GLB_IACT;
+            if (current_x == iact_size_x + padding_x - 1) begin
+              current_x <= -padding_x;
+              current_y <= current_y + 1;
+            end
+            iact_input_window_q <= 0;
+            if ((current_x >= 0) & (current_y >= 0) & (current_x < iact_size_x) & (current_y < iact_size_y)) begin
+              iact_input_window_q     <= iact_input_window;
+              relative_pos            <= relative_pos + 1;
+              current_pos_in_iact_glb <= current_pos_in_iact_glb + 1;
+              if (relative_pos == 1) begin
+                relative_pos             <= 0;
+                select_iact_glb_addr_inc <= select_iact_glb_addr_inc + 1;
+                for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+                  if (select_iact_glb_addr_inc == a) begin
+                    iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
                   end
                 end
               end
             end
-          end
-          iact_converter_buffer_addr_cycles <= iact_converter_buffer_addr_cycles + 1;
-          if (iact_converter_buffer_addr_cycles == (iact_converter_buffer_addr_max_cycles - 1)) begin
-            iact_converter_buffer_addr_cycles <= 0;
-            iact_converter_cycles <= iact_converter_cycles + 1;
-            if (iact_converter_cycles == (iact_converter_max_cycles - 1)) begin
-              iact_converter_cycles <= 0;
-              iact_channels_counter <= iact_channels_counter + 1;
-              if (iact_channels_counter == (iact_channel_max_cycles - 1)) begin
-                fsm_current_state     <= WAIT_CYCLE;
-                iact_channels_counter <= 0;
-                fsm_cycle             <= 0;
-                past_padding          <= 0;
-              end
+          end 
+          if (current_y == iact_size_y + (2*padding_y) - 1) begin
+            fsm_current_state     <= WAIT_CYCLE;
+            fsm_cycle             <= 0;
+            for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+              iact_buffer_en_r[a] <= 0;
             end
           end
         end
@@ -2104,7 +2065,7 @@ end
         //   * Routing decision based on send_data_out from dma_storage:
         //       send_data_out = 1  -> WAIT_FOR_RESULTS (results go to host).
         //       send_data_out = 0  -> RECEIVE_PSUMS_TO_IACT (results loop back).
-        //         Also initialises ram_iact_modulo, select_ram_counter,
+        //         Also initialises select_iact_glb_addr_inc, select_ram_counter,
         //         buffer address window parameters, and
         //         clears all buffer data write registers.
         // -------------------------------------------------------------------
@@ -2113,7 +2074,7 @@ end
           fsm_cycle                 <= fsm_cycle + 1;
           iact_ready                <= 0;
           iact_converter_enc_enable <= 0;
-          if (fsm_cycle == (4 * 4 * 2)) begin
+          if (fsm_cycle == (8 * 4 * 2)) begin
             fsm_cycle                <= 0;
             send_data_reg            <= 1;
             fsm_last_state           <= WAIT_CYCLE;
@@ -2122,7 +2083,6 @@ end
             end else begin
               fsm_current_state           <= RECEIVE_PSUMS_TO_IACT;
               iact_to_psum_start_shifting <= 0;
-              ram_iact_modulo             <= iact_size_x % (CLUSTER_COLUMNS*NUM_GLB_PSUM);
               select_ram_offset           <= 0;
               select_ram_counter          <= 0;
               if (iact_channels_per_pe_next_layer == 4) begin
@@ -2454,10 +2414,10 @@ end
     end
   end
   reg [7:0] storage_cycles;     
-  wire [(8*QUANT_AMOUNT)-1:0] quant_offset_flat;
-  wire [(7*QUANT_AMOUNT)-1:0] quant_exp_flat;
+  wire [ (8*QUANT_AMOUNT)-1:0] quant_offset_flat;
+  wire [ (7*QUANT_AMOUNT)-1:0] quant_exp_flat;
   wire [(25*QUANT_AMOUNT)-1:0] quant_mant_flat;
-  wire [(8*TRANS_WORDS)-1:0] quantized_value_flat;
+  wire [  (8*TRANS_WORDS)-1:0] quantized_value_flat;
 
   genvar quant_flat_gen;
   for (quant_flat_gen = 0; quant_flat_gen < QUANT_AMOUNT; quant_flat_gen=quant_flat_gen+1) begin : gen_flat_quant_wires
@@ -2729,7 +2689,7 @@ end
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
             .rst_ni                      (rst_n),
-            .storage_i                   (iact_buffer_data_r),
+            .storage_i                   (iact_input_window_q),
             .reset_cycle_i               (reset_cycle),
             .params                      (iact_converter_params_reg[i_gen][j_gen]),
             .enable_config               (iact_converter_en_cfg_reg[i_gen][j_gen]),
