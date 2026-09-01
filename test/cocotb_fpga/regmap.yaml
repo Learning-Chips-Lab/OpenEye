@@ -22,6 +22,7 @@ registers:
   - {name: iact_size_y, width: 8}
   - {name: iact_size_c, width: 12}
   - {name: iact_x_per_cluster, width: 4}
+  - {name: iact_x_add_up, width: 12}
   - {name: psum_x_all_cluster, width: 16}
   - {name: padding_x, width: 4}
   - {name: padding_y, width: 4}
@@ -45,6 +46,7 @@ registers:
   - {name: needed_iact_cycles_reg, width: 4}
   - {name: wght_addr_len_reg, width: 5}
   - {name: iact_channels_per_pe, width: 4}
+  - {name: channel_div_trans, width: 2}
   - {name: send_data_out, width: 1}
   - {name: needed_iact_buffer_words, width: int(BUFFER_WIDTH)}
   - {name: add_up_reg, width: 3}
@@ -60,15 +62,26 @@ registers:
   - {name: cluster_per_conv_cycle, width: ceil(log2((int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS))+1))}
   - {name: iact_converter_max_cycles, width: 8}
   - {name: iact_buffer_words_per_write, width: 12}
+  - {name: iact_words_per_compute, width: 8}
   - {name: pooling_mode, width: 1}
   - {name: gemm_mode, width: 1}
   - {name: used_wght_per_PE, width: int(BUFFER_WIDTH_WGHT)}
   - {name: psum_output_words, width: 16}
   - {name: overhang_discrepancy, width: 4}
+  - {name: iact_read_limit_0, width: 8}
+  - {name: iact_read_limit_1, width: 8}
+  - {name: iact_read_limit_2, width: 8}
+  - {name: iact_read_limit_3, width: 8}
+  - {name: iact_read_limit_4, width: 8}
+  - {name: iact_read_inc_0, width: 12}
   - {name: iact_read_inc_1, width: 12}
   - {name: iact_read_inc_2, width: 12}
   - {name: iact_read_inc_3, width: 12}
   - {name: iact_read_inc_4, width: 12}
+  - {name: iact_write_limit_0, width: 12}
+  - {name: iact_write_limit_1, width: 8}
+  - {name: iact_write_limit_2, width: 8}
+  - {name: iact_write_inc_0, width: 12}
   - {name: iact_write_inc_1, width: 12}
   - {name: iact_write_inc_2, width: 12}
   - {name: pagu_wght_limit, width: 10}

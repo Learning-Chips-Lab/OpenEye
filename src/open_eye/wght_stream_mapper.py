@@ -847,7 +847,7 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         params = self.params
 
         # Initialize stream for Dense layers
-        stream = [[[[] for c in range(params.Wght_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+        wght_stream = [[[[] for c in range(params.Wght_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
 
         # Create combined address + data stream for each PE
         for cl_x in range(params.Clusters_X):
@@ -856,24 +856,34 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                     current_spad = spad_storage[cl_x][cl_y][router]
 
                     # Append data stream
-                    stream[cl_x][cl_y][router].extend(self.create_pe_data_wght_stream(current_spad))
+                    wght_stream[cl_x][cl_y][router].extend(self.create_pe_data_wght_stream(current_spad))
 
         if(params.SERIAL):
             # === SERIAL MODE: Time-multiplex across clusters ===
-            temp_stream = stream
-            stream = []
+            temp_stream = wght_stream
+            wght_stream = []
 
             for word in range(len(temp_stream[0][0][0])):
-                for cl_y in range(params.Clusters_Y):
-                    for router in range(params.NUM_GLB_WGHT):
-                        try:
-                            # Combine data from both X-clusters (24-bit shift)
-                            stream.append(temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**self.params.WGHT_Trans_Bitwidth)))
-                        except:
-                            # Only one cluster or no data
-                            stream.append(0)
+                for cl_x in range(self.params.Clusters_X):
+                    for cl_y in range(params.Clusters_Y):
+                        for router in range(params.NUM_GLB_WGHT):
+                            try:
+                                # Combine data from both X-clusters (24-bit shift)
+                                wght_stream.append(temp_stream[cl_x][cl_y][router][word] + (temp_stream[cl_x][cl_y][router][word] * (2**self.params.WGHT_Trans_Bitwidth)))
+                            except:
+                                # Only one cluster or no data
+                                wght_stream.append(0)
 
-        return stream
+        chunk = self.params.Clusters * self.params.NUM_GLB_WGHT
+        wght_stream = gtu.transform_n_to_m_chunked(wght_stream,self.params.WGHT_Trans_Bitwidth,self.params.DMA_BITWIDTH, chunk)
+        n = self.layer_params.wght_cycles_one_word_all_ram
+        temp = []
+        for i in range(0, len(wght_stream), n):
+            part = wght_stream[i : i + n]
+            temp.extend(part[::-1])
+        wght_stream = temp
+
+        return wght_stream
 
     def write_wght_data_storage(self, cl_x, cl_y, router):
         """Populate Dense layer weight data SPAD from DRAM for a specific PE.

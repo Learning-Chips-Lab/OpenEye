@@ -255,18 +255,22 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
         for layer_repetition in range(layer_params.needed_total_transmissions):
             output_order.append(return_dict[layer_repetition])
     elif "Dense" in str(layer_params.layer_name):
+        words_per_transmission = params.DMA_BITWIDTH//params.DATA_PSUM_BITWIDTH
         layer_repetition = 0
         file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
         if(params.SERIAL):
             for refresh in range(math.ceil(len(calculated_results)/2)):
-                for x in range(2) :
+                for x in range(words_per_transmission) :
                     partial_result_a = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
                     partial_result_b = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
                     try:
                         partial_result_b = gtu.to_twos_complement_string(calculated_results[refresh + x * layer_params.used_psum_per_PE],params.DATA_PSUM_BITWIDTH)
                     except:
                         partial_result_b = partial_result_b
-                    file_dma_ref.write(partial_result_a + partial_result_b + "\n")
+                    if (params.Clusters_X == 1):
+                        file_dma_ref.write(partial_result_b + "\n")
+                    else:
+                        file_dma_ref.write(partial_result_a + partial_result_b + "\n")
             file_dma_ref.close()
         else:
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]

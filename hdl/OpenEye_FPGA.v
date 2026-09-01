@@ -213,6 +213,9 @@ module OpenEye_FPGA #(
     //Pooling Features
     parameter AVERAGE_POOLING = 0,
 
+    //Pooling Features
+    parameter STRIDE_ENABLED = 0,
+
     //Channels per word
     parameter CHANNELS_PER_WORD = 4,
 
@@ -346,8 +349,12 @@ reg [1023:0] fst_path;
   reg [$clog2(AF_MODES)-1:0] af_cluster_mode_reg;  // Activation-function mode (set in GET_PARAMETERS, forwarded to OpenEye_Parallel).
   wire [4:0] input_activations;                  // Number of non-zero activations per MAC cycle (from dma_storage).
   wire [7:0] wght_cycles_reg;                    // DMA cycles needed to stream one complete set of weights (from dma_storage).
-  wire [2:0] stride_x;                       // Convolution stride in the x-direction (from dma_storage).
-  wire [2:0] stride_y;                       // Convolution stride in the y-direction (from dma_storage).
+  wire [2:0] stride_x_dma;                       // Convolution stride in the x-direction (from dma_storage).
+  wire [2:0] stride_y_dma;                       // Convolution stride in the y-direction (from dma_storage).
+  wire [2:0] stride_x;                           // Convolution stride in the x-direction (from dma_storage).
+  wire [2:0] stride_y;                           // Convolution stride in the y-direction (from dma_storage).
+  assign stride_x = STRIDE_ENABLED == 1 ? stride_x_dma : 1;
+  assign stride_y = STRIDE_ENABLED == 1 ? stride_y_dma : 1;
   wire skipIact_reg;                             // When 1: skip GET_IACT phase (activations already in buffer from previous layer).
   wire skipWght_reg;                             // When 1: skip GET_WGHT phase (weights unchanged from previous layer).
   wire skipPsum_reg;                             // When 1: skip GET_BIAS / GET_QUANTIZE phases (no bias to load).
@@ -397,10 +404,20 @@ reg [1023:0] fst_path;
   // -----------------------------------------------------------------------
   // PAGU Values
   // -----------------------------------------------------------------------
+  wire [ 7:0] iact_read_limit_0;
+  wire [ 7:0] iact_read_limit_1;
+  wire [ 7:0] iact_read_limit_2;
+  wire [ 7:0] iact_read_limit_3;
+  wire [ 7:0] iact_read_limit_4;
+  wire [11:0] iact_read_inc_0;
   wire [11:0] iact_read_inc_1;
   wire [11:0] iact_read_inc_2;
   wire [11:0] iact_read_inc_3;
   wire [11:0] iact_read_inc_4;
+  wire [11:0] iact_write_limit_0;
+  wire [ 7:0] iact_write_limit_1;
+  wire [ 7:0] iact_write_limit_2;
+  wire [11:0] iact_write_inc_0;
   wire [11:0] iact_write_inc_1;
   wire [11:0] iact_write_inc_2;
   wire [ 9:0] pagu_wght_limit;
@@ -489,6 +506,7 @@ reg [1023:0] fst_path;
   wire [11:0] iact_size_c;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
   wire [11:0] psum_size_x;       // Output map width in pixels (from dma_storage).
   wire [ 7:0] psum_size_y;       // Output map height in pixels (from dma_storage).
+  wire [ 1:0] channel_div_trans;
   wire [ 3:0] iact_channels_per_pe;             // Channels assigned to one PE (from dma_storage).
   wire [ 3:0] iact_channels_per_pe_next_layer;  // Channel count for the next layer (from dma_storage); used when routing psums back as iact.
   reg  [ 4:0] iact_channels_counter;             // Counts which channel batch [0..iact_channel_max_cycles-1] is currently being processed.
@@ -496,6 +514,7 @@ reg [1023:0] fst_path;
   wire [10:0] iact_needed_cycles;               // Number of iact streaming cycles for one spatial position (from dma_storage).
   wire [15:0] psum_x_all_cluster;               // Psum X with multiple channels counting seperate
   wire [ 3:0] iact_x_per_cluster;
+  wire [11:0] iact_x_add_up;
 
   reg [$clog2(CLUSTER_ROWS+1)-1:0] iact_router_counter; // Counts how many cluster-row sweeps have been performed within the current iact delivery; wraps at needed_y_cls_reg.
 
@@ -518,7 +537,7 @@ reg [1023:0] fst_path;
   // shared 32-cell buffer and produces the packed, sparse-encoded iact
   // streams for the corresponding PE cluster in OpenEye_Parallel.
   // -----------------------------------------------------------------------
-  reg [35:0] iact_converter_params_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0]; // Packed config word per converter: [35:32]=row_offset, [31:24]=x, [23:16]=y, [15:8]=size_x, [7:0]=channel_start.
+  reg [37:0] iact_converter_params_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0]; // Packed config word per converter: [35:32]=row_offset, [31:24]=x, [23:16]=y, [15:8]=size_x, [7:0]=channel_start.
   reg iact_converter_en_cfg_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];        // Pulse: latch iact_converter_params_reg into the converter's internal registers.
   reg iact_converter_en_store_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];      // Pulse: run one store step inside the converter (reads from shared buffer, writes to internal FIFO).
   reg iact_converter_en_enc_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];        // Pulse: run one encode step (outputs one word to the iact GLB interface).
@@ -554,6 +573,7 @@ reg [1023:0] fst_path;
   // -----------------------------------------------------------------------
   wire [7:0] iact_converter_max_cycles;             // Total y-lines to process including kernel overlap = iact_size_y + kernel_size - 1 (set in GET_WGHT).
   wire [11:0] iact_buffer_words_per_write;          // Words written per cycle into iact buffer per writing cycle
+  wire [7:0] iact_words_per_compute;
   wire [7:0] iact_converter_buffer_addr_max_cycles; // Maximum value of iact_converter_buffer_addr_cycles (from dma_storage).
   reg [7:0] iact_converter_cycles;                  // Current y-line counter [0..iact_converter_max_cycles-1]; drives the sliding window advancement.
   reg [7:0] iact_converter_buffer_addr_cycles;      // Sub-counter [0..iact_converter_buffer_addr_max_cycles-1]; controls how often the buffer address advances.
@@ -867,7 +887,7 @@ reg [1023:0] fst_path;
         end
 
         for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin 
-          iact_converter_params_reg[a][fsm_row][35:32] <= fsm_row_offset;
+          iact_converter_params_reg[a][fsm_row][37:32] <= fsm_row_offset;
           iact_converter_params_reg[a][fsm_row][15:8]  <= iact_size_x;
           iact_converter_params_reg[a][fsm_row][7:0]   <= iact_converter_c;
 
@@ -895,8 +915,8 @@ reg [1023:0] fst_path;
         fsm_row <= fsm_row + needed_y_cls_reg;
         if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
           fsm_row        <= fsm_row_offset + 1;
-          fsm_row_offset <= fsm_row_offset + 1;
-          if (fsm_row_offset == needed_y_cls_reg - 1) begin
+          fsm_row_offset <= fsm_row_offset + NUM_GLB_IACT;
+          if (fsm_row_offset == NUM_GLB_IACT * (needed_y_cls_reg - 1)) begin
             fsm_row        <= 0;
             fsm_row_offset <= 0;
           end
@@ -920,9 +940,13 @@ reg [1023:0] fst_path;
                 fsm_iact_params <= 0;
               end
               if (!fully_connected_layer) begin
-                if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) fsm_iact_params <= 0;
+                if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
+                  fsm_iact_params <= 0;
+                end
                 fsm_row <= 0;
-                if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) iact_converter_c <= iact_converter_c + iact_channels_per_pe;
+                if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
+                   iact_converter_c <= iact_converter_c + iact_channels_per_pe;
+                end
               end
             end
             
@@ -1118,9 +1142,9 @@ end
           end
         end
         if (wght_sendable & (wght_ready_o_reg == {CLUSTERS*NUM_GLB_WGHT{1'b1}})) begin
-          wght_sendable       <= 0;
-          fsm_sending_cycle   <= 1;
-          wght_buffer_en_r <= 1;
+          wght_sendable     <= 0;
+          fsm_sending_cycle <= 1;
+          wght_buffer_en_r  <= 1;
         end
         if (wght_buffer_en_r) begin
           if (fsm_sending_cycle <= wghts_per_pe) begin
@@ -1143,9 +1167,9 @@ end
             end
           end
           if (fsm_sending_cycle > wghts_per_pe + 2) begin
-            fsm_sending_cycle   <= fsm_sending_cycle;
-            wght_buffer_en_r <= 0;
-            wght_enable_i_reg   <= 0;
+            fsm_sending_cycle <= fsm_sending_cycle;
+            wght_buffer_en_r  <= 0;
+            wght_enable_i_reg <= 0;
             if (current_cycle == 0) begin
               compute_reg <= 1;
             end
@@ -1184,21 +1208,21 @@ end
         end
       end else begin
         //Set Registers to 0
-        fsm_sending_cycle   <= 0;
-        wght_enable_i_reg   <= 0;
-        wght_buffer_en_r <= 0;
+        fsm_sending_cycle <= 0;
+        wght_enable_i_reg <= 0;
+        wght_buffer_en_r  <= 0;
       end
       if (fsm_current_state == GET_PARAMETERS) begin
-        sending_data           <= 0;
-        fsm_sending_cycle      <= 0;
-        wght_enable_i_reg      <= 0;
+        sending_data        <= 0;
+        fsm_sending_cycle   <= 0;
+        wght_enable_i_reg   <= 0;
         wght_buffer_en_r    <= 0;
         wght_buffer_rd_addr <= 0;
-        compute_reg            <= 0;
-        wght_sendable          <= 1;
+        compute_reg         <= 0;
+        wght_sendable       <= 1;
         flat_help_var_send = 0;
         for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-          prepared_iact[a]             <= 0;
+          prepared_iact[a] <= 0;
         end
         for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
           for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
@@ -1227,8 +1251,8 @@ end
   end
 
   // --- DMA output staging registers (main FSM Process 6) ---
-  reg       write_dma_en;              // High for one cycle when a result word is ready on data_dma_o.
-  reg [2:0] write_dma_addr;            // Selects which of the 4 dma_storage target registers to write.
+  reg       write_dma_en;             // High for one cycle when a result word is ready on data_dma_o.
+  reg [2:0] write_dma_addr;           // Selects which of the 4 dma_storage target registers to write.
   reg [DMA_BITWIDTH-1:0] dma_data_i;  // Data word being sent back to the host via the DMA interface.
 
   // --- Iact buffer address counters (main FSM Process 6) ---
@@ -1284,7 +1308,7 @@ end
   reg                                                     iact_buffer_en_w   [IACT_RAM_CELLS-1:0]; // Per-cell write enable from FSM or converter.
   reg [                                 BUFFER_WIDTH-1:0] iact_buffer_addr   [IACT_RAM_CELLS-1:0]; // Per-cell address (half-width; MSB is buffer_select).
   reg [                        IACT_CELL_INPUT_WIDTH-1:0] iact_buffer_data_w;                      // Per-cell write data (64 bits).
-  wire [  IACT_RAM_CELLS_WORD_BITWIDTH*IACT_RAM_CELLS-1:0] iact_buffer_data_r;                     // Active-half read data: unpacked from iact_buffer_data_r.
+  wire [ IACT_RAM_CELLS_WORD_BITWIDTH*IACT_RAM_CELLS-1:0] iact_buffer_data_r;                     // Active-half read data: unpacked from iact_buffer_data_r.
 
   // --- PSUM send-phase registers (PSUM FSM Process 8) ---
   // These registers coordinate the multi-cycle sequence of reading psum results
@@ -1322,9 +1346,10 @@ end
   reg signed [                                  8-1:0] current_y;
   reg        [           $clog2(2*IACT_RAM_CELLS)-1:0] current_pos_in_iact_glb;
   reg        [                                  3-1:0] relative_pos;
-  reg        [                                    1:0] iact_channel_sending_cycle;
-  reg        [(4*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window;
-  reg        [(4*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window_q;
+  reg        [                                    1:0] iact_channel_sending_cycle1;
+  reg        [                                    1:0] iact_channel_sending_cycle2;
+  reg        [(8*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window;
+  reg        [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window_q;
 
   reg [ 7:0] iact_channel_counter_reg;  // Registered copy of iact_channels_counter for cross-process use.
 
@@ -1559,7 +1584,8 @@ end
       current_pos_in_iact_glb      <= 0;
       iact_input_window            <= 0;
       iact_input_window_q          <= 0;
-      iact_channel_sending_cycle   <= 0;
+      iact_channel_sending_cycle1  <= 0;
+      iact_channel_sending_cycle2  <= 0;
     end else begin
       for (a = 0; a < CHANNELS_PER_WORD; a = a + 1) begin
         pooling_buffer_old_q[a] <= pooling_buffer_old[a];
@@ -1613,6 +1639,8 @@ end
           buffer_addr_upper_limit    <= 0;
           set_pointer_start          <= 0;
           limit_increase_reg         <= 0;
+          iact_to_psum_trans_counter <= 0;
+          iact_to_psum_x_pos_counter <= 0;
           for (a = 0; a < IACT_RAM_CELLS; a = a + 1) begin
             iact_buffer_en_r[a]      <= 0;
             iact_buffer_en_w[a]      <= 0;
@@ -1930,11 +1958,11 @@ end
             end
           end
           if ((fsm_cycle == QUANT_TRANS_CYCLES - 1) & enable_dma_i_reg) begin
-            ready_dma_o         <= 0;
-            fsm_cycle           <= 0;
+            ready_dma_o           <= 0;
+            fsm_cycle             <= 0;
             pooling_buffer_enable <= 0;
-            fsm_last_state    <= GET_QUANTIZE;
-            fsm_current_state <= START_CONVERTER;
+            fsm_last_state        <= GET_QUANTIZE;
+            fsm_current_state     <= START_CONVERTER;
             buffer_addr_upper_limit <= initial_upper_limit;
             if (max_pooling) begin
               fsm_cycle           <= 2;
@@ -1964,7 +1992,7 @@ end
         // finishing a previous encoding run from the last iact batch.
         // -------------------------------------------------------------------
         START_CONVERTER: begin
-          converters_ready = 1;
+          converters_ready  = 1;
           for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
             iact_buffer_addr_reg[a] <= 0;
           end
@@ -1976,18 +2004,24 @@ end
               converters_ready = converters_ready & iact_converter_ready_w[a][b];
             end
           end
-          if (converters_ready == 1) begin
-            iact_channel_sending_cycle<= 0;
-            iact_converter_enc_enable <= 1;
-            select_iact_glb_addr_inc  <= 0;
-            current_x                 <= -padding_x;
-            current_y                 <= -padding_y;
-            current_pos_in_iact_glb   <= 0;
-            relative_pos              <= 0;
-            iact_input_window         <= 0;
-            iact_input_window_q       <= 0;
-            fsm_current_state         <= CONVERT_IACT;
-            select_ram_counter        <= 0;
+          fsm_cycle        <= fsm_cycle + 1;
+          if (fsm_cycle == 3) begin
+            fsm_cycle <= fsm_cycle;
+            if (converters_ready == 1) begin
+              fsm_cycle                   <= 0;
+              iact_input_window           <= iact_buffer_data_r[0+:2*8*4];
+              iact_channel_sending_cycle1 <= 0;
+              iact_channel_sending_cycle2 <= 0;
+              iact_converter_enc_enable   <= 1;
+              select_iact_glb_addr_inc    <= 0;
+              current_x                   <= -padding_x;
+              current_y                   <= -padding_y;
+              current_pos_in_iact_glb     <= 1;
+              relative_pos                <= 0;
+              iact_input_window_q         <= 0;
+              fsm_current_state           <= CONVERT_IACT;
+              select_ram_counter          <= 0;
+            end
           end
         end
 
@@ -2012,35 +2046,45 @@ end
           //TODO: Add pointer for multiple iact_glbs
           fsm_cycle                 <= fsm_cycle + 1;
           iact_converter_enc_enable <= 0;
-          if (fsm_cycle == 0) begin
-            iact_converter_enc_enable <= 1;
-          end
-          iact_input_window          <= iact_buffer_data_r[current_pos_in_iact_glb*8*4+:8*4];
-          iact_channel_sending_cycle <= iact_channel_sending_cycle + 1;
-          if (iact_channel_sending_cycle == 1) begin
-            iact_channel_sending_cycle <= 0;
-            current_x <= current_x + NUM_GLB_IACT;
-            if (current_x == iact_size_x + padding_x - 1) begin
-              current_x <= -padding_x;
-              current_y <= current_y + 1;
-            end
-            iact_input_window_q <= 0;
-            if ((current_x >= 0) & (current_y >= 0) & (current_x < iact_size_x) & (current_y < iact_size_y)) begin
-              iact_input_window_q     <= iact_input_window;
-              relative_pos            <= relative_pos + 1;
-              current_pos_in_iact_glb <= current_pos_in_iact_glb + 1;
-              if (relative_pos == 1) begin
-                relative_pos             <= 0;
-                select_iact_glb_addr_inc <= select_iact_glb_addr_inc + 1;
-                for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-                  if (select_iact_glb_addr_inc == a) begin
-                    iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
+          if (fsm_cycle >= 2) begin
+            iact_channel_sending_cycle1 <= iact_channel_sending_cycle1 + 1;
+            if (iact_channel_sending_cycle1 == 1 - 1) begin
+              iact_channel_sending_cycle1 <= 0;
+              iact_channel_sending_cycle2 <= iact_channel_sending_cycle2 + 1;
+              if (iact_channel_sending_cycle2 == channel_div_trans - 1) begin
+                iact_channel_sending_cycle2 <= 0;
+                current_x <= current_x + NUM_GLB_IACT;
+                if (current_x == iact_x_add_up + padding_x - 1) begin
+                  current_x <= -padding_x;
+                  current_y <= current_y + 1;
+                  if (current_y == iact_size_y + padding_y - 1) begin
+                    current_y <= -padding_y;
+                  end
+                end
+              end 
+              iact_input_window_q <= 0;
+              if ((current_x >= 0) & (current_y >= 0) & (current_x < iact_size_x) & (current_y < iact_size_y)) begin
+                iact_input_window       <= iact_input_window >> 16;
+                iact_input_window_q     <= iact_input_window[15:0];
+                relative_pos            <= relative_pos + 1;
+                if (relative_pos == IACT_RAM_CELLS - 1) begin
+                  relative_pos             <= 0;
+                  current_pos_in_iact_glb  <= current_pos_in_iact_glb + 1;
+                  if (current_pos_in_iact_glb == IACT_RAM_CELLS - 1) begin
+                    current_pos_in_iact_glb  <= 0;
+                  end
+                  iact_input_window        <= iact_buffer_data_r[current_pos_in_iact_glb*2*8*4+:2*8*4];
+                  select_iact_glb_addr_inc <= current_pos_in_iact_glb;
+                  for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+                    if (select_iact_glb_addr_inc == a) begin
+                      iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
+                    end
                   end
                 end
               end
             end
-          end 
-          if (current_y == iact_size_y + (2*padding_y) - 1) begin
+          end
+          if (fsm_cycle == iact_buffer_words_per_write) begin
             fsm_current_state     <= WAIT_CYCLE;
             fsm_cycle             <= 0;
             for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
@@ -2194,10 +2238,10 @@ end
             for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
               iact_buffer_en_w[a] <= 1;
             end
-            fsm_current_state     <= GET_PARAMETERS;
-            fsm_last_state        <= RECEIVE_PSUMS_TO_IACT;
-            send_data_reg         <= 0;
-            iact_channels_counter <= 0;
+            fsm_current_state          <= GET_PARAMETERS;
+            fsm_last_state             <= RECEIVE_PSUMS_TO_IACT;
+            send_data_reg              <= 0;
+            iact_channels_counter      <= 0;
           end
         end
 
@@ -2706,6 +2750,7 @@ end
             .iact_size_x_i               (iact_size_x),
             .iact_size_y_i               (iact_size_y),
             .iact_channels_per_pe_i      (iact_channels_per_pe),
+            .channel_div_trans           (channel_div_trans),
             .x_lines_i                   (iact_x_line_repetitions),
             .needed_wght_cycles_i        (needed_wght_cycles),
             .needed_iact_router_cycles_i (needed_iact_cycles_reg),
@@ -2717,12 +2762,23 @@ end
             .y_lines_per_calc            (y_lines_per_calc),
             .fully_connected_i           (fully_connected_layer),
             .needed_iact_buffer_words_i  (iact_buffer_words_per_write),
-            .rd_addr_1_inc               (iact_read_inc_1),
-            .rd_addr_2_inc               (iact_read_inc_2),
-            .rd_addr_3_inc               (iact_read_inc_3),
-            .rd_addr_4_inc               (iact_read_inc_4),
-            .wr_addr_1_inc               (iact_write_inc_1),
-            .wr_addr_2_inc               (iact_write_inc_2),
+            .iact_words_per_compute(iact_words_per_compute),
+            .rd_loop_limit_0             (iact_read_limit_0),
+            .rd_loop_limit_1             (iact_read_limit_1),
+            .rd_loop_limit_2             (iact_read_limit_2),
+            .rd_loop_limit_3             (iact_read_limit_3),
+            .rd_loop_limit_4             (iact_read_limit_4),
+            .rd_addr_inc_0               (iact_read_inc_0),
+            .rd_addr_inc_1               (iact_read_inc_1),
+            .rd_addr_inc_2               (iact_read_inc_2),
+            .rd_addr_inc_3               (iact_read_inc_3),
+            .rd_addr_inc_4               (iact_read_inc_4),
+            .wr_loop_limit_0             (iact_write_limit_0),
+            .wr_loop_limit_1             (iact_write_limit_1),
+            .wr_loop_limit_2             (iact_write_limit_2),
+            .wr_addr_inc_0               (iact_write_inc_0),
+            .wr_addr_inc_1               (iact_write_inc_1),
+            .wr_addr_inc_2               (iact_write_inc_2),
             .padding_x                   (padding_x),
             .padding_y                   (padding_y)
         );
@@ -2820,8 +2876,8 @@ end
         .write_en(write_dma_en),
         .dma_data_i(dma_data_i),
         .wght_cycles_reg(wght_cycles_reg),
-        .stride_x(stride_x),
-        .stride_y(stride_y),
+        .stride_x(stride_x_dma),
+        .stride_y(stride_y_dma),
         .skipIact_reg(skipIact_reg),
         .skipWght_reg(skipWght_reg),
         .skipPsum_reg(skipPsum_reg),
@@ -2837,11 +2893,13 @@ end
         .trans_cycles_psum(trans_cycles_psum),
         .iact_converter_buffer_addr_max_cycles(iact_converter_buffer_addr_max_cycles),
         .iact_channels_per_pe(iact_channels_per_pe),
+        .channel_div_trans(channel_div_trans),
         .fc_size_reg(fc_size_reg),
         .iact_size_x(iact_size_x),
         .iact_size_y(iact_size_y),
         .iact_size_c(iact_size_c),
         .iact_x_per_cluster(iact_x_per_cluster),
+        .iact_x_add_up(iact_x_add_up),
         .padding_x(padding_x),
         .padding_y(padding_y),
         .psum_size_x(psum_size_x),
@@ -2880,14 +2938,25 @@ end
         .cluster_per_conv_cycle(cluster_per_conv_cycle),
         .iact_converter_max_cycles(iact_converter_max_cycles),
         .iact_buffer_words_per_write(iact_buffer_words_per_write),
+        .iact_words_per_compute(iact_words_per_compute),
         .pooling_mode(pooling_mode),
         .overhang_discrepancy(overhang_discrepancy),
         .psum_output_words(psum_output_words),
         .gemm_mode(gemm_mode),
+        .iact_read_limit_0(iact_read_limit_0),
+        .iact_read_limit_1(iact_read_limit_1),
+        .iact_read_limit_2(iact_read_limit_2),
+        .iact_read_limit_3(iact_read_limit_3),
+        .iact_read_limit_4(iact_read_limit_4),
+        .iact_read_inc_0(iact_read_inc_0),
         .iact_read_inc_1(iact_read_inc_1),
         .iact_read_inc_2(iact_read_inc_2),
         .iact_read_inc_3(iact_read_inc_3),
         .iact_read_inc_4(iact_read_inc_4),
+        .iact_write_limit_0(iact_write_limit_0),
+        .iact_write_limit_1(iact_write_limit_1),
+        .iact_write_limit_2(iact_write_limit_2),
+        .iact_write_inc_0(iact_write_inc_0),
         .iact_write_inc_1(iact_write_inc_1),
         .iact_write_inc_2(iact_write_inc_2),
         .pagu_wght_limit(pagu_wght_limit),
@@ -3057,8 +3126,6 @@ end
         .iact_x_line_repetitions_i    (iact_x_line_repetitions[3:0]),
         .kernel_size_y_i              (kernel_size_y),
         .input_activations_i          (input_activations),
-        .stride_x_i                   (stride_x),
-        .stride_y_i                   (stride_y),
         .delay_psum_glb_i             (psum_q),
         .compute_mask_i               (compute_mask_reg_port),
         .router_mode_iact_i           (router_mode_iact),

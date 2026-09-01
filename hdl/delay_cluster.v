@@ -73,9 +73,9 @@ module delay_cluster #(
     input                       ready_i,
 
     output reg [DATA_BITWIDTH-1:0] data_o,
-    output reg                      enable_o,
-    output reg                      ready_o,
-    input [3:0]                 delay_psum_glb_i
+    output reg                     enable_o,
+    output reg                     ready_o,
+    input [3:0]                    delay_psum_glb_i
 );
 
   // Delay stages (8 stages for 0-8 cycles)
@@ -140,10 +140,12 @@ module delay_cluster #(
   // Select appropriate delay stage based on delay_psum_glb_i
   integer idx;
   always @(*) begin
+    /*
     if (delay_psum_glb_i == 0) begin
-      data_o    = data_i;
-      enable_o  = enable_i;
-      ready_o   = ready_i;
+      idx       = 0;
+      data_o    = data_regs[DATA_BITWIDTH +: DATA_BITWIDTH];
+      enable_o  = enable_regs[0];
+      ready_o   = ready_regs[0];
     end else if (delay_psum_glb_i <= NUM_STAGES) begin
       // Valid delay: 1-8 cycles
       idx       = delay_psum_glb_i - 1;
@@ -156,6 +158,11 @@ module delay_cluster #(
       enable_o  = 1'b0;
       ready_o   = 1'b0;
     end
+    */
+    idx       = 7;
+    data_o    = data_regs[idx*DATA_BITWIDTH +: DATA_BITWIDTH];
+    enable_o  = enable_regs[idx];
+    ready_o   = ready_regs[idx];
   end
 
 endmodule

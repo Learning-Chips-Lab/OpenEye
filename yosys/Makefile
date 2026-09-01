@@ -48,7 +48,9 @@ pnr: synth
 		--json $(OUT_JSON) \
 		-o ccf=$(CCF_FILE) \
 		-o out=$(PNR_OUT_TXT) \
+		--freq 40 \
 		--router router2 \
+		--placer-heap-cell-placement-timeout 0 \
 		-o allow-unconstrained > $(PNR_LOG) 2>&1
 	@echo "Place & Route finished."
 

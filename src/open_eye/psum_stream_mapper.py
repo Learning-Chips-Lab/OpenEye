@@ -416,7 +416,6 @@ class DensePsumStreamMapper(PsumStreamMapper):
             - Total stream length = ceil(used_psum_per_PE) * 2
 
         """
-        block_length = 2  # Fixed block size for dual PE processing
         psum_stream = []
 
         # Calculate number of bias values per PE block
@@ -424,11 +423,10 @@ class DensePsumStreamMapper(PsumStreamMapper):
 
         # Interleave bias values for dual PE processing
         for i in range(values):
-            for j in range(2):
-                # Convert each bias to 20-bit two's complement and add to stream
-                bias_index = i + j * values
-                bias_value = gtu.to_twos_complement(self.dram_bias[bias_index], 20)
-                psum_stream.extend([bias_value])
+            # Convert each bias to DATA_PSUM_BITWIDTH-bit two's complement and add to stream
+            bias_index = i
+            bias_value = gtu.to_twos_complement(self.dram_bias[bias_index], self.params.DATA_PSUM_BITWIDTH)
+            psum_stream.extend([bias_value])
 
         return psum_stream
 

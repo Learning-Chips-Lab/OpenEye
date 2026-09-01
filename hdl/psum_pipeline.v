@@ -135,10 +135,10 @@ module psum_pipeline #(
   reg [BUFFER_WIDTH-1:0] psum_buffer_addr_array [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][NUM_GLB_PSUM/2-1:0];
   reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][NUM_GLB_PSUM/2-1:0] psum_buffer_en_w_int;
   reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][NUM_GLB_PSUM/2-1:0] psum_buffer_en_r_int;
-  reg [7:0] fsm_x_cl_psum;
-  reg [7:0] fsm_x_cl_psum_q1;
-  reg [7:0] fsm_x_cl_psum_q2;
-  reg [7:0] fsm_x_cl_psum_q3;
+  reg [1:0] fsm_x_cl_psum;
+  reg [1:0] fsm_x_cl_psum_q1;
+  reg [1:0] fsm_x_cl_psum_q2;
+  reg [1:0] fsm_x_cl_psum_q3;
   reg [7:0] fsm_y_cl_psum_offset;
   reg [7:0] fsm_y_cl_psum;
   reg [7:0] fsm_y_cl_psum_q1;
@@ -310,7 +310,7 @@ module psum_pipeline #(
               if (fully_connected_layer) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                    psum_buffer_data_w[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cr_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_psum*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS] <= data_dma_i_reg[TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0];
+                    //psum_buffer_data_w[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cr_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_psum*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS] <= data_dma_i_reg[TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0];
                   end
                 end
                 psum_buffer_en_w <= 0;
@@ -327,21 +327,21 @@ module psum_pipeline #(
                   psum_buffer_en_w <= ~0;
                 end
               end else begin
-              psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
-              for (g_psum = 0; g_psum < PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1; g_psum = g_psum + 1) begin
-                psum_buffer_data_w[DMA_BITWIDTH*(1+g_psum)+:DMA_BITWIDTH] <= psum_buffer_data_w[DMA_BITWIDTH*g_psum+:DMA_BITWIDTH];
-              end
-              psum_buffer_en_w <= 0;
-              if (psum_cycle_count == PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1) begin
-                psum_cycle_count <= 0;
-                for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                  for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                    for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                      psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
+                psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
+                for (g_psum = 0; g_psum < PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1; g_psum = g_psum + 1) begin
+                  psum_buffer_data_w[DMA_BITWIDTH*(1+g_psum)+:DMA_BITWIDTH] <= psum_buffer_data_w[DMA_BITWIDTH*g_psum+:DMA_BITWIDTH];
+                end
+                psum_buffer_en_w <= 0;
+                if (psum_cycle_count == PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1) begin
+                  psum_cycle_count <= 0;
+                  for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
+                    for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
+                      for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                        psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
+                      end
                     end
                   end
-                end
-                psum_buffer_en_w <= ~0;
+                  psum_buffer_en_w <= ~0;
                 end
               end
             end

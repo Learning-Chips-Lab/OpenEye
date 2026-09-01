@@ -205,8 +205,6 @@ module OpenEye_Parallel #(
     input      [                             NUM_GLB_PSUM-1:0] pooling_cluster_mode_i,
     input      [                                          3:0] delay_psum_glb_i,
     input      [                    $clog2(IACT_PER_PE+1)-1:0] input_activations_i,
-    input      [                                          2:0] stride_x_i,
-    input      [                                          2:0] stride_y_i,
     input      [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i,
     input      [                                          3:0] iact_x_line_repetitions_i,
     input      [                                          3:0] kernel_size_y_i,
@@ -259,8 +257,6 @@ module OpenEye_Parallel #(
   reg  [                             NUM_GLB_PSUM-1:0] pooling_cluster_mode_reg;
   reg  [                                          3:0] delay_psum_glb_reg;
   reg  [                    $clog2(IACT_PER_PE+1)-1:0] input_activations_reg;
-  reg  [                                          2:0] stride_x_reg;
-  reg  [                                          2:0] stride_y_reg;
   reg  [                             CLUSTERS*PES-1:0] compute_cluster_i_reg;
   reg  [                             CLUSTERS*PES-1:0] compute_mask_reg;
   ///Register for the psum FSM
@@ -316,8 +312,6 @@ module OpenEye_Parallel #(
   wire [                             NUM_GLB_PSUM-1:0] pooling_cluster_mode_i_w;
   wire [                                          3:0] delay_psum_glb_i_w;
   wire [                    $clog2(IACT_PER_PE+1)-1:0] input_activations_i_w;
-  wire [                                          2:0] stride_x_i_w;
-  wire [                                          2:0] stride_y_i_w;
   wire [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i_w;
   wire [                             CLUSTERS*PES-1:0] compute_mask_i_w;
   reg  [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_reg;
@@ -343,8 +337,6 @@ module OpenEye_Parallel #(
   reg  [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i_reg;
   reg  [                             NUM_GLB_PSUM-1:0] pooling_cluster_mode_i_reg;
   reg  [                    $clog2(IACT_PER_PE+1)-1:0] input_activations_i_reg;
-  reg  [                                          2:0] stride_x_i_reg;
-  reg  [                                          2:0] stride_y_i_reg;
   reg  [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i_reg;
   reg  [                                          3:0] iact_x_line_repetitions_reg;
   reg  [                             CLUSTERS*PES-1:0] compute_mask_i_reg;
@@ -427,7 +419,7 @@ module OpenEye_Parallel #(
           // more, this cycle's word settles at stream_data[26:18], which
           // PE.v reads as: bit 8 -> raw_wght_w, bits[7:4] -> iact_x_line_
           // repetitions, bits[3:0] -> iact_addr_max_reg. So this word must
-          // carry those three fields now, not the old data_mode/stride_x/
+          // carry those three fields now,
           // wght_addr_len set (which have no reader left in PE.v).
           data_stream_reg        <= {{3{1'd0}}, raw_wght_i_reg, iact_x_line_repetitions_reg, kernel_size_y_i};
           fsm_transmission_state <= SECOND_PARAMS;
@@ -469,8 +461,6 @@ module OpenEye_Parallel #(
       needed_y_cls_reg               <= 0;
       needed_iact_cycles_reg         <= 0;
       filters_reg                    <= 0;
-      stride_x_reg                   <= 0;
-      stride_y_reg                   <= 0;
       bano_cluster_mode_reg          <= 0;
       af_cluster_mode_reg            <= 0;
       pooling_cluster_mode_reg       <= 0;
@@ -501,8 +491,6 @@ module OpenEye_Parallel #(
       af_cluster_mode_i_reg          <= 0;
       pooling_cluster_mode_i_reg     <= 0;
       input_activations_i_reg        <= 0;
-      stride_x_i_reg                 <= 0;
-      stride_y_i_reg                 <= 0;
       kernel_per_pe_cluster_i_reg    <= 0;
       router_mode_wght_reg           <= 0;
       router_mode_wght_i_reg         <= 0;
@@ -539,8 +527,6 @@ module OpenEye_Parallel #(
       af_cluster_mode_i_reg       <= {NUM_GLB_PSUM{af_cluster_mode_i}};
       pooling_cluster_mode_i_reg  <= pooling_cluster_mode_i;
       input_activations_i_reg     <= input_activations_i;
-      stride_x_i_reg              <= stride_x_i;
-      stride_y_i_reg              <= stride_y_i;
       kernel_per_pe_cluster_i_reg <= kernel_per_pe_cluster_i;
       iact_x_line_repetitions_reg <= iact_x_line_repetitions_i;
       wght_addr_len_i_reg         <= wght_addr_len_i;
@@ -567,8 +553,6 @@ module OpenEye_Parallel #(
         pooling_cluster_mode_reg    <= pooling_cluster_mode_i_w;
         delay_psum_glb_reg          <= delay_psum_glb_i;
         input_activations_reg       <= input_activations_i_w;
-        stride_x_reg                <= stride_x_i_w;
-        stride_y_reg                <= stride_y_i_w;
         kernel_per_pe_cluster_i_reg <= kernel_per_pe_cluster_i_w;
         compute_mask_reg            <= compute_mask_i_w;
         router_mode_iact_reg        <= router_mode_iact_i;
@@ -936,8 +920,6 @@ module OpenEye_Parallel #(
       assign pooling_cluster_mode_i_w  = pooling_cluster_mode_i_reg;
       assign delay_psum_glb_i_w        = delay_psum_glb_reg;
       assign input_activations_i_w     = input_activations_i_reg;
-      assign stride_x_i_w              = stride_x_i_reg;
-      assign stride_y_i_w              = stride_y_i_reg;
       assign kernel_per_pe_cluster_i_w = kernel_per_pe_cluster_i_reg;
       assign compute_mask_i_w          = compute_mask_i_reg;
 
@@ -965,8 +947,6 @@ module OpenEye_Parallel #(
       assign pooling_cluster_mode_i_w  = pooling_cluster_mode_i;
       assign delay_psum_glb_i_w        = delay_psum_glb_i;
       assign input_activations_i_w     = input_activations_i;
-      assign stride_x_i_w              = stride_x_i;
-      assign stride_y_i_w              = stride_y_i;
       assign kernel_per_pe_cluster_i_w = kernel_per_pe_cluster_i;
       assign compute_mask_i_w          = compute_mask_i;
     end
