@@ -1272,26 +1272,26 @@ end
   //   pooling_stage_2[0..3]- second level: 8→4 values.
   //   pooling_stage_3[0..1]- third level: 4→2 values.
   //   pooling_stage_4      - final output: 2→1 maximum value.
-  reg signed [ 7:0] pooling_regs    [31:0];
-  reg pooling_buffer_enable;
-  reg set_pointer_start;
-  reg signed [DATA_IACT_BITWIDTH-1:0] pooling_buffer_new [CHANNELS_PER_WORD-1:0];
-  wire signed [DATA_IACT_BITWIDTH-1:0] pooling_buffer_old [CHANNELS_PER_WORD-1:0];
-  reg signed [DATA_IACT_BITWIDTH-1:0] pooling_buffer_old_q [CHANNELS_PER_WORD-1:0];
-  reg signed [ 7:0] pooling_stage_1 [7:0];  // Pipeline stage 1: 32→8 max.
-  reg signed [ 7:0] pooling_stage_2 [3:0];  // Pipeline stage 2: 8→4 max.
-  reg signed [ 7:0] pooling_stage_3 [1:0];  // Pipeline stage 3: 4→2 max.
-  reg signed [ 7:0] pooling_stage_4;         // Pipeline stage 4: 2→1 max (final result).
-  reg  [  IACT_RAM_CELLS_WORD_BITWIDTH*IACT_RAM_CELLS-1:0] iact_buffer_data_pool_temp;             // Temp reg from iact_buffer_data_r.
+  reg signed  [                   7:0] pooling_regs          [31:0];
+  reg                                  pooling_buffer_enable;
+  reg                                  set_pointer_start;
+  reg signed  [DATA_IACT_BITWIDTH-1:0] pooling_buffer_new    [CHANNELS_PER_WORD-1:0];
+  wire signed [DATA_IACT_BITWIDTH-1:0] pooling_buffer_old    [CHANNELS_PER_WORD-1:0];
+  reg signed  [DATA_IACT_BITWIDTH-1:0] pooling_buffer_old_q  [CHANNELS_PER_WORD-1:0];
+  reg signed  [                   7:0] pooling_stage_1       [7:0];  // Pipeline stage 1: 32→8 max.
+  reg signed  [                   7:0] pooling_stage_2       [3:0];  // Pipeline stage 2: 8→4 max.
+  reg signed  [                   7:0] pooling_stage_3       [1:0];  // Pipeline stage 3: 4→2 max.
+  reg signed  [                   7:0] pooling_stage_4;         // Pipeline stage 4: 2→1 max (final result).
+  reg [IACT_RAM_CELLS_WORD_BITWIDTH*IACT_RAM_CELLS-1:0] iact_buffer_data_pool_temp;             // Temp reg from iact_buffer_data_r.
 
   // --- Per-filter quantization parameters (loaded in GET_QUANTIZE / GET_OFFSET) ---
   // Quantization formula applied in SEND_PSUM_TO_IACT state:
   //   q[f] = (quant_mant[f] * (psum + quant_offset[f])) >>> quant_exp[f]
   // Result is clamped to signed 8-bit before writing back to the iact buffer.
   reg  [QUANT_TRANS_WIDTH-1:0] quant_reg;
-  wire [  OFFSET_WIDTH-1:0]    quant_offset [QUANT_AMOUNT-1:0]; // Per-filter zero-point offset (8-bit, added to raw psum).
-  wire [EXPONENT_WIDTH-1:0]    quant_exp    [QUANT_AMOUNT-1:0]; // Per-filter right-shift exponent (7-bit; applied after multiply).
-  wire [MANTISSA_WIDTH-1:0]    quant_mant   [QUANT_AMOUNT-1:0]; // Per-filter scale mantissa (25-bit; multiplied with shifted psum).
+  wire [     OFFSET_WIDTH-1:0] quant_offset [QUANT_AMOUNT-1:0]; // Per-filter zero-point offset (8-bit, added to raw psum).
+  wire [   EXPONENT_WIDTH-1:0] quant_exp    [QUANT_AMOUNT-1:0]; // Per-filter right-shift exponent (7-bit; applied after multiply).
+  wire [   MANTISSA_WIDTH-1:0] quant_mant   [QUANT_AMOUNT-1:0]; // Per-filter scale mantissa (25-bit; multiplied with shifted psum).
   genvar quant_count;
   for (quant_count = 0; quant_count < QUANT_AMOUNT; quant_count=quant_count+1) begin
     assign quant_offset[quant_count] = quant_reg[(quant_count*(OFFSET_WIDTH+EXPONENT_WIDTH+MANTISSA_WIDTH))+:OFFSET_WIDTH];
@@ -2427,11 +2427,11 @@ end
                 set_pointer_start     <= 1;
               end
             end else begin
-              fsm_cycle               <= 0;
-              finished_cycles_iact    <= finished_cycles_iact + 1;
-              fsm_cycle               <= 0;
-              fsm_last_state    <= MAXPOOLING_SEND;
-              fsm_current_state <= MAXPOOLING_WAIT;
+              fsm_cycle            <= 0;
+              finished_cycles_iact <= finished_cycles_iact + 1;
+              fsm_cycle            <= 0;
+              fsm_last_state       <= MAXPOOLING_SEND;
+              fsm_current_state    <= MAXPOOLING_WAIT;
             end
           end
         end

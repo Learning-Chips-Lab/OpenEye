@@ -274,7 +274,7 @@ module iact_stream_constructor #(
             if (fsm_row_offset == 0) begin
               ram_rd_en             <= 1;
               if ((current_iact_cycle_reg >> 1) != {15{1'b1}}) begin
-                if ((ram_rd_addr <= address_storage) | (!fully_connected_i)) begin
+                if ((ram_rd_addr <= address_storage)) begin
                   iact_enable_o <= {((NUM_GLB_IACT)){1'b1}};
                 end
               end
@@ -362,6 +362,7 @@ module iact_stream_constructor #(
               current_iact_cycle_mod_reg <= 0;
               ram_rd_en                  <= 0;
               ram_inc_counter            <= 0;
+              fsm_enc_cycle              <= 0;
             end
           end
           default: begin

@@ -1230,7 +1230,7 @@ module PE #(
             wght_data_use_vec       <= 1;
             wght_data_vec           <= wght_data_start;
             wght_addr_vec           <= wght_addr_SPad_addr + 1;
-            iact_addr_SPad_en_r      <= 0;
+            iact_addr_SPad_en_r     <= 0;
             //Zero-Case
             if (iact_oh_delay_2 != 0) begin
               wght_data_end <= wght_addr_SPad_data_r;
@@ -1730,14 +1730,14 @@ module PE #(
             psum_data_SPad_en_w[pmc]  <= 0;
             psum_spad_addr_delay[pmc] <= pmc;
             psum_spad_addr_w[pmc]     <= pmc;
-            psum_spad_addr_mem[pmc] <= pmc;
+            psum_spad_addr_mem[pmc]   <= pmc;
             adder_en[pmc]             <= 0;
             reuse_psum_spad[pmc]      <= 0;
             reused_data[pmc]          <= 0;
             use_psum[pmc]             <= 0;
             used_psum_memory[pmc]     <= 0;
             end
-            adder_tree_en             <= 0;
+            adder_tree_en          <= 0;
             psum_select            <= 1;
             values_valid           <= 0;
             // Psum read-out request

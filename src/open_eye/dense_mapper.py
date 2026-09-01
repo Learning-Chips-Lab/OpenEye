@@ -214,7 +214,6 @@ class DenseMapper(LayerMapper):
             "needed_y_cls_reg": 1,
             "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
             "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
-            "iact_channels_per_pe": layer_params.used_channels,
             "send_data_out": layer_params.send_values_out,
             "needed_iact_buffer_words": layer_params.needed_iact_buffer_words,
             "add_up_reg":layer_params.add_up,
@@ -230,8 +229,36 @@ class DenseMapper(LayerMapper):
             "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
             "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
             "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
+            "iact_words_per_compute": layer_params.iact_words_per_compute,
             "pooling_mode": 0,
             "psum_output_words": layer_params.psum_output_words,
+            "iact_read_limit_0" : layer_params.iact_read_limit_0,
+            "iact_read_limit_1" : layer_params.iact_read_limit_1,
+            "iact_read_limit_2" : layer_params.iact_read_limit_2,
+            "iact_read_limit_3" : layer_params.iact_read_limit_3,
+            "iact_read_limit_4" : layer_params.iact_read_limit_4,
+            "iact_read_inc_0" : layer_params.iact_read_inc_0,
+            "iact_read_inc_1" : layer_params.iact_read_inc_1,
+            "iact_read_inc_2" : layer_params.iact_read_inc_2,
+            "iact_read_inc_3" : layer_params.iact_read_inc_3,
+            "iact_read_inc_4" : layer_params.iact_read_inc_4,
+            "iact_write_limit_0" : layer_params.iact_write_limit_0,
+            "iact_write_limit_1" : layer_params.iact_write_limit_1,
+            "iact_write_limit_2" : layer_params.iact_write_limit_2,
+            "iact_write_inc_0" : layer_params.iact_write_inc_0,
+            "iact_write_inc_1" : layer_params.iact_write_inc_1,
+            "iact_write_inc_2" : layer_params.iact_write_inc_2,
+            "pagu_wght_limit" : layer_params.pagu_wght_limit,
+            "psum_pagu_loop_limit_0" : layer_params.psum_pagu_loop_limit_0,
+            "psum_pagu_loop_limit_1" : layer_params.psum_pagu_loop_limit_1,
+            "psum_pagu_loop_limit_2" : layer_params.psum_pagu_loop_limit_2,
+            "psum_pagu_loop_limit_3" : layer_params.psum_pagu_loop_limit_3,
+            "psum_pagu_loop_limit_4" : layer_params.psum_pagu_loop_limit_4,
+            "psum_pagu_addr_inc_0" : layer_params.psum_pagu_addr_inc_0,
+            "psum_pagu_addr_inc_1" : layer_params.psum_pagu_addr_inc_1,
+            "psum_pagu_addr_inc_2" : layer_params.psum_pagu_addr_inc_2,
+            "psum_pagu_addr_inc_3" : layer_params.psum_pagu_addr_inc_3,
+            "psum_pagu_addr_inc_4" : layer_params.psum_pagu_addr_inc_4,
             "gemm_mode": getattr(layer_params, "gemm_mode", 0)
             })
             
@@ -377,6 +404,9 @@ class DenseMapper(LayerMapper):
         else:
             # Parallel: 3D array [cluster_x][cluster_y][router]
             storage = [[[[] for c in range(params.NUM_GLB_IACT)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+        if ((params.Clusters_Y == 1) & (params.Clusters_X == 1)):
+            storage.append(line)
+            return storage
 
         router_cycle = 0  # Track position within current DMA word
 
@@ -431,6 +461,8 @@ class DenseMapper(LayerMapper):
         else:
             # Parallel: 3D array [cluster_x][cluster_y][router]
             storage = [[[[] for c in range(params.Wght_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+        if ((params.Clusters_X == 1)):
+            return storage
 
         router_cycle = 0  # Track position within current DMA word
 
@@ -488,6 +520,8 @@ class DenseMapper(LayerMapper):
         else:
             # Parallel: 3D array [cluster_x][cluster_y][router]
             storage = [[[[] for c in range(params.Psum_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+        if ((params.Clusters_Y == 1)):
+            return storage
 
         router_cycle = 0  # Track position within current DMA word
 

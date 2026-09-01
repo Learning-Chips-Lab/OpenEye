@@ -279,6 +279,7 @@ class LayerParameters(object):
         self.iact_repetitions_per_write = 0
         self.overhang_discrepancy = 0
         self.psum_output_words = 1             # Neede transmissions for output
+        self.wght_cycles_one_word_all_ram = 0
 
         # === Control Flags ===
         self.send_values_out = 1               # Send outputs to DRAM
@@ -1085,7 +1086,7 @@ class LayerParameters(object):
         self.trans_cycles_iact =  self.trans_cycles_iact + missing_cycles
 
         self.wght_cycles_one_word_all_ram = math.ceil((params.Clusters*params.NUM_GLB_WGHT*params.WGHT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_BITWIDTH)
-        self.trans_cycles_wght = self.needed_wght_transmissions *  math.ceil(self.used_wght_per_PE/params.PARALLEL_MACS) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * params.WGHT_Trans_Bitwidth / params.DMA_BITWIDTH)
+        self.trans_cycles_wght = 3 * self.needed_wght_transmissions *  math.ceil(self.used_wght_per_PE/params.PARALLEL_MACS) * math.ceil(params.NUM_GLB_WGHT * params.Clusters * params.WGHT_Trans_Bitwidth / params.DMA_BITWIDTH)
 
         
         temp = math.ceil(params.NUM_GLB_PSUM * (params.Clusters * params.DATA_PSUM_BITWIDTH/params.DMA_BITWIDTH))
@@ -1132,8 +1133,8 @@ class LayerParameters(object):
         # Determine if multiple kernels fit per PE cluster
         if (math.floor(params.PEs_Y/self.kernel_size[0]) > 1):
             self.kernel_per_pe_cluster = math.floor(params.PEs_Y/self.kernel_size[0])
-            self.kernel_per_pe_cluster = 1 << (self.kernel_per_pe_cluster.bit_length() - 1) #Round down to power of 2
-            self.kernel_per_pe_cluster = 1 #Harcoded to 1 kernel per cluster
+            self.kernel_per_pe_cluster = 1 << (self.kernel_per_pe_cluster.bit_length() - 1) # Round down to power of 2
+            self.kernel_per_pe_cluster = 1 # Harcoded to 1 kernel per cluster
         # === Phase 4: Calculate activation handling ===
         self.calculate_iact_transmissions(params)
         self.calculate_used_channels(params)
@@ -1497,6 +1498,7 @@ class LayerParameters(object):
         self.y_lines_per_calculation = 1
         self.kernel_size = [0]
         self.used_iact_addr_per_PE = 15
+        self.channels = 1
         if (layer_number == max_layers - 1):
             self.send_values_out = 1
         else:
@@ -1509,10 +1511,16 @@ class LayerParameters(object):
         self.input_shape = layer.input.shape
         self.kernel_shape = layer.kernel.shape
         self.output_shape = layer.output.shape
+        self.iact_read_limit_0 = 255
+        self.iact_read_inc_0 = 1
+        self.iact_write_limit_0 = 255
+        self.iact_write_inc_0 = 1
             
         self.used_channels = params.NUM_GLB_IACT*math.ceil(self.iact_size_x/(params.Clusters_Y*params.NUM_GLB_IACT))
         # Calculate Iact Cycles
         self.needed_Iact_writes = math.ceil(params.PEs_Y/params.NUM_GLB_IACT)
+        self.iact_words_per_compute = self.used_channels + 1
+        self.calculate_transmission_cycles(params)
 
         # Calculate the number of refreshes needed for the layer
         
@@ -1539,7 +1547,7 @@ class LayerParameters(object):
         self.used_Y_cluster = params.Clusters_Y
         self.used_X_cluster = 1
         self.kernel_per_pe_cluster = 1
-        self.needed_iact_buffer_words = math.ceil(self.used_iact_per_PE/2)
+        self.needed_iact_buffer_words = math.ceil(self.used_iact_per_PE/2) - 1
         self.iact_converter_buffer_addr_max_cycles = self.needed_iact_buffer_words
 
         self.computing_mx = [[[[1 for _ in range(params.PEs_X)]
@@ -1591,7 +1599,7 @@ class LayerParameters(object):
         self.iteration_for_kernels = math.ceil(self.diff_iact_layer_next_layer / self.different_kernels_per_calculation)
         self.buffer_cycles_for_x_iact = params.Clusters_Y
         self.iact_converter_max_cycles = 1
-        self.iact_buffer_words_per_write = math.ceil(self.used_iact_per_PE/2) * self.needed_Iact_writes
+        self.iact_buffer_words_per_write = math.ceil(self.used_iact_per_PE/2) * self.needed_Iact_writes + 1
         
         self.iact_size_c = self.used_iact_per_PE * params.NUM_GLB_WGHT * self.diff_iact_layer
 
@@ -1608,7 +1616,7 @@ class LayerParameters(object):
         # Clusters_Y in a way that didn't match this construction, so it
         # silently mis-sized the stream and left GET_WGHT reading stale/X
         # data for the back portion of the weight load.
-        self.trans_cycles_wght = self.needed_wght_transmissions * params.Clusters_Y * params.NUM_GLB_WGHT * math.ceil(self.used_wght_per_PE / params.PARALLEL_MACS)
+        self.trans_cycles_wght = self.needed_wght_transmissions * params.Clusters_Y * params.NUM_GLB_WGHT * math.ceil(self.used_wght_per_PE / params.PARALLEL_MACS) * 3
         # Must equal len(DensePsumStreamMapper.get_psum_stream()): the test
         # harness sends each DMA section on a fixed schedule with no flow
         # control, so GET_BIAS (psum_pipeline.v) must consume exactly this

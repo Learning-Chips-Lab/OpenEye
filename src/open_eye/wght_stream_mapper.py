@@ -797,38 +797,6 @@ class DenseWghtStreamMapper(WghtStreamMapper):
 
             # Convert and append this transmission's stream
             wght_stream.extend(self.create_complete_wght_stream(temp_storage))
-        # GET_WGHT's shift-pipeline (hdl/OpenEye_FPGA.v) treats the incoming
-        # weight stream as a raw byte stream: it shifts WGHT_CYCLES_ONE_WORD_ALL_CELLS
-        # DMA words through a buffer and slices off the low
-        # TRANS_BITWIDTH_WGHT*CLUSTERS*NUM_GLB_WGHT bits each time
-        # wght_buffer_wr_addr advances. That only produces correct weight
-        # rows if the incoming stream is already repacked into this same
-        # 24-bit-per-weight-pair -> 64-bit-DMA-word layout - the base
-        # WghtStreamMapper.get_wght_stream() (used by ConvWghtStreamMapper)
-        # applies this repack; this Dense override predates it and was
-        # never updated, so Dense/GEMM layers streamed weights in the old
-        # unpacked layout, producing garbage weight data that made the PE's
-        # zero-skip SPad range logic (CALCULATING state) loop indefinitely.
-        # create_complete_wght_stream's SERIAL-mode combining step packs
-        # Clusters_X clusters into each stream element (24 bits per
-        # cluster, e.g. temp_stream[0][...] + temp_stream[1][...]*2**24 for
-        # Clusters_X==2), so each element here is 24*Clusters_X bits wide,
-        # not the base class's flat 24 - passing a plain 24 here silently
-        # truncated away every cluster beyond the first via
-        # transform_n_to_m_chunked's masking.
-        elem_bits = self.params.WGHT_Trans_Bitwidth * self.params.Clusters_X
-        wght_stream = gtu.transform_n_to_m_chunked(wght_stream, elem_bits, self.params.DMA_BITWIDTH, 3)
-        # layer_params.wght_cycles_one_word_all_ram is only ever set by
-        # calculate_transmission_cycles(), a conv-only method Dense never
-        # calls; compute the same value directly from params here instead
-        # of depending on that (see WghtStreamMapper.get_wght_stream's
-        # base-class version for the formula this mirrors).
-        n = math.ceil((self.params.Clusters * self.params.NUM_GLB_WGHT * self.params.WGHT_RAM_CELLS_WORD_BITWIDTH) / self.params.DMA_BITWIDTH)
-        temp = []
-        for i in range(0, len(wght_stream), n):
-            part = wght_stream[i : i + n]
-            temp.extend(part[::-1])
-        wght_stream = temp
         return wght_stream
 
     def create_complete_wght_stream(self, spad_storage):
@@ -845,6 +813,7 @@ class DenseWghtStreamMapper(WghtStreamMapper):
 
         """
         params = self.params
+        layer_params = self.layer_params
 
         # Initialize stream for Dense layers
         wght_stream = [[[[] for c in range(params.Wght_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
@@ -864,7 +833,7 @@ class DenseWghtStreamMapper(WghtStreamMapper):
             wght_stream = []
 
             for word in range(len(temp_stream[0][0][0])):
-                for cl_x in range(self.params.Clusters_X):
+                for cl_x in range(params.Clusters_X):
                     for cl_y in range(params.Clusters_Y):
                         for router in range(params.NUM_GLB_WGHT):
                             try:
@@ -873,10 +842,9 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                             except:
                                 # Only one cluster or no data
                                 wght_stream.append(0)
-
-        chunk = self.params.Clusters * self.params.NUM_GLB_WGHT
-        wght_stream = gtu.transform_n_to_m_chunked(wght_stream,self.params.WGHT_Trans_Bitwidth,self.params.DMA_BITWIDTH, chunk)
-        n = self.layer_params.wght_cycles_one_word_all_ram
+        chunk = params.Clusters * params.NUM_GLB_WGHT
+        wght_stream = gtu.transform_n_to_m_chunked(wght_stream,params.WGHT_Trans_Bitwidth,params.DMA_BITWIDTH, chunk)
+        n = layer_params.wght_cycles_one_word_all_ram
         temp = []
         for i in range(0, len(wght_stream), n):
             part = wght_stream[i : i + n]

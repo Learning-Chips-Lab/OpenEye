@@ -848,6 +848,14 @@ class DenseIactStreamMapper(IactStreamMapper):
                             val_twos = gtu.to_twos_complement(dram_fmap[(i * values_per_word) + j], bitwidth)
                             word |= val_twos << (j * bitwidth)
                     iact_stream.append(word)
+        n = self.layer_params.iact_cycles_one_word_all_ram
+        missing_zeros = (n - len(iact_stream)) % n
+        iact_stream = iact_stream + [0] * missing_zeros
+        temp = []
+        for i in range(0, len(iact_stream), n):
+                part = iact_stream[i : i + n]
+                temp.extend(part[::-1])
+        iact_stream = temp
         return iact_stream
 
     def write_iact_data_glb(self, cl_x, cl_y, router):
