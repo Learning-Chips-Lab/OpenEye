@@ -5,6 +5,7 @@
 import logging
 import subprocess
 import os
+from unittest import case
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import tempfile
 import math
@@ -133,6 +134,11 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
                 input_shape=(x_axis, y_axis, channels), 
                 strides=strides
             ))
+        case "MLP":
+            inputsize_x = 6
+            model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=32, use_bias = True))
+            model.add(tf.keras.layers.Dense(units=16, use_bias = True))
+            model.add(tf.keras.layers.Dense(units=4, use_bias = True))
             """
             model.add(tf.keras.layers.Flatten())
 

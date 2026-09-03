@@ -153,6 +153,7 @@ module OpenEye_FPGA #(
     // a fixed value (was 32) mismatches the generated DATA_PSUM_BITWIDTH (e.g.
     // 20) and prunes the psum bus feeding each PE, corrupting results.
     parameter TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * (SERIAL == 1 ? 1 : PARALLEL_MACS),
+    parameter PSUM_BUFFER_WIDTH = NUM_GLB_PSUM == 1 ? DATA_PSUM_BITWIDTH : DATA_PSUM_BITWIDTH * 2,
     parameter DATA_IACT_OVERHEAD  = 4,
 
     parameter PES = NUM_GLB_PSUM * NUM_GLB_WGHT,
@@ -244,7 +245,7 @@ module OpenEye_FPGA #(
     localparam WGHT_CELL_INPUT_WIDTH = WGHT_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
     localparam integer WGHT_ONE_WORD_ALL_RAM = ((CLUSTERS*WGHT_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH,
 
-    localparam integer PSUM_RAM_CELLS = CLUSTERS * NUM_GLB_PSUM/2,
+    localparam integer PSUM_RAM_CELLS = CLUSTERS * (NUM_GLB_PSUM+1)/2,
     localparam integer PSUM_CYCLES_ONE_WORD_ALL_CELLS = ((PSUM_RAM_CELLS * PSUM_RAM_CELLS_WORD_BITWIDTH) + DMA_BITWIDTH - 1) / DMA_BITWIDTH,
     localparam         PSUM_CELL_INPUT_WIDTH = PSUM_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
     localparam integer PSUM_ONE_WORD_ALL_RAM = ((CLUSTERS*PSUM_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH,
@@ -478,9 +479,9 @@ reg [1023:0] fst_path;
   // by OpenEye_Parallel (in PSUM_GET_RESULTS), and supplies them for DMA
   // output (PSUM_SEND_RESULTS) or quantization (SEND_PSUM_TO_IACT).
   // -----------------------------------------------------------------------
-  reg  [CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_en_r;           // Per-buffer read-enable vector (one bit per RAM instance).
-  reg  [CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_en_w;           // Per-buffer write-enable vector.
-  wire [BUFFER_WIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_addr; // Flattened address bus; driven from psum_buffer_addr_array.
+  reg  [CLUSTERS*(NUM_GLB_PSUM+1)/2-1:0] psum_buffer_en_r;           // Per-buffer read-enable vector (one bit per RAM instance).
+  reg  [CLUSTERS*(NUM_GLB_PSUM+1)/2-1:0] psum_buffer_en_w;           // Per-buffer write-enable vector.
+  wire [BUFFER_WIDTH_PSUM*CLUSTERS*(NUM_GLB_PSUM+1)/2-1:0] psum_buffer_addr; // Flattened address bus; driven from psum_buffer_addr_array.
   reg  [BUFFER_WIDTH_PSUM-1:0] psum_buffer_addr_storage;              // Base address for the start of the current output page; advances by filters after each complete psum pass.
   reg  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_data_w;  // Write-data bus to all psum buffers; MUXed between bias-load and PE-output paths.
   wire [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_data_r;  // Read-data bus from all psum buffers; fed into OpenEye_Parallel or into the quantizer.
@@ -558,9 +559,9 @@ reg [1023:0] fst_path;
   reg [3:0] iact_converter_mem_off_3_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];
   reg [10-1:0] iact_to_psum_x_pos_counter;
   reg [4-1:0] iact_to_psum_trans_counter;
-  reg [$clog2(IACT_RAM_CELLS*2)-1:0] iact_to_psum_storage_counter;
-  reg [TEMP_BITS_PSUM_TO_IACT-1:0] iact_to_psum_shift_reg;
-  reg [TEMP_BITS_PSUM_TO_IACT-1:0] iact_to_psum_mux_reg;
+  reg [$clog2(IACT_RAM_CELLS*(8/TRANS_WORDS))-1:0] iact_to_psum_storage_counter;
+  reg [DATA_IACT_BITWIDTH*TRANS_WORDS-1:0] iact_to_psum_shift_reg;
+  reg [DATA_IACT_BITWIDTH*TRANS_WORDS-1:0] iact_to_psum_mux_reg;
   reg iact_to_psum_start_shifting;
 
   reg [CLUSTERS*NUM_GLB_IACT*TRANS_BITWIDTH_IACT - 1:0] iact_out_reg; // Legacy assembled iact output register (not driven in current path; kept for compatibility).
@@ -2188,7 +2189,7 @@ end
               iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
             end
           end
-          if ((fsm_psum_current_state == SEND_PSUM_TO_IACT) & (fsm_psum_cycle >= 7)) begin
+          if (((fsm_psum_current_state == SEND_PSUM_TO_IACT) & (fsm_psum_cycle >= 7)) | (fsm_cycle != 0)) begin
             fsm_cycle                  <= fsm_cycle + 1;
             iact_to_psum_x_pos_counter <= 0;
             iact_to_psum_trans_counter <= iact_to_psum_trans_counter + 1;
@@ -2197,20 +2198,23 @@ end
               iact_to_psum_x_pos_counter <= iact_to_psum_x_pos_counter + 1;
               if (iact_to_psum_x_pos_counter < iact_size_x) begin
                 iact_to_psum_storage_counter <= iact_to_psum_storage_counter + 1;
-                if (iact_to_psum_storage_counter == (2*IACT_RAM_CELLS)-1) begin
+                if (iact_to_psum_storage_counter == ((8/TRANS_WORDS)*IACT_RAM_CELLS)-1) begin
                   iact_to_psum_storage_counter <= 0;
                   for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
                     iact_buffer_en_w[a] <= 1;
                   end
                 end
+
                 
-                iact_buffer_data_w[((IACT_RAM_CELLS*2)-1)*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)] <= iact_to_psum_shift_reg[0+:(DATA_IACT_BITWIDTH*4)];
-                iact_to_psum_shift_reg[(4-1)*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)] <= 0;
-                for (b = 0; b < 4-1; b=b+1) begin
-                  iact_to_psum_shift_reg[b*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)] <= iact_to_psum_shift_reg[(b+1)*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)];
+                iact_buffer_data_w[(((8/TRANS_WORDS)*IACT_RAM_CELLS)-1)*(DATA_IACT_BITWIDTH*TRANS_WORDS)+:(DATA_IACT_BITWIDTH*TRANS_WORDS)] <= iact_to_psum_shift_reg[0+:(DATA_IACT_BITWIDTH*TRANS_WORDS)];
+                iact_to_psum_shift_reg[(TRANS_WORDS-1)*(DATA_IACT_BITWIDTH*TRANS_WORDS)+:(DATA_IACT_BITWIDTH*TRANS_WORDS)] <= 0;
+                for (b = 0; b < TRANS_WORDS-1; b=b+1) begin
+                  iact_to_psum_shift_reg[b*(DATA_IACT_BITWIDTH*TRANS_WORDS)+:(DATA_IACT_BITWIDTH*TRANS_WORDS)] <=
+                  iact_to_psum_shift_reg[(b+1)*(DATA_IACT_BITWIDTH*TRANS_WORDS)+:(DATA_IACT_BITWIDTH*TRANS_WORDS)];
                 end
-                for (b = 0; b < 16-1; b=b+1) begin
-                  iact_buffer_data_w[((IACT_RAM_CELLS*2)-1-(b+1))*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)] <= iact_buffer_data_w[((IACT_RAM_CELLS*2)-1-b)*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)];
+                for (b = 0; b < ((8/TRANS_WORDS)*IACT_RAM_CELLS)-1; b=b+1) begin
+                  iact_buffer_data_w[(((8/TRANS_WORDS)*IACT_RAM_CELLS)-1-(b+1))*(DATA_IACT_BITWIDTH*TRANS_WORDS)+:(DATA_IACT_BITWIDTH*TRANS_WORDS)] <=
+                  iact_buffer_data_w[(((8/TRANS_WORDS)*IACT_RAM_CELLS)-1-b)*(DATA_IACT_BITWIDTH*TRANS_WORDS)+:(DATA_IACT_BITWIDTH*TRANS_WORDS)];
                 end
               end
             end
@@ -2224,25 +2228,26 @@ end
               end
             end            
             for (a = 0; a < TRANS_WORDS; a=a+1) begin
-              iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*4)+(DATA_IACT_BITWIDTH*(4-1))+:DATA_IACT_BITWIDTH] <= quantized_value_reg[a];
+              iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*TRANS_WORDS)+(DATA_IACT_BITWIDTH*(TRANS_WORDS-1))+:DATA_IACT_BITWIDTH] <= quantized_value_reg[a];
             end
             for (a = 0; a < TRANS_WORDS; a=a+1) begin
-              for (b = 0; b < 4-1; b=b+1) begin
-                iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*4)+(DATA_IACT_BITWIDTH*(4-1)-((b+1)*DATA_IACT_BITWIDTH))+:DATA_IACT_BITWIDTH] <=
-                iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*4)+(DATA_IACT_BITWIDTH*(4-1)-(b*DATA_IACT_BITWIDTH))+:DATA_IACT_BITWIDTH];
+              for (b = 0; b < TRANS_WORDS-1; b=b+1) begin
+                iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*TRANS_WORDS)+(DATA_IACT_BITWIDTH*(TRANS_WORDS-1)-((b+1)*DATA_IACT_BITWIDTH))+:DATA_IACT_BITWIDTH] <=
+                iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*TRANS_WORDS)+(DATA_IACT_BITWIDTH*(TRANS_WORDS-1)-(b*DATA_IACT_BITWIDTH))+:DATA_IACT_BITWIDTH];
               end
             end
           end
           if ((fsm_psum_current_state == PSUM_IDLE) & (fsm_cycle >= 1)) begin
             iact_to_psum_storage_counter <= iact_to_psum_storage_counter + 1;
-            if (iact_to_psum_storage_counter == (2*IACT_RAM_CELLS)-1) begin
+            if (iact_to_psum_storage_counter == ((8/TRANS_WORDS)*IACT_RAM_CELLS)-1) begin
               iact_to_psum_storage_counter <= 0;
               for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
                 iact_buffer_en_w[a] <= 1;
               end
             end
-            for (b = 0; b < 16-1; b=b+1) begin
-              iact_buffer_data_w[((IACT_RAM_CELLS*2)-1-(b+1))*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)] <= iact_buffer_data_w[((IACT_RAM_CELLS*2)-1-b)*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)];
+            for (b = 0; b < ((8/TRANS_WORDS)*IACT_RAM_CELLS)-1; b=b+1) begin
+              iact_buffer_data_w[(((8/TRANS_WORDS)*IACT_RAM_CELLS)-1-(b+1))*(DATA_IACT_BITWIDTH*TRANS_WORDS)+:(DATA_IACT_BITWIDTH*TRANS_WORDS)] <=
+              iact_buffer_data_w[(((8/TRANS_WORDS)*IACT_RAM_CELLS)-1-b)*(DATA_IACT_BITWIDTH*TRANS_WORDS)+:(DATA_IACT_BITWIDTH*TRANS_WORDS)];
             end
             if (iact_to_psum_storage_counter == 0) begin            
               select_ram_counter          <= 0;
@@ -2823,7 +2828,7 @@ end
 
     // -------------------------------------------------------------------
     // PSUM_RAM_X / PSUM_RAM_Y / PSUM_RAM_GLB: Psum Staging Buffers
-    // Instantiates CLUSTER_COLUMNS × CLUSTER_ROWS × (NUM_GLB_PSUM/2) RAM_SP
+    // Instantiates CLUSTER_COLUMNS × CLUSTER_ROWS × ((NUM_GLB_PSUM+1)/2) RAM_SP
     // cells.  Each cell is TRANS_BITWIDTH_PSUM×2 bits wide (holds two psum
     // values per word) and BUFFER_WIDTH address bits deep.
     //
@@ -2840,18 +2845,18 @@ end
     // -------------------------------------------------------------------
     for (i_gen = 0; i_gen < CLUSTER_COLUMNS; i_gen=i_gen+1) begin : PSUM_RAM_X
       for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen=j_gen+1) begin : PSUM_RAM_Y
-        for (g_gen = 0; g_gen < NUM_GLB_PSUM/2; g_gen=g_gen+1) begin : PSUM_RAM_GLB
+        for (g_gen = 0; g_gen < (NUM_GLB_PSUM+1)/2; g_gen=g_gen+1) begin : PSUM_RAM_GLB
           RAM_SP #(
-              .DataWidth(TRANS_BITWIDTH_PSUM*2),
+              .DataWidth(PSUM_BUFFER_WIDTH),
               .AddrWidth(BUFFER_WIDTH_PSUM),
               .Pipelined(1)
           ) psum_buffer (
               .clk_i  (clk_i),
-              .rd_en_i(psum_buffer_en_r[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen] & !psum_buffer_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen]),
-              .wr_en_i(psum_buffer_en_w[i_gen*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*NUM_GLB_PSUM/2+g_gen]),
-              .addr_i (psum_buffer_addr[i_gen*BUFFER_WIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM/2+j_gen*BUFFER_WIDTH_PSUM*NUM_GLB_PSUM/2+g_gen*BUFFER_WIDTH_PSUM+:BUFFER_WIDTH_PSUM]),
-              .data_i (psum_buffer_data_w[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM*2]),
-              .data_o (psum_buffer_data_r[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*TRANS_BITWIDTH_PSUM*2+:TRANS_BITWIDTH_PSUM*2])
+              .rd_en_i(psum_buffer_en_r[i_gen*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*(NUM_GLB_PSUM+1)/2+g_gen] & !psum_buffer_en_w[i_gen*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*(NUM_GLB_PSUM+1)/2+g_gen]),
+              .wr_en_i(psum_buffer_en_w[i_gen*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*(NUM_GLB_PSUM+1)/2+g_gen]),
+              .addr_i (psum_buffer_addr[i_gen*BUFFER_WIDTH_PSUM*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*BUFFER_WIDTH_PSUM*(NUM_GLB_PSUM+1)/2+g_gen*BUFFER_WIDTH_PSUM+:BUFFER_WIDTH_PSUM]),
+              .data_i (psum_buffer_data_w[i_gen*PSUM_BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*PSUM_BUFFER_WIDTH*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH]),
+              .data_o (psum_buffer_data_r[i_gen*PSUM_BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*PSUM_BUFFER_WIDTH*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH])
           );
         end
       end

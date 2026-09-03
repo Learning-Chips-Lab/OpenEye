@@ -668,7 +668,7 @@ module PE #(
   // Computation control and configuration registers
   // [SPARSITY_EN=1 only] Weight data validity flag (always true in dense mode)
   reg                                   values_valid;           // Flag: current values are valid (not zero)
-  wire [                         4 : 0] filters_reg_M0;            // Number of filters configured, in Eyeriss-Paper referenced as M0
+  wire [                         5 : 0] filters_reg_M0;            // Number of filters configured, in Eyeriss-Paper referenced as M0
   wire [                         3 : 0] channel_reg_C0;            // Number of channels configured, in Eyeriss-Paper referenced as C0
   wire                                  psum_data_SPad_en_w_i [PARALLEL_MACS-1: 0];// Internal write enable
   wire                                  raw_wght_w;           // 1 = raw (uncompressed) weight stream: keep all-zero weight words
@@ -898,7 +898,7 @@ module PE #(
   // the config stream sent two cycles later, making raw_wght_w effectively
   // always 0 for any config where cycle 3 doesn't happen to set bit 8.
   assign channel_reg_C0          = stream_data[12:9];
-  assign filters_reg_M0          = stream_data[17:13];
+  assign filters_reg_M0          = stream_data[5:0];
   assign iact_addr_max_reg       = stream_data[21:18];
   assign iact_x_line_repetitions = stream_data[25:22];
   assign raw_wght_w              = stream_data[26];
@@ -1644,8 +1644,8 @@ module PE #(
     // - Sequential addressing: iact and weight SPads are read in order
     // - Loop termination: when all iact data words processed
 
-    reg  [          IACT_ADDR_DATA-1 : 0] iact_channel;     // Current iact address being processed
-    reg  [          IACT_ADDR_DATA-1 : 0] wght_filter;     // Current iact address being processed
+    reg  [          IACT_ADDR_DATA   : 0] iact_channel;     // Current iact address being processed
+    reg  [          IACT_ADDR_DATA   : 0] wght_filter;     // Current iact address being processed
     reg                                   computing_1;              // Flag indicating active computation
     reg                                   computing_2;              // Flag indicating active computation
     always @(posedge clk_i, negedge rst_ni) begin
@@ -1678,15 +1678,15 @@ module PE #(
           used_psum_memory[pmc]      <= 0;
           psum_data_delay[pmc]       <= 0;
         end
-        iact_channel            <= 0;
-        wght_filter             <= 0;
-        mux_iact_ready          <= 1;
-        wght_ready_o            <= 1;
-        psum_select             <= 1;
-        psum_enable             <= 0;
-        psum_enable_2           <= 0;
-        psum_enable_o           <= 0;
-        values_valid            <= 0;
+        iact_channel       <= 0;
+        wght_filter        <= 0;
+        mux_iact_ready     <= 1;
+        wght_ready_o       <= 1;
+        psum_select        <= 1;
+        psum_enable        <= 0;
+        psum_enable_2      <= 0;
+        psum_enable_o      <= 0;
+        values_valid       <= 0;
       end else begin
         // Psum pipeline and external psum input handling (identical to sparse FSM)
         if (psum_ready_i) begin
@@ -1778,7 +1778,7 @@ module PE #(
             current_state_computing <= CALCULATING;
             iact_data_current_3     <= iact_data_spad_pay;
             if (PARALLEL_MACS >= filters_reg_M0 ) begin
-              iact_data_SPad_addr     <= iact_data_SPad_addr + 1;
+              iact_data_SPad_addr <= iact_data_SPad_addr + 1;
             end else begin
               wght_filter <= wght_filter + PARALLEL_MACS;
             end
@@ -1798,21 +1798,21 @@ module PE #(
             // ---------------------------------------------------------------
             // Default signal setup
             // ---------------------------------------------------------------
-            computing             <= 1;
-            computing_1           <= computing;
-            computing_2           <= computing_1;
-            iact_data_current_3   <= iact_data_spad_pay;
-            iact_addr_SPad_en_r   <= 0;
-            iact_data_SPad_en_r   <= !mux_iact_ready;
-            wght_addr_SPad_en_r   <= 0;           // No weight addr SPad in dense mode
+            computing           <= 1;
+            computing_1         <= computing;
+            computing_2         <= computing_1;
+            iact_data_current_3 <= iact_data_spad_pay;
+            iact_addr_SPad_en_r <= 0;
+            iact_data_SPad_en_r <= !mux_iact_ready;
+            wght_addr_SPad_en_r <= 0;           // No weight addr SPad in dense mode
             for (pmc = 0; pmc < PARALLEL_MACS; pmc=pmc+1) begin
               psum_data_SPad_en_r[pmc] <= 1;
               psum_data_SPad_en_w[pmc] <= psum_data_SPad_en_r[pmc];
               reuse_psum_spad[pmc]     <= 0;
               reused_data[pmc]         <= 0;
             end
-            fast_cycle            <= 0;
-            values_valid          <= 1; // Default: data is valid
+            fast_cycle   <= 0;
+            values_valid <= 1; // Default: data is valid
 
             // ---------------------------------------------------------------
             // Weight vector increment (sequential, no range computation)

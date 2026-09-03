@@ -206,7 +206,7 @@ module data_pipeline_wght #(
     input                                         enable_i,
 
     output reg [ $clog2(FIRST_SPAD_ADDR+1)-1 : 0] first_spad_words_o,
-    input      [ $clog2(FIRST_SPAD_ADDR+1)-1 : 0] first_spad_max_i,
+    input      [ $clog2(FIRST_SPAD_ADDR+1)   : 0] first_spad_max_i,
     output reg [$clog2(SECOND_SPAD_ADDR+1)-1 : 0] second_spad_words_o,
 
     output reg [  FIRST_SPAD_ADDR_BITWIDTH-1 : 0] first_spad_addr_o,

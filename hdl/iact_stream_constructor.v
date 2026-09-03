@@ -149,8 +149,6 @@ module iact_stream_constructor #(
   reg                           change_state;
   reg  [DATA_IACT_BITWIDTH-1:0] mem_data_payload_reg   [NUM_GLB_IACT-1:0][  WORDS_PER_TRANS-1:0];
   reg  [DATA_IACT_OVERHEAD-1:0] mem_data_overhead_reg  [NUM_GLB_IACT-1:0][  WORDS_PER_TRANS-1:0];
-  wire [DATA_IACT_BITWIDTH-1:0] storage_w              [   RAM_CELLS-1:0][IACT_WORDS_IN_RAM-1:0];
-  reg  [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] storage_reg;
   reg  [                 4-1:0] iact_router_counter;
   reg  [                 8-1:0] kernel_y_counter;
 
@@ -420,7 +418,6 @@ module iact_stream_constructor #(
         wght_size_x                   <= 0;
         wght_size_y                   <= 0;
         x_pos_in_w_cycle              <= 0;
-        storage_reg                   <= 0;
         wr_cycle_loop_cnt_0           <= 0;
         wr_cycle_loop_cnt_1           <= 0;
         wr_cycle_loop_cnt_2           <= 0;
@@ -438,7 +435,6 @@ module iact_stream_constructor #(
       end else begin
         channels_q          <= channels;
         ram_wr_addr_q       <= ram_wr_addr;
-        storage_reg         <= storage_i[16+:16];
         case (fsm_current_state)
           FSM_INITIALIZE: begin
             fsm_cycle              <= 0;
@@ -575,14 +571,6 @@ module iact_stream_constructor #(
         assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA +:DATA_IACT_BITWIDTH]                      = mem_data_payload_reg[r_gen][w_gen];
         if (SPARSITY_EN == 1) begin
           assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA + DATA_IACT_BITWIDTH +:DATA_IACT_OVERHEAD] = mem_data_overhead_reg[r_gen][w_gen];
-        end
-      end
-    end
-    for (r_gen = 0; r_gen < RAM_CELLS; r_gen = r_gen + 1) begin
-      for (w_gen = 0; w_gen < IACT_WORDS_IN_RAM; w_gen = w_gen + 1) begin
-        for (b_gen = 0; b_gen < DATA_IACT_BITWIDTH; b_gen = b_gen + 1) begin
-          localparam index = b_gen + w_gen * DATA_IACT_BITWIDTH;
-          assign storage_w[r_gen][w_gen][b_gen] = storage_i[(DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM*r_gen)+index];
         end
       end
     end

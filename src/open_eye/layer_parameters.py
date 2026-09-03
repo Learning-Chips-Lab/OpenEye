@@ -1531,7 +1531,7 @@ class LayerParameters(object):
         # test_gemm_layer.py; used_iact 2/3/5 fail, 4/6 work). Round up; the
         # padded positions carry zero iacts and zero weights, which is exact
         # (requires the raw_wght zero-operand fix).
-        self.used_iact_per_PE = max(4, self.used_iact_per_PE + (self.used_iact_per_PE % 2))
+        self.used_iact_per_PE = max(2, self.used_iact_per_PE + (self.used_iact_per_PE % 2))
         self.used_wght_per_PE = self.used_iact_per_PE * math.ceil(self.filters/params.Clusters_X/params.PARALLEL_MACS)*params.PARALLEL_MACS
         self.diff_iact_layer = math.ceil(self.iact_size_x/(params.NUM_GLB_WGHT*self.used_iact_per_PE))
         self.used_psum_per_PE = math.ceil(self.used_wght_per_PE/self.used_iact_per_PE)
@@ -1547,6 +1547,16 @@ class LayerParameters(object):
         self.iact_write_inc_0 = 1
         self.iact_write_limit_1 = 255
         self.iact_write_inc_1 = 256
+        self.psum_pagu_loop_limit_0 = 255
+        self.psum_pagu_loop_limit_1 = 0
+        self.psum_pagu_loop_limit_2 = 0
+        self.psum_pagu_loop_limit_3 = 0
+        self.psum_pagu_loop_limit_4 = 0
+        self.psum_pagu_addr_inc_0 = 1
+        self.psum_pagu_addr_inc_1 = 0
+        self.psum_pagu_addr_inc_2 = 0
+        self.psum_pagu_addr_inc_3 = 0
+        self.psum_pagu_addr_inc_4 = 0
         self.iact_words_per_compute = math.ceil(params.NUM_GLB_WGHT*self.used_iact_per_PE) + 1
         self.used_Y_cluster = params.Clusters_Y
         self.used_X_cluster = 1

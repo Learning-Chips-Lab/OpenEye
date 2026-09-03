@@ -426,7 +426,7 @@ module OpenEye_Parallel #(
         end
         SECOND_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{filters_i_reg}, {iact_channels_per_pe_i_reg}};
+          data_stream_reg        <= {{4{1'd0}},  {iact_channels_per_pe_i_reg}};
           fsm_transmission_state <= THIRD_PARAMS;
         end
         THIRD_PARAMS: begin
@@ -438,7 +438,7 @@ module OpenEye_Parallel #(
           // handshake PE.v's stream_data logic expects) rather than removed,
           // to avoid changing the cycle count consumers rely on elsewhere.
           enable_stream_reg      <= 1;
-          data_stream_reg        <= 0;
+          data_stream_reg        <= {{3{1'd0}}, {filters_i_reg}};
           fsm_transmission_state <= IDLE_TRANSMI;
         end
         default: begin
@@ -486,7 +486,7 @@ module OpenEye_Parallel #(
       needed_iact_cycles_i_reg       <= 0;
       filters_i_reg                  <= 0;
       iact_size_x_reg                <= 0;
-      iact_channels_per_pe_i_reg            <= 0;
+      iact_channels_per_pe_i_reg     <= 0;
       bano_cluster_mode_i_reg        <= 0;
       af_cluster_mode_i_reg          <= 0;
       pooling_cluster_mode_i_reg     <= 0;
@@ -522,7 +522,7 @@ module OpenEye_Parallel #(
       needed_iact_cycles_i_reg    <= needed_iact_cycles_i;
       filters_i_reg               <= filters_i;
       iact_size_x_reg             <= iact_size_x_i;
-      iact_channels_per_pe_i_reg         <= iact_channels_per_pe_i;
+      iact_channels_per_pe_i_reg  <= iact_channels_per_pe_i;
       bano_cluster_mode_i_reg     <= bano_cluster_mode_i;
       af_cluster_mode_i_reg       <= {NUM_GLB_PSUM{af_cluster_mode_i}};
       pooling_cluster_mode_i_reg  <= pooling_cluster_mode_i;
@@ -584,7 +584,7 @@ module OpenEye_Parallel #(
           cycle_break_counter   <= 0;
           if (psum_transmitted_i & (iact_enable_i == 0) & (wght_enable_i == 0)) begin
             cycle_break_counter <= cycle_break_counter + 1;
-            if (cycle_break_counter >= needed_y_cls_i_reg << 1) begin 
+            if (cycle_break_counter >= needed_y_cls_i_reg << 1) begin
               cycle_break_counter <= 0;
               start_new_cycle     <= 1;
               if (start_new_cycle != 1) begin

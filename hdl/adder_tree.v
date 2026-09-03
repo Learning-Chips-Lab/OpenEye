@@ -63,12 +63,14 @@ module adder_tree #(
     generate
         for (stage = 0; stage < STAGES; stage = stage + 1) begin : g_stages
             localparam integer NUM_ADDERS = PAD_INPUTS >> (stage + 1);
-            
             // Derive enable signal safely for stage 0 and higher stages
-            wire current_en = (stage == 0) ? en_i : valid_pipe_q[stage-1];
-
+            wire current_en;
+            if (stage == 0) begin : g_en_first
+                assign current_en = en_i;
+            end else begin : g_en_later
+                assign current_en = valid_pipe_q[stage-1];
+            end
             for (pair = 0; pair < NUM_ADDERS; pair = pair + 1) begin : g_adders
-                
                 adder #(
                     .DATA_WIDTH_SUM(DATA_WIDTH)
                 ) u_adder (
@@ -79,7 +81,6 @@ module adder_tree #(
                     .sum_o       (stage_data[stage+1][pair]),
                     .adder_en_i  (current_en)
                 );
-
             end
         end
     endgenerate

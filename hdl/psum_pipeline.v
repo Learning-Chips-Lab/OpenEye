@@ -55,7 +55,6 @@ module psum_pipeline #(
     input wire [7:0] needed_psum_storage_cycles_reg,
     input wire [7:0] iact_channel_max_cycles,
     input wire [3:0] iact_channels_per_pe_next_layer,
-    input wire [7:0] output_cycles,
     input wire [5:0] filters,
     input wire [7:0] psum_x_with_add_up,
     input wire [15:0] psum_x_all_cluster,
@@ -84,9 +83,9 @@ module psum_pipeline #(
     input wire [8-1:0] psum_cycle_addr_inc_3,
     input wire [8-1:0] psum_cycle_addr_inc_4,
 
-    output reg [CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_en_r,
-    output reg [CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_en_w,
-    output     [BUFFER_WIDTH*CLUSTERS*NUM_GLB_PSUM/2-1:0] psum_buffer_addr,
+    output reg [(CLUSTERS*(NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_r,
+    output reg [(CLUSTERS*(NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_w,
+    output     [(BUFFER_WIDTH*CLUSTERS*(NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_addr,
     output reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_data_w,
     output reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_i_reg,
     output reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_i_reg,
@@ -132,9 +131,9 @@ module psum_pipeline #(
   reg [7:0] iact_channel_counter_reg;
   reg [17:0] finished_cycles_psum;
   reg [BUFFER_WIDTH-1:0] psum_buffer_addr_storage;
-  reg [BUFFER_WIDTH-1:0] psum_buffer_addr_array [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][NUM_GLB_PSUM/2-1:0];
-  reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][NUM_GLB_PSUM/2-1:0] psum_buffer_en_w_int;
-  reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][NUM_GLB_PSUM/2-1:0] psum_buffer_en_r_int;
+  reg [BUFFER_WIDTH-1:0] psum_buffer_addr_array [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][((NUM_GLB_PSUM+1)/2)-1:0];
+  reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][((NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_w_int;
+  reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][((NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_r_int;
   reg [1:0] fsm_x_cl_psum;
   reg [1:0] fsm_x_cl_psum_q1;
   reg [1:0] fsm_x_cl_psum_q2;
@@ -194,8 +193,8 @@ module psum_pipeline #(
     end
     for (i_addr = 0; i_addr < CLUSTER_COLUMNS; i_addr = i_addr + 1) begin : ADDR_X
       for (j_addr = 0; j_addr < CLUSTER_ROWS; j_addr = j_addr + 1) begin : ADDR_Y
-        for (g_addr = 0; g_addr < NUM_GLB_PSUM/2; g_addr = g_addr + 1) begin : ADDR_GLB
-          assign psum_buffer_addr[(i_addr*BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM/2)+(j_addr*BUFFER_WIDTH*NUM_GLB_PSUM/2)+(g_addr*BUFFER_WIDTH)+:BUFFER_WIDTH] = psum_buffer_addr_array[i_addr][j_addr][g_addr];
+        for (g_addr = 0; g_addr < (NUM_GLB_PSUM+1)/2; g_addr = g_addr + 1) begin : ADDR_GLB
+          assign psum_buffer_addr[(i_addr*BUFFER_WIDTH*CLUSTER_ROWS*((NUM_GLB_PSUM+1)/2))+(j_addr*BUFFER_WIDTH*((NUM_GLB_PSUM+1)/2))+(g_addr*BUFFER_WIDTH)+:BUFFER_WIDTH] = psum_buffer_addr_array[i_addr][j_addr][g_addr];
         end
       end
     end
@@ -209,7 +208,7 @@ module psum_pipeline #(
       fsm_psum_current_state      <= PSUM_IDLE;
       for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
         for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-          for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+          for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
             psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= ~0;
           end
         end
@@ -278,7 +277,7 @@ module psum_pipeline #(
           if (GET_PARAMETERS == fsm_current_state) begin
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                   psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= ~0;
                 end
               end
@@ -310,7 +309,7 @@ module psum_pipeline #(
               psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
               if (fully_connected_layer) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                  for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                  for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                     //psum_buffer_data_w[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cr_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_psum*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS] <= data_dma_i_reg[TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0];
                   end
                 end
@@ -320,7 +319,7 @@ module psum_pipeline #(
                   fsm_x_cl_psum <= 0;
                   for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                     for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                      for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                      for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                         psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                       end
                     end
@@ -336,7 +335,7 @@ module psum_pipeline #(
                   psum_cycle_count <= 0;
                   for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                     for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                      for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                      for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                         psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                       end
                     end
@@ -352,7 +351,7 @@ module psum_pipeline #(
           if (compute_reg) begin
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                   psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= 0;
                 end
               end
@@ -370,7 +369,7 @@ module psum_pipeline #(
             fsm_psum_cycle <= fsm_psum_cycle + 1;
           end
           psum_transmitted <= 1;
-          psum_buffer_en_r <= {(NUM_GLB_PSUM*CLUSTERS/2){1'd1}};
+          psum_buffer_en_r <= {(((NUM_GLB_PSUM*CLUSTERS)+1)/2){1'd1}};
           if (fsm_psum_cycle == 16) begin
             fsm_psum_cycle         <= 0;
             psum_ready_i_reg       <= {(NUM_GLB_PSUM*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
@@ -384,12 +383,12 @@ module psum_pipeline #(
           if (psum_ready_i_reg != 0) begin
             psum_ready_i_reg <= psum_ready_i_reg;
           end
-          psum_buffer_en_r <= {(NUM_GLB_PSUM*CLUSTERS/2){1'd1}};
+          psum_buffer_en_r <= {(((NUM_GLB_PSUM*CLUSTERS)+1)/2){1'd1}};
           if ((results_ready == 0) & (psum_ready_i_reg != 0)) begin
             results_ready = 1;
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                   results_ready = results_ready & (psum_ready_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum*2] |
                    ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTERS != 1)));
                 end
@@ -401,11 +400,11 @@ module psum_pipeline #(
             psum_data_i_reg <= psum_buffer_data_r;
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                   if (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1 | (CLUSTERS == 1)) begin
                     psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                   end
-                  // g_psum indexes GLB pairs (loop bound NUM_GLB_PSUM/2), so
+                  // g_psum indexes GLB pairs (loop bound (NUM_GLB_PSUM+1)/2), so
                   // the stride into the full NUM_GLB_PSUM-wide router field
                   // must be g_psum*ROUTER_MODES_PSUM*2, matching every other
                   // use of this bit-2 check in this state (lines above/below).
@@ -420,12 +419,12 @@ module psum_pipeline #(
               psum_buffer_en_r    <= 0;
               fsm_psum_last_state    <= CALCULATE_PSUM;
               fsm_psum_current_state <= PSUM_GET_RESULTS;
-              results_ready          <= 0;
+              results_ready          <= 1;
               fsm_psum_cycle         <= 0;
               psum_enable_i_reg      <= 0;
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                  for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                  for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                     if ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) | (CLUSTERS == 1)) begin
                       psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_storage;
                     end
@@ -448,16 +447,16 @@ module psum_pipeline #(
           psum_buffer_data_w <= psum_data_o_w;
           for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
             for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-              for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                if (psum_buffer_en_w[cc_psum*NUM_GLB_PSUM/2*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM/2+g_psum]) begin
+              for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
+                if (psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)*CLUSTER_ROWS+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum]) begin
                   psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                 end
                 results_ready = results_ready & (psum_enable_o[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] |
                 ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTERS != 1)));
                 if (psum_enable_o[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] != 0) begin
-                  psum_buffer_en_w[cc_psum*NUM_GLB_PSUM/2*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM/2+g_psum] <= 1;
+                  psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)*CLUSTER_ROWS+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
                 end else begin
-                  psum_buffer_en_w[cc_psum*NUM_GLB_PSUM/2*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM/2+g_psum] <= 0;
+                  psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)*CLUSTER_ROWS+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum] <= 0;
                 end
               end
             end
@@ -466,12 +465,13 @@ module psum_pipeline #(
             psum_router_set_reg <= 0;
             fsm_psum_cycle      <= fsm_psum_cycle + 1;
           end
-          if (fsm_psum_cycle[$clog2(PSUM_PER_PE+1 )-1:0] >= filters) begin
+          if (fsm_psum_cycle == filters) begin
+            fsm_psum_cycle         <= 0;
             psum_transmitted       <= 1;
             if ((finished_cycles_psum == needed_cycles - 1)) begin
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                  for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                  for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                     psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= 0;
                   end
                 end
@@ -479,14 +479,13 @@ module psum_pipeline #(
               fsm_psum_last_state    <= PSUM_GET_RESULTS;
               fsm_psum_current_state <= WAIT_FOR_SENDING_RESULTS;
               psum_ready_i_reg       <= 0;
-              fsm_psum_cycle         <= 0;
               psum_buffer_en_w       <= 0;
               psum_buffer_en_r       <= ~0;
               psum_enable_i_reg      <= 0;
             end else begin
               finished_cycles_psum <= finished_cycles_psum + 1;
               if ((needed_y_cls_reg >= 2) & !psum_router_set_reg) begin
-                psum_router_set_reg <= 1;
+                psum_router_set_reg      <= 1;
                 iact_channel_counter_reg <= iact_channel_counter_reg + 1;
                 if ((iact_channel_counter_reg == iact_channel_max_cycles - 1)) begin
                   iact_channel_counter_reg <= 0;
@@ -497,14 +496,13 @@ module psum_pipeline #(
               end
               fsm_psum_last_state    <= PSUM_GET_RESULTS;
               fsm_psum_current_state <= WAIT_TO_SEND_READY_SIGNAL;
-              fsm_psum_cycle         <= 0;
-              psum_buffer_en_w    <= 0;
+              psum_buffer_en_w       <= 0;
               if (storage_cycles == needed_psum_storage_cycles_reg - 1) begin
                 storage_cycles <= 0;
                 psum_buffer_addr_storage <= psum_buffer_addr_storage + {{6{1'd0}}, filters};
                 for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                   for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                    for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                    for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                       psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_storage + {{6{1'd0}}, filters};
                     end
                   end
@@ -513,7 +511,7 @@ module psum_pipeline #(
                 storage_cycles <= storage_cycles + 1;
                 for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                   for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                    for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                    for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                       psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_storage;
                     end
                   end
@@ -533,12 +531,12 @@ module psum_pipeline #(
               fsm_psum_cycle            <= 0;
               psum_buffer_data_temp_reg <= psum_buffer_data_r;
               fsm_psum_current_state    <= PSUM_SEND_RESULTS;
-              psum_buffer_en_r          <= {(NUM_GLB_PSUM/2*CLUSTER_ROWS*CLUSTER_COLUMNS){1'd1}};
+              psum_buffer_en_r          <= {(((NUM_GLB_PSUM*CLUSTERS)+1)/2){1'd1}};
               psum_cycle_loop_cnt_1       <= 1;
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                  for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                    psum_buffer_en_r[cc_psum*CLUSTER_ROWS*NUM_GLB_PSUM/2+cr_psum*NUM_GLB_PSUM/2+g_psum] <= 1;
+                  for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
+                    psum_buffer_en_r[cc_psum*CLUSTER_ROWS*((NUM_GLB_PSUM+1)/2)+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
                     psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                   end
                 end
@@ -629,8 +627,8 @@ module psum_pipeline #(
                   psum_cycle_loop_cnt_1 <= 0;
                   for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                     for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                      for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
-                        psum_buffer_en_r[cc_psum*CLUSTER_ROWS*NUM_GLB_PSUM/2+cr_psum*NUM_GLB_PSUM/2+g_psum] <= 1;
+                      for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
+                        psum_buffer_en_r[cc_psum*CLUSTER_ROWS*((NUM_GLB_PSUM+1)/2)+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
                         psum_buffer_addr_array[cc_psum][cr_psum][g_psum]                                    <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                       end
                     end
@@ -642,7 +640,7 @@ module psum_pipeline #(
               psum_cycle_loop_cnt_0      <= 0;
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                  for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                  for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                     psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= 0;
                   end
                 end
@@ -663,7 +661,7 @@ module psum_pipeline #(
             fsm_y_cl_psum       <= fsm_y_cl_psum;
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+                for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                   psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum];
                 end
               end
@@ -777,7 +775,7 @@ module psum_pipeline #(
           end
           for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
             for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-              for (g_psum = 0; g_psum < (NUM_GLB_PSUM/2); g_psum = g_psum + 1) begin
+              for (g_psum = 0; g_psum < ((NUM_GLB_PSUM+1)/2); g_psum = g_psum + 1) begin
                 psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_cycle_addr_0;
               end
             end
@@ -846,7 +844,7 @@ module psum_pipeline #(
         psum_transmitted            <= 0;
         for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
           for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-            for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
+            for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
               psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= ~0;
             end
           end

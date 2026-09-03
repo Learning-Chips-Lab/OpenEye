@@ -79,7 +79,7 @@ module delay_cluster #(
 );
 
   // Delay stages (8 stages for 0-8 cycles)
-  localparam integer NUM_STAGES = 8;
+  localparam integer NUM_STAGES = 22;
 
   // Delay registers for data, enable, and ready signals
   reg [NUM_STAGES*DATA_BITWIDTH-1:0] data_regs;
@@ -159,7 +159,7 @@ module delay_cluster #(
       ready_o   = 1'b0;
     end
     */
-    idx       = 7;
+    idx       = 21;
     data_o    = data_regs[idx*DATA_BITWIDTH +: DATA_BITWIDTH];
     enable_o  = enable_regs[idx];
     ready_o   = ready_regs[idx];

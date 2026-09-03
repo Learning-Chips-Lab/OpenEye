@@ -35,14 +35,12 @@ module quantization_unit #(
     input  wire                           clk_i,
     input  wire                           rst_n,          // asynchronous, active-low reset
 
-    input  wire                           valid_in,        // input word is valid this cycle
     input  wire signed [MANT_WIDTH-1:0]   quant_mant,      // quantization multiplier (per filter)
     input  wire signed [PSUM_WIDTH-1:0]   psum_data,       // raw accumulated PSUM word
     input  wire signed [OFFSET_WIDTH-1:0] quant_offset,    // quantization offset (per filter)
     input  wire        [SHIFT_WIDTH-1:0]  current_shift,   // arithmetic right-shift amount
 
-    output reg  signed [OUT_WIDTH-1:0]    quantized_value, // quantized result, valid when valid_out = 1
-    output reg                            valid_out        // pipeline output valid (3 cycles after valid_in)
+    output reg  signed [OUT_WIDTH-1:0]    quantized_value // quantized result, valid when valid_out = 1
 );
 
     // Internal widths sized to avoid overflow in the intermediate steps.
@@ -62,12 +60,10 @@ module quantization_unit #(
             sum_s1   <= {SUM_WIDTH{1'b0}};
             mant_s1  <= {MANT_WIDTH{1'b0}};
             shift_s1 <= {SHIFT_WIDTH{1'b0}};
-            valid_s1 <= 1'b0;
         end else begin
             sum_s1   <= psum_data + quant_offset;
             mant_s1  <= quant_mant;
             shift_s1 <= current_shift;
-            valid_s1 <= valid_in;
         end
     end
 
@@ -86,7 +82,6 @@ module quantization_unit #(
         end else begin
             prod_s2  <= mant_s1 * sum_s1;
             shift_s2 <= shift_s1;
-            valid_s2 <= valid_s1;
         end
     end
 
@@ -96,10 +91,8 @@ module quantization_unit #(
     always @(posedge clk_i or negedge rst_n) begin
         if (!rst_n) begin
             quantized_value <= {OUT_WIDTH{1'b0}};
-            valid_out       <= 1'b0;
         end else begin
             quantized_value <= prod_s2 >>> shift_s2;
-            valid_out       <= valid_s2;
         end
     end
 

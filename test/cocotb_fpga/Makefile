@@ -9,12 +9,14 @@ SIM ?= icarus
 #COMPILE_ARGS += --trace --trace-fst --trace-structs
 COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE
 COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE_cluster
+COMPILE_ARGS += -Wall -Winf-loop
 
 TOPLEVEL_LANG ?= verilog
 WAVEFORM=on
 
 HDL_PATH = $(abspath $(PWD)/../../hdl)
 VH_PATH = $(abspath $(PWD))
+SIM_ARGS += -v
 
 # use VHDL_SOURCES for VHDL files
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/OpenEye_FPGA.v)
@@ -78,15 +80,16 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 
 #export LAYER=FC
-export LAYER=MNIST
+#export LAYER=MNIST
 #export LAYER=Convolution
+export LAYER=MLP
 #export LAYER=MobileNetV1
 #export LAYER=Pooling
 export NUM_FILTERS=8
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=14
-export INPUT_SIZE_Y=14
+export INPUT_SIZE_X=6
+export INPUT_SIZE_Y=1
 export STRIDE=1
 export INPUT_CHANNELS=4
 export OUTPUT_SIZE=8
@@ -113,7 +116,7 @@ export TRANS_BITWIDTH_PSUM=32
 #Set Number of Router Clusters per Instance
 export NUM_GLB_IACT=1
 export NUM_GLB_WGHT=3
-export NUM_GLB_PSUM=4
+export NUM_GLB_PSUM=1
 
 #Set number of Clusters
 export CLUSTER_COLUMNS=1
@@ -134,7 +137,7 @@ export BUFFER_WIDTH=9
 export BUFFER_WIDTH_PSUM = 12
 export BUFFER_WIDTH_WGHT = 13
 export QUANT_AMOUNT=32
-export TRANS_WORDS = 4
+export TRANS_WORDS = 1
 
 export DMA_BITWIDTH = 32
 
