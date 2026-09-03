@@ -17,6 +17,7 @@ from open_eye import hdl_dir
 
 import pe_test_utils as ptu
 from open_eye import hdl_dir, test_dir
+import open_eye.vh_file_creator as vh_file_creator
 
 
 #As ref:
@@ -39,7 +40,9 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("SPARSE_IACT", [(0)])#, (10), (20), (30), (40), (50), (60), (70), (80), (90)]) # Input activation sparsity
 @pytest.mark.parametrize("SPARSE_WGHT", [(0)]) # Weight sparsity
 @pytest.mark.parametrize("SEED", [0]) # Random seed
-def test_single_pe(B, C0, M0, SPARSE_IACT, SPARSE_WGHT, SEED, request):
+@pytest.mark.parametrize("PARALLEL_MACS", [2]) # MAC lanes per PE (must match PE_IO_debug default)
+@pytest.mark.parametrize("SPARSITY_EN", [1]) # 1=sparse mode
+def test_single_pe(B, C0, M0, SPARSE_IACT, SPARSE_WGHT, SEED, PARALLEL_MACS, SPARSITY_EN, request):
     dut = 'PE_IO_debug' # Name of the top-level module (without .v extension)
     module = 'PE_tb'
     toplevel = dut
@@ -47,6 +50,14 @@ def test_single_pe(B, C0, M0, SPARSE_IACT, SPARSE_WGHT, SEED, request):
     nodeid = request.node.nodeid.replace("::", "_").replace("/", "_").replace("[","_").replace("]","_")
     target_dir = os.path.join(test_dir, '.temp/' + nodeid)
     os.makedirs(target_dir, exist_ok=True)
+
+    # PE.v `includes "parameters_PE.vh" (PARALLEL_MACS/SPARSITY_EN) unless
+    # USE_INTERNAL_PARAMS_PE is defined. Generate it into the sim_build dir so
+    # Icarus's cwd-relative include search finds it. create_vh_file reads the
+    # values from the environment, so set them before the call.
+    os.environ["PARALLEL_MACS"] = str(PARALLEL_MACS)
+    os.environ["SPARSITY_EN"] = str(SPARSITY_EN)
+    vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel="PE")
 
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],
@@ -72,7 +83,8 @@ def test_single_pe(B, C0, M0, SPARSE_IACT, SPARSE_WGHT, SEED, request):
                     "SPARSE_IACT" : str(SPARSE_IACT),
                     "SPARSE_WGHT" : str(SPARSE_WGHT),
                     "SEED" : str(SEED),
-                    "SPARSITY_EN": "1",
+                    "PARALLEL_MACS": str(PARALLEL_MACS),
+                    "SPARSITY_EN": str(SPARSITY_EN),
                     "COCOTB_TRACE": "1",
                     "IVERILOG_DUMPER": "fst"},  # Enable FST waveform dumping for Icarus
     )

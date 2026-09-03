@@ -51,12 +51,30 @@ def are_files_identical(file1_path: str, file2_path: str) -> bool:
         return False
 
 
-def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -> None:
+# Suffix of the generated .vh file, per top-level module. PE.v and PE_cluster.v
+# `include their own parameter file whenever they are compiled, no matter which
+# module sits on top, so those two files are always generated as well.
+VH_SUFFIX_BY_TOPLEVEL = {
+    "OpenEye_FPGA": "_FPGA",
+    # OpenEye_Parallel.v only includes parameters.vh under USE_EXTERNAL_PARAMS,
+    # which the tests do not define; it is listed so the PE and PE_cluster
+    # headers below are generated for it.
+    "OpenEye_Parallel": "",
+    "PE_cluster": "_PE_cluster",
+    "PE": "_PE",
+}
+
+
+def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh',
+                   toplevel: Optional[str] = None) -> None:
     """Create a Verilog header file with OpenEye parameters.
 
     Args:
         openeye_parameter: OpenEye parameter configuration object
         filename: Output .vh file path
+        toplevel: Module the file is written for (from TOPLEVEL env when None).
+            "OpenEye_FPGA" gets the full accelerator configuration, every other
+            module gets the PE-level parameters only.
 
     Generated Parameters:
         - CLUSTER_ROWS: Number of cluster rows (Y dimension)
@@ -64,8 +82,9 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
         - NUM_GLB_PSUM: Number of global partial sum buffers
         - NUM_GLB_WGHT: Number of global weight buffers
     """
-    gtu.delete_files_in_directory('demo/')
-    if (gtu.load_env_to_variable("TOPLEVEL", "OpenEye_FPGA") == "OpenEye_FPGA") :
+    toplevel = toplevel or gtu.load_env_to_variable("TOPLEVEL", "")
+    if toplevel == "OpenEye_FPGA":
+        gtu.delete_files_in_directory('demo/')
         try:
             with open("shared_config.json", "r") as f:
                 config_data = json.load(f)
@@ -92,14 +111,40 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh') -
             txt_file.write(f"parameter TRANS_BITWIDTH_IACT = {openeye_parameter.IACT_Trans_Bitwidth},\n")
             txt_file.write(f"parameter TRANS_BITWIDTH_WGHT = {openeye_parameter.WGHT_Trans_Bitwidth},\n")
             txt_file.write(f"parameter TRANSMISSIONS = {TRANSMISSIONS},\n")
-    if (gtu.load_env_to_variable("TOPLEVEL", "PE_cluster") == "PE_cluster") :
+    else:
         with open(filename, 'w') as txt_file:
             txt_file.write(f"parameter PARALLEL_MACS = {openeye_parameter.PARALLEL_MACS},\n")
             txt_file.write(f"parameter SPARSITY_EN = {openeye_parameter.SPARSITY_EN},\n")
-    if (gtu.load_env_to_variable("TOPLEVEL", "PE") == "PE") :
-        with open(filename, 'w') as txt_file:
-            txt_file.write(f"parameter PARALLEL_MACS = {openeye_parameter.PARALLEL_MACS},\n")
-            txt_file.write(f"parameter SPARSITY_EN = {openeye_parameter.SPARSITY_EN},\n")
+
+
+def _update_vh_file(openeye_parameter: object, file_path_vh: str, file_path_hdl: str,
+                    toplevel: str) -> None:
+    """Write one parameter file, recompile-triggering the module only on change.
+
+    The file is written to a temporary name first and compared with the current
+    one. If nothing changed the temporary is dropped, otherwise it replaces the
+    old file and the corresponding .v file is touched so the simulator rebuilds.
+    """
+    suffix = VH_SUFFIX_BY_TOPLEVEL[toplevel]
+    pre_param_path = os.path.join(file_path_vh, "pre_parameters" + suffix + ".vh")
+    param_path = os.path.join(file_path_vh, "parameters" + suffix + ".vh")
+
+    create_vh_file(openeye_parameter, pre_param_path, toplevel=toplevel)
+
+    if are_files_identical(pre_param_path, param_path):
+        os.remove(pre_param_path)
+        print(f"Same vh-file for {toplevel}. Do not recompile")
+        return
+
+    if os.path.exists(param_path):
+        os.remove(param_path)
+    os.rename(pre_param_path, param_path)
+
+    verilog_path = os.path.join(file_path_hdl, f"{toplevel}.v")
+    print(f"Touching {verilog_path}")
+    os.utime(verilog_path, None)
+    print(f"Different vh-file for {toplevel}, updated vh-file")
+
 
 def create_vh_file_from_envvars(
     file_path_vh: Optional[str] = None,
@@ -122,32 +167,24 @@ def create_vh_file_from_envvars(
     file_path_hdl = file_path_hdl or gtu.load_env_to_variable("HDL_PATH", hdl_dir)
     toplevel = toplevel or gtu.load_env_to_variable("TOPLEVEL", "")
     print(toplevel)
-    if(toplevel == "OpenEye_FPGA") :
-      suffix = "_FPGA"
-    if(toplevel == "PE_cluster") :
-        suffix = "_PE_cluster"
-    if(toplevel == "PE") :
-        suffix = "_PE"
-    # Create parameter file
+
+    if toplevel not in VH_SUFFIX_BY_TOPLEVEL:
+        raise ValueError(
+            f"No parameter file defined for toplevel {toplevel!r}. "
+            f"Known toplevels: {sorted(VH_SUFFIX_BY_TOPLEVEL)}"
+        )
+
     openeye_parameter = oep.get_oep(serial=False)
-    pre_param_path = os.path.join(file_path_vh, "pre_parameters" + suffix + ".vh")
-    param_path = os.path.join(file_path_vh, "parameters" + suffix + ".vh")
-    
-    create_vh_file(openeye_parameter, pre_param_path)
-    
-    if are_files_identical(pre_param_path, param_path):
-        os.remove(pre_param_path)
-        print("Same vh-file. Do not recompile")
-    else:
-        if os.path.exists(param_path):
-            os.remove(param_path)
-        os.rename(pre_param_path, param_path)
-        
-        if toplevel:
-            verilog_path = os.path.join(file_path_hdl, f"{toplevel}.v")
-            print(f"Touching {verilog_path}")
-            os.utime(verilog_path, None)
-        print("Different vh-file, updated vh-file")
+
+    # Every module in the compile that includes a parameter header unconditionally
+    # needs that header on disk, not just the top-level one. PE.v and PE_cluster.v
+    # always do; OpenEye_FPGA.v is part of the full-design source lists even when
+    # OpenEye_Parallel is on top.
+    also = ["PE_cluster", "PE"]
+    if toplevel in ("OpenEye_Parallel", "OpenEye_FPGA"):
+        also.append("OpenEye_FPGA")
+    for module in dict.fromkeys([toplevel] + also):
+        _update_vh_file(openeye_parameter, file_path_vh, file_path_hdl, module)
 
 
 if __name__ == "__main__":

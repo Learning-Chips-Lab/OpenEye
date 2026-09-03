@@ -14,6 +14,8 @@ def get_verilog_sources(hdl_dir):
     verilog_sources =[
     os.path.join(hdl_dir, "PE.v"),
     os.path.join(hdl_dir, "adder.v"),
+    os.path.join(hdl_dir, "adder_tree.v"),
+    os.path.join(hdl_dir, "dsp_unit.v"),
     os.path.join(hdl_dir, "data_pipeline.v"),
     os.path.join(hdl_dir, "data_pipeline_iact.v"),
     os.path.join(hdl_dir, "data_pipeline_wght.v"),

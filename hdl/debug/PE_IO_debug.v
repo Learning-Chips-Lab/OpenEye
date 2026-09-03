@@ -21,9 +21,6 @@ module PE_IO_debug #(
     parameter SERIAL      = 1,
     parameter CREATE_VCD  = 0,
 
-    parameter PE_X = 0,
-    parameter PE_Y = 0,
-
     parameter integer PARALLEL_MACS = 2,
 
     parameter integer DATA_IACT_BITWIDTH     = 8,
@@ -212,8 +209,6 @@ module PE_IO_debug #(
   PE #(
     .IS_TOPLEVEL(IS_TOPLEVEL),
     .SERIAL(SERIAL),
-    .PE_X(PE_X),
-    .PE_Y(PE_Y),
     .PARALLEL_MACS(PARALLEL_MACS),
     .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
     .DATA_WGHT_BITWIDTH(DATA_WGHT_BITWIDTH),

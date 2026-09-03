@@ -11,4 +11,7 @@ jobs:
         run: sudo apt install -y verilator
 
       - name: run verilator lint
-        run: verilator --lint-only -Wall -Ihdl/ hdl/OpenEye_Parallel.v
+        # PE.v and PE_cluster.v `include generated parameter headers that only
+        # exist in a simulation build directory; the ifdef fallbacks give the
+        # linter the same defaults.
+        run: verilator --lint-only -Wall -Ihdl/ +define+USE_INTERNAL_PARAMS_PE +define+USE_INTERNAL_PARAMS_PE_cluster hdl/OpenEye_Parallel.v

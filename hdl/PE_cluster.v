@@ -170,8 +170,11 @@ module PE_cluster #(
     parameter  DATA_IACT_OVERHEAD     = 4,
     parameter  DATA_WGHT_OVERHEAD     = 4,
     parameter  DATA_WGHT_IGNORE_ZEROS = 4,
-    parameter  TRANS_BITWIDTH_IACT    = 16,
-    parameter  TRANS_BITWIDTH_WGHT    = 8,
+    // Transfer widths hold PARALLEL_MACS words of the payload plus, in sparse
+    // mode, the zero-skip overhead bits. Fixed defaults only matched the dense
+    // single-MAC build and truncated every other configuration.
+    parameter  TRANS_BITWIDTH_IACT    = PARALLEL_MACS * (DATA_IACT_BITWIDTH + (SPARSITY_EN ? DATA_IACT_OVERHEAD : 0)),
+    parameter  TRANS_BITWIDTH_WGHT    = PARALLEL_MACS * (DATA_WGHT_BITWIDTH + (SPARSITY_EN ? DATA_WGHT_IGNORE_ZEROS : 0)),
     parameter  TRANS_BITWIDTH_PSUM    = 20,
     parameter  NUM_GLB_IACT           = 3,
     parameter  IACT_ADDR_WORDS        = 9,

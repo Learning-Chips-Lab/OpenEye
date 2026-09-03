@@ -76,6 +76,16 @@ def test_single_conv_layer(
     vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel="OpenEye_FPGA")
     generator.create_regmap_params_vh_file(os.path.join(test_dir, "cocotb_fpga"), target_dir, target_dir)
 
+    # test/cocotb_fpga/regmap.yaml carries registers that the checked-in
+    # hdl/dma_storage.v (generated from hdl/config/regmap.yaml for a 1x2 array)
+    # does not know. Compile the decoder just generated into sim_build so it
+    # matches the regmap_params.vh the rest of the design includes.
+    verilog_sources = [
+        src for src in verilog_sources
+        if os.path.basename(src) != "dma_storage.v"
+    ]
+    verilog_sources.append(os.path.join(target_dir, "dma_storage.v"))
+
     results = cocotb_test.simulator.run(
         python_search=[test_dir],
         verilog_sources=verilog_sources,

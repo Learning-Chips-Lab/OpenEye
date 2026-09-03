@@ -455,11 +455,15 @@ module data_pipeline_iact #(
         // payload_reg is output via second_spad_data_o combinationally and
         // will be captured by the SPAD on the cycle second_spad_en_o is high.
         // -----------------------------------------------------------------
-        if ((cycle_counter == 0) & (data_i != 0)) begin
+        // Dense mode writes every sub-word, so the payload must be staged even
+        // when it is zero. Gating the load on non-zero would store the previous
+        // activation in its place and leave data_storage_2 holding a stale
+        // shift window for the remaining sub-words of an all-zero transfer.
+        if ((cycle_counter == 0) & ((data_i != 0) | (!SPARSITY_EN))) begin
           payload_reg       <= data_i[SECOND_PAYLOAD_WIDTH-1 : 0];
           data_storage_2    <= data_i;
         end
-        if ((cycle_counter != 0) & (current_data != 0)) begin
+        if ((cycle_counter != 0) & ((current_data != 0) | (!SPARSITY_EN))) begin
           payload_reg         <= current_data[SECOND_PAYLOAD_WIDTH-1 : 0];
         end
 

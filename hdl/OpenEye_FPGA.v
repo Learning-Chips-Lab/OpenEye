@@ -2855,8 +2855,14 @@ end
               .rd_en_i(psum_buffer_en_r[i_gen*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*(NUM_GLB_PSUM+1)/2+g_gen] & !psum_buffer_en_w[i_gen*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*(NUM_GLB_PSUM+1)/2+g_gen]),
               .wr_en_i(psum_buffer_en_w[i_gen*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*(NUM_GLB_PSUM+1)/2+g_gen]),
               .addr_i (psum_buffer_addr[i_gen*BUFFER_WIDTH_PSUM*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*BUFFER_WIDTH_PSUM*(NUM_GLB_PSUM+1)/2+g_gen*BUFFER_WIDTH_PSUM+:BUFFER_WIDTH_PSUM]),
-              .data_i (psum_buffer_data_w[i_gen*PSUM_BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*PSUM_BUFFER_WIDTH*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH]),
-              .data_o (psum_buffer_data_r[i_gen*PSUM_BUFFER_WIDTH*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*PSUM_BUFFER_WIDTH*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH])
+              // The data buses are declared in TRANS_BITWIDTH_PSUM units
+              // (TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM), so the per-column
+              // and per-row strides stay in those units. Only the slot inside
+              // one cluster is PSUM_BUFFER_WIDTH wide - using it for the
+              // strides too doubles them for NUM_GLB_PSUM>1 and runs off the
+              // end of the bus.
+              .data_i (psum_buffer_data_w[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH]),
+              .data_o (psum_buffer_data_r[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH])
           );
         end
       end

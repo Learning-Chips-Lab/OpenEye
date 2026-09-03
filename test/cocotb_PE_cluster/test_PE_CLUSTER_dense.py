@@ -8,6 +8,9 @@ import cocotb_test.simulator
 logger = logging.getLogger("cocotb")
 
 from open_eye import hdl_dir, test_dir
+
+# pe_cluster_test_utils sits next to this file, not on sys.path by default
+sys.path.extend([os.path.abspath(os.getcwd()), os.path.dirname(os.path.realpath(__file__))])
 import pe_cluster_test_utils as pctu
 
 # Clock configuration

@@ -28,6 +28,7 @@ import cocotb_test.simulator
 logger = logging.getLogger("cocotb")
 
 from open_eye import hdl_dir, test_dir
+import open_eye.vh_file_creator as vh_file_creator
 import pe_test_utils as ptu
 
 # Test parameters for dense mode
@@ -36,6 +37,7 @@ C0_VALUES = [3]  # Input channels per PE (C0 in Eyeriss v2)
 M0_VALUES = [12] # Output channels per PE (M0 in Eyeriss v2)
 SEED_VALUES = [0]            # Random seeds
 USE_DSP_VALUES = [0, 1]      # 0=standard multiplier+adder, 1=DSP48 optimization
+PARALLEL_MACS_VALUES = [2]   # MAC lanes per PE (C0S*M0 weights must fit WGHT_DATA_ADDR)
 
 # Clock configuration
 CLK_CYCLE = 10
@@ -51,7 +53,8 @@ CLK_DELAY_UNIT_OUTPUT = "ps"
 @pytest.mark.parametrize("M0", M0_VALUES)
 @pytest.mark.parametrize("SEED", SEED_VALUES)
 @pytest.mark.parametrize("USE_DSP", USE_DSP_VALUES)
-def test_pe_dense_mode(U, C0, M0, SEED, USE_DSP):
+@pytest.mark.parametrize("PARALLEL_MACS", PARALLEL_MACS_VALUES)
+def test_pe_dense_mode(U, C0, M0, SEED, USE_DSP, PARALLEL_MACS):
     """
     Test PE in dense mode (SPARSITY_EN=0) with selectable MAC implementation.
 
@@ -73,21 +76,23 @@ def test_pe_dense_mode(U, C0, M0, SEED, USE_DSP):
     from open_eye import hdl_dir
     verilog_sources = ptu.get_verilog_sources(str(hdl_dir))
 
-    # Add dsp_unit.v when USE_DSP=1
-    if USE_DSP == 1:
-        dsp_unit_path = Path(hdl_dir) / "dsp_unit.v"
-        if dsp_unit_path.exists():
-            verilog_sources.append(str(dsp_unit_path))
-
     # Test module configuration
     module = "PE_tb"
     toplevel = "PE"
 
     # Create temporary directory for this test
     dsp_mode_str = "dsp" if USE_DSP == 1 else "std"
-    test_name = f"test_dense_iact{U}x{C0}_wght{M0}_seed{SEED}_{dsp_mode_str}"
+    test_name = f"test_dense_iact{U}x{C0}_wght{M0}_seed{SEED}_{dsp_mode_str}_pm{PARALLEL_MACS}"
     target_dir = Path(__file__).parent / ".temp" / test_name
     target_dir.mkdir(parents=True, exist_ok=True)
+
+    # PE.v `includes "parameters_PE.vh" (PARALLEL_MACS/SPARSITY_EN) unless
+    # USE_INTERNAL_PARAMS_PE is defined. Generate it into the sim_build dir so
+    # Icarus's cwd-relative include search finds it. create_vh_file reads the
+    # values from the environment, so set them before the call.
+    os.environ["PARALLEL_MACS"] = str(PARALLEL_MACS)
+    os.environ["SPARSITY_EN"] = "0"
+    vh_file_creator.create_vh_file_from_envvars(str(target_dir), str(hdl_dir) + "/", toplevel="PE")
 
     # Environment variables for test configuration
     extra_env = {
@@ -105,6 +110,7 @@ def test_pe_dense_mode(U, C0, M0, SEED, USE_DSP):
         "M0": str(M0),
 
         # Dense mode configuration
+        "PARALLEL_MACS": str(PARALLEL_MACS),
         "SPARSITY_EN": "0",  # *** DENSE MODE ***
         "SPARSE_IACT": "0",  # 0% sparsity (all values present)
         "SPARSE_WGHT": "0",  # 0% sparsity

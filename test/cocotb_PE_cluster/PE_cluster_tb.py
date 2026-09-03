@@ -332,7 +332,8 @@ async def send_wght(ptp, dut, data_array):
     wght_transmission = []
     for glb_cluster in range(int(dut.PE_ROWS.value)):
         wght_transmission.append(
-            pctu.send_to_wght_spad(ptp, spad_data[glb_cluster], dut))
+            pctu.send_to_wght_spad(ptp, spad_data[glb_cluster], dut,
+                                   wghtsize_y * wghtsize_x))
 
     for transmission in range (int(dut.WGHT_DATA_WORDS.value)):
         temp_enable = 0
@@ -501,7 +502,10 @@ def generate_spad(
     for y in range(len(data)):  # For each row
         for x in range(len(data[y])):  # For each element in row
             # Include this element if it's non-zero OR we're not ignoring zeros
-            if (data[y][x] != 0) | (not ignore_zeros) | (((len(data[y]) - 1 == x) & (current_count%2 != 0))):
+            # The last clause pads a row out to an even word in packed mode so
+            # the next row starts on a fresh word. SISD mode stores one value
+            # per word, so padding there would inject a bogus zero weight.
+            if (data[y][x] != 0) | (not ignore_zeros) | (simd & (len(data[y]) - 1 == x) & (current_count%2 != 0)):
                 if (data[y][x] < 0):
                     temp_data = data[y][x] + 2**bitwidth
                 else :

@@ -11,7 +11,7 @@ needed by LayerParameters for each layer type.
 """
 
 import numpy as np
-from layer_adapter import KerasLayerAdapter
+from open_eye.layer_adapter import KerasLayerAdapter
 
 
 def test_conv2d_layer():

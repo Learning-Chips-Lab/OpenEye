@@ -139,6 +139,11 @@ def test_depthwise_conv_layer(STRIDE,KERNEL_SIZE_X,KERNEL_SIZE_Y,INPUT_SIZE,INPU
     verilog_sources = ptu.get_verilog_sources(hdl_dir)
 
     target_dir = os.path.join(tests_dir, '.temp') 
+    os.makedirs(target_dir, exist_ok=True)
+    # PE.v and PE_cluster.v `include their own parameter headers; generate
+    # them into sim_build so Icarus finds them next to the other sources.
+    vh_file_creator.create_vh_file_from_envvars(
+        target_dir, hdl_dir + "/", toplevel="OpenEye_Parallel")
 
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],
@@ -177,6 +182,11 @@ def test_fc_layer(INPUT_SIZE, OUTPUT_SIZE):
     verilog_sources = ptu.get_verilog_sources(hdl_dir)
 
     target_dir = os.path.join(tests_dir, '.temp') 
+    os.makedirs(target_dir, exist_ok=True)
+    # PE.v and PE_cluster.v `include their own parameter headers; generate
+    # them into sim_build so Icarus finds them next to the other sources.
+    vh_file_creator.create_vh_file_from_envvars(
+        target_dir, hdl_dir + "/", toplevel="OpenEye_Parallel")
 
     results = cocotb_test.simulator.run(
         python_search=[tests_dir],

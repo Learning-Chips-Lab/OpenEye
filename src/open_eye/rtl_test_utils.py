@@ -123,7 +123,8 @@ async def reset_all_signals(ptp, dut, serial):
         cocotb.start_soon(set_input(ptp,(dut.needed_y_cls_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.needed_iact_cycles_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.filters_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.iact_addr_len_i), 0))
+        # iact_addr_len_i was removed from OpenEye_Parallel in fed1325; PE.v has
+        # no reader for it any more, so only the weight length is driven.
         cocotb.start_soon(set_input(ptp,(dut.wght_addr_len_i), 0))
 
         # Cluster operation modes
@@ -137,8 +138,8 @@ async def reset_all_signals(ptp, dut, serial):
         cocotb.start_soon(set_input(ptp,(dut.iact_write_data_t_i), 0))
 
         # Convolution parameters
-        cocotb.start_soon(set_input(ptp,(dut.stride_x_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.stride_y_i), 0))
+        # stride_x_i/stride_y_i were dropped from OpenEye_Parallel in 4cc9e07;
+        # the config stream no longer carries stride.
         cocotb.start_soon(set_input(ptp,(dut.kernel_per_pe_cluster_i), 0))
 
         # Processing element control
@@ -211,7 +212,7 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
 
         # Filter and memory configuration
         cocotb.start_soon(set_input(ptp,(dut.filters_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["used_psum_per_PE"]]))
-        cocotb.start_soon(set_input(ptp,(dut.iact_addr_len_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["used_iact_addr_per_PE"]]))
+        # iact_addr_len_i no longer exists on OpenEye_Parallel (removed in fed1325).
         cocotb.start_soon(set_input(ptp,(dut.wght_addr_len_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["used_wght_addr_per_PE"]]))
 
         # Cluster operation modes
@@ -226,8 +227,8 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
         cocotb.start_soon(set_input(ptp,(dut.iact_write_data_t_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["iact_data_len"]]))
 
         # Convolution stride parameters
-        cocotb.start_soon(set_input(ptp,(dut.stride_x_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["strideX"]]))
-        cocotb.start_soon(set_input(ptp,(dut.stride_y_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["strideY"]]))
+        # stride_x_i/stride_y_i were dropped from OpenEye_Parallel in 4cc9e07;
+        # the config stream no longer carries stride.
         cocotb.start_soon(set_input(ptp,(dut.kernel_per_pe_cluster_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["kernel_per_pe_cluster"]]))
 
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)

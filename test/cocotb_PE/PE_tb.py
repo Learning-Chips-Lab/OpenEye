@@ -557,10 +557,15 @@ async def send_data_params(ptp, dut):
     data_reg_i =  (iact_addr_max_i << 0)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
     await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
-    data_reg_i =  (filters_reg_i << 4) + (channel_reg_i << 0)
+    # PE.v shifts each 9-bit word up by 9 bits per cycle, so after all three
+    # cycles word 1 sits at stream_data[26:18], word 2 at [17:9] and word 3 at
+    # [8:0]. The decode is C0 = stream_data[12:9] (word 2 bits [3:0]) and
+    # M0 = stream_data[5:0] (word 3 bits [5:0]) - M0 moved out of word 2 and
+    # widened to 6 bits in e8f39ad. Nothing reads the remaining word-3 bits.
+    data_reg_i =  (channel_reg_i << 0)
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
     await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
-    data_reg_i =  (wght_addr_max_reg << 4) + (stride_reg << 1)
+    data_reg_i =  (filters_reg_i << 0)
     print("TEST: " + str(data_reg_i))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), data_reg_i))
     await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore

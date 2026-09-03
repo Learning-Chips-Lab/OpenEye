@@ -49,7 +49,12 @@ def test_gemm_mode_plumbing(CLUSTER_ROWS, request):
         sim_build=target_dir,
         includes=[os.path.join(hdl_dir, "include")],
         parameters={"CLUSTER_ROWS": CLUSTER_ROWS},
-        defines={"NO_TRACE": "TRUE"},
+        # This runner overrides the PE parameters through `parameters` and does
+        # not generate the parameter headers, so use the modules' built-in
+        # defaults instead of the generated parameters_PE*.vh includes.
+        defines={"NO_TRACE": "TRUE",
+                 "USE_INTERNAL_PARAMS_PE": "TRUE",
+                 "USE_INTERNAL_PARAMS_PE_cluster": "TRUE"},
         force_compile=True,
         simulator="icarus",
         extra_env={

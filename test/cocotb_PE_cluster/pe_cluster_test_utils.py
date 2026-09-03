@@ -136,18 +136,22 @@ async def send_data_params(ptp, dut, iactsize_x, iactsize_y, wghtsize_x):
         # unread in stream_data[8:0] (nothing consumes it). The bit
         # layout PE.v actually decodes is:
         #   FIRST  : [8]=raw_wght, [7:4]=iact_x_line_repetitions, [3:0]=iact_addr_max
-        #   SECOND : [8:4]=M0 (filters),                          [3:0]=C0 (channels)
-        #   THIRD  : unused (dead cycle, still sent to complete the handshake)
-        # raw_wght is left 0 here: send_wght() above packs weights with
-        # ignore_zeros=True (sparse zero-skip encoding), which is only
-        # correct when PE.v's raw_mode_i is 0.
-        data_reg_i = (iact_addr_max_i << 0)
+        #   SECOND : [3:0]=C0 (channels)
+        #   THIRD  : [5:0]=M0 (filters)
+        # M0 moved out of the SECOND word and widened to 6 bits in e8f39ad
+        # (PE.v: filters_reg_M0 = stream_data[5:0], was stream_data[17:13]).
+        # raw_wght must mirror send_wght()'s packing: sparse mode packs with
+        # ignore_zeros=True (zero-skip encoding), which needs raw_mode_i 0,
+        # while dense mode sends every weight verbatim, which data_pipeline_wght
+        # only stores when raw_mode_i is 1 (zero weights are dropped otherwise).
+        raw_wght = 0 if int(dut.SPARSITY_EN.value) == 1 else 1
+        data_reg_i = (iact_addr_max_i << 0) | (raw_wght << 8)
         cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        data_reg_i = (filters_reg_i << 4) + (channel_reg_i << 0)
+        data_reg_i = (channel_reg_i << 0)
         cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        data_reg_i = 0
+        data_reg_i = (filters_reg_i << 0)
         cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.data_stream_i), data_reg_i))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
@@ -155,7 +159,7 @@ async def send_data_params(ptp, dut, iactsize_x, iactsize_y, wghtsize_x):
     cocotb.start_soon(rtl_test_utils.set_input(ptp, (dut.enable_stream_i), 0))
     await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
    
-def send_to_wght_spad(ptp, spad, dut):
+def send_to_wght_spad(ptp, spad, dut, words):
     """
     Generic function to transmit SPAD data over a limited-width bus.
 
@@ -181,6 +185,11 @@ def send_to_wght_spad(ptp, spad, dut):
     data_array = [[],[]]
     # Send data over multiple clock cycles
     words_per_transmit = 1
+    # generate_spad packs one weight per SPAD word in SISD mode and two in
+    # packed mode, so that is how many transfers carry real data.
+    values_per_word = 1 if int(dut.PARALLEL_MACS.value) == 1 else 2
+    dense_mode = int(dut.SPARSITY_EN.value) == 0
+    valid_transfers = math.ceil(words / values_per_word)
     for cycle in range(int(dut.WGHT_DATA_WORDS.value)):
         # Calculate how many words fit in one transmission
         # Pack multiple words into this transmission
@@ -197,9 +206,13 @@ def send_to_wght_spad(ptp, spad, dut):
             except:
                 # Handle out of bounds (sparse data)
                 sending_data = sending_data
-        # Send the packed transmission
+        # Send the packed transmission.
+        # As on the iact path: sparse mode drops all-zero transfers because the
+        # zeros were compressed away, dense mode must keep sending them.
         data_array[1].append(sending_data)
-        if (sending_data != 0) :
+        if dense_mode:
+            data_array[0].append(1 if cycle < valid_transfers else 0)
+        elif (sending_data != 0) :
             data_array[0].append(1)
         else: 
             data_array[0].append(0)
@@ -238,11 +251,19 @@ def send_to_iact_spad(ptp, spad, dut, words):
         words_per_transmit = 1
         word_stride        = int(dut.DATA_IACT_BITWIDTH.value)
     else:
-        words_per_transmit = 2
         if (int(dut.SPARSITY_EN.value) == 1): 
             word_stride        = int(dut.DATA_IACT_BITWIDTH.value) + int(dut.DATA_IACT_OVERHEAD.value)
         else:
             word_stride        = int(dut.DATA_IACT_BITWIDTH.value)
+        # data_pipeline_iact unpacks DATA_WIDTH/SECOND_SPAD_DATA sub-words per
+        # transfer, so the packing has to follow the compiled bus width instead
+        # of assuming the 24-bit (2 x 12 bit) sparse case.
+        words_per_transmit = int(dut.TRANS_BITWIDTH_IACT.value) // word_stride
+    dense_mode = int(dut.SPARSITY_EN.value) == 0
+    # The position stepping below repeats each group of words_per_transmit SPAD
+    # words for that many cycles, so a transfer still carries data up to the
+    # cycle whose group holds the last word.
+    valid_transfers = math.ceil(words / words_per_transmit) * words_per_transmit
     # Send data over multiple clock cycles
     for cycle in range(int(dut.IACT_DATA_WORDS.value)):
         # Calculate how many words fit in one transmission
@@ -257,9 +278,15 @@ def send_to_iact_spad(ptp, spad, dut, words):
             except:
                 # Handle out of bounds (sparse data)
                 sending_data = sending_data
-        # Send the packed transmission
+        # Send the packed transmission.
+        # Sparse mode compresses zeros away, so an all-zero transfer is padding
+        # past the end of the data and stays disabled. Dense mode stores every
+        # value including the zeros, so the enable has to follow the word count
+        # instead - dropping a zero transfer would starve the PE of a word.
         data_array[1].append(sending_data)
-        if (sending_data != 0) :
+        if dense_mode:
+            data_array[0].append(1 if cycle < valid_transfers else 0)
+        elif (sending_data != 0) :
             data_array[0].append(1)
         else: 
             data_array[0].append(0)

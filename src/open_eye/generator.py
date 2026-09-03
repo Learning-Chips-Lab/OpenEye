@@ -17,6 +17,8 @@ import os
 import math
 import json
 
+import open_eye.open_eye_parameters as oep
+
 # Context for evaluating expressions in YAML (e.g., "ceil(log2(CLUSTER_ROWS))")
 context = {
     "dma_bitwidth": 64,           # DMA bus width in bits
@@ -69,8 +71,23 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
         DMA_BITWIDTH = 64 
     dma_bitwidth = DMA_BITWIDTH
     registers = config["registers"]
+    # Width expressions in regmap.yaml refer to OpenEye configuration
+    # parameters. Seed them from the parameter object (which already applies the
+    # env overrides and the defaults) so a register does not break every caller
+    # that happens not to export that one variable, then let the raw environment
+    # win as before.
+    openeye_parameter = oep.get_oep(serial=False)
+    oep_ctx = {
+        name: value
+        for name, value in vars(openeye_parameter).items()
+        if isinstance(value, int) and not isinstance(value, bool)
+    }
+    # Two cluster dimensions carry a different name in the Verilog parameter
+    # file than on the parameter object (see vh_file_creator.create_vh_file).
+    oep_ctx["CLUSTER_ROWS"] = openeye_parameter.Clusters_Y
+    oep_ctx["CLUSTER_COLUMNS"] = openeye_parameter.Clusters_X
     env_ctx = dict(os.environ)
-    comb_ctx = context | env_ctx
+    comb_ctx = context | oep_ctx | env_ctx
     for reg in registers:
         reg["width"] = eval_width(reg["width"], comb_ctx)
 
