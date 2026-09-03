@@ -38,6 +38,35 @@ import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 
+def pack_values_into_words(flat_values, bitwidth, values_per_word, layer_params):
+    """Pack activation values into DMA-width words, padded to whole cell groups."""
+    words = []
+    for i in range(0, len(flat_values), values_per_word):
+        word = 0
+        for j in range(values_per_word):
+            if i + j < len(flat_values):
+                val_twos = gtu.to_twos_complement(int(flat_values[i + j]), bitwidth)
+                word |= val_twos << (j * bitwidth)
+        words.append(word)
+    n = layer_params.iact_cycles_one_word_all_ram
+    return words + [0] * ((n - len(words)) % n)
+
+
+def buffer_words_to_dma_stream(buffer_words, layer_params):
+    """Reorder a BUFFER_A image into the order the DMA has to send it in.
+
+    GET_IACT shifts each incoming word through a register and commits all
+    cells at once, so a group of iact_cycles_one_word_all_ram words has to
+    arrive reversed for cell j to end up holding word j of that group.
+    """
+    n = layer_params.iact_cycles_one_word_all_ram
+    padded = list(buffer_words) + [0] * ((n - len(buffer_words)) % n)
+    stream = []
+    for i in range(0, len(padded), n):
+        stream.extend(padded[i:i + n][::-1])
+    return stream
+
+
 class IactStreamMapper(object):
     """Base class for mapping input activations to hardware data streams.
 
@@ -123,46 +152,50 @@ class IactStreamMapper(object):
 
             # Skip activation loading if layer parameters indicate it's not needed
             if (self.layer_params.skipIact == 0):
-                bitwidth = self.params.IACT_Bitwidth
-                dma_bitwidth = self.params.DMA_BITWIDTH
-                values_per_word = dma_bitwidth // bitwidth
-
-                # Transpose from [C][H][W] to [H][W][C] for row-major ordering
-                values = np.transpose(np.array(self.dram_fmap), axes=[2, 1, 0])
-                iact_size_y, iact_size_x, channels = values.shape
-
-                used_channels = self.layer_params.used_channels
-                flat_values = []
-
-                # Flatten values with channel-first grouping for used_channels
-                # Ordering: iterate over channel groups, then spatial positions, then channels in group
-                for c_base in range(0, channels, used_channels):
-                    for y in range(iact_size_y):
-                        for x in range(iact_size_x):
-                            for c_offset in range(used_channels):
-                                c = c_base + c_offset
-                                if c < channels:
-                                    flat_values.append(int(values[y, x, c]))
-
-                # Pack multiple activation values into DMA words
-                for i in range(0, len(flat_values), values_per_word):
-                    word = 0
-                    for j in range(values_per_word):
-                        if i + j < len(flat_values):
-                            # Convert to two's complement and pack into word
-                            val_twos = gtu.to_twos_complement(flat_values[i + j], bitwidth)
-                            word |= val_twos << (j * bitwidth)
-                    iact_stream.append(word)
-
-                n = self.layer_params.iact_cycles_one_word_all_ram
-                missing_zeros = (n - len(iact_stream)) % n
-                iact_stream = iact_stream + [0] * missing_zeros
-                temp = []
-                for i in range(0, len(iact_stream), n):
-                        part = iact_stream[i : i + n]
-                        temp.extend(part[::-1])
-                iact_stream = temp
+                iact_stream = buffer_words_to_dma_stream(
+                    self.build_iact_buffer_words(), self.layer_params)
         return iact_stream
+
+    def build_iact_buffer_words(self):
+        """Raw 64-bit iact words in BUFFER_A cell order.
+
+        Word k belongs in RAM cell ``k % iact_cycles_one_word_all_ram`` at
+        address ``k // iact_cycles_one_word_all_ram``. This is the image the
+        buffer holds once a layer's activations are loaded, whether they came
+        over DMA or from the psum write-back path, which makes it the single
+        definition of the layout for both the stream builder and the
+        testbench check in rtl_test_utils.compare_iact_storage.
+
+        get_iact_stream turns this into the DMA order by reversing each group
+        of iact_cycles_one_word_all_ram words, because the hardware shifts
+        incoming words through a register and commits all cells at once.
+
+        Returns:
+            list[int]: packed words, padded to a whole number of groups.
+        """
+        bitwidth = self.params.IACT_Bitwidth
+        dma_bitwidth = self.params.DMA_BITWIDTH
+        values_per_word = dma_bitwidth // bitwidth
+
+        # Transpose from [C][H][W] to [H][W][C] for row-major ordering
+        values = np.transpose(np.array(self.dram_fmap), axes=[2, 1, 0])
+        iact_size_y, iact_size_x, channels = values.shape
+
+        used_channels = self.layer_params.used_channels
+        flat_values = []
+
+        # Flatten values with channel-first grouping for used_channels
+        # Ordering: iterate over channel groups, then spatial positions, then channels in group
+        for c_base in range(0, channels, used_channels):
+            for y in range(iact_size_y):
+                for x in range(iact_size_x):
+                    for c_offset in range(used_channels):
+                        c = c_base + c_offset
+                        if c < channels:
+                            flat_values.append(int(values[y, x, c]))
+
+        return pack_values_into_words(flat_values, bitwidth, values_per_word,
+                                      self.layer_params)
 
 
     def write_iact_data_glb(self, cl_x, cl_y, router):
@@ -833,30 +866,30 @@ class DenseIactStreamMapper(IactStreamMapper):
         else :
             iact_stream = []
             if (layer_params.skipIact == 0) :
-                bitwidth = params.IACT_Bitwidth
-                dma_bitwidth = params.DMA_BITWIDTH
-                values_per_word = dma_bitwidth // bitwidth
-                # iact_size_x is the flattened feature count K; input_shape may
-                # be 2D (standalone Dense/GEMM) or 4D (after conv), so it is
-                # not indexed directly here.
-                transmissions = math.ceil((layer_params.iact_size_x / (params.NUM_GLB_IACT*layer_params.used_iact_per_PE))) * (params.NUM_GLB_IACT*layer_params.used_iact_per_PE)
-                transmissions = math.ceil(transmissions/values_per_word)
-                for i in range(0, transmissions):
-                    word = 0
-                    for j in range(values_per_word):
-                        if (i * values_per_word) + j < len(dram_fmap):
-                            val_twos = gtu.to_twos_complement(dram_fmap[(i * values_per_word) + j], bitwidth)
-                            word |= val_twos << (j * bitwidth)
-                    iact_stream.append(word)
-        n = self.layer_params.iact_cycles_one_word_all_ram
-        missing_zeros = (n - len(iact_stream)) % n
-        iact_stream = iact_stream + [0] * missing_zeros
-        temp = []
-        for i in range(0, len(iact_stream), n):
-                part = iact_stream[i : i + n]
-                temp.extend(part[::-1])
-        iact_stream = temp
-        return iact_stream
+                iact_stream = self.build_iact_buffer_words()
+        return buffer_words_to_dma_stream(iact_stream, self.layer_params)
+
+    def build_iact_buffer_words(self):
+        """Raw 64-bit iact words in BUFFER_A cell order for a Dense layer.
+
+        Dense activations are already a flat feature vector, so they are packed
+        in order rather than walked as [C][H][W]. See the base-class method for
+        how the returned list maps onto cells and addresses.
+        """
+        params = self.params
+        layer_params = self.layer_params
+        dram_fmap = self.dram_fmap
+        bitwidth = params.IACT_Bitwidth
+        values_per_word = params.DMA_BITWIDTH // bitwidth
+        # iact_size_x is the flattened feature count K; input_shape may
+        # be 2D (standalone Dense/GEMM) or 4D (after conv), so it is
+        # not indexed directly here.
+        transmissions = math.ceil((layer_params.iact_size_x / (params.NUM_GLB_IACT*layer_params.used_iact_per_PE))) * (params.NUM_GLB_IACT*layer_params.used_iact_per_PE)
+        # transmissions counts values here, but the stream is sized in words
+        transmissions = math.ceil(transmissions/values_per_word)
+        values = [dram_fmap[i] if i < len(dram_fmap) else 0
+                  for i in range(transmissions * values_per_word)]
+        return pack_values_into_words(values, bitwidth, values_per_word, layer_params)
 
     def write_iact_data_glb(self, cl_x, cl_y, router):
         """Generate GLB activation data for Dense layers.

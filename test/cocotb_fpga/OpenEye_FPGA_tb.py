@@ -288,7 +288,11 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                         if (layer_parameters[layer_number].layer_name != "Pooling") :
                             slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
                         if (layer_number != max_layers - 1) :
-                            assert rtl_test_utils.compare_iact_storage(ptp, dut, dram.fmap[1 + layer_number], openeye_parameter)
+                            # The buffer being checked is the next layer's input, so the
+                            # layout parameters that describe it are that layer's.
+                            assert rtl_test_utils.compare_iact_storage(
+                                ptp, dut, dram.fmap[1 + layer_number], openeye_parameter,
+                                layer_parameters[layer_number + 1])
                     else :
                         if (layer_number == max_layers - 1) :
                             dram.fmap[1 + layer_number] = tum.fill_dram_with_ref(calculated_results, dram.fmap[1 + layer_number], layer_parameters[layer_number], layer_parameters[layer_number+1])

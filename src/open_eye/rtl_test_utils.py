@@ -23,6 +23,7 @@ import logging
 import math
 import cocotb
 import numpy as np
+import open_eye.iact_stream_mapper as iact_stream_mapper
 from cocotb.triggers import Timer
 import open_eye.stream_dicts as strdic
 import random
@@ -328,100 +329,144 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
         
-def _spad_word_signed(mem_entry, hi, lo):
-    """Read a signed sub-word out of a RAM entry, or None if it holds X/Z.
+def _ram_word(mem_entry):
+    """Read a whole RAM word as an int, or None if it holds X/Z.
 
-    Buffer words the DUT never wrote read back as X, and LogicArray.to_signed()
-    raises on those. Returning None lets the caller report an unwritten word as
-    a mismatch instead of aborting the whole comparison with a ValueError.
+    Words the DUT never wrote read back as X, and LogicArray conversion raises
+    on those. Returning None lets the caller report an unwritten word as a
+    mismatch instead of aborting the comparison with a ValueError.
     """
     try:
-        return mem_entry.value[hi:lo].to_signed()
+        return int(mem_entry.value)
     except ValueError:
         return None
 
 
-def compare_iact_storage(ptp, dut, iact_ref, oep):
-    """Compare input activation storage contents with reference values.
-    
-    This function verifies that the input activation data stored in the DUT's buffers
-    matches the expected reference values. It handles the complex memory layout and
-    data organization of the OpenEye accelerator's input activation storage.
-    
+def _iact_buffer_words(oep, layer_params, iact_ref):
+    """Expected BUFFER_A image for `iact_ref`, in cell order.
+
+    Delegates to the stream mappers so the layout has exactly one definition,
+    shared with the DMA stream builder. Returns None when the layer type has no
+    raw-pixel buffer layout to compare against - Pooling is the case in
+    practice: pooling_mapper builds no iact stream, and a pooled layer's
+    LayerParameters never run calculate_transmission_cycles, so its layout
+    fields are still at their constructor defaults.
+    """
+    name = str(getattr(layer_params, "layer_name", ""))
+    if "Dense" in name:
+        mapper = iact_stream_mapper.DenseIactStreamMapper
+    elif "Conv" in name or "Depthwise" in name:
+        mapper = iact_stream_mapper.IactStreamMapper
+    else:
+        return None
+    return mapper(oep, layer_params, 0, iact_ref, 0).build_iact_buffer_words()
+
+
+def iact_cells_per_group(oep):
+    """Number of RAM cells one full buffer write cycle spans.
+
+    Mirrors IACT_ONE_WORD_ALL_RAM in OpenEye_FPGA.v. It is a property of the
+    hardware, not of a layer, so it is derived from the OpenEye parameters
+    rather than read off LayerParameters (where it is only populated for the
+    layer types that run calculate_transmission_cycles).
+    """
+    return math.ceil((oep.IACT_RAM_CELLS * oep.IACT_RAM_CELLS_WORD_BITWIDTH)
+                     / oep.DMA_BITWIDTH)
+
+
+def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
+    """Compare the iact double-buffer contents with reference activations.
+
+    The expected buffer image comes from the same mapper that builds the DMA
+    iact stream, so the checker cannot drift from the layout the hardware is
+    actually fed. Word k of that image belongs in RAM cell
+    ``k % iact_cycles_one_word_all_ram`` at address
+    ``k // iact_cycles_one_word_all_ram``.
+
     Args:
-        ptp: Port timing parameters
-        dut: Device under test (OpenEye accelerator instance)
-        iact_ref: Reference input activation data to compare against
-        oep: OpenEye parameters containing architecture configuration
-        
+        ptp: Port timing parameters (unused; kept for call-site symmetry)
+        dut: Device under test (OpenEye_FPGA instance)
+        iact_ref: Reference activations for the layer that reads this buffer
+        oep: OpenEye parameters
+        layer_params: Parameters of the layer that reads this buffer, i.e. the
+            next layer - it owns used_channels and iact_cycles_one_word_all_ram
+
     Returns:
-        bool: True if comparison passes, False if any mismatch is found
-        
-    Technical Details:
-        - Handles multi-dimensional activation data layout
-        - Manages word and buffer addressing in hardware
-        - Performs proper data alignment and comparison
-        - Provides detailed logging of any mismatches
-        - Accounts for data organization across multiple buffers
+        bool: True when every word matches, False on any mismatch.
     """
     logger.info("Iact storages are checked.")
-    i,c,x,y = 0,0,0,0
-    word, word_reset, buffer, buffer_reset = 0,0,0,0
-    iact_ref = np.array(iact_ref)
-    error_found = False
+
+    expected = _iact_buffer_words(oep, layer_params, iact_ref)
+    if expected is None:
+        logger.warning("No iact buffer layout known for layer '%s'; skipping the check.",
+                       getattr(layer_params, "layer_name", "?"))
+        return True
+
+    cells_per_group = iact_cells_per_group(oep)
     try:
-        temp = iact_ref.transpose((0, 2, 1))
-        iact_ref = temp
-        for c in range(len(iact_ref)):
-            for y in range(len(iact_ref[c])):
-                for x in range(len(iact_ref[c][y])):
-                    dut_value = _spad_word_signed(
-                        dut.BUFFER_A[buffer%oep.IACT_RAM_CELLS].iact_layer_buffer.impl.mem[word],
-                        7 + (i * 8), (i * 8))
-                    if(iact_ref[c][y][x] != dut_value):
-                        logger.error("Error found in Iact storage; Channel: " + str(c) + " X: " + str(x) + " Y: " + str(y) + " buffer: " + str(buffer) + " word: " + str(word) + " i: " + str(i))
-                        logger.error("Ref-Value: " + str(iact_ref[c][y][x]) + " DUT-Value: " + ("X (never written)" if dut_value is None else str(dut_value)))
-                        error_found = True
-                    i = i + 4
-                    if (i >= 8):
-                        i = i - 8
-                        buffer = buffer + 1
-                        if (buffer >= oep.IACT_RAM_CELLS):
-                            word = word + 1
-                            buffer = buffer - oep.IACT_RAM_CELLS
-            if ((c%4 == 3)):
-                buffer_reset = buffer
-                word_reset = word
-                if ((len(iact_ref[c] * len(iact_ref[c][y]))) %2 == 1):
-                    i = i - 3
-                else :
-                    i = 0
-            else:
-                i = i + 1
-                if ((len(iact_ref[c]) * len(iact_ref[c][y])) %2 == 1):
-                    i = (i + 4) % 8
-                buffer = buffer_reset
-                word = word_reset
-    except Exception as exc:
-        # The layout above assumes a 3D (channel, y, x) reference; fall back to
-        # the flat per-channel layout, but say why rather than hiding the reason.
-        logger.info("Iact storage 3D layout check bailed out (%s: %s); using the flat layout.",
-                    type(exc).__name__, exc)
-        for c in range(len(iact_ref)):
-            word = c%8
-            buffer = math.floor(c/8)%oep.IACT_RAM_CELLS
-            addr = math.floor(c/8/oep.IACT_RAM_CELLS)
-            dut_value = _spad_word_signed(
-                dut.BUFFER_A[buffer].iact_layer_buffer.impl.mem[addr],
-                7 + (word * 8), (word * 8))
-            if(iact_ref[c] != dut_value):
-                logger.error("Error found in Iact storage; Channel: " + str(c)  + " buffer: " + str(buffer) + " word: " + str(word) + " addr: " + str(addr))
-                logger.error("Ref-Value: " + str(iact_ref[c]) + " DUT-Value: " + ("X (never written)" if dut_value is None else str(dut_value)))
-                error_found = True
+        depth = len(dut.BUFFER_A[0].iact_layer_buffer.impl.mem)
+    except TypeError:
+        depth = 1 << oep.BUFFER_WIDTH
+    logger.info("Iact buffer check: %d expected words, %d cells per group, depth %d (layer '%s')",
+                len(expected), cells_per_group, depth, getattr(layer_params, "layer_name", "?"))
+    if len(expected) > cells_per_group * depth:
+        logger.error("Expected iact image (%d words) exceeds the buffer (%d cells x %d addresses); "
+                     "check the layout parameters for layer '%s'.",
+                     len(expected), cells_per_group, depth,
+                     getattr(layer_params, "layer_name", "?"))
+        return False
+    # The RTL builds the RAM address as {choose_iact_buffer, iact_buffer_addr_reg}
+    # assigned to a BUFFER_WIDTH-wide port, but iact_buffer_addr_reg is itself
+    # BUFFER_WIDTH bits, so the concatenation is truncated and the half-select
+    # bit is dropped - both halves alias onto the same addresses. (The unused
+    # BRANCHES_WIDTH parameter is where the narrower register was meant to come
+    # from.) Address the buffer the way the hardware really does; if that width
+    # is ever corrected, the group index needs the half offset added back here.
+    error_found = False
+    errors_logged = 0
+    for index, ref_word in enumerate(expected):
+        cell = index % cells_per_group
+        addr = index // cells_per_group
+        dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[addr])
+        if dut_word != ref_word:
+            error_found = True
+            errors_logged += 1
+            if errors_logged <= 16:
+                logger.error("Error found in Iact storage; word: %d cell: %d addr: %d", index, cell, addr)
+                logger.error("Ref-Value: 0x%x DUT-Value: %s", ref_word,
+                             "X (never written)" if dut_word is None else hex(dut_word))
+    if errors_logged > 16:
+        logger.error("... and %d further Iact storage mismatches.", errors_logged - 16)
 
     if error_found:
-        return True
-    return True
+        _log_iact_buffer_occupancy(dut, oep)
+
+    return not error_found
+
+
+def _log_iact_buffer_occupancy(dut, oep, max_addr=64):
+    """Report where the iact buffer actually holds data, to localise a mismatch.
+
+    Says whether the comparison looked in the wrong place (data present, other
+    cells/addresses) or the buffer was never filled at all (nothing anywhere).
+    """
+    written = []
+    for cell in range(oep.IACT_RAM_CELLS):
+        for addr in range(max_addr):
+            try:
+                word = int(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[addr].value)
+            except (ValueError, IndexError):
+                continue
+            written.append((cell, addr, word))
+    if not written:
+        logger.error("Iact buffer occupancy: no written word in any of %d cells over the first %d addresses.",
+                     oep.IACT_RAM_CELLS, max_addr)
+        return
+    cells = sorted({c for c, _, _ in written})
+    logger.error("Iact buffer occupancy: %d written words, cells %s, first entries %s",
+                 len(written), cells[:8],
+                 [(c, a, hex(w)) for c, a, w in written[:4]])
+
 
 async def write_iact(ptp, dut, stream, oep, lp):
     """Write the input activations to the DUT.
