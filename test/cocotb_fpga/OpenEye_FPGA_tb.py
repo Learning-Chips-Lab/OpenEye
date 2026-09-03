@@ -291,6 +291,9 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                         if (layer_parameters[layer_number].layer_name != "Pooling") :
                             slo.batchnorm_output(layer_parameters[layer_number], 1, layer_number, dram)
                         if (layer_number != max_layers - 1) :
+                            logger.info("Iact check context: layer %d, repetition %d of %d",
+                                        layer_number, layer_repetition,
+                                        layer_parameters[layer_number].needed_total_transmissions)
                             # The buffer being checked is the next layer's input, so the
                             # layout parameters that describe it are that layer's.
                             assert rtl_test_utils.compare_iact_storage(

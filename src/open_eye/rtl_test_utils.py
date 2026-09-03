@@ -425,6 +425,13 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
     """
     logger.info("Iact storages are checked.")
 
+    try:
+        shape = np.array(iact_ref).shape
+    except Exception:
+        shape = "?"
+    logger.info("Iact reference: shape %s, used_channels %s, IACT_RAM_CELLS %s",
+                shape, getattr(layer_params, "used_channels", "?"), oep.IACT_RAM_CELLS)
+
     expected = _iact_buffer_words(oep, layer_params, iact_ref)
     if expected is None:
         logger.warning("No iact buffer layout known for layer '%s'; skipping the check.",
@@ -468,9 +475,42 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
         logger.error("... and %d further Iact storage mismatches.", errors_logged - 16)
 
     if error_found:
+        _log_iact_value_comparison(dut, oep, expected, cells_per_group)
         _log_iact_buffer_occupancy(dut, oep)
 
     return not error_found
+
+
+def _log_iact_value_comparison(dut, oep, expected, cells_per_group):
+    """Say whether the buffer holds the right values in the wrong order.
+
+    If the expected and actual byte multisets agree, the write-back produced
+    the correct activations and only the placement differs, which points at
+    the layout. If they disagree, the values themselves are wrong and the
+    layout is not the place to look.
+    """
+    def to_bytes(word):
+        return [(word >> (8 * i)) & 0xFF for i in range(8)]
+
+    actual_words, missing = [], 0
+    for index in range(len(expected)):
+        word = _ram_word(dut.BUFFER_A[index % cells_per_group]
+                         .iact_layer_buffer.impl.mem[index // cells_per_group])
+        if word is None:
+            missing += 1
+        else:
+            actual_words.append(word)
+
+    exact = sum(1 for e, a in zip(expected, actual_words) if e == a)
+    expected_bytes = sorted(b for w in expected for b in to_bytes(w))
+    actual_bytes = sorted(b for w in actual_words for b in to_bytes(w))
+    common = len(set(expected_bytes) & set(actual_bytes))
+    logger.error("Iact value comparison: %d/%d words match exactly, %d unwritten; "
+                 "byte multisets %s (%d distinct values in common)",
+                 exact, len(expected), missing,
+                 "MATCH - same values, different placement"
+                 if expected_bytes == actual_bytes else "DIFFER - values themselves are wrong",
+                 common)
 
 
 def _log_iact_buffer_occupancy(dut, oep, max_addr=64):
@@ -670,27 +710,73 @@ async def await_enable_signal(ptp, dut):
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     pass
 
-async def await_ready_signal(ptp, dut):
-    """Wait for ready signal from the device.
-    
-    This function implements a waiting period followed by monitoring of the
-    DMA ready signal from the DUT. It ensures proper synchronization for
-    data transfer operations.
-    
+def _signal_is(handle, expected):
+    """True when a signal reads exactly `expected`; False while it holds X/Z."""
+    try:
+        return int(handle.value) == expected
+    except ValueError:
+        return False
+
+
+async def await_ready_signal(ptp, dut, settle_cycles=5000, max_wait_cycles=2000000,
+                             report_every=200000):
+    """Wait until the DUT has finished the current layer and wants the next one.
+
+    ready_dma_o means "I can accept DMA input", and it is already high through
+    GET_PARAMETERS, GET_ROUTER_CONFIG, GET_IACT, GET_WGHT, GET_BIAS and
+    GET_QUANTIZE. Sampling it as a level therefore returned immediately, while
+    the layer was still loading, and the caller went on to the next layer (and
+    to compare_iact_storage) before any computation or psum write-back had
+    happened.
+
+    The port does carry the information as an edge: it is deasserted on the way
+    out of GET_QUANTIZE and re-asserted only when the FSM comes back round to
+    GET_PARAMETERS for the next layer. So wait for the falling edge, then for
+    the rising one.
+
     Args:
         ptp: Port timing parameters
-        dut: Device under test (OpenEye accelerator instance)
-        
-    Note:
-        Includes a fixed 3-cycle delay before checking ready signal to allow
-        for internal state stabilization.
+        dut: Device under test (OpenEye_FPGA instance)
+        settle_cycles: How long to wait for the DUT to leave its input phase
+            before assuming it already has
+        max_wait_cycles: Give up (and say where the FSM is stuck) after this
+        report_every: Log a progress line at this interval while waiting
     """
-    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-    await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-    while (dut.ready_dma_o.value != 1):
+    # Phase 1: the DUT leaves its input phase and starts computing.
+    for _ in range(settle_cycles):
+        if not _signal_is(dut.ready_dma_o, 1):
+            break
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-    pass
+    else:
+        # Not a benign case: the DUT should drop ready_dma_o when it stops
+        # accepting input and starts computing. If it never does, the wait
+        # below is satisfied immediately and this call degenerates into the
+        # level sample it replaced, so say so rather than passing quietly.
+        logger.warning("ready_dma_o stayed high for %d cycles%s; the completion "
+                       "wait below cannot be trusted for this layer.",
+                       settle_cycles, _fsm_state_note(dut))
+
+    # Phase 2: it comes back ready for the next layer's configuration.
+    for cycle in range(max_wait_cycles):
+        if _signal_is(dut.ready_dma_o, 1):
+            return
+        if cycle and cycle % report_every == 0:
+            logger.info("Still waiting for the layer to finish after %d cycles%s",
+                        cycle, _fsm_state_note(dut))
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+
+    raise TimeoutError(
+        "ready_dma_o never came back high within {} cycles{} - the accelerator "
+        "did not finish the layer.".format(max_wait_cycles, _fsm_state_note(dut)))
+
+
+def _fsm_state_note(dut):
+    """' (main FSM in state N)' when readable, else an empty string."""
+    try:
+        return " (main FSM in state {})".format(int(dut.fsm_current_state.value))
+    except Exception:
+        return ""
+
 
 async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order):
     """Compare convolutional layer output stream with expected results.
