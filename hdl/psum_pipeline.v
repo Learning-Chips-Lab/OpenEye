@@ -307,6 +307,7 @@ module psum_pipeline #(
               // lockstep schedule, no flow control) instead of being inflated
               // by PSUM_CYCLES_ONE_WORD_ALL_CELLS and starving later
               // sections.
+              psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
               if (fully_connected_layer) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < NUM_GLB_PSUM/2; g_psum = g_psum + 1) begin
@@ -327,7 +328,6 @@ module psum_pipeline #(
                   psum_buffer_en_w <= ~0;
                 end
               end else begin
-                psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
                 for (g_psum = 0; g_psum < PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1; g_psum = g_psum + 1) begin
                   psum_buffer_data_w[DMA_BITWIDTH*(1+g_psum)+:DMA_BITWIDTH] <= psum_buffer_data_w[DMA_BITWIDTH*g_psum+:DMA_BITWIDTH];
                 end
@@ -555,23 +555,23 @@ module psum_pipeline #(
                   sending_cluster_rows <= 1;
                 end
                 if (psum_size_x <= NUM_GLB_PSUM) begin
-                  sending_cluster_rows  <= 1;
+                  sending_cluster_rows <= 1;
                 end
               end else begin
                 fsm_psum_current_state <= PSUM_IDLE;
               end
-              fsm_psum_cycle          <= 0;
-              psum_cycle_loop_cnt_0   <= 0;
-              psum_cycle_loop_cnt_1   <= 0;
-              psum_cycle_loop_cnt_2   <= 0;
-              psum_cycle_loop_cnt_3   <= 0;
-              psum_cycle_loop_cnt_4   <= 0;
-              psum_cycle_addr_0       <= 0;
-              psum_cycle_addr_1       <= 0;
-              psum_cycle_addr_2       <= 0;
-              psum_cycle_addr_3       <= 0;
-              psum_cycle_addr_4       <= 0;
-              fsm_psum_row_offset  <= 0;
+              fsm_psum_cycle        <= 0;
+              psum_cycle_loop_cnt_0 <= 0;
+              psum_cycle_loop_cnt_1 <= 0;
+              psum_cycle_loop_cnt_2 <= 0;
+              psum_cycle_loop_cnt_3 <= 0;
+              psum_cycle_loop_cnt_4 <= 0;
+              psum_cycle_addr_0     <= 0;
+              psum_cycle_addr_1     <= 0;
+              psum_cycle_addr_2     <= 0;
+              psum_cycle_addr_3     <= 0;
+              psum_cycle_addr_4     <= 0;
+              fsm_psum_row_offset   <= 0;
             end
           end
           fsm_psum_r    <= 0;
@@ -581,9 +581,10 @@ module psum_pipeline #(
 
         PSUM_SEND_RESULTS: begin
           if (ready_dma_i == 1) begin
-            psum_cycle_loop_cnt_0 <= psum_cycle_loop_cnt_0 + 1;
             psum_cycle_loop_cnt_1 <= psum_cycle_loop_cnt_1 + 1;
-            if (fsm_psum_cycle != 0) begin
+            if (((fsm_psum_cycle >= 1 + fully_connected_layer) & CLUSTER_COLUMNS == 1) |
+                (fsm_psum_cycle >= 1 & CLUSTER_COLUMNS != 1)) begin
+              psum_cycle_loop_cnt_0     <= psum_cycle_loop_cnt_0 + 1;
               enable_dma_o              <= 1;
               data_dma_o                <= psum_buffer_data_temp_reg[0+:DMA_BITWIDTH];
               psum_buffer_data_temp_reg <= psum_buffer_data_temp_reg >> DMA_BITWIDTH;
@@ -637,7 +638,7 @@ module psum_pipeline #(
                 end
               end
             end
-            if (psum_cycle_loop_cnt_0 == output_words) begin
+            if (psum_cycle_loop_cnt_0 == output_words - 1) begin
               psum_cycle_loop_cnt_0      <= 0;
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin

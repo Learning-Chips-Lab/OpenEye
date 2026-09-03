@@ -877,7 +877,7 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         # Initialize SPAD storage
         spad_storage = [[[0 for _ in range(2)] for _ in range(self.params.PARALLEL_MACS)] for _ in range(int(params.Wghts_per_PE/params.PARALLEL_MACS))]
         overhead_counter = 0
-
+        iact_words_per_memory = 2
         # Populate SPAD with weights from the 2D weight matrix
         for words_in_storage in range(int(params.Wghts_per_PE/params.PARALLEL_MACS)):
             for spad_val_number in range(params.PARALLEL_MACS):
@@ -890,10 +890,10 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                 (math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.psum_transmissions_pe) * params.Clusters_X * params.Clusters_Y * layer_params.used_psum_per_PE
                 # Recalculate channel with Y-cluster assignment
                 #channel = math.floor((layer_repetition%layer_params.iact_transmissions_pe)*params.Wght_Routers*layer_params.used_iact_per_PE) + \
-                channel = math.floor((layer_repetition)*(params.NUM_GLB_WGHT * params.Clusters_Y * layer_params.used_iact_per_PE)) + \
-                math.floor(position/needed_wghts_in_word) + \
-                cl_y * params.NUM_GLB_WGHT * layer_params.used_iact_per_PE + \
-                router * layer_params.used_iact_per_PE 
+                channel = math.floor(layer_repetition*(params.NUM_GLB_WGHT * params.Clusters_Y * layer_params.used_iact_per_PE)) + \
+                (math.floor(position/needed_wghts_in_word)%iact_words_per_memory) + (math.floor(position/(needed_wghts_in_word*iact_words_per_memory))*(iact_words_per_memory*params.NUM_GLB_WGHT)) + \
+                (cl_y * params.NUM_GLB_WGHT * layer_params.used_iact_per_PE) + \
+                router * iact_words_per_memory
 
                 if ((position % needed_wghts_in_word) < layer_params.used_psum_per_PE) :
                     try:

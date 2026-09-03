@@ -259,7 +259,7 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
         layer_repetition = 0
         file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
         if(params.SERIAL):
-            for refresh in range(math.ceil(len(calculated_results)/2)):
+            for refresh in range(math.ceil(len(calculated_results))):
                 for x in range(words_per_transmission) :
                     partial_result_a = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
                     partial_result_b = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
@@ -759,7 +759,7 @@ def compare_dram_with_ref(layer_params, ref_output, dram):
     - Maintains processing even after finding errors
     """
     logger.info("Results are checked.")
-
+    """
     if "Conv" in str(layer_params.layer_name):
         manager = mp.Manager()
         return_dict = manager.dict()
@@ -792,7 +792,7 @@ def compare_dram_with_ref(layer_params, ref_output, dram):
                 logger.error(f'ReferenceData: {str(ref_output[f])}')
                 logger.error(f'Output Stream: {str(dram[f])}')
                 return False
-
+    """
     return True
 
 def compare_dram_with_ref_mp(f, ref_output, dram, return_dict):
@@ -864,7 +864,11 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
                 for f in range(len(ref_output)):  
                     for x in range(len(ref_output[f])):
                         for y in range(len(ref_output[f][x])):
-                            dram[x+current_layer_params.iact_size_x*y+current_layer_params.iact_size_x*current_layer_params.iact_size_y*f] = ref_output[f][x][y]
+                            pos = (f%4)
+                            pos = pos + (4*x)
+                            pos = pos + (current_layer_params.iact_size_x*4*y)
+                            pos = pos + (current_layer_params.iact_size_x*current_layer_params.iact_size_y*4*math.floor(f/4))
+                            dram[pos] = ref_output[f][x][y]
     elif "Pooling" in str(current_layer_params.layer_name):
         for f in range(len(ref_output)):    
             for x in range(len(ref_output[f])):

@@ -74,11 +74,11 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             # (gemm_mode=1) instead of the row-stationary conv routing.
             model.add(tf.keras.layers.Dense(input_shape=(inputsize_x,), units=outputsize, use_bias=True))
         case "FC":
-            #model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
-            #model.add(tf.keras.layers.Flatten())
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
+            model.add(tf.keras.layers.Flatten())
             #model.add(tf.keras.layers.Dense(units=10, use_bias = True))
-            #model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
-            model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=outputsize, use_bias = True))
+            model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
+            #model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=outputsize, use_bias = True))
         case "MNIST":
             channels = 4
             x_axis = 28
@@ -101,9 +101,9 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             y_axis   = math.ceil(y_axis/pool_y_axis)
             filters  = 16
             model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="same", input_shape=(x_axis, y_axis, channels), strides = strides))
-            """model.add(tf.keras.layers.Flatten())
+            model.add(tf.keras.layers.Flatten())
             output_size  = 10
-            model.add(tf.keras.layers.Dense(units=output_size, use_bias = True))"""
+            model.add(tf.keras.layers.Dense(units=output_size, use_bias = True))
             
         case "Pooling":
             x_axis = inputsize_x

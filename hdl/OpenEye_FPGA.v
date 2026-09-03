@@ -1342,7 +1342,7 @@ end
   // --- iact buffer next-address combinational signal ---
   // Asserted when the iact_stream_constructor is about to need the next buffer address
   // (one cycle before the current address window runs out).
-  reg signed [                                  8-1:0] current_x;
+  reg signed [                                 12-1:0] current_x;
   reg signed [                                  8-1:0] current_y;
   reg        [           $clog2(2*IACT_RAM_CELLS)-1:0] current_pos_in_iact_glb;
   reg        [                                  3-1:0] relative_pos;
@@ -1629,18 +1629,19 @@ end
         //   (FC layers also zero padding here.)
         // -------------------------------------------------------------------
         GET_PARAMETERS: begin
-          fifo_data_i                <= 0;
-          fifo_read_i                <= 0;
-          fifo_write_i               <= 0;
-          status_reg_enable_reg      <= 1;
-          ready_dma_o                <= 1;
-          reset_cycle                <= 1;
-          buffer_addr_lower_limit    <= 0;
-          buffer_addr_upper_limit    <= 0;
-          set_pointer_start          <= 0;
-          limit_increase_reg         <= 0;
-          iact_to_psum_trans_counter <= 0;
-          iact_to_psum_x_pos_counter <= 0;
+          fifo_data_i                  <= 0;
+          fifo_read_i                  <= 0;
+          fifo_write_i                 <= 0;
+          status_reg_enable_reg        <= 1;
+          ready_dma_o                  <= 1;
+          reset_cycle                  <= 1;
+          buffer_addr_lower_limit      <= 0;
+          buffer_addr_upper_limit      <= 0;
+          set_pointer_start            <= 0;
+          limit_increase_reg           <= 0;
+          iact_to_psum_trans_counter   <= 0;
+          iact_to_psum_x_pos_counter   <= 0;
+          iact_to_psum_storage_counter <= 0;
           for (a = 0; a < IACT_RAM_CELLS; a = a + 1) begin
             iact_buffer_en_r[a]      <= 0;
             iact_buffer_en_w[a]      <= 0;
@@ -2233,15 +2234,25 @@ end
             end
           end
           if ((fsm_psum_current_state == PSUM_IDLE) & (fsm_cycle >= 1)) begin
-            select_ram_counter <= 0;
-            fsm_cycle          <= 0;
-            for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
-              iact_buffer_en_w[a] <= 1;
+            iact_to_psum_storage_counter <= iact_to_psum_storage_counter + 1;
+            if (iact_to_psum_storage_counter == (2*IACT_RAM_CELLS)-1) begin
+              iact_to_psum_storage_counter <= 0;
+              for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+                iact_buffer_en_w[a] <= 1;
+              end
             end
-            fsm_current_state          <= GET_PARAMETERS;
-            fsm_last_state             <= RECEIVE_PSUMS_TO_IACT;
-            send_data_reg              <= 0;
-            iact_channels_counter      <= 0;
+            for (b = 0; b < 16-1; b=b+1) begin
+              iact_buffer_data_w[((IACT_RAM_CELLS*2)-1-(b+1))*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)] <= iact_buffer_data_w[((IACT_RAM_CELLS*2)-1-b)*(DATA_IACT_BITWIDTH*4)+:(DATA_IACT_BITWIDTH*4)];
+            end
+            if (iact_to_psum_storage_counter == 0) begin            
+              select_ram_counter          <= 0;
+              fsm_cycle                   <= 0;
+              fsm_current_state           <= GET_PARAMETERS;
+              fsm_last_state              <= RECEIVE_PSUMS_TO_IACT;
+              send_data_reg               <= 0;
+              iact_channels_counter       <= 0;
+              iact_to_psum_start_shifting <= 0;
+            end
           end
         end
 

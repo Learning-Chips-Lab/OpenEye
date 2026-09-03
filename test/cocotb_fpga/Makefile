@@ -77,19 +77,19 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 
 export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 
-export LAYER=FC
-#export LAYER=MNIST
+#export LAYER=FC
+export LAYER=MNIST
 #export LAYER=Convolution
 #export LAYER=MobileNetV1
 #export LAYER=Pooling
-export NUM_FILTERS=16
+export NUM_FILTERS=8
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=36
-export INPUT_SIZE_Y=28
+export INPUT_SIZE_X=14
+export INPUT_SIZE_Y=14
 export STRIDE=1
-export INPUT_CHANNELS=36
-export OUTPUT_SIZE=10
+export INPUT_CHANNELS=4
+export OUTPUT_SIZE=8
 export USE_RANDOM_VALUES=1
 export USE_SPARSE_IACTS=0
 export USE_SPARSE_WEIGHTS=0
@@ -132,7 +132,7 @@ export PSUM_PER_PE=32
 export BRANCHES=1
 export BUFFER_WIDTH=9
 export BUFFER_WIDTH_PSUM = 12
-export BUFFER_WIDTH_WGHT = 12
+export BUFFER_WIDTH_WGHT = 13
 export QUANT_AMOUNT=32
 export TRANS_WORDS = 4
 

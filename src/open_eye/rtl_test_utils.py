@@ -709,6 +709,7 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                     for i in range(words):
                         if(logging.DEBUG >= login_level):
                             storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
+                        
                         try:
                             dram.fmap[layer_number + 1][f][x][y] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH*(i+1)-1:oep.DATA_PSUM_BITWIDTH*i])
                             if (dram.fmap[layer_number + 1][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)):
