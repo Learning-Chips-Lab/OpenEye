@@ -329,6 +329,35 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
         
+# Diagnostic: main-FSM states the DUT has visited, filled by probe_fsm_states
+# when OPENEYE_PROBE_FSM is set. Reported by the iact buffer check on failure.
+fsm_states_seen = set()
+fsm_probe_samples = [0]
+fsm_state_trace = []
+
+
+async def probe_fsm_states(ptp, dut):
+    """Record every main-FSM state the DUT enters (opt-in diagnostic).
+
+    Sampling every clock costs simulation time, so the testbench only starts
+    this when OPENEYE_PROBE_FSM is set. It answers questions the post-hoc
+    checks cannot, such as whether RECEIVE_PSUMS_TO_IACT is ever reached.
+    """
+    previous = None
+    while True:
+        fsm_probe_samples[0] += 1
+        try:
+            state = int(dut.fsm_current_state.value)
+        except ValueError:
+            state = None
+        if state is not None:
+            fsm_states_seen.add(state)
+            if state != previous and len(fsm_state_trace) < 60:
+                fsm_state_trace.append((str(cocotb.utils.get_sim_time("ns")), state))
+            previous = state
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+
+
 def _ram_word(mem_entry):
     """Read a whole RAM word as an int, or None if it holds X/Z.
 
@@ -450,6 +479,24 @@ def _log_iact_buffer_occupancy(dut, oep, max_addr=64):
     Says whether the comparison looked in the wrong place (data present, other
     cells/addresses) or the buffer was never filled at all (nothing anywhere).
     """
+    for name in ("send_data_out", "fsm_current_state", "choose_iact_buffer",
+                 "iact_channels_per_pe_next_layer", "fsm_cycle", "skipIact_reg",
+                 "max_pooling", "FSM_CEIL_IACT_RTR_CCLS", "FSM_CEIL_WGHT_RTR_CCLS",
+                 "FSM_CEIL_PSUM_RTR_CCLS", "CLUSTERS", "NUM_GLB_IACT",
+                 "NUM_GLB_WGHT", "NUM_GLB_PSUM", "fsm_psum_cycle",
+                 "trans_cycles_psum", "fsm_psum_current_state", "filters",
+                 "needed_cycles", "finished_cycles_psum"):
+        try:
+            logger.error("Iact buffer context: %s = %s", name,
+                         int(getattr(dut, name).value))
+        except Exception as exc:
+            logger.error("Iact buffer context: %s unavailable (%s)", name, type(exc).__name__)
+
+    if fsm_states_seen:
+        logger.error("Iact buffer context: main FSM states visited = %s over %d samples "
+                     "(RECEIVE_PSUMS_TO_IACT is 11)", sorted(fsm_states_seen), fsm_probe_samples[0])
+        logger.error("Iact buffer context: FSM transitions (ns, state) = %s", fsm_state_trace)
+
     written = []
     for cell in range(oep.IACT_RAM_CELLS):
         for addr in range(max_addr):

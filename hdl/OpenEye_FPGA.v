@@ -1702,6 +1702,12 @@ end
                 end
               end
               if (fsm_cycle == (TRANSMISSIONS + (((PES * CLUSTERS) - 1)/DMA_BITWIDTH))) begin
+                // Every state restarts fsm_cycle for its successor. Leaving it
+                // at TRANSMISSIONS+... here meant GET_ROUTER_CONFIG began
+                // counting from a value already past its own exit target, and
+                // its exit test is an equality, so it could never match and the
+                // FSM stalled there for the rest of the run.
+                fsm_cycle          <= 0;
                 fsm_last_state <= GET_PARAMETERS;
                 fsm_current_state  <= GET_ROUTER_CONFIG;
               end

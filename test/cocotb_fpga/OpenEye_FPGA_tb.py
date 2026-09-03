@@ -230,6 +230,9 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         # reset the DUT
         await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
 
+    if os.environ.get("OPENEYE_PROBE_FSM"):
+        cocotb.start_soon(rtl_test_utils.probe_fsm_states(ptp, dut))
+
     # Process the layers of the model one after another
     max_layers = len(model)
     layer_parameters = [0 for _ in range(len(model))]
