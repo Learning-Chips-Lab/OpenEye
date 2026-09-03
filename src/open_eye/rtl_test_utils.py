@@ -287,6 +287,17 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
     else:
         # Serial/DMA mode: send all data sequentially over DMA interface
 
+        # The serial stream is assembled with stream_serial_dict but indexed
+        # below with stream_parallel_dict names; log what is actually being
+        # sent so a section-count mismatch with the DUT is visible.
+        logger.info("DMA stream sections (words each): %s",
+                    [len(section) for section in stream])
+        for name in ("trans_cycles_iact", "trans_cycles_wght", "trans_cycles_psum"):
+            try:
+                logger.info("DUT expects %s = %d", name, int(getattr(dut, name).value))
+            except Exception:
+                pass
+
         # Enable DMA transfer
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 1))
 
@@ -352,8 +363,13 @@ async def probe_fsm_states(ptp, dut):
             state = None
         if state is not None:
             fsm_states_seen.add(state)
-            if state != previous and len(fsm_state_trace) < 60:
-                fsm_state_trace.append((str(cocotb.utils.get_sim_time("ns")), state))
+            if state != previous:
+                if len(fsm_state_trace) < 200:
+                    fsm_state_trace.append((str(cocotb.utils.get_sim_time("ns")), state))
+                # Log live: a test that stalls may never reach a check that
+                # would otherwise report the trace.
+                logger.info("FSM state -> %d at %s ns", state,
+                            cocotb.utils.get_sim_time("ns"))
             previous = state
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
@@ -389,6 +405,23 @@ def _iact_buffer_words(oep, layer_params, iact_ref):
     else:
         return None
     return mapper(oep, layer_params, 0, iact_ref, 0).build_iact_buffer_words()
+
+
+def iact_half_offset(dut, oep):
+    """Base RAM address of the buffer half the DUT currently has selected.
+
+    OpenEye_FPGA assembles the address as {choose_iact_buffer, addr_reg}, so the
+    half-select occupies the top BRANCHES_CLOG bits and each half owns the lower
+    BRANCHES_WIDTH = BUFFER_WIDTH - BRANCHES_CLOG address bits.
+    """
+    branches = getattr(oep, "BRANCHES", 1)
+    if branches <= 1:
+        return 0
+    try:
+        half = int(dut.choose_iact_buffer.value)
+    except Exception:
+        return 0
+    return half << (oep.BUFFER_WIDTH - math.ceil(math.log2(branches)))
 
 
 def iact_cells_per_group(oep):
@@ -451,19 +484,14 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
                      len(expected), cells_per_group, depth,
                      getattr(layer_params, "layer_name", "?"))
         return False
-    # The RTL builds the RAM address as {choose_iact_buffer, iact_buffer_addr_reg}
-    # assigned to a BUFFER_WIDTH-wide port, but iact_buffer_addr_reg is itself
-    # BUFFER_WIDTH bits, so the concatenation is truncated and the half-select
-    # bit is dropped - both halves alias onto the same addresses. (The unused
-    # BRANCHES_WIDTH parameter is where the narrower register was meant to come
-    # from.) Address the buffer the way the hardware really does; if that width
-    # is ever corrected, the group index needs the half offset added back here.
+    # Addresses are relative to the half the DUT currently has selected.
+    half_offset = iact_half_offset(dut, oep)
     error_found = False
     errors_logged = 0
     for index, ref_word in enumerate(expected):
         cell = index % cells_per_group
         addr = index // cells_per_group
-        dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[addr])
+        dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[half_offset + addr])
         if dut_word != ref_word:
             error_found = True
             errors_logged += 1
@@ -475,13 +503,13 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
         logger.error("... and %d further Iact storage mismatches.", errors_logged - 16)
 
     if error_found:
-        _log_iact_value_comparison(dut, oep, expected, cells_per_group)
+        _log_iact_value_comparison(dut, oep, expected, cells_per_group, half_offset)
         _log_iact_buffer_occupancy(dut, oep)
 
     return not error_found
 
 
-def _log_iact_value_comparison(dut, oep, expected, cells_per_group):
+def _log_iact_value_comparison(dut, oep, expected, cells_per_group, half_offset=0):
     """Say whether the buffer holds the right values in the wrong order.
 
     If the expected and actual byte multisets agree, the write-back produced
@@ -495,22 +523,25 @@ def _log_iact_value_comparison(dut, oep, expected, cells_per_group):
     actual_words, missing = [], 0
     for index in range(len(expected)):
         word = _ram_word(dut.BUFFER_A[index % cells_per_group]
-                         .iact_layer_buffer.impl.mem[index // cells_per_group])
+                         .iact_layer_buffer.impl.mem[half_offset + index // cells_per_group])
         if word is None:
             missing += 1
         else:
             actual_words.append(word)
 
     exact = sum(1 for e, a in zip(expected, actual_words) if e == a)
-    expected_bytes = sorted(b for w in expected for b in to_bytes(w))
+    # Compare like with like: only the prefix of the expected image that the
+    # DUT actually wrote. Comparing all 392 expected words against 196 written
+    # ones can only ever report a difference, whatever the cause.
+    comparable = expected[:len(actual_words)]
+    expected_bytes = sorted(b for w in comparable for b in to_bytes(w))
     actual_bytes = sorted(b for w in actual_words for b in to_bytes(w))
-    common = len(set(expected_bytes) & set(actual_bytes))
-    logger.error("Iact value comparison: %d/%d words match exactly, %d unwritten; "
-                 "byte multisets %s (%d distinct values in common)",
-                 exact, len(expected), missing,
-                 "MATCH - same values, different placement"
-                 if expected_bytes == actual_bytes else "DIFFER - values themselves are wrong",
-                 common)
+    same_multiset = expected_bytes == actual_bytes
+    logger.error("Iact value comparison: %d/%d words match exactly, %d of %d expected "
+                 "words unwritten; over the %d written words the byte multisets %s",
+                 exact, len(expected), missing, len(expected), len(actual_words),
+                 "MATCH - right values, wrong placement" if same_multiset
+                 else "DIFFER - the values themselves are wrong")
 
 
 def _log_iact_buffer_occupancy(dut, oep, max_addr=64):
