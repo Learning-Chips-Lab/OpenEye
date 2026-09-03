@@ -328,6 +328,19 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
         
+def _spad_word_signed(mem_entry, hi, lo):
+    """Read a signed sub-word out of a RAM entry, or None if it holds X/Z.
+
+    Buffer words the DUT never wrote read back as X, and LogicArray.to_signed()
+    raises on those. Returning None lets the caller report an unwritten word as
+    a mismatch instead of aborting the whole comparison with a ValueError.
+    """
+    try:
+        return mem_entry.value[hi:lo].to_signed()
+    except ValueError:
+        return None
+
+
 def compare_iact_storage(ptp, dut, iact_ref, oep):
     """Compare input activation storage contents with reference values.
     
@@ -362,9 +375,12 @@ def compare_iact_storage(ptp, dut, iact_ref, oep):
         for c in range(len(iact_ref)):
             for y in range(len(iact_ref[c])):
                 for x in range(len(iact_ref[c][y])):
-                    if(iact_ref[c][y][x] != dut.BUFFER_A[buffer%oep.IACT_RAM_CELLS].iact_layer_buffer.impl.mem[word].value[7 + (i * 8):(i * 8)].to_signed()):
+                    dut_value = _spad_word_signed(
+                        dut.BUFFER_A[buffer%oep.IACT_RAM_CELLS].iact_layer_buffer.impl.mem[word],
+                        7 + (i * 8), (i * 8))
+                    if(iact_ref[c][y][x] != dut_value):
                         logger.error("Error found in Iact storage; Channel: " + str(c) + " X: " + str(x) + " Y: " + str(y) + " buffer: " + str(buffer) + " word: " + str(word) + " i: " + str(i))
-                        logger.error("Ref-Value: " + str(iact_ref[c][y][x]) + " DUT-Value: " + str(dut.BUFFER_A[buffer%oep.IACT_RAM_CELLS].iact_layer_buffer.impl.mem[word].value[7 + (i * 8):(i * 8)].to_signed()))
+                        logger.error("Ref-Value: " + str(iact_ref[c][y][x]) + " DUT-Value: " + ("X (never written)" if dut_value is None else str(dut_value)))
                         error_found = True
                     i = i + 4
                     if (i >= 8):
@@ -386,14 +402,21 @@ def compare_iact_storage(ptp, dut, iact_ref, oep):
                     i = (i + 4) % 8
                 buffer = buffer_reset
                 word = word_reset
-    except:
+    except Exception as exc:
+        # The layout above assumes a 3D (channel, y, x) reference; fall back to
+        # the flat per-channel layout, but say why rather than hiding the reason.
+        logger.info("Iact storage 3D layout check bailed out (%s: %s); using the flat layout.",
+                    type(exc).__name__, exc)
         for c in range(len(iact_ref)):
             word = c%8
             buffer = math.floor(c/8)%oep.IACT_RAM_CELLS
             addr = math.floor(c/8/oep.IACT_RAM_CELLS)
-            if(iact_ref[c] != dut.BUFFER_A[buffer].iact_layer_buffer.impl.mem[addr].value[7 + (word * 8):(word * 8)].to_signed()):
+            dut_value = _spad_word_signed(
+                dut.BUFFER_A[buffer].iact_layer_buffer.impl.mem[addr],
+                7 + (word * 8), (word * 8))
+            if(iact_ref[c] != dut_value):
                 logger.error("Error found in Iact storage; Channel: " + str(c)  + " buffer: " + str(buffer) + " word: " + str(word) + " addr: " + str(addr))
-                logger.error("Ref-Value: " + str(iact_ref[c]) + " DUT-Value: " + str(dut.BUFFER_A[buffer].iact_layer_buffer.impl.mem[addr].value[7 + (word * 8):(word * 8)].to_signed()))
+                logger.error("Ref-Value: " + str(iact_ref[c]) + " DUT-Value: " + ("X (never written)" if dut_value is None else str(dut_value)))
                 error_found = True
 
     if error_found:
