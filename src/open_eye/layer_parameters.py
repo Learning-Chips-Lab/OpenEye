@@ -1643,7 +1643,13 @@ class LayerParameters(object):
         self.lower_bound = (self.padding_y * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions) - 1
         self.upper_bound = (self.padding_y+self.iact_size_y) * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions
         self.overhang_discrepancy = (self.used_channels*params.NUM_GLB_WGHT)%(params.WORDS_PER_CYCLE*4)
-        self.psum_output_words = int(self.output_cycles * self.filters * self.needed_wght_cycles * params.Clusters_X)
+        # One DMA output word carries PARALLEL_MACS psums, and the filters are
+        # split across the cluster columns rather than repeated per column, so
+        # both factors divide out. Multiplying by Clusters_X and not dividing by
+        # PARALLEL_MACS asked the readout for 4x too many words, and the surplus
+        # came back as never-written (X) psum-buffer locations on data_dma_o.
+        self.psum_output_words = int(self.output_cycles * self.filters
+                                     * self.needed_wght_cycles / params.PARALLEL_MACS)
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))
