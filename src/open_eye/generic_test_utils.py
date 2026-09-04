@@ -108,25 +108,39 @@ def check_results(params, file_1,file_2):
     line2_words = [0 for _ in range (words)]
     error_line1 = ""
     error_line2 = ""
+    def decode_words(line):
+        """Split a packed line into signed psum values.
+
+        Lines can be shorter than words*DATA_PSUM_BITWIDTH (a truncated or
+        empty output line is exactly the failure worth reporting), so decode
+        only the slices that are full width instead of letting int('', 2)
+        raise and hide the comparison result behind a ValueError.
+        """
+        stripped = line.strip()
+        values = []
+        for x in range(words):
+            chunk = stripped[x*params.DATA_PSUM_BITWIDTH:(x+1)*params.DATA_PSUM_BITWIDTH]
+            if len(chunk) == params.DATA_PSUM_BITWIDTH and set(chunk) <= {"0", "1"}:
+                values.append(str(twos_complement(chunk, params.DATA_PSUM_BITWIDTH)))
+            else:
+                values.append("<{}>".format(chunk if chunk else "missing"))
+        return values
+
+    expected_len = words * params.DATA_PSUM_BITWIDTH
     for i, (line1, line2) in enumerate(zip(lines1, lines2)) :
         if line1 != line2:
-            if (int(line1.strip()) != 0) :
-                logger.error(f'Difference found at line {i + 1}:')
-
-                for x in range(words) :
-                    line1_words[x] = line1.strip()[(x)*params.DATA_PSUM_BITWIDTH:(x+1)*params.DATA_PSUM_BITWIDTH]
-                    line2_words[x] = line2.strip()[(x)*params.DATA_PSUM_BITWIDTH:(x+1)*params.DATA_PSUM_BITWIDTH]
-
-                error_line1 = f'Reference Data: {line1.strip()}' + "   " 
-                error_line2 = f'Output Data   : {line2.strip()}' + "   " 
-                for x in range(words) :
-                    error_line1 = error_line1 + str(twos_complement(line1_words[x], params.DATA_PSUM_BITWIDTH)) + " "
-                for x in range(words) :
-                    error_line2 = error_line2 + str(twos_complement(line2_words[x], params.DATA_PSUM_BITWIDTH)) + " "
-                logger.error(error_line1)
-                logger.error(error_line2)
-
-                return False
+            ref, out = line1.strip(), line2.strip()
+            # An all-zero reference line is padding and not a real difference.
+            if set(ref) <= {"0"} and ref:
+                continue
+            logger.error(f'Difference found at line {i + 1}:')
+            if len(ref) != expected_len or len(out) != expected_len:
+                logger.error("Line width mismatch: reference %d chars, output %d chars, "
+                             "expected %d (%d words x %d bits)",
+                             len(ref), len(out), expected_len, words, params.DATA_PSUM_BITWIDTH)
+            logger.error("Reference Data: %s   %s", ref, " ".join(decode_words(line1)))
+            logger.error("Output Data   : %s   %s", out, " ".join(decode_words(line2)))
+            return False
         
     logger.debug('No differences found between files')
     return True

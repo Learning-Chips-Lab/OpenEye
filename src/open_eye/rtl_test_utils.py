@@ -306,6 +306,20 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["status"]][data_word]))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
+        # dma_storage has now decoded the configuration words, so the DUT's
+        # own expectations are readable and can be compared with what is about
+        # to be sent. A mismatch here stalls the corresponding GET_* state.
+        for name in ("trans_cycles_iact", "trans_cycles_wght", "trans_cycles_psum"):
+            try:
+                logger.info("DUT expects %s = %d", name, int(getattr(dut, name).value))
+            except Exception as exc:
+                logger.info("DUT %s unreadable (%s)", name, type(exc).__name__)
+        logger.info("Host will send: iact %d, wght %d, psum %d, quantize %d words",
+                    len(stream[strdic.stream_parallel_dict["iact"]]),
+                    len(stream[strdic.stream_parallel_dict["wght"]]),
+                    len(stream[strdic.stream_parallel_dict["psum"]]),
+                    len(stream[strdic.stream_parallel_dict["quantize"]]))
+
         # Send input activation data
         for data_word in range(len(stream[strdic.stream_parallel_dict["iact"]])):
             cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["iact"]][data_word]))
