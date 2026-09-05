@@ -176,9 +176,6 @@ class LayerMapper(object):
             - PsumStreamCreator.get_psum_stream() for biases/partial sums
             - write_quant_and_offset() for post-processing parameters
         """
-        # Generate working parameters and hardware configuration
-        self.storage[strdic.stream_parallel_dict["status"]] = self.write_working_parameters(self.params, self.layer_params, self.layer_repetition)
-
         # Generate input activation stream (skip if data can be reused)
         if (self.layer_params.skipIact == 0) :
             self.storage[strdic.stream_parallel_dict["iact"]] = self.IactStreamCreator.get_iact_stream()
@@ -196,6 +193,27 @@ class LayerMapper(object):
             self.storage[strdic.stream_parallel_dict["psum"]] = self.PsumStreamCreator.get_psum_stream()
         else :
             self.storage[strdic.stream_parallel_dict["psum"]] = []
+
+        # The data streams are built before the configuration is packed so the
+        # accelerator is told how many words it will actually receive. Each
+        # trans_cycles_* is otherwise derived from a formula over the layer
+        # geometry, and every place those formulas disagree with the emitted
+        # stream the corresponding GET_* state - which exits on an equality -
+        # either waits forever or over-consumes into the next section and drags
+        # everything after it out of alignment. Observed: sparse weights emit
+        # about half the uncompressed count, and the psum stream ran longer than
+        # trans_cycles_psum, which ended GET_BIAS early and left GET_QUANTIZE
+        # short of words.
+        if self.params.SERIAL:
+            for name, key in (("trans_cycles_iact", "iact"),
+                              ("trans_cycles_wght", "wght"),
+                              ("trans_cycles_psum", "psum")):
+                section = self.storage[strdic.stream_parallel_dict[key]]
+                if section:
+                    setattr(self.layer_params, name, len(section))
+
+        # Generate working parameters and hardware configuration
+        self.storage[strdic.stream_parallel_dict["status"]] = self.write_working_parameters(self.params, self.layer_params, self.layer_repetition)
 
         # Generate quantization and offset parameters
         self.storage[strdic.stream_parallel_dict["quantize"]] = self.write_quant_and_offset(self.params, self.layer_params, self.layer_repetition)

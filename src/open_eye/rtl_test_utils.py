@@ -361,7 +361,7 @@ fsm_probe_samples = [0]
 fsm_state_trace = []
 
 
-async def probe_fsm_states(ptp, dut):
+async def probe_fsm_states(ptp, dut, stall_report_after=20000):
     """Record every main-FSM state the DUT enters (opt-in diagnostic).
 
     Sampling every clock costs simulation time, so the testbench only starts
@@ -369,6 +369,8 @@ async def probe_fsm_states(ptp, dut):
     checks cannot, such as whether RECEIVE_PSUMS_TO_IACT is ever reached.
     """
     previous = None
+    stuck_for = 0
+    reported = False
     while True:
         fsm_probe_samples[0] += 1
         try:
@@ -384,6 +386,24 @@ async def probe_fsm_states(ptp, dut):
                 # would otherwise report the trace.
                 logger.info("FSM state -> %d at %s ns", state,
                             cocotb.utils.get_sim_time("ns"))
+                stuck_for = 0
+                reported = False
+            else:
+                stuck_for += 1
+                # A state that stops advancing is the signature of a section
+                # word-count mismatch, so report the counters that gate the
+                # exit once rather than leaving a silent run to time out.
+                if stuck_for == stall_report_after and not reported:
+                    reported = True
+                    counters = []
+                    for name in ("fsm_cycle", "fsm_psum_cycle", "trans_cycles_iact",
+                                 "trans_cycles_wght", "trans_cycles_psum"):
+                        try:
+                            counters.append("%s=%d" % (name, int(getattr(dut, name).value)))
+                        except Exception:
+                            pass
+                    logger.error("FSM stuck in state %d for %d cycles: %s",
+                                 state, stuck_for, ", ".join(counters))
             previous = state
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 

@@ -441,12 +441,14 @@ class WghtStreamMapper(object):
                     for cl_y in range(params.Clusters_Y):
                         for router in range(params.NUM_GLB_WGHT):
                             try:
-                                stream.append(temp_stream[0][cl_y][router][word])
-                            except:
-                                try:
-                                    stream.append(temp_stream[0][cl_y][router][word])
-                                except:
-                                    stream.append(0)
+                                # Index the cluster column being emitted. This read
+                                # cl_x's data from column 0 regardless, so column 0
+                                # was sent twice and column 1's weights never at all
+                                # (the retry below repeated the same expression, so
+                                # it could only ever fall through to the zero).
+                                stream.append(temp_stream[cl_x][cl_y][router][word])
+                            except (IndexError, TypeError):
+                                stream.append(0)
 
         return stream
     
@@ -837,7 +839,14 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                     for cl_y in range(params.Clusters_Y):
                         for router in range(params.NUM_GLB_WGHT):
                             try:
-                                # Combine data from both X-clusters (24-bit shift)
+                                # Combine data from both X-clusters (24-bit shift).
+                                # NOTE: both terms index cl_x, so this doubles one
+                                # column rather than combining columns 0 and 1 as
+                                # the iact/psum mappers do. Emitting a single
+                                # value here instead halves the stream and stalls
+                                # GET_WGHT, so the word count depends on this
+                                # doubling - fixing the value bug needs
+                                # trans_cycles_wght corrected in the same change.
                                 wght_stream.append(temp_stream[cl_x][cl_y][router][word] + (temp_stream[cl_x][cl_y][router][word] * (2**self.params.WGHT_Trans_Bitwidth)))
                             except:
                                 # Only one cluster or no data
