@@ -31,6 +31,38 @@ clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]  # Output delay unit
 
 signals_dict = {}
 
+async def dump_wght_spad(dut, wghts_array):
+    """Print PE(0,0)'s loaded weight SPADs next to the values that were sent.
+
+    The sparse encoding skips zero weights and records the skip count in the
+    overhead field; if the decode of that field is off, the weights land under
+    the wrong filter. Comparing the SPAD image with the source matrix shows
+    exactly which weight ended up where.
+    """
+    pe = dut.gen_X[0].gen_Y[0].pe
+    # The weight address SPad only exists under SPARSITY_EN, inside a named
+    # generate block, so it needs the extra level of hierarchy.
+    handles = {"weight_data_SPad": lambda: pe.weight_data_SPad.ram.impl.mem,
+               "weight_addr_SPad": lambda: pe.gen_wght_addr_spad.weight_addr_SPad.ram.impl.mem}
+    for name, getter in handles.items():
+        try:
+            mem = getter()
+        except Exception as exc:
+            dut._log.info("SPAD %s not reachable (%s)", name, type(exc).__name__)
+            continue
+        words = []
+        for addr in range(32):
+            try:
+                words.append(hex(int(mem[addr].value)))
+            except ValueError:
+                words.append("X")
+            except IndexError:
+                break
+        dut._log.info("%s[0:%d] = %s", name, len(words), " ".join(words))
+    dut._log.info("weights sent to PE row 0 (y-major, %d filters per row): %s",
+                  len(wghts_array[0][0]), wghts_array[0].tolist())
+
+
 async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
     """_summary_
 
@@ -54,6 +86,12 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
 
     await Combine(send_iact_thread, send_wght_thread)
     await Timer(clk_cycle, unit=clk_cycle_unit)
+
+    if os.environ.get("DUMP_WGHT_SPAD"):
+        # data_pipeline_wght is two stages deep; let the last writes land
+        # before sampling or the tail of the SPAD reads as X.
+        await Timer(6*clk_cycle, unit=clk_cycle_unit)
+        await dump_wght_spad(dut, wghts_array)
     # Trigger computation: pulse compute_i high for one cycle
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, (2**12)-1))
     await Timer(clk_cycle, unit=clk_cycle_unit)
@@ -559,6 +597,17 @@ def create_iact_wght_psum_arrays(dut):
     # Apply random sparsity to weights
     mask = np.random.rand(*wghts.shape) < (sparse_wght / 100.0)
     wghts[mask] = 0
+
+    # Debug hook: WGHT_ZERO_POS places exactly one zero at that flat index of
+    # each PE row's weight matrix (row-major over [wghtsize_y][wghtsize_x]) and
+    # leaves everything else non-zero, so a failure can be attributed to a known
+    # position instead of a random mask.
+    if os.environ.get("WGHT_ZERO_POS") is not None:
+        positions = [int(v) for v in os.environ["WGHT_ZERO_POS"].split(",") if v != ""]
+        wghts[wghts == 0] = 1
+        for r in range(wghts.shape[0]):
+            for pos in positions:
+                wghts[r][pos // wghts.shape[2]][pos % wghts.shape[2]] = 0
 
     psums = np.arange(1, wghtsize_x * int(dut.PE_COLUMNS.value) + 1, 1).reshape(int(dut.PE_COLUMNS.value), wghtsize_x)
 

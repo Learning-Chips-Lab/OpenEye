@@ -1309,7 +1309,14 @@ module PE #(
               psum_data_SPad_en_r[pmc] <= computing;    // Read psum when computing
               psum_data_SPad_en_w[pmc] <= 0;            // Disable psum writes (default)
               reuse_psum_spad[pmc]     <= 0;            // No data forwarding (default)
-              psum_spad_addr_mem[pmc]  <= psum_spad_addr_mem[PARALLEL_MACS-1] + PARALLEL_MACS;
+              // Advance from psum_spad_addr_r, not from the old base: in sparse
+              // mode psum_spad_addr_r is base + wght_data_spad_oh_acc, so the
+              // zeros this weight skipped are carried into the next base. Taking
+              // the old base instead applied each skip only to its own weight
+              // and left every later weight in the row one filter short, so they
+              // accumulated onto each other's psum addresses. In dense mode
+              // psum_spad_addr_r == psum_spad_addr_mem, so this is unchanged.
+              psum_spad_addr_mem[pmc]  <= psum_spad_addr_r[PARALLEL_MACS-1] + 1;
               reused_data[pmc]         <= 0;            // No forwarded data (default)
             end
             wght_addr_use_vec     <= 1;            // Use computed weight addresses
