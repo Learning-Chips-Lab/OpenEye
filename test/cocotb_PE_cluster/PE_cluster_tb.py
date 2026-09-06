@@ -632,6 +632,7 @@ def generate_spad(
     overhead = 0  # Count of consecutive zeros skipped
     # Process each element in the input array
     for y in range(len(data)):  # For each row
+        stored_in_row = 0
         for x in range(len(data[y])):  # For each element in row
             # Include this element if it's non-zero OR we're not ignoring zeros
             # The last clause pads a row out to an even word in packed mode so
@@ -658,10 +659,26 @@ def generate_spad(
                     )
 
                 current_count = current_count + 1
+                stored_in_row = stored_in_row + 1
                 overhead = 0  # Reset zero counter after storing a value
             else:
                 # This element is zero - increment skip counter
                 overhead = overhead + 1
+
+        # A row whose weights are all zero stores nothing, so the hardware sees
+        # no word for it and cannot advance the first SPAD address: the next
+        # row's first value gets attributed to the empty row and every later
+        # row's count lands one address too low. Emit one padding entry
+        # carrying the accumulated skip so every row contributes a word.
+        if ignore_zeros and stored_in_row == 0:
+            if sisd:
+                data_spad_data[current_count] = (overhead << bitwidth)
+            else:
+                data_spad_data[int(math.floor(current_count / 2))] = (
+                    data_spad_data[int(math.floor(current_count / 2))]
+                    + ((overhead << bitwidth) << (offset * (current_count % 2))))
+            current_count = current_count + 1
+            overhead = 0
 
         # Store cumulative count for this row in address array
         if simd:

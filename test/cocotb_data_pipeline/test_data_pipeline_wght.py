@@ -45,7 +45,8 @@ def run_case(request, zeros, parallel_macs=2, filters_w=6, rows=4):
         extra_env={"PARALLEL_MACS": str(parallel_macs),
                    "FILTERS_W": str(filters_w),
                    "ROWS": str(rows),
-                   "ZEROS": ",".join(str(z) for z in zeros)},
+                   "ZEROS": ",".join(str(z) for z in zeros),
+                   "TRACE_WGHT": os.environ.get("TRACE_WGHT", "")},
     )
 
 

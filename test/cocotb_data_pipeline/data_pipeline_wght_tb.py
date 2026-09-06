@@ -46,35 +46,41 @@ def to_twos(value, bits=PAYLOAD_WIDTH):
 
 
 def encode_matrix(matrix, parallel_macs):
-    """Compress a [rows][filters] weight matrix into input words.
+    """Compress a [rows][filters] weight matrix exactly as the cluster does.
 
-    Returns (words, expected) where expected is the list of
-    (filter_position, payload) pairs the pipeline should store, with
-    filter_position counted from the start of that weight's row.
+    Mirrors PE_cluster_tb.generate_spad: the skip counter runs on across row
+    boundaries (its per-row reset is commented out there), and a row that would
+    end on an odd sub-word count stores its final element - even when that
+    element is zero - as padding carrying the accumulated skip, then leaves the
+    next slot empty so the following row starts on a fresh word.
+
+    That combination is why a trailing zero normally does not leak its skip into
+    the next row, and why an entirely zero row (which triggers neither path)
+    carries its whole skip forward in the next stored value's tag.
+
+    Returns (words, expected, row_lengths) where expected holds, per row, the
+    (filter position, payload) pairs the pipeline should store.
     """
     subwords, expected, row_lengths = [], [], []
-    # Skips are counted within a row. PE_cluster_tb.generate_spad lets its
-    # counter run on across rows, but it also *stores* a trailing zero as a
-    # padding entry carrying the accumulated skip, so in practice the skip never
-    # leaks into the next row. Modelling it per row matches that behaviour
-    # without reproducing the padding rule.
+    skipped = 0
+    count = 0
     for row in matrix:
-        skipped = 0
         start = len(subwords)
         row_expected = []
         for position, value in enumerate(row):
-            if value == 0:
+            last = position == len(row) - 1
+            store = value != 0 or (last and count % 2 != 0)
+            if not store:
                 skipped += 1
                 continue
             subwords.append((skipped, to_twos(value)))
-            row_expected.append((position, to_twos(value)))
+            if value != 0:
+                row_expected.append((position, to_twos(value)))
             skipped = 0
-        # Rows are packed independently: pad so the next row starts on a fresh
-        # input word, matching how the serializer emits per-row groups. The pad
-        # occupies a sub-word slot, which is why rows have to be segmented on
-        # decode rather than treating the stream as one flat sequence.
-        while len(subwords) % parallel_macs:
-            subwords.append((0, 0))
+            count += 1
+        if count % 2 == 1:
+            subwords.append(None)   # slot left empty to realign the next row
+            count += 1
         row_lengths.append(len(subwords) - start)
         expected.append(row_expected)
 
@@ -82,7 +88,10 @@ def encode_matrix(matrix, parallel_macs):
     for i in range(0, len(subwords), parallel_macs):
         word = 0
         for lane in range(parallel_macs):
-            overhead, payload = subwords[i + lane]
+            entry = subwords[i + lane] if i + lane < len(subwords) else None
+            if entry is None:
+                continue
+            overhead, payload = entry
             word |= ((overhead << PAYLOAD_WIDTH) | payload) << (lane * WORD_WIDTH)
         words.append(word)
     return words, expected, row_lengths
@@ -120,6 +129,22 @@ async def load_matrix(dut, matrix, parallel_macs, filters_w):
             except ValueError:
                 pass
 
+    async def trace():
+        while True:
+            await RisingEdge(dut.clk_i)
+            await Timer(1, unit="ns")
+            def rd(name):
+                try:
+                    return int(getattr(dut, name).value)
+                except Exception:
+                    return None
+            dut._log.info("t oh_reg=%s oh_new=%s oh_delay=%s addr=%s en=%s data=%s",
+                          rd("overhead_reg"), rd("overhead_new_calc_reg"),
+                          rd("overhead_delay_reg"), rd("first_spad_addr_o"),
+                          rd("first_spad_en_o"), rd("first_spad_data_o"))
+
+    if os.environ.get("TRACE_WGHT"):
+        cocotb.start_soon(trace())
     collector = cocotb.start_soon(collect())
 
     for word in words:
@@ -165,7 +190,7 @@ def decode_positions(writes, parallel_macs, row_lengths):
         row = flat[cursor:cursor + length]
         cursor += length
         while row and row[-1] == (0, 0):
-            row.pop()
+            row.pop()  # padding / realignment slots carry no weight
         position, row_decoded = 0, []
         for tag, payload in row:
             position += tag
