@@ -61,6 +61,19 @@ def run_case(request, zeros, parallel_macs=2, filters_w=6, rows=4):
     (12, 16),      # two zeros, same row, from the row start
     (13, 21),      # two zeros, different rows (passes at cluster level)
     (0, 1),        # adjacent zeros
+    # An entirely zero weight row emits no sub-words, and the pipeline does not
+    # advance the first SPAD address for it: the expected boundaries [3, 6, 6, 9]
+    # come back as [3, 6, 9, None], so every later row is stored one address too
+    # low and the compute engine segments the stream in the wrong places. This is
+    # the remaining PE_cluster sparse failure (all 5 left in the 132-case sample
+    # are high-sparsity, where empty rows become likely). Reproduce at cluster
+    # level with WGHT_ZERO_POS="12,13,14,15,16,17".
+    pytest.param((12, 13, 14, 15, 16, 17),
+                 marks=pytest.mark.xfail(reason="empty weight row does not advance "
+                                                "the first SPAD address", strict=True)),
+    pytest.param((0, 1, 2, 3, 4, 5),
+                 marks=pytest.mark.xfail(reason="empty weight row does not advance "
+                                                "the first SPAD address", strict=True)),
 ])
 def test_wght_positions(zeros, request):
     run_case(request, zeros)

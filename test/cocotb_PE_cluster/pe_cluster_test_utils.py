@@ -259,7 +259,6 @@ def send_to_iact_spad(ptp, spad, dut, words):
         # transfer, so the packing has to follow the compiled bus width instead
         # of assuming the 24-bit (2 x 12 bit) sparse case.
         words_per_transmit = int(dut.TRANS_BITWIDTH_IACT.value) // word_stride
-    dense_mode = int(dut.SPARSITY_EN.value) == 0
     # The position stepping below repeats each group of words_per_transmit SPAD
     # words for that many cycles, so a transfer still carries data up to the
     # cycle whose group holds the last word.
@@ -284,12 +283,14 @@ def send_to_iact_spad(ptp, spad, dut, words):
         # value including the zeros, so the enable has to follow the word count
         # instead - dropping a zero transfer would starve the PE of a word.
         data_array[1].append(sending_data)
-        if dense_mode:
-            data_array[0].append(1 if cycle < valid_transfers else 0)
-        elif (sending_data != 0) :
-            data_array[0].append(1)
-        else: 
-            data_array[0].append(0)
+        # Activations are always handed over uncompressed - send_iact builds the
+        # SPAD with ignore_zeros=False, and data_pipeline_iact does the
+        # zero-skipping itself, tagging each stored value with its source
+        # position. A zero activation therefore still has to be transferred: its
+        # position is what the tag counts. Gating the enable on a non-zero word
+        # dropped that transfer, so every later activation was tagged one
+        # position too low and got paired with the wrong weight row.
+        data_array[0].append(1 if cycle < valid_transfers else 0)
         sending_data = 0
     return data_array
 

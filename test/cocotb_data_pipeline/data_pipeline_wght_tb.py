@@ -53,6 +53,11 @@ def encode_matrix(matrix, parallel_macs):
     filter_position counted from the start of that weight's row.
     """
     subwords, expected, row_lengths = [], [], []
+    # Skips are counted within a row. PE_cluster_tb.generate_spad lets its
+    # counter run on across rows, but it also *stores* a trailing zero as a
+    # padding entry carrying the accumulated skip, so in practice the skip never
+    # leaks into the next row. Modelling it per row matches that behaviour
+    # without reproducing the padding rule.
     for row in matrix:
         skipped = 0
         start = len(subwords)

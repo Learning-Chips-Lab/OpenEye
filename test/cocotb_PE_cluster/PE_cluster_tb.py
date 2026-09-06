@@ -81,6 +81,26 @@ async def dump_psum_spad(dut):
                 break
         dut._log.info("psum_SPad PE row %d lane %d = %s", pe_row, lane, words)
 
+    # The iact SPADs are only complete once the stream has been consumed, so
+    # they are sampled here rather than alongside the weight dump.
+    for name, getter in (("iact_data_SPad", lambda: pe.iact_data_SPad.ram.impl.mem),
+                         ("iact_addr_SPad",
+                          lambda: pe.gen_iact_addr_spad.iact_addr_SPad.ram.impl.mem)):
+        try:
+            mem = getter()
+        except Exception as exc:
+            dut._log.info("%s not reachable (%s)", name, type(exc).__name__)
+            continue
+        words = []
+        for addr in range(10):
+            try:
+                words.append(hex(int(mem[addr].value)))
+            except ValueError:
+                words.append("X")
+            except IndexError:
+                break
+        dut._log.info("%s = %s", name, " ".join(words))
+
 
 async def dump_wght_spad(dut, wghts_array):
     """Print PE(0,0)'s loaded weight SPADs next to the values that were sent.
@@ -98,7 +118,8 @@ async def dump_wght_spad(dut, wghts_array):
     # The weight address SPad only exists under SPARSITY_EN, inside a named
     # generate block, so it needs the extra level of hierarchy.
     handles = {"weight_data_SPad": lambda: pe.weight_data_SPad.ram.impl.mem,
-               "weight_addr_SPad": lambda: pe.gen_wght_addr_spad.weight_addr_SPad.ram.impl.mem}
+               "weight_addr_SPad": lambda: pe.gen_wght_addr_spad.weight_addr_SPad.ram.impl.mem,
+               }
     for name, getter in handles.items():
         try:
             mem = getter()
@@ -119,6 +140,9 @@ async def dump_wght_spad(dut, wghts_array):
             dut._log.info("PE config: %s = %d", sig, int(getattr(pe, sig).value))
         except Exception as exc:
             dut._log.info("PE config: %s unreadable (%s)", sig, type(exc).__name__)
+
+    if os.environ.get("IACT_ZERO_POS") is not None:
+        dut._log.info("iact zero spec: %s", os.environ["IACT_ZERO_POS"])
 
     for r in range(len(wghts_array)):
         flat = wghts_array[r].reshape(-1)
