@@ -1473,17 +1473,30 @@ module PE #(
             // Rationale: Adders have 1-cycle latency. If we try to read a psum
             // that's being written in the same cycle, we need to forward the
             // result directly to avoid stalling or using stale data.
-            if (psum_spad_addr_r[pmc] == psum_spad_addr_w[pmc]) begin
-              // Port A read conflicts with Port A write
-              reuse_psum_spad[pmc] <= 1;       // Enable forwarding
-              reused_data[pmc]     <= adder_o_w[pmc]; // Use adder 1 output
+            // This check needs its own loop: pmc is left over from the
+            // preceding for-loop, where it ends at PARALLEL_MACS, so the
+            // comparison indexed one past the last lane and the forwarding
+            // never fired for a real lane. A psum write is suppressed when its
+            // address collides with the read address (psum_data_SPad_en_w_i),
+            // so without forwarding that accumulation is simply lost. It only
+            // shows up once a weight row is short enough for the same filter to
+            // recur within the two-cycle write pipeline, which is what skipping
+            // zeros does.
+            for (pmc = 0; pmc < PARALLEL_MACS; pmc=pmc+1) begin
+              if (psum_spad_addr_r[pmc] == psum_spad_addr_w[pmc]) begin
+                // Port A read conflicts with Port A write
+                reuse_psum_spad[pmc] <= 1;       // Enable forwarding
+                reused_data[pmc]     <= adder_o_w[pmc]; // Use adder 1 output
+              end
             end
             if (!SERIAL) begin
               for (pmc1 = 0; pmc1 < PARALLEL_MACS; pmc1=pmc1+1) begin
                 for (pmc2 = 0; pmc2 < PARALLEL_MACS; pmc2=pmc2+1) begin
                   if (psum_spad_addr_r[pmc1] == psum_spad_addr_w[pmc2]) begin
-                    reuse_psum_spad[pmc] <= 1;
-                    reused_data[pmc1]    <= adder_o_w[pmc2];
+                    // Forward for the lane that is reading, pmc1, not the
+                    // stale loop variable.
+                    reuse_psum_spad[pmc1] <= 1;
+                    reused_data[pmc1]     <= adder_o_w[pmc2];
                   end
                 end
               end
@@ -1584,8 +1597,13 @@ module PE #(
                 adder_en[pmc] <= 1;
               end
               current_state_computing <= SEND_PSUM;
-              psum_data_SPad_en_w[pmc]   <= 1;
-              psum_spad_addr_w[pmc]      <= psum_spad_addr_r[pmc];
+              // These two were outside the loop below and used the leftover
+              // pmc (== PARALLEL_MACS), so they addressed one past the last
+              // lane instead of every lane.
+              for (pmc = 0; pmc < PARALLEL_MACS; pmc=pmc+1) begin
+                psum_data_SPad_en_w[pmc] <= 1;
+                psum_spad_addr_w[pmc]    <= psum_spad_addr_r[pmc];
+              end
               for (pmc = 0; pmc < PARALLEL_MACS; pmc=pmc+1) begin
                 psum_spad_addr_mem[pmc] <= psum_spad_addr_r[pmc] + 1;
                 if (used_psum_memory[pmc][(psum_spad_addr_r[pmc])] == 1) begin

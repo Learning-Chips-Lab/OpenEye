@@ -31,6 +31,31 @@ clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]  # Output delay unit
 
 signals_dict = {}
 
+async def probe_psum_hazard(dut, cycles=60):
+    """Trace lane 0's psum read/write pipeline during compute.
+
+    Logs the read address, the two pipelined write addresses, whether the write
+    was actually enabled, and the forwarding flag. A suppressed write whose
+    value is not forwarded is how an accumulation goes missing.
+    """
+    pe_row = int(os.environ.get("DUMP_WGHT_SPAD_PE", "0"))
+    pe = dut.gen_X[0].gen_Y[pe_row].pe
+    def rd(sig, idx=None):
+        try:
+            h = getattr(pe, sig)
+            return int((h[idx] if idx is not None else h).value)
+        except Exception:
+            return None
+    for cycle in range(cycles):
+        await Timer(clk_cycle, unit=clk_cycle_unit)
+        row = (rd("psum_spad_addr_r", 0), rd("psum_spad_addr_delay", 0),
+               rd("psum_spad_addr_w", 0), rd("psum_data_SPad_en_w_i", 0),
+               rd("reuse_psum_spad", 0), rd("use_psum", 0))
+        if row[0] is not None:
+            dut._log.info("hz %02d addr_r=%s delay=%s addr_w=%s en_w=%s reuse=%s use_psum=%s",
+                          cycle, *row)
+
+
 async def dump_psum_spad(dut):
     """Print each MAC lane's psum SPAD, i.e. the accumulator per filter.
 
@@ -132,6 +157,8 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
         await Timer(6*clk_cycle, unit=clk_cycle_unit)
         await dump_wght_spad(dut, wghts_array)
     # Trigger computation: pulse compute_i high for one cycle
+    if os.environ.get("PROBE_PSUM_HAZARD"):
+        cocotb.start_soon(probe_psum_hazard(dut))
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, (2**12)-1))
     await Timer(clk_cycle, unit=clk_cycle_unit)
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, 0))
@@ -631,6 +658,18 @@ def create_iact_wght_psum_arrays(dut):
     # Apply random sparsity to activations
     mask = np.random.rand(*iacts.shape) < (sparse_iact / 100.0)
     iacts[mask] = 0
+
+    # Same debug hook as WGHT_ZERO_POS but for activations: flat (y-major)
+    # positions within each iact slice, "a,b" for every slice or "a|b|c" to give
+    # each slice its own pattern.
+    if os.environ.get("IACT_ZERO_POS") is not None:
+        spec = os.environ["IACT_ZERO_POS"]
+        per_slice = [[int(v) for v in part.split(",") if v != ""]
+                     for part in spec.split("|")]
+        iacts[iacts == 0] = 1
+        for sl in range(iacts.shape[0]):
+            for pos in per_slice[sl % len(per_slice)]:
+                iacts[sl][pos // iacts.shape[2]][pos % iacts.shape[2]] = 0
     print(iacts)
     # Generate weights: random values from -128 to 127, without 0
     shape = (int(dut.PE_ROWS.value), wghtsize_y, wghtsize_x)
