@@ -31,6 +31,32 @@ clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]  # Output delay unit
 
 signals_dict = {}
 
+async def dump_psum_spad(dut):
+    """Print each MAC lane's psum SPAD, i.e. the accumulator per filter.
+
+    Read after compute, this says which filter every product actually landed
+    on - the question a PSUM output mismatch cannot answer on its own.
+    """
+    pe_row = int(os.environ.get("DUMP_WGHT_SPAD_PE", "0"))
+    pe = dut.gen_X[0].gen_Y[pe_row].pe
+    for lane in range(int(dut.PARALLEL_MACS.value)):
+        try:
+            mem = pe.gen_serial_psum_spad.gen_psum_spad[lane].psum_SPad.ram.impl.mem
+        except Exception as exc:
+            dut._log.info("psum SPAD lane %d not reachable (%s)", lane, type(exc).__name__)
+            continue
+        words = []
+        for addr in range(12):
+            try:
+                v = int(mem[addr].value)
+                words.append(v - (1 << 20) if v >> 19 else v)
+            except ValueError:
+                words.append("X")
+            except IndexError:
+                break
+        dut._log.info("psum_SPad PE row %d lane %d = %s", pe_row, lane, words)
+
+
 async def dump_wght_spad(dut, wghts_array):
     """Print PE(0,0)'s loaded weight SPADs next to the values that were sent.
 
@@ -39,7 +65,11 @@ async def dump_wght_spad(dut, wghts_array):
     the wrong filter. Comparing the SPAD image with the source matrix shows
     exactly which weight ended up where.
     """
-    pe = dut.gen_X[0].gen_Y[0].pe
+    # DUMP_WGHT_SPAD_PE selects which PE row to inspect; the interesting one is
+    # whichever row the zero pattern was applied to.
+    pe_row = int(os.environ.get("DUMP_WGHT_SPAD_PE", "0"))
+    pe = dut.gen_X[0].gen_Y[pe_row].pe
+    dut._log.info("dumping PE row %d", pe_row)
     # The weight address SPad only exists under SPARSITY_EN, inside a named
     # generate block, so it needs the extra level of hierarchy.
     handles = {"weight_data_SPad": lambda: pe.weight_data_SPad.ram.impl.mem,
@@ -59,6 +89,12 @@ async def dump_wght_spad(dut, wghts_array):
             except IndexError:
                 break
         dut._log.info("%s[0:%d] = %s", name, len(words), " ".join(words))
+    for sig in ("filters_reg_M0", "channel_reg_C0", "iact_addr_max_reg", "raw_wght_w"):
+        try:
+            dut._log.info("PE config: %s = %d", sig, int(getattr(pe, sig).value))
+        except Exception as exc:
+            dut._log.info("PE config: %s unreadable (%s)", sig, type(exc).__name__)
+
     for r in range(len(wghts_array)):
         flat = wghts_array[r].reshape(-1)
         zeros = [int(i) for i in range(len(flat)) if flat[i] == 0]
@@ -100,6 +136,10 @@ async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
     await Timer(clk_cycle, unit=clk_cycle_unit)
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.compute_i, 0))
     await Timer(3*clk_cycle, unit=clk_cycle_unit)
+
+    if os.environ.get("DUMP_WGHT_SPAD"):
+        await Timer(60*clk_cycle, unit=clk_cycle_unit)
+        await dump_psum_spad(dut)
     # configure the vertical routing of the PEs to send the psums upwards in the column of the PEs
     # (by default, the accumulate the psums inside the PE)
     cocotb.start_soon(rtl_test_utils.set_input(ptp, dut.pe_router_psum_ready_i, (2**int(dut.PE_COLUMNS.value))-1))
