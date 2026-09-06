@@ -59,8 +59,11 @@ async def dump_wght_spad(dut, wghts_array):
             except IndexError:
                 break
         dut._log.info("%s[0:%d] = %s", name, len(words), " ".join(words))
-    dut._log.info("weights sent to PE row 0 (y-major, %d filters per row): %s",
-                  len(wghts_array[0][0]), wghts_array[0].tolist())
+    for r in range(len(wghts_array)):
+        flat = wghts_array[r].reshape(-1)
+        zeros = [int(i) for i in range(len(flat)) if flat[i] == 0]
+        dut._log.info("PE row %d: %d filters/row, zero flat positions %s",
+                      r, len(wghts_array[r][0]), zeros)
 
 
 async def test_hdls(ptp, dut, iacts_array, wghts_array, psum_array):
@@ -603,10 +606,15 @@ def create_iact_wght_psum_arrays(dut):
     # leaves everything else non-zero, so a failure can be attributed to a known
     # position instead of a random mask.
     if os.environ.get("WGHT_ZERO_POS") is not None:
-        positions = [int(v) for v in os.environ["WGHT_ZERO_POS"].split(",") if v != ""]
+        # "a,b" applies the same flat positions to every PE row; "a,b|c|d"
+        # gives each PE row its own pattern, which is what a random mask
+        # produces and what a uniform pattern cannot reproduce.
+        spec = os.environ["WGHT_ZERO_POS"]
+        per_row = [[int(v) for v in part.split(",") if v != ""]
+                   for part in spec.split("|")]
         wghts[wghts == 0] = 1
         for r in range(wghts.shape[0]):
-            for pos in positions:
+            for pos in per_row[r % len(per_row)]:
                 wghts[r][pos // wghts.shape[2]][pos % wghts.shape[2]] = 0
 
     psums = np.arange(1, wghtsize_x * int(dut.PE_COLUMNS.value) + 1, 1).reshape(int(dut.PE_COLUMNS.value), wghtsize_x)
