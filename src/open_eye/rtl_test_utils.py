@@ -154,7 +154,7 @@ async def reset_all_signals(ptp, dut, serial):
         # Serial/DMA mode: reset DMA interface signals
         cocotb.start_soon(set_input(ptp,(dut.data_dma_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
+    cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
 
     # Hold reset for one clock cycle
     await Timer(ptp.clk_cycle, ptp.clk_cycle_unit)
@@ -1152,6 +1152,37 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
 
     pass
 
+def dump_psum_buffers(dut, oep, max_addr=None):
+    """Print the FPGA psum buffer RAM contents.
+
+    Read after compute, this separates two very different failures: if the
+    buffers hold the expected results then only the DMA read-out packing is
+    wrong, whereas missing or X entries mean the compute never produced them.
+    """
+    if max_addr is None:
+        max_addr = int(os.environ.get("DUMP_PSUM_ADDRS", "8"))
+    for cc in range(oep.Clusters_X):
+        for cr in range(oep.Clusters_Y):
+            for g in range((oep.NUM_GLB_PSUM + 1) // 2):
+                try:
+                    mem = (dut.PSUM_RAM_X[cc].PSUM_RAM_Y[cr]
+                           .PSUM_RAM_GLB[g].psum_buffer.impl.mem)
+                except Exception as exc:
+                    logger.info("psum buffer [%d][%d][%d] not reachable (%s)",
+                                cc, cr, g, type(exc).__name__)
+                    return
+                words = []
+                for addr in range(max_addr):
+                    try:
+                        words.append(hex(int(mem[addr].value)))
+                    except ValueError:
+                        words.append("X")
+                    except IndexError:
+                        break
+                logger.info("psum_buffer[x=%d][y=%d][glb=%d] = %s", cc, cr, g,
+                            " ".join(words))
+
+
 async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level):
     """ Await the output stream and compare it to the reference output.
 
@@ -1214,6 +1245,9 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         else :
             f = f - cluster_offset + 1
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+
+    if os.environ.get("DUMP_PSUM_BUFFERS"):
+        dump_psum_buffers(dut, oep)
 
     cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
     
