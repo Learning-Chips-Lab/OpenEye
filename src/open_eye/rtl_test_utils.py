@@ -420,6 +420,29 @@ def _ram_word(mem_entry):
     except ValueError:
         return None
 
+def _to_ram_format(datapoints, params, layer_params):
+    ram_words = []
+    iacts_per_word = 8
+    iact_word_width = params.IACT_Bitwidth
+    temp_word = 0
+    for index, data in enumerate(datapoints):
+        position = index % iacts_per_word
+        if (data < 0):
+            data = data + 256
+        temp_word = temp_word + (data << (position * params.IACT_Bitwidth))
+
+        if (position == iacts_per_word - 1):
+            ram_words.append(temp_word)
+            temp_word = 0
+
+        if (index == layer_params.iact_size_x - 1):
+            break
+
+    if (position != iacts_per_word - 1):
+        ram_words.append(temp_word)
+        temp_word = 0
+
+    return ram_words
 
 def _iact_buffer_words(oep, layer_params, iact_ref):
     """Expected BUFFER_A image for `iact_ref`, in cell order.
@@ -499,7 +522,7 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
     logger.info("Iact reference: shape %s, used_channels %s, IACT_RAM_CELLS %s",
                 shape, getattr(layer_params, "used_channels", "?"), oep.IACT_RAM_CELLS)
 
-    expected = _iact_buffer_words(oep, layer_params, iact_ref)
+    expected = _to_ram_format(_iact_buffer_words(oep, layer_params, iact_ref),oep,layer_params)
     if expected is None:
         logger.warning("No iact buffer layout known for layer '%s'; skipping the check.",
                        getattr(layer_params, "layer_name", "?"))

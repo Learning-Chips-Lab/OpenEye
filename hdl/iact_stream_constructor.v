@@ -447,6 +447,7 @@ module iact_stream_constructor #(
             pos                    <= 0;
             change_state           <= 0;
             ram_wr_en              <= 0;
+            ram_wr_en_q            <= 0;
             ram_wr_addr            <= 0;
             address_storage        <= -1;
             iact_router_counter    <= 0;
@@ -467,6 +468,7 @@ module iact_stream_constructor #(
             x_pos_in_w_cycle           <= 0;
             router_cycle               <= 0;
             ram_wr_en                  <= 0;
+            ram_wr_en_q                <= 0;
             iact_router_counter        <= 0;
             kernel_y_counter           <= 0;
             iacts_in_one_trans         <= ((values_per_word+1) / WORDS_PER_CYCLE);
@@ -523,7 +525,6 @@ module iact_stream_constructor #(
             if (fsm_cycle == needed_iact_buffer_words_i) begin
               fsm_cycle         <= 0;
               fsm_current_state <= GET_PARAMETER;
-              ram_wr_en_q       <= 0;
               ram_wr_en         <= 0;
             end
           end
@@ -543,7 +544,7 @@ module iact_stream_constructor #(
         wght_size_x                   <= wght_size_x_i;
         wght_size_y                   <= wght_size_y_i;
         if (reset_cycle_i) begin
-          fsm_current_state      <= FSM_INITIALIZE;
+          fsm_current_state <= FSM_INITIALIZE;
         end
       end
     end

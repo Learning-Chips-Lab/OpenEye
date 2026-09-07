@@ -38,8 +38,10 @@ import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 
-def pack_values_into_words(flat_values, bitwidth, values_per_word, layer_params):
+def pack_values_into_words(flat_values, params, layer_params):
     """Pack activation values into DMA-width words, padded to whole cell groups."""
+    bitwidth = params.IACT_Bitwidth
+    values_per_word = params.DMA_BITWIDTH // bitwidth
     words = []
     for i in range(0, len(flat_values), values_per_word):
         word = 0
@@ -153,7 +155,7 @@ class IactStreamMapper(object):
             # Skip activation loading if layer parameters indicate it's not needed
             if (self.layer_params.skipIact == 0):
                 iact_stream = buffer_words_to_dma_stream(
-                    self.build_iact_buffer_words(), self.layer_params)
+                    pack_values_into_words(self.build_iact_buffer_words(), self.params, self.layer_params), self.layer_params)
         return iact_stream
 
     def build_iact_buffer_words(self):
@@ -193,9 +195,7 @@ class IactStreamMapper(object):
                         c = c_base + c_offset
                         if c < channels:
                             flat_values.append(int(values[y, x, c]))
-
-        return pack_values_into_words(flat_values, bitwidth, values_per_word,
-                                      self.layer_params)
+        return flat_values
 
 
     def write_iact_data_glb(self, cl_x, cl_y, router):
@@ -866,7 +866,7 @@ class DenseIactStreamMapper(IactStreamMapper):
         else :
             iact_stream = []
             if (layer_params.skipIact == 0) :
-                iact_stream = self.build_iact_buffer_words()
+                iact_stream = pack_values_into_words(self.build_iact_buffer_words(), self.params, layer_params)
         return buffer_words_to_dma_stream(iact_stream, self.layer_params)
 
     def build_iact_buffer_words(self):
@@ -889,7 +889,7 @@ class DenseIactStreamMapper(IactStreamMapper):
         transmissions = math.ceil(transmissions/values_per_word)
         values = [dram_fmap[i] if i < len(dram_fmap) else 0
                   for i in range(transmissions * values_per_word)]
-        return pack_values_into_words(values, bitwidth, values_per_word, layer_params)
+        return values
 
     def write_iact_data_glb(self, cl_x, cl_y, router):
         """Generate GLB activation data for Dense layers.
