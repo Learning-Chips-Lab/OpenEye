@@ -232,6 +232,8 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
 
     if os.environ.get("OPENEYE_PROBE_FSM"):
         cocotb.start_soon(rtl_test_utils.probe_fsm_states(ptp, dut))
+    if os.environ.get("PROBE_PSUM_STREAM"):
+        cocotb.start_soon(rtl_test_utils.probe_psum_stream(ptp, dut, openeye_parameter))
 
     # Process the layers of the model one after another
     max_layers = len(model)
