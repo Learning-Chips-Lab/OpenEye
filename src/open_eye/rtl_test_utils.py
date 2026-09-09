@@ -421,6 +421,8 @@ def _ram_word(mem_entry):
         return None
 
 def _to_ram_format(datapoints, params, layer_params):
+    if datapoints == None:
+        return None
     ram_words = []
     iacts_per_word = 8
     iact_word_width = params.IACT_Bitwidth
@@ -434,9 +436,9 @@ def _to_ram_format(datapoints, params, layer_params):
         if (position == iacts_per_word - 1):
             ram_words.append(temp_word)
             temp_word = 0
-
-        if (index == layer_params.iact_size_x - 1):
+        if (index == layer_params.iact_size_x*layer_params.iact_size_y*layer_params.channels - 1):
             break
+
 
     if (position != iacts_per_word - 1):
         ram_words.append(temp_word)
@@ -523,6 +525,7 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
                 shape, getattr(layer_params, "used_channels", "?"), oep.IACT_RAM_CELLS)
 
     expected = _to_ram_format(_iact_buffer_words(oep, layer_params, iact_ref),oep,layer_params)
+
     if expected is None:
         logger.warning("No iact buffer layout known for layer '%s'; skipping the check.",
                        getattr(layer_params, "layer_name", "?"))
@@ -546,8 +549,8 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
     error_found = False
     errors_logged = 0
     for index, ref_word in enumerate(expected):
-        cell = index % cells_per_group
-        addr = index // cells_per_group
+        cell = index % oep.IACT_RAM_CELLS
+        addr = index // oep.IACT_RAM_CELLS
         dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[half_offset + addr])
         if dut_word != ref_word:
             error_found = True
@@ -579,8 +582,8 @@ def _log_iact_value_comparison(dut, oep, expected, cells_per_group, half_offset=
 
     actual_words, missing = [], 0
     for index in range(len(expected)):
-        word = _ram_word(dut.BUFFER_A[index % cells_per_group]
-                         .iact_layer_buffer.impl.mem[half_offset + index // cells_per_group])
+        word = _ram_word(dut.BUFFER_A[index % oep.IACT_RAM_CELLS]
+                         .iact_layer_buffer.impl.mem[half_offset + index // oep.IACT_RAM_CELLS])
         if word is None:
             missing += 1
         else:
