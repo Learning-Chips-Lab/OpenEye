@@ -154,7 +154,7 @@ async def reset_all_signals(ptp, dut, serial):
         # Serial/DMA mode: reset DMA interface signals
         cocotb.start_soon(set_input(ptp,(dut.data_dma_i), 0))
         cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
+    cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
 
     # Hold reset for one clock cycle
     await Timer(ptp.clk_cycle, ptp.clk_cycle_unit)
@@ -419,6 +419,11 @@ def _ram_word(mem_entry):
         return int(mem_entry.value)
     except ValueError:
         return None
+
+def _signed(value, bits):
+    """Reinterpret an unsigned field of the given width as two's complement."""
+    return value - (1 << bits) if value & (1 << (bits - 1)) else value
+
 
 def _to_ram_format(datapoints, params, layer_params):
     if datapoints == None:
@@ -1155,6 +1160,119 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
 
     pass
 
+# Cycles each psum_enable_o bit was asserted, filled by probe_psum_stream and
+# reported by dump_psum_buffers so the totals survive however the run ends.
+psum_stream_counts = {}
+
+
+async def probe_psum_stream(ptp, dut, oep):
+    """Count how many psum values each router actually emits.
+
+    psum_enable_o is the valid signal on psum_data_o_w, one bit per
+    (cluster, GLB). Counting its assertions says whether the PE array streamed
+    the expected number of results, which separates "the PE produced too few"
+    from "the GLB buffer captured too few".
+    """
+    previous = 0
+    while True:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            value = int(dut.psum_enable_o.value)
+        except ValueError:
+            continue
+        # Count cycles held high, not rising edges: a burst of consecutive
+        # psums keeps the bit asserted, so edges would report one.
+        for bit in range(oep.Clusters * oep.NUM_GLB_PSUM):
+            if (value >> bit) & 1:
+                psum_stream_counts[bit] = psum_stream_counts.get(bit, 0) + 1
+        previous = value
+
+
+def dump_pe_psum_spads(dut, oep, pe_col=0, max_addr=20):
+    """Print the psum SPADs of one PE inside the FPGA design.
+
+    Cheaper and just as decisive as counting psum_enable_o cycles: if the PE
+    holds the full set of results then the loss is in the GLB capture or the
+    DMA read-out, whereas a short PE SPAD means the compute never produced
+    them. Sampling every clock instead costs hours on a full FPGA run.
+    """
+    # Sweep the PE rows: which one holds the results is not obvious, and only
+    # PE column 0 is enabled for Dense layers (layer_parameters disables
+    # x_pe != 0), so the column is fixed but the row has to be searched.
+    for cl_x in range(oep.Clusters_X):
+      for pe_row in range(oep.PEs_Y):
+        try:
+            pe = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[0].OpenEye_Cluster
+                  .pe_cluster.gen_X[pe_col].gen_Y[pe_row].pe)
+        except Exception as exc:
+            logger.info("PE [%d][row %d] not reachable (%s)", cl_x, pe_row,
+                        type(exc).__name__)
+            return
+        for lane in range(oep.PARALLEL_MACS):
+            try:
+                mem = pe.gen_serial_psum_spad.gen_psum_spad[lane].psum_SPad.ram.impl.mem
+            except Exception as exc:
+                logger.info("PE [%d] lane %d SPAD not reachable (%s)",
+                            cl_x, lane, type(exc).__name__)
+                continue
+            words = []
+            for addr in range(max_addr):
+                try:
+                    v = int(mem[addr].value)
+                    words.append(v - (1 << 20) if v >> 19 else v)
+                except ValueError:
+                    words.append("X")
+                except IndexError:
+                    break
+            if any(w != "X" for w in words):
+                logger.info("PE[x=%d][col=%d][row=%d] psum_SPad lane %d = %s",
+                            cl_x, pe_col, pe_row, lane, words)
+
+
+def dump_psum_buffers(dut, oep, max_addr=None):
+    """Print the FPGA psum buffer RAM contents.
+
+    Read after compute, this separates two very different failures: if the
+    buffers hold the expected results then only the DMA read-out packing is
+    wrong, whereas missing or X entries mean the compute never produced them.
+
+    Each RAM word is PSUM_BUFFER_WIDTH = DATA_PSUM_BITWIDTH*2 wide and packs
+    TWO psums (the even/odd GLB of the pair), which is why psum_buffer_en_w
+    carries only (NUM_GLB_PSUM+1)/2 enables. Printing the raw word makes a
+    full buffer look half empty, so split it here: a buffer with N written
+    addresses holds 2*N results, not N.
+    """
+    if max_addr is None:
+        max_addr = int(os.environ.get("DUMP_PSUM_ADDRS", "8"))
+    for cc in range(oep.Clusters_X):
+        for cr in range(oep.Clusters_Y):
+            for g in range((oep.NUM_GLB_PSUM + 1) // 2):
+                try:
+                    mem = (dut.PSUM_RAM_X[cc].PSUM_RAM_Y[cr]
+                           .PSUM_RAM_GLB[g].psum_buffer.impl.mem)
+                except Exception as exc:
+                    logger.info("psum buffer [%d][%d][%d] not reachable (%s)",
+                                cc, cr, g, type(exc).__name__)
+                    return
+                bw = oep.DATA_PSUM_BITWIDTH
+                lo_half, hi_half = [], []
+                for addr in range(max_addr):
+                    try:
+                        word = int(mem[addr].value)
+                    except ValueError:
+                        lo_half.append("X")
+                        hi_half.append("X")
+                        continue
+                    except IndexError:
+                        break
+                    lo_half.append(_signed(word & ((1 << bw) - 1), bw))
+                    hi_half.append(_signed((word >> bw) & ((1 << bw) - 1), bw))
+                logger.info("psum_buffer[x=%d][y=%d][glb=%d] even=%s", cc, cr, g,
+                            lo_half)
+                logger.info("psum_buffer[x=%d][y=%d][glb=%d] odd =%s", cc, cr, g,
+                            hi_half)
+
+
 async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level):
     """ Await the output stream and compare it to the reference output.
 
@@ -1190,6 +1308,7 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
 
     f = 0
     dut._log.info("Output Stream started")
+    dump_dma_words = [] if os.environ.get("DUMP_PSUM_BUFFERS") else None
     cluster_offset = math.ceil(layer_parameters.used_psum_per_PE)
     while (dut.enable_dma_o.value == 1):
 
@@ -1206,6 +1325,16 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
                 txt_file.write(str(dut.data_dma_o.value) + "\n")
         if(logging.DEBUG >= login_level):
             storage_file.write("f: " + str(f) + "\n")
+        if dump_dma_words is not None:
+            # The Dense reader below takes only bits [DATA_PSUM_BITWIDTH-1:0]
+            # of each DMA word, while the conv reader takes DMA_BITWIDTH //
+            # DATA_PSUM_BITWIDTH psums per word. Capture the raw word so the
+            # high half can be inspected: if it is non-zero the Dense reader
+            # is silently discarding half of every transfer.
+            try:
+                dump_dma_words.append(int(dut.data_dma_o.value))
+            except ValueError:
+                dump_dma_words.append(None)
         try:
             dram.fmap[layer_number + 1][f] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH-1:0])
             if (dram.fmap[layer_number + 1][f] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
@@ -1217,6 +1346,32 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         else :
             f = f - cluster_offset + 1
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+
+    if dump_dma_words is not None:
+        # Careful with the two meanings of DATA_PSUM_BITWIDTH: the HDL
+        # parameter is the 32-bit *lane* the psum is packed into, while
+        # oep.DATA_PSUM_BITWIDTH is the 20-bit signed accumulator. So step
+        # across the word in lanes but sign-extend at the accumulator width,
+        # otherwise every negative psum prints as a large positive.
+        acc_bits = oep.DATA_PSUM_BITWIDTH
+        lane_bits = 32
+        lanes = oep.DMA_BITWIDTH // lane_bits
+        logger.info("captured %d DMA words on the Dense output stream",
+                    len(dump_dma_words))
+        for idx, word in enumerate(dump_dma_words):
+            if word is None:
+                logger.info("dma word %2d = X", idx)
+                continue
+            vals = [_signed((word >> (lane_bits * i)) & ((1 << acc_bits) - 1),
+                            acc_bits) for i in range(lanes)]
+            logger.info("dma word %2d = %s", idx, vals)
+
+    if os.environ.get("DUMP_PSUM_BUFFERS"):
+        dump_pe_psum_spads(dut, oep)
+        dump_psum_buffers(dut, oep)
+        if psum_stream_counts:
+            logger.info("psum_enable_o asserted cycles per bit: %s",
+                        {k: v for k, v in sorted(psum_stream_counts.items())})
 
     cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
     
