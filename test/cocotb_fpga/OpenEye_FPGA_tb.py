@@ -297,12 +297,16 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                             elif("Pooling" in str(layer_parameters[layer_number].layer_name)):
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                             if os.environ.get("DUMP_PSUM_BUFFERS") and "Dense" in str(layer_parameters[layer_number].layer_name):
-                                # compare_dram_with_ref is currently a no-op, so show the
-                                # per-filter reference next to what the DUT delivered.
+                                # Debug listing of every filter; compare_dram_with_ref below
+                                # asserts, but only logs the first few mismatches.
                                 for f in range(len(calculated_results)):
                                     logger.info("dense f=%2d ref=%s dut=%s", f, calculated_results[f],
                                                 dram.fmap[1 + layer_number][f])
-                            if(logging.DEBUG >= log_level):
+                            # The Dense dma_stream_ref.txt layout does not match the FC
+                            # read-out (one psum per DMA word, columns interleaved), so
+                            # the line compare can only fail. compare_dram_with_ref below
+                            # checks every Dense output exactly, per filter.
+                            if(logging.DEBUG >= log_level) and ("Dense" not in str(layer_parameters[layer_number].layer_name)):
                                 assert gtu.check_results(openeye_parameter, 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                                         'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
                             assert tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
