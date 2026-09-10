@@ -26,6 +26,8 @@ import json
 directory = (os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)))
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 hdl_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "hdl")
+# Authoritative register map (see generator.py); REGMAP_DIR overrides it.
+regmap_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), os.pardir, os.pardir, "test", "cocotb_fpga")
 
 
 def are_files_identical(file1_path: str, file2_path: str) -> bool:
@@ -85,12 +87,16 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh',
     toplevel = toplevel or gtu.load_env_to_variable("TOPLEVEL", "")
     if toplevel == "OpenEye_FPGA":
         gtu.delete_files_in_directory('demo/')
-        try:
-            with open("shared_config.json", "r") as f:
-                config_data = json.load(f)
-                TRANSMISSIONS = config_data.get("TRANSMISSIONS", 8)
-        except FileNotFoundError:
-            TRANSMISSIONS = 8
+        # Derive the status-word count from regmap.yaml with the generator's
+        # own packing. It used to be read back from a CWD-relative
+        # shared_config.json, which every runner creates *before* running the
+        # generator, so the value came from whichever configuration ran last
+        # (or defaulted to 8 in a fresh directory). A count that differs from
+        # dma_storage's shift chain misaligns every decoded field, leaving
+        # trans_cycles_* at 0 and the FSM stuck in GET_IACT.
+        import open_eye.generator as regmap_generator
+        TRANSMISSIONS = regmap_generator.regmap_transmissions(
+            gtu.load_env_to_variable("REGMAP_DIR", regmap_dir))
         with open(filename, 'w') as txt_file:
             txt_file.write(f"parameter CLUSTER_ROWS  = {openeye_parameter.Clusters_Y},\n")
             txt_file.write(f"parameter CLUSTER_COLUMNS  = {openeye_parameter.Clusters_X},\n")

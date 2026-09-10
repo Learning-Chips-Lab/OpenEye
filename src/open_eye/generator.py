@@ -43,23 +43,17 @@ def eval_width(width, ctx):
         raise TypeError("Invalid width type")
 
 
-def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v_path=None, output_py_path=None):
-    """Generate DMA register map files from YAML specification."""
+def layout_registers(regmap_yaml_path):
+    """Evaluate the register widths of regmap.yaml and pack them into DMA words.
 
-    if output_vh_path is None:
-        output_vh_path = os.path.join(os.path.dirname(regmap_yaml_path), "include")
-    Path(output_vh_path).mkdir(parents=True, exist_ok=True)
-    if output_v_path is None:
-        output_v_path = os.path.join(os.path.dirname(regmap_yaml_path))
-    Path(output_v_path).mkdir(parents=True, exist_ok=True)
-    if output_py_path is None:
-        output_py_path = Path(__file__).resolve().parent
-    Path(output_py_path).mkdir(parents=True, exist_ok=True)
-
+    Returns (transmissions, dma_bitwidth), where transmissions is a list of
+    DMA words, each a list of {name, width, trans, pos} entries. This is the
+    single definition of the status-word layout: the regmap files written
+    below and the TRANSMISSIONS count in parameters_FPGA.vh
+    (vh_file_creator) must both come from it, because widths scale with the
+    array configuration and so does the number of words.
+    """
     YAML_FILE = os.path.join(regmap_yaml_path, "regmap.yaml")
-    VERILOG_PARAMS_OUT = os.path.join(output_vh_path, "regmap_params.vh")
-    PYTHON_OUT = os.path.join(output_py_path, "regmap_pack.py")
-    DMA_STORAGE_OUT = os.path.join(output_v_path, "dma_storage.v")
 
     # Load YAML
     with open(YAML_FILE, "r") as f:
@@ -117,6 +111,36 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
     if current_trans:
         transmissions.append(current_trans)
 
+    num_transmissions = len(transmissions)
+
+    return transmissions, dma_bitwidth
+
+
+def regmap_transmissions(regmap_yaml_path):
+    """Number of DMA status words regmap.yaml packs into for this configuration."""
+    transmissions, _ = layout_registers(regmap_yaml_path)
+    return len(transmissions)
+
+
+def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v_path=None, output_py_path=None):
+    """Generate DMA register map files from YAML specification."""
+
+    if output_vh_path is None:
+        output_vh_path = os.path.join(os.path.dirname(regmap_yaml_path), "include")
+    Path(output_vh_path).mkdir(parents=True, exist_ok=True)
+    if output_v_path is None:
+        output_v_path = os.path.join(os.path.dirname(regmap_yaml_path))
+    Path(output_v_path).mkdir(parents=True, exist_ok=True)
+    if output_py_path is None:
+        output_py_path = Path(__file__).resolve().parent
+    Path(output_py_path).mkdir(parents=True, exist_ok=True)
+
+    YAML_FILE = os.path.join(regmap_yaml_path, "regmap.yaml")
+    VERILOG_PARAMS_OUT = os.path.join(output_vh_path, "regmap_params.vh")
+    PYTHON_OUT = os.path.join(output_py_path, "regmap_pack.py")
+    DMA_STORAGE_OUT = os.path.join(output_v_path, "dma_storage.v")
+
+    transmissions, dma_bitwidth = layout_registers(regmap_yaml_path)
     num_transmissions = len(transmissions)
 
     config_data = {

@@ -234,6 +234,8 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         cocotb.start_soon(rtl_test_utils.probe_fsm_states(ptp, dut))
     if os.environ.get("PROBE_PSUM_STREAM"):
         cocotb.start_soon(rtl_test_utils.probe_psum_stream(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_PSUM_CAPTURE"):
+        cocotb.start_soon(rtl_test_utils.trace_psum_capture(ptp, dut, openeye_parameter))
 
     # Process the layers of the model one after another
     max_layers = len(model)
@@ -282,6 +284,12 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                             elif("Pooling" in str(layer_parameters[layer_number].layer_name)):
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
+                            if os.environ.get("DUMP_PSUM_BUFFERS") and "Dense" in str(layer_parameters[layer_number].layer_name):
+                                # compare_dram_with_ref is currently a no-op, so show the
+                                # per-filter reference next to what the DUT delivered.
+                                for f in range(len(calculated_results)):
+                                    logger.info("dense f=%2d ref=%s dut=%s", f, calculated_results[f],
+                                                dram.fmap[1 + layer_number][f])
                             if(logging.DEBUG >= log_level):
                                 assert gtu.check_results(openeye_parameter, 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                                         'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')

@@ -164,6 +164,28 @@ module psum_pipeline #(
   wire [TRANS_BITWIDTH_PSUM*TRANS_WORDS-1:0] pre_quantized_value_flat;
   wire [8-1:0] quant_result[TRANS_WORDS-1:0];
   reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_data_temp_reg;
+
+  // Read-out source for PSUM_SEND_RESULTS. A fully-connected layer leaves one
+  // result per cluster column per buffer address, in GLB 0 of cluster row 0
+  // (the same slots the FC branch of SEND_PSUM_TO_IACT reads), and the FC
+  // branch below steps fsm_x_cl_psum once per DMA word. So DMA word cc must
+  // carry cluster column cc's GLB-0 psum. Shifting the raw buffer bus
+  // instead emitted cluster (0,0)'s unused GLB 2/3 slot as every second word
+  // and never reached cluster column 1.
+  reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_readout_src;
+  integer cc_fc;
+  always @(*) begin
+    psum_readout_src = psum_buffer_data_r;
+    if (fully_connected_layer) begin
+      psum_readout_src = 0;
+      for (cc_fc = 0; cc_fc < CLUSTER_COLUMNS; cc_fc = cc_fc + 1) begin
+        if (cc_fc*DMA_BITWIDTH + TRANS_BITWIDTH_PSUM <= TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM) begin
+          psum_readout_src[cc_fc*DMA_BITWIDTH+:TRANS_BITWIDTH_PSUM] =
+            psum_buffer_data_r[cc_fc*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM];
+        end
+      end
+    end
+  end
   reg                                                 ready_dma_i_q1;
   reg                                                 ready_dma_i_q2;
   assign current_shift = quant_exp[current_filter];
@@ -529,7 +551,7 @@ module psum_pipeline #(
           if (send_data_out) begin
             if (fsm_psum_cycle == 2) begin
               fsm_psum_cycle            <= 0;
-              psum_buffer_data_temp_reg <= psum_buffer_data_r;
+              psum_buffer_data_temp_reg <= psum_readout_src;
               fsm_psum_current_state    <= PSUM_SEND_RESULTS;
               psum_buffer_en_r          <= {(((NUM_GLB_PSUM*CLUSTERS)+1)/2){1'd1}};
               psum_cycle_loop_cnt_1       <= 1;
@@ -588,7 +610,7 @@ module psum_pipeline #(
               psum_buffer_data_temp_reg <= psum_buffer_data_temp_reg >> DMA_BITWIDTH;
             end
             if (psum_cycle_loop_cnt_1 == 0) begin
-              psum_buffer_data_temp_reg <= psum_buffer_data_r;
+              psum_buffer_data_temp_reg <= psum_readout_src;
             end
             if (data_dma_o_counter != 0) begin
               data_dma_o_counter <= data_dma_o_counter -1;
@@ -677,7 +699,7 @@ module psum_pipeline #(
               end
               psum_cycle_loop_cnt_1 <= psum_cycle_loop_cnt_1 + 1;
               if (psum_cycle_loop_cnt_1 == 0) begin
-                psum_buffer_data_temp_reg <= psum_buffer_data_r;
+                psum_buffer_data_temp_reg <= psum_readout_src;
               end
             end
           end

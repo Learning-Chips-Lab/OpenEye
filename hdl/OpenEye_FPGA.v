@@ -144,10 +144,11 @@ module OpenEye_FPGA #(
     // "Pipelined Shift Register Architecture": every transmission must be
     // written or the whole chain misaligns by one word, corrupting every
     // field). Must equal the generated regmap_params.vh's own TRANSMISSIONS
-    // constant (currently 8, from test/cocotb_fpga/regmap.yaml's field
-    // list) - OpenEye_FPGA.v does not `include regmap_params.vh (it only
-    // consumes dma_storage's decoded output wires), so this count has to be
-    // kept in sync by hand whenever fields are added to regmap.yaml.
+    // constant. OpenEye_FPGA.v does not `include regmap_params.vh (it only
+    // consumes dma_storage's decoded output wires), so vh_file_creator
+    // derives this value for parameters_FPGA.vh from regmap.yaml with the
+    // generator's packing. The count depends on the configuration (register
+    // widths in regmap.yaml scale with the array size), so never hard-code it.
     // Per-PE psum transfer width. Must match PE.v's internal
     // TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * (SERIAL ? 1 : PARALLEL_MACS);
     // a fixed value (was 32) mismatches the generated DATA_PSUM_BITWIDTH (e.g.

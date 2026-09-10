@@ -314,6 +314,10 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
                 logger.info("DUT expects %s = %d", name, int(getattr(dut, name).value))
             except Exception as exc:
                 logger.info("DUT %s unreadable (%s)", name, type(exc).__name__)
+        try:
+            logger.info("DUT compute_mask_reg = %s", hex(int(dut.compute_mask_reg.value)))
+        except Exception as exc:
+            logger.info("DUT compute_mask_reg unreadable (%s)", type(exc).__name__)
         logger.info("Host will send: iact %d, wght %d, psum %d, quantize %d words",
                     len(stream[strdic.stream_parallel_dict["iact"]]),
                     len(stream[strdic.stream_parallel_dict["wght"]]),
@@ -1188,6 +1192,61 @@ async def probe_psum_stream(ptp, dut, oep):
         previous = value
 
 
+async def trace_psum_capture(ptp, dut, oep, max_lines=400):
+    """Per-cycle trace of the psum capture handshake (opt-in: TRACE_PSUM_CAPTURE).
+
+    Logs every clock while the PSUM FSM is in CALCULATE_PSUM (2) or
+    PSUM_GET_RESULTS (3): the counter that ends each state, the psum input
+    enables driven into cluster row 0, the returning psum_enable_o valid bits
+    and the buffer write enables, for GLB 0/1 of both cluster columns. A full
+    gemm run is only a few hundred cycles, so this is cheap there.
+    """
+    pp = dut.psum_pipeline_inst
+    ng = oep.NUM_GLB_PSUM
+    cr = oep.Clusters_Y
+    glb_bits = [cc * ng * cr + g for cc in range(oep.Clusters_X) for g in range(2)]
+    wen_bits = [cc * cr * ((ng + 1) // 2) for cc in range(oep.Clusters_X)]
+
+    def bits(sig, idx):
+        try:
+            v = int(sig.value)
+        except ValueError:
+            return "X" * len(idx)
+        return "".join(str((v >> i) & 1) for i in idx)
+
+    lines = 0
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            state = int(pp.fsm_psum_current_state.value)
+        except ValueError:
+            continue
+        if state not in (2, 3):
+            continue
+        try:
+            cyc = int(pp.fsm_psum_cycle.value)
+        except ValueError:
+            cyc = -1
+        try:
+            addr_lo = hex(int(pp.psum_buffer_addr.value) & 0xFFFFFFFFFFFF)
+        except ValueError:
+            addr_lo = "X"
+        dw = []
+        for cc in range(oep.Clusters_X):
+            try:
+                word = int(pp.psum_buffer_data_w.value) >> (32 * cr * ng * cc)
+                dw.append(_signed(word & 0xFFFFF, 20))
+            except ValueError:
+                dw.append("X")
+        logger.info("psumtrace t=%s st=%d cyc=%d en_i[x0g0,x0g1,x1g0,x1g1]=%s "
+                    "en_o=%s wen[x0,x1]=%s addr_lo=%s data_w[x0,x1]=%s",
+                    cocotb.utils.get_sim_time("ns"), state, cyc,
+                    bits(pp.psum_enable_i_reg, glb_bits),
+                    bits(pp.psum_enable_o, glb_bits),
+                    bits(pp.psum_buffer_en_w, wen_bits), addr_lo, dw)
+        lines += 1
+
+
 def dump_pe_psum_spads(dut, oep, pe_col=0, max_addr=20):
     """Print the psum SPADs of one PE inside the FPGA design.
 
@@ -1200,14 +1259,33 @@ def dump_pe_psum_spads(dut, oep, pe_col=0, max_addr=20):
     # PE column 0 is enabled for Dense layers (layer_parameters disables
     # x_pe != 0), so the column is fixed but the row has to be searched.
     for cl_x in range(oep.Clusters_X):
+     for cl_y in range(oep.Clusters_Y):
       for pe_row in range(oep.PEs_Y):
         try:
-            pe = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[0].OpenEye_Cluster
+            pe = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[cl_y].OpenEye_Cluster
                   .pe_cluster.gen_X[pe_col].gen_Y[pe_row].pe)
         except Exception as exc:
-            logger.info("PE [%d][row %d] not reachable (%s)", cl_x, pe_row,
-                        type(exc).__name__)
+            logger.info("PE [%d][%d][row %d] not reachable (%s)", cl_x, cl_y,
+                        pe_row, type(exc).__name__)
             return
+        occ = []
+        for label, path in (("iact", "iact_data_SPad"), ("wght", "weight_data_SPad")):
+            try:
+                m = getattr(pe, path).ram.impl.mem
+                written = 0
+                for addr in range(64):
+                    try:
+                        int(m[addr].value)
+                        written += 1
+                    except ValueError:
+                        pass
+                    except IndexError:
+                        break
+                occ.append("%s=%d" % (label, written))
+            except Exception as exc:
+                occ.append("%s=?(%s)" % (label, type(exc).__name__))
+        logger.info("PE[x=%d][y=%d][col=%d][row=%d] written operand words (of first 64): %s",
+                    cl_x, cl_y, pe_col, pe_row, " ".join(occ))
         for lane in range(oep.PARALLEL_MACS):
             try:
                 mem = pe.gen_serial_psum_spad.gen_psum_spad[lane].psum_SPad.ram.impl.mem
@@ -1225,8 +1303,8 @@ def dump_pe_psum_spads(dut, oep, pe_col=0, max_addr=20):
                 except IndexError:
                     break
             if any(w != "X" for w in words):
-                logger.info("PE[x=%d][col=%d][row=%d] psum_SPad lane %d = %s",
-                            cl_x, pe_col, pe_row, lane, words)
+                logger.info("PE[x=%d][y=%d][col=%d][row=%d] psum_SPad lane %d = %s",
+                            cl_x, cl_y, pe_col, pe_row, lane, words)
 
 
 def dump_psum_buffers(dut, oep, max_addr=None):
