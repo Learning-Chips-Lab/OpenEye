@@ -1638,8 +1638,9 @@ class LayerParameters(object):
         # follow. psum_pipeline.v's fully_connected_layer branch advances the
         # bias buffer address every cycle (one bias word per cycle), so this
         # is simply the stream length, not scaled by
-        # PSUM_CYCLES_ONE_WORD_ALL_CELLS like Conv's packed-word scheme.
-        self.trans_cycles_psum = self.used_psum_per_PE
+        # PSUM_CYCLES_ONE_WORD_ALL_CELLS like Conv's packed-word scheme. The
+        # stream carries one bias word per filter per cluster column.
+        self.trans_cycles_psum = self.used_psum_per_PE * params.Clusters_X
         self.lower_bound = (self.padding_y * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions) - 1
         self.upper_bound = (self.padding_y+self.iact_size_y) * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions
         self.overhang_discrepancy = (self.used_channels*params.NUM_GLB_WGHT)%(params.WORDS_PER_CYCLE*4)

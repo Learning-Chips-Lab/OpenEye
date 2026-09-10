@@ -328,11 +328,16 @@ module psum_pipeline #(
               // lockstep schedule, no flow control) instead of being inflated
               // by PSUM_CYCLES_ONE_WORD_ALL_CELLS and starving later
               // sections.
-              psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
+              // The FC branch must not also take the shared low-slot write
+              // the conv branch uses: that put every bias word into cluster
+              // column 0's slot, so column 1 never got a bias, and the second
+              // word of each pair overwrote the first before the buffer write
+              // landed. Only 8 of the 16 per-column addresses were filled and
+              // CALCULATE_PSUM then fed X into the top of the psum chain.
               if (fully_connected_layer) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
-                    //psum_buffer_data_w[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cr_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_psum*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS] <= data_dma_i_reg[TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0];
+                    psum_buffer_data_w[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cr_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_psum*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS] <= data_dma_i_reg[TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0];
                   end
                 end
                 psum_buffer_en_w <= 0;
@@ -349,6 +354,7 @@ module psum_pipeline #(
                   psum_buffer_en_w <= ~0;
                 end
               end else begin
+                psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
                 for (g_psum = 0; g_psum < PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1; g_psum = g_psum + 1) begin
                   psum_buffer_data_w[DMA_BITWIDTH*(1+g_psum)+:DMA_BITWIDTH] <= psum_buffer_data_w[DMA_BITWIDTH*g_psum+:DMA_BITWIDTH];
                 end

@@ -236,6 +236,9 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         cocotb.start_soon(rtl_test_utils.probe_psum_stream(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_PSUM_CAPTURE"):
         cocotb.start_soon(rtl_test_utils.trace_psum_capture(ptp, dut, openeye_parameter))
+        cocotb.start_soon(rtl_test_utils.trace_bias_load(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_PE_PSUM"):
+        cocotb.start_soon(rtl_test_utils.trace_pe_psum(ptp, dut, openeye_parameter))
 
     # Process the layers of the model one after another
     max_layers = len(model)
@@ -247,6 +250,15 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     dram = DRAM.DRAMContents(model, layer_parameters)
     time_printer.timestamp("Initialized DRAM. ", logger)
     dram.write_initial_data_to_dram(model, layer_parameters, sparse_iacts, sparse_wghts)
+    if os.environ.get("OPENEYE_ZERO_IACTS"):
+        # Debug: zero the first layer's input so every product is 0 and each
+        # output must equal its bias alone. This isolates the bias/psum feed
+        # from the iact and weight delivery paths. The reference is computed
+        # from the same DRAM, so it stays consistent.
+        def _zero(x):
+            return [_zero(v) for v in x] if isinstance(x, list) else 0
+        dram.fmap[0] = _zero(dram.fmap[0])
+        logger.info("OPENEYE_ZERO_IACTS: layer-0 input zeroed")
     test_amount = 1
     for _ in range(test_amount) :
         for layer_number, layer in enumerate(model):
