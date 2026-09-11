@@ -657,7 +657,7 @@ module psum_pipeline #(
                     for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                       for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
                         psum_buffer_en_r[cc_psum*((NUM_GLB_PSUM+1)/2)+cr_psum*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
-                        psum_buffer_addr_array[cc_psum][cr_psum][g_psum]                                    <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
+                        psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                       end
                     end
                   end

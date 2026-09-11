@@ -1197,8 +1197,6 @@ class LayerParameters(object):
         if(self.used_wght_addr_per_PE == (params.Wghts_Addr_per_PE + 1)):
             self.used_wght_addr_per_PE = self.used_wght_addr_per_PE - 1
 
-        # Cycles needed to produce all output rows
-        self.output_cycles = math.ceil(math.ceil(self.calc_Y/self.strideY) * self.iact_x_line_repetitions)
 
         # Calculate partial sum storage requirements
         self.psum_storage_cycles = self.diff_iact_layer * self.used_Y_cluster
@@ -1287,6 +1285,8 @@ class LayerParameters(object):
         self.lower_bound = (self.padding_y * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions) - 1
         self.upper_bound = (self.padding_y+self.iact_size_y) * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions
 
+        # Cycles needed to produce all output rows
+        self.output_cycles = math.ceil(self.calc_Y/self.strideY) * self.iact_x_line_repetitions/ self.different_kernels_per_calculation
         self.psum_output_words = int((self.output_cycles * self.filters * params.Clusters * params.NUM_GLB_PSUM) / math.ceil(params.DMA_BITWIDTH/32))
         self.psum_x_all_cluster = self.different_kernels_per_calculation * self.iact_x_add_up
         # === Phase 9: Finalize calculations ===
