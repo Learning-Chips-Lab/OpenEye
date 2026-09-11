@@ -138,6 +138,8 @@ module iact_stream_constructor #(
   wire [     WORD_BITWIDTH-1:0] ram_data_o;
   reg  [         ADDRWIDTH-1:0] address_storage;
   reg  [                 4-1:0] fsm_row_offset;
+  reg  [                 8-1:0] x_start;
+  reg  [                12-1:0] x_range_lower_bound;
   reg  [                 8-1:0] channels;
   reg  [                 8-1:0] channels_q;
   reg  [                 8-1:0] pos;
@@ -387,13 +389,14 @@ module iact_stream_constructor #(
         end
       end
     end
-
+reg enable_write_to_storage;
     integer signed r, w;
     always @(posedge clk_i, negedge rst_ni) begin
       // Reset
       if (!rst_ni) begin
         // Initialize the FSM cycle counter to 0 for tracking FSM state transitions
         fsm_cycle                     <= 0;
+        enable_write_to_storage                    <= 0;
         wr_addr_0                     <= 0;
         wr_addr_1                     <= 0;
         wr_addr_2                     <= 0;
@@ -401,6 +404,8 @@ module iact_stream_constructor #(
         router_cycle                  <= 0;
         fsm_current_state             <= FSM_INITIALIZE;
         fsm_row_offset                <= 0;
+        x_range_lower_bound           <= 0;
+        x_start                       <= 0;
         channels                      <= 0;
         channels_q                    <= 0;
         pos                           <= 0;
@@ -438,6 +443,7 @@ module iact_stream_constructor #(
         case (fsm_current_state)
           FSM_INITIALIZE: begin
             fsm_cycle              <= 0;
+            enable_write_to_storage               <= 0;
             wr_addr_1              <= 0;
             wr_addr_2              <= 0;
             router_cycle           <= 0;
@@ -473,12 +479,15 @@ module iact_stream_constructor #(
             kernel_y_counter           <= 0;
             iacts_in_one_trans         <= ((values_per_word+1) / WORDS_PER_CYCLE);
             if (enable_store) begin
-              ram_wr_addr       <= address_storage;
-              fsm_current_state <= WRITE_TO_MEMORY;
-              wr_addr_0         <= 0;
-              wr_addr_1         <= 0;
-              wr_addr_2         <= 0;
+              ram_wr_addr         <= address_storage;
+              fsm_current_state   <= WRITE_TO_MEMORY;
+              wr_addr_0           <= 0;
+              wr_addr_1           <= 0;
+              wr_addr_2           <= 0;
               wr_cycle_loop_cnt_0 <= ~0;
+              x_pos_in_w_cycle    <= 0;
+              x_range_lower_bound <= x_start;
+              
               if (0 == (iacts_in_one_trans - 1)) begin
                 router_cycle        <= 0;
                 iact_router_counter <= iact_router_counter + 1;
@@ -491,41 +500,66 @@ module iact_stream_constructor #(
           end
 
           WRITE_TO_MEMORY: begin
-            fsm_cycle   <= fsm_cycle + 1;
-            ram_wr_en   <= 1;
             ram_wr_en_q <= ram_wr_en;
-            for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
-              for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
-                mem_data_payload_reg[r][w] <= storage_i[w*8+:8];
+            if (ram_wr_en) begin
+              for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
+                for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
+                  mem_data_payload_reg[r][w] <= storage_i[w*8+:8];
+                end
               end
             end
-            router_cycle <= router_cycle + 1;
-            if (router_cycle == (2 - 1)) begin
-              router_cycle        <= 0;
-            end
-            //Loops for wr_address
-            ram_wr_addr         <= wr_addr_0;
-            wr_addr_0           <= wr_addr_0 + wr_addr_inc_0;
-            wr_cycle_loop_cnt_0 <= wr_cycle_loop_cnt_0 + 1;
-            if (wr_cycle_loop_cnt_0 == wr_loop_limit_0) begin
-              wr_cycle_loop_cnt_0 <= 0;
-              wr_addr_0           <= wr_addr_1 + wr_addr_inc_0;
-              wr_addr_1           <= wr_addr_1 + wr_addr_inc_1;
-              ram_wr_addr         <= wr_addr_1;
-              wr_cycle_loop_cnt_1 <= wr_cycle_loop_cnt_1 + 1;
-              if (wr_cycle_loop_cnt_1 == wr_loop_limit_1) begin
-                wr_cycle_loop_cnt_1 <= 0;
-                wr_addr_0           <= wr_addr_2 + wr_addr_inc_0;
-                wr_addr_1           <= wr_addr_2 + wr_addr_inc_1;
-                wr_addr_2           <= wr_addr_2 + wr_addr_inc_2;
-                ram_wr_addr         <= wr_addr_2;
-                kernel_y_counter    <= 0;
+            if (CLUSTERS != 1) begin
+              router_cycle <= router_cycle + 1;
+              if (router_cycle == (2 - 1)) begin
+                router_cycle <= 0;
               end
+              if (router_cycle == 0) begin
+                enable_write_to_storage <= 0;
+                if ((x_pos_in_w_cycle >= x_range_lower_bound) & (x_pos_in_w_cycle < x_range_lower_bound + PE_X + PE_Y - 1)) begin
+                  enable_write_to_storage <= 1;
+                end
+                x_pos_in_w_cycle <= x_pos_in_w_cycle + 1;
+                if (x_pos_in_w_cycle == iact_size_x_i + 2 - 1) begin
+                  x_pos_in_w_cycle <= 0;
+                end
+              end
+              if (ram_wr_en & !enable_write_to_storage) begin
+                x_range_lower_bound <= x_start;
+                if (iact_size_x_i > x_range_lower_bound + (CLUSTERS * PE_X)) begin
+                  x_range_lower_bound <= x_range_lower_bound + (CLUSTERS * PE_X);
+                end
+              end
+            end else begin
+              enable_write_to_storage <= 1;
             end
-            if (fsm_cycle == needed_iact_buffer_words_i) begin
-              fsm_cycle         <= 0;
-              fsm_current_state <= GET_PARAMETER;
-              ram_wr_en         <= 0;
+            ram_wr_en <= 0;
+            if (enable_write_to_storage) begin
+              fsm_cycle   <= fsm_cycle + 1;
+              ram_wr_en   <= 1;
+              //Loops for wr_address
+              ram_wr_addr         <= wr_addr_0;
+              wr_addr_0           <= wr_addr_0 + wr_addr_inc_0;
+              wr_cycle_loop_cnt_0 <= wr_cycle_loop_cnt_0 + 1;
+              if (wr_cycle_loop_cnt_0 == wr_loop_limit_0) begin
+                wr_cycle_loop_cnt_0 <= 0;
+                wr_addr_0           <= wr_addr_1 + wr_addr_inc_0;
+                wr_addr_1           <= wr_addr_1 + wr_addr_inc_1;
+                ram_wr_addr         <= wr_addr_1;
+                wr_cycle_loop_cnt_1 <= wr_cycle_loop_cnt_1 + 1;
+                if (wr_cycle_loop_cnt_1 == wr_loop_limit_1) begin
+                  wr_cycle_loop_cnt_1 <= 0;
+                  wr_addr_0           <= wr_addr_2 + wr_addr_inc_0;
+                  wr_addr_1           <= wr_addr_2 + wr_addr_inc_1;
+                  wr_addr_2           <= wr_addr_2 + wr_addr_inc_2;
+                  ram_wr_addr         <= wr_addr_2;
+                  kernel_y_counter    <= 0;
+                end
+              end
+              if (fsm_cycle == needed_iact_buffer_words_i) begin
+                fsm_cycle         <= 0;
+                fsm_current_state <= GET_PARAMETER;
+                ram_wr_en         <= 0;
+              end
             end
           end
 
@@ -537,6 +571,7 @@ module iact_stream_constructor #(
         if (enable_config) begin
           fsm_row_offset <= params[35:32];
           channels       <= params[(PARAMS_SIZE/4)-1:0];
+          x_start        <= params[(3*PARAMS_SIZE/4)+:8];
           ready_o        <= 1;
           configured     <= 1;
         end

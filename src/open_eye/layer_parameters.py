@@ -280,6 +280,7 @@ class LayerParameters(object):
         self.overhang_discrepancy = 0
         self.psum_output_words = 1             # Neede transmissions for output
         self.wght_cycles_one_word_all_ram = 0
+        self.iact_glb_writing_cycles = 0,
 
         # === Control Flags ===
         self.send_values_out = 1               # Send outputs to DRAM
@@ -750,7 +751,7 @@ class LayerParameters(object):
             if (self.used_channels == 0):
                 assert False
         self.used_channels = min(self.channels,self.used_channels)
-        self.channel_div_trans = math.ceil(self.used_channels//2)
+        self.channel_div_trans = math.ceil(self.used_channels/2)
 
     def calculate_needed_refreshes_mx(self, params):
         """Generate a matrix of refresh cycle counts for each transmission iteration.
@@ -1044,7 +1045,10 @@ class LayerParameters(object):
         self.iact_read_inc_1 = self.channel_div_trans * self.needed_Iact_writes
         self.iact_read_inc_1 = self.iact_repetitions_per_write
         self.iact_read_inc_2 = (self.iact_size_y + self.padding_y * 2) * self.iact_repetitions_per_write
-        self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM
+        if (params.Clusters == 1):
+            self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM
+        else:
+            self.iact_read_inc_3 = self.channel_div_trans * self.needed_Iact_writes
         self.iact_read_inc_4 = self.iact_repetitions_per_write
 
         if (self.used_channels == 1):
@@ -1149,6 +1153,7 @@ class LayerParameters(object):
 
         # Calculate channel iteration metrics
         self.diff_iact_layer = math.ceil(self.input_shape[3]/self.used_channels)
+        self.iact_glb_writing_cycles = self.diff_iact_layer*(self.iact_size_y+2*self.padding_y)*(self.iact_size_x+2*self.padding_x)*self.channel_div_trans
         if (layer_number != max_layers - 1):
             # Store next layer's channel requirements for inter-layer optimization
             self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
@@ -1209,6 +1214,7 @@ class LayerParameters(object):
         else:
             addition = 0
         self.buffer_cycles_for_x_iact = math.ceil((self.strideX*(addition+(params.Clusters_X*params.Clusters_Y*params.PEs_X)))/(params.IACT_RAM_CELLS*(8//4)))
+        self.buffer_cycles_for_x_iact = 1
         if (self.buffer_cycles_for_x_iact == 1):
             self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*math.ceil((self.channel_div_trans*(self.kernel_size[1]+self.iact_size_y-1)))*2
         else :
@@ -1289,6 +1295,7 @@ class LayerParameters(object):
         self.calculate_fpga_parameters(params)
         self.get_pagu_values(params)
         self.output_logger()
+
     def write_convdw_layer(self, layer, params):
         """Compute all configuration parameters for a Depthwise Convolution layer.
 

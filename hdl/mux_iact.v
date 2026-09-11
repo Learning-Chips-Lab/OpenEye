@@ -108,7 +108,7 @@ module mux_iact #(
   for (i = 0; i < I_COUNT; i = i + 1) begin
     assign a_w[i] = a_i[(WIDTH*(i+1))-1:(WIDTH*i)];
   end
-  always @(*) begin : configure_mux
+  always @* begin : configure_mux
     if (sel_i < I_COUNT) begin
       a_o = a_w[sel_i];
       b_o = b_i[sel_i];

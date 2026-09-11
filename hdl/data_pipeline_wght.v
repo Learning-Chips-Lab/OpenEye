@@ -421,9 +421,9 @@ module data_pipeline_wght #(
   //   If so: subtract filters_w (and 1 extra if over_ending) to wrap the tag
   //   into the next filter's address space.
   //   Otherwise: pass the stored tag through unchanged.
-  assign overhead_output = !SPARSITY_EN ? 0: (data_storage_2[11:8] != 0) & overhead_delay_reg + data_storage_2[11:8] >= filters_w
-                         ? data_storage_2[11:8] + overhead_delay_reg - filters_w - over_ending
-                         : data_storage_2[11:8];
+  assign overhead_output = !SPARSITY_EN ? 0: (data_storage_2[SPARSITY_EN*11:SPARSITY_EN*8] != 0) & overhead_delay_reg + data_storage_2[SPARSITY_EN*11:SPARSITY_EN*8] >= filters_w
+                         ? data_storage_2[SPARSITY_EN*11:SPARSITY_EN*8] + overhead_delay_reg - filters_w - over_ending
+                         : data_storage_2[SPARSITY_EN*11:SPARSITY_EN*8];
 
   // ---------------------------------------------------------------------------
   // Main Sequential Process

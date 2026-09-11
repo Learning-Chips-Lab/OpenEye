@@ -186,6 +186,7 @@ class DenseMapper(LayerMapper):
             # hang but left the window twice as wide as the buffer actually
             # holds valid data for, so the back half of every weight load
             # still read stale/X buffer content.
+            "iact_glb_writing_cycles": layer_params.iact_glb_writing_cycles,
             "used_wght_per_PE": math.ceil(layer_params.used_wght_per_PE / params.PARALLEL_MACS),
             "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
             "iact_channels_per_pe": layer_params.used_iact_per_PE,

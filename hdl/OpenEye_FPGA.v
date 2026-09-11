@@ -192,9 +192,9 @@ module OpenEye_FPGA #(
     parameter integer fsm_psum_rTR_CCLS_C = DMA_BITWIDTH - (DMA_BITWIDTH % ROUTER_MODES_PSUM),
     parameter real fsm_psum_rTR_CCLS = fsm_psum_rTR_CCLS_A / fsm_psum_rTR_CCLS_B,
 
-    parameter integer FSM_CEIL_IACT_RTR_CCLS = $rtoi($ceil(FSM_IACT_RTR_CCLS)),
-    parameter integer FSM_CEIL_WGHT_RTR_CCLS = $rtoi($ceil(FSM_WGHT_RTR_CCLS)),
-    parameter integer FSM_CEIL_PSUM_RTR_CCLS = $rtoi($ceil(fsm_psum_rTR_CCLS)),
+    parameter integer FSM_CEIL_IACT_RTR_CCLS = CLUSTERS == 1 ? 0 : $rtoi($ceil(FSM_IACT_RTR_CCLS)),
+    parameter integer FSM_CEIL_WGHT_RTR_CCLS = CLUSTER_COLUMNS == 1 ? 0 : $rtoi($ceil(FSM_WGHT_RTR_CCLS)),
+    parameter integer FSM_CEIL_PSUM_RTR_CCLS = CLUSTER_ROWS == 1 ? 0 : $rtoi($ceil(fsm_psum_rTR_CCLS)),
 
 
     //Number of Words per PE
@@ -245,7 +245,7 @@ module OpenEye_FPGA #(
     localparam WGHT_CELL_INPUT_WIDTH = WGHT_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
     localparam integer WGHT_ONE_WORD_ALL_RAM = ((CLUSTERS*WGHT_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH,
 
-    localparam integer PSUM_RAM_CELLS = CLUSTERS * (NUM_GLB_PSUM+1)/2,
+    localparam integer PSUM_RAM_CELLS = CLUSTERS * ((NUM_GLB_PSUM+1)/2),
     localparam integer PSUM_CYCLES_ONE_WORD_ALL_CELLS = ((PSUM_RAM_CELLS * PSUM_RAM_CELLS_WORD_BITWIDTH) + DMA_BITWIDTH - 1) / DMA_BITWIDTH,
     localparam         PSUM_CELL_INPUT_WIDTH = PSUM_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
     localparam integer PSUM_ONE_WORD_ALL_RAM = ((CLUSTERS*PSUM_RAM_CELLS_WORD_BITWIDTH)+DMA_BITWIDTH-1)/DMA_BITWIDTH,
@@ -384,6 +384,7 @@ reg [1023:0] fst_path;
   wire [15:0]                       trans_cycles_iact; // Register for deciding, how many cycles are needed for transmissions for iact
   wire [15:0]                       trans_cycles_wght; // Register for deciding, how many cycles are needed for transmissions for wght
   wire [15:0]                       trans_cycles_psum; // Register for deciding, how many cycles are needed for transmissions for psum
+  wire [15:0]                       iact_glb_writing_cycles;
   reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_x_cl;          // Current cluster column being processed during weight loading.
   reg [$clog2(CLUSTER_ROWS)-1:0] fsm_y_cl;             // Current cluster row being processed during weight loading.
   reg [$clog2(NUM_GLB_IACT)-1:0] fsm_iact_r;           // Current iact GLB index during iact loading (unused after refactor but kept for compatibility).
@@ -481,7 +482,7 @@ reg [1023:0] fst_path;
   // -----------------------------------------------------------------------
   reg  [CLUSTERS*(NUM_GLB_PSUM+1)/2-1:0] psum_buffer_en_r;           // Per-buffer read-enable vector (one bit per RAM instance).
   reg  [CLUSTERS*(NUM_GLB_PSUM+1)/2-1:0] psum_buffer_en_w;           // Per-buffer write-enable vector.
-  wire [BUFFER_WIDTH_PSUM*CLUSTERS*(NUM_GLB_PSUM+1)/2-1:0] psum_buffer_addr; // Flattened address bus; driven from psum_buffer_addr_array.
+  wire [(BUFFER_WIDTH_PSUM*CLUSTERS*((NUM_GLB_PSUM+1)/2))-1:0] psum_buffer_addr; // Flattened address bus; driven from psum_buffer_addr_array.
   reg  [BUFFER_WIDTH_PSUM-1:0] psum_buffer_addr_storage;              // Base address for the start of the current output page; advances by filters after each complete psum pass.
   reg  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_data_w;  // Write-data bus to all psum buffers; MUXed between bias-load and PE-output paths.
   wire [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_data_r;  // Read-data bus from all psum buffers; fed into OpenEye_Parallel or into the quantizer.
@@ -1351,6 +1352,7 @@ end
   reg        [                                    1:0] iact_channel_sending_cycle2;
   reg        [(8*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window;
   reg        [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window_q;
+  reg        [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window_q2;
 
   reg [ 7:0] iact_channel_counter_reg;  // Registered copy of iact_channels_counter for cross-process use.
 
@@ -1585,12 +1587,14 @@ end
       current_pos_in_iact_glb      <= 0;
       iact_input_window            <= 0;
       iact_input_window_q          <= 0;
+      iact_input_window_q2         <= 0;
       iact_channel_sending_cycle1  <= 0;
       iact_channel_sending_cycle2  <= 0;
     end else begin
       for (a = 0; a < CHANNELS_PER_WORD; a = a + 1) begin
         pooling_buffer_old_q[a] <= pooling_buffer_old[a];
       end
+      iact_input_window_q2 <= iact_input_window_q;
       case (fsm_current_state)
 
         // -------------------------------------------------------------------
@@ -1707,9 +1711,9 @@ end
                 // counting from a value already past its own exit target, and
                 // its exit test is an equality, so it could never match and the
                 // FSM stalled there for the rest of the run.
-                fsm_cycle          <= 0;
-                fsm_last_state <= GET_PARAMETERS;
-                fsm_current_state  <= GET_ROUTER_CONFIG;
+                fsm_cycle         <= 0;
+                fsm_last_state    <= GET_PARAMETERS;
+                fsm_current_state <= GET_ROUTER_CONFIG;
               end
             end
           end
@@ -2092,7 +2096,8 @@ end
               end
             end
           end
-          if (fsm_cycle == iact_buffer_words_per_write) begin
+          //if (fsm_cycle == iact_buffer_words_per_write) begin
+          if (fsm_cycle == iact_glb_writing_cycles) begin
             fsm_current_state     <= WAIT_CYCLE;
             fsm_cycle             <= 0;
             for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
@@ -2755,7 +2760,7 @@ end
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
             .rst_ni                      (rst_n),
-            .storage_i                   (iact_input_window_q),
+            .storage_i                   (iact_input_window_q2),
             .reset_cycle_i               (reset_cycle),
             .params                      (iact_converter_params_reg[i_gen][j_gen]),
             .enable_config               (iact_converter_en_cfg_reg[i_gen][j_gen]),
@@ -2858,17 +2863,17 @@ end
               .Pipelined(1)
           ) psum_buffer (
               .clk_i  (clk_i),
-              .rd_en_i(psum_buffer_en_r[i_gen*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*(NUM_GLB_PSUM+1)/2+g_gen] & !psum_buffer_en_w[i_gen*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*(NUM_GLB_PSUM+1)/2+g_gen]),
-              .wr_en_i(psum_buffer_en_w[i_gen*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*(NUM_GLB_PSUM+1)/2+g_gen]),
-              .addr_i (psum_buffer_addr[i_gen*BUFFER_WIDTH_PSUM*CLUSTER_ROWS*(NUM_GLB_PSUM+1)/2+j_gen*BUFFER_WIDTH_PSUM*(NUM_GLB_PSUM+1)/2+g_gen*BUFFER_WIDTH_PSUM+:BUFFER_WIDTH_PSUM]),
+              .rd_en_i(psum_buffer_en_r[i_gen*((NUM_GLB_PSUM+1)/2)+j_gen*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_gen] & !psum_buffer_en_w[i_gen*((NUM_GLB_PSUM+1)/2)+j_gen*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_gen]),
+              .wr_en_i(psum_buffer_en_w[i_gen*((NUM_GLB_PSUM+1)/2)+j_gen*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_gen]),
+              .addr_i (psum_buffer_addr[i_gen*BUFFER_WIDTH_PSUM*((NUM_GLB_PSUM+1)/2)+j_gen*BUFFER_WIDTH_PSUM*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_gen*BUFFER_WIDTH_PSUM+:BUFFER_WIDTH_PSUM]),
               // The data buses are declared in TRANS_BITWIDTH_PSUM units
               // (TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM), so the per-column
               // and per-row strides stay in those units. Only the slot inside
               // one cluster is PSUM_BUFFER_WIDTH wide - using it for the
               // strides too doubles them for NUM_GLB_PSUM>1 and runs off the
               // end of the bus.
-              .data_i (psum_buffer_data_w[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH]),
-              .data_o (psum_buffer_data_r[i_gen*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH])
+              .data_i (psum_buffer_data_w[i_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH]),
+              .data_o (psum_buffer_data_r[i_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH])
           );
         end
       end
@@ -2919,6 +2924,7 @@ end
         .trans_cycles_iact(trans_cycles_iact),
         .trans_cycles_wght(trans_cycles_wght),
         .trans_cycles_psum(trans_cycles_psum),
+        .iact_glb_writing_cycles(iact_glb_writing_cycles),
         .iact_converter_buffer_addr_max_cycles(iact_converter_buffer_addr_max_cycles),
         .iact_channels_per_pe(iact_channels_per_pe),
         .channel_div_trans(channel_div_trans),

@@ -153,6 +153,7 @@ class ConvMapper(LayerMapper):
         "trans_cycles_iact": layer_params.trans_cycles_iact,
         "trans_cycles_wght": layer_params.trans_cycles_wght,
         "trans_cycles_psum": layer_params.trans_cycles_psum,
+        "iact_glb_writing_cycles": layer_params.iact_glb_writing_cycles,
         "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
         "iact_channels_per_pe": layer_params.used_channels,
         "fc_size_reg": 0,

@@ -1047,16 +1047,16 @@ module OpenEye_Parallel #(
         for (g_gen = 0; g_gen < NUM_GLB_PSUM; g_gen = g_gen + 1) begin
           if (SERIAL) begin : gen_serial_router_mode_psum
             assign gen_x[cc_gen].gen_y[cr_gen].router_mode_psum_i_w[g_gen*ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM] =
-            router_mode_psum_i[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
-                              cr_gen * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
+            router_mode_psum_i[cc_gen * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
+                              cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                               g_gen * ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM];
           end else begin : gen_parallel_router_mode_psum
             assign gen_x[cc_gen].gen_y[cr_gen].router_mode_psum_i_w[g_gen*ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM] =
-            router_mode_psum_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
-                              cr_gen * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
+            router_mode_psum_reg[cc_gen * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
+                              cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                               g_gen * ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM];
           end
-          assign gen_x[cc_gen].gen_y[cr_gen].psum_choose_cluster_i_w[g_gen] = psum_choose_i[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM + cr_gen * NUM_GLB_PSUM + g_gen];
+          assign gen_x[cc_gen].gen_y[cr_gen].psum_choose_cluster_i_w[g_gen] = psum_choose_i[cc_gen * NUM_GLB_PSUM + cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM + g_gen];
           if (cr_gen != CLUSTER_ROWS - 1) begin : gen_router_iact_bottom_connect
             assign gen_x[cc_gen].gen_y[cr_gen + 1].data_src_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] =
           gen_x[cc_gen].gen_y[cr_gen].data_dst_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM];
@@ -1081,23 +1081,23 @@ module OpenEye_Parallel #(
           end
 
           assign gen_x[cc_gen].gen_y[cr_gen].psum_data_i_cluster_w[g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM] = 
-          psum_data_i_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
-                          cr_gen * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
+          psum_data_i_reg[cc_gen * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
+                          cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
                           g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM];
-          assign psum_data_o[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
-                                 cr_gen * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
+          assign psum_data_o[cc_gen * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
+                                 cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
                                  g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM]
           = gen_x[cc_gen].gen_y[cr_gen].psum_data_o_cluster_w[g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM];
           assign gen_x[cc_gen].gen_y[cr_gen].psum_addr_i_cluster_w[g_gen * PSUM_MEM_ADDR_BITS +:PSUM_MEM_ADDR_BITS] =
-          mem_addr_psum[cc_gen * CLUSTER_ROWS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS +
-                        cr_gen * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS +
+          mem_addr_psum[cc_gen * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS +
+                        cr_gen *CLUSTER_COLUMNS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS +
                         g_gen * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS];
-          assign gen_x[cc_gen].gen_y[cr_gen].psum_enable_i_cluster_w[g_gen] = psum_enable_i_reg[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen];
+          assign gen_x[cc_gen].gen_y[cr_gen].psum_enable_i_cluster_w[g_gen] = psum_enable_i_reg[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen];
 
-          assign psum_ready_o_cluster_reg[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_ready_o_cluster_w[g_gen];
+          assign psum_ready_o_cluster_reg[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_ready_o_cluster_w[g_gen];
 
-          assign psum_enable_o[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_enable_o_cluster_w[g_gen];
-          assign gen_x[cc_gen].gen_y[cr_gen].psum_ready_i_cluster_w[g_gen] = psum_ready_i_reg[cc_gen*NUM_GLB_PSUM*CLUSTER_ROWS+cr_gen*NUM_GLB_PSUM+g_gen];
+          assign psum_enable_o[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_enable_o_cluster_w[g_gen];
+          assign gen_x[cc_gen].gen_y[cr_gen].psum_ready_i_cluster_w[g_gen] = psum_ready_i_reg[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen];
         end
       end
     end

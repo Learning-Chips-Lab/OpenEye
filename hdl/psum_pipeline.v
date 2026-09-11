@@ -85,7 +85,7 @@ module psum_pipeline #(
 
     output reg [(CLUSTERS*(NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_r,
     output reg [(CLUSTERS*(NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_w,
-    output     [(BUFFER_WIDTH*CLUSTERS*(NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_addr,
+    output     [(BUFFER_WIDTH*CLUSTERS*((NUM_GLB_PSUM+1)/2))-1:0] psum_buffer_addr,
     output reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_data_w,
     output reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_i_reg,
     output reg [CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_i_reg,
@@ -194,7 +194,7 @@ module psum_pipeline #(
     for (i_addr = 0; i_addr < CLUSTER_COLUMNS; i_addr = i_addr + 1) begin : ADDR_X
       for (j_addr = 0; j_addr < CLUSTER_ROWS; j_addr = j_addr + 1) begin : ADDR_Y
         for (g_addr = 0; g_addr < (NUM_GLB_PSUM+1)/2; g_addr = g_addr + 1) begin : ADDR_GLB
-          assign psum_buffer_addr[(i_addr*BUFFER_WIDTH*CLUSTER_ROWS*((NUM_GLB_PSUM+1)/2))+(j_addr*BUFFER_WIDTH*((NUM_GLB_PSUM+1)/2))+(g_addr*BUFFER_WIDTH)+:BUFFER_WIDTH] = psum_buffer_addr_array[i_addr][j_addr][g_addr];
+          assign psum_buffer_addr[(i_addr*BUFFER_WIDTH*((NUM_GLB_PSUM+1)/2))+(j_addr*CLUSTER_COLUMNS*BUFFER_WIDTH*((NUM_GLB_PSUM+1)/2))+(g_addr*BUFFER_WIDTH)+:BUFFER_WIDTH] = psum_buffer_addr_array[i_addr][j_addr][g_addr];
         end
       end
     end
@@ -308,11 +308,6 @@ module psum_pipeline #(
               // sections.
               psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
               if (fully_connected_layer) begin
-                for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                  for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
-                    //psum_buffer_data_w[fsm_x_cl_psum*CLUSTER_ROWS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cr_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_psum*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS] <= data_dma_i_reg[TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0];
-                  end
-                end
                 psum_buffer_en_w <= 0;
                 fsm_x_cl_psum <= fsm_x_cl_psum + 1;
                 if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
@@ -389,8 +384,8 @@ module psum_pipeline #(
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
-                  results_ready = results_ready & (psum_ready_o_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum*2] |
-                   ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTERS != 1)));
+                  results_ready = results_ready & (psum_ready_o_reg[cc_psum*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_psum*2] |
+                   ((router_mode_psum[cc_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTER_ROWS != 1)));
                 end
               end
             end
@@ -401,16 +396,16 @@ module psum_pipeline #(
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                 for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
-                  if (router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1 | (CLUSTERS == 1)) begin
+                  if (router_mode_psum[cc_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1 | (CLUSTER_ROWS == 1)) begin
                     psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                   end
                   // g_psum indexes GLB pairs (loop bound (NUM_GLB_PSUM+1)/2), so
                   // the stride into the full NUM_GLB_PSUM-wide router field
                   // must be g_psum*ROUTER_MODES_PSUM*2, matching every other
                   // use of this bit-2 check in this state (lines above/below).
-                  if ((fsm_psum_cycle != 0) & ((router_mode_psum[(cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (g_psum * ROUTER_MODES_PSUM * 2) + 2] == 1) | (CLUSTERS == 1))) begin
-                    psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] <= 1;
-                    psum_enable_i_reg[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2 + 1] <= 1;
+                  if ((fsm_psum_cycle != 0) & ((router_mode_psum[(cc_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (cr_psum * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM) + (g_psum * ROUTER_MODES_PSUM * 2) + 2] == 1) | (CLUSTER_ROWS == 1))) begin
+                    psum_enable_i_reg[cc_psum*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_psum * 2] <= 1;
+                    psum_enable_i_reg[cc_psum*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_psum * 2 + 1] <= 1;
                   end
                 end
               end
@@ -425,7 +420,7 @@ module psum_pipeline #(
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
-                    if ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) | (CLUSTERS == 1)) begin
+                    if ((router_mode_psum[cc_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 1) | (CLUSTER_ROWS == 1)) begin
                       psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_storage;
                     end
                   end
@@ -451,12 +446,12 @@ module psum_pipeline #(
                 if (psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)*CLUSTER_ROWS+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum]) begin
                   psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                 end
-                results_ready = results_ready & (psum_enable_o[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] |
-                ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTERS != 1)));
+                results_ready = results_ready & (psum_enable_o[cc_psum*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_psum * 2] |
+                ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTER_ROWS != 1)));
                 if (psum_enable_o[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] != 0) begin
-                  psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)*CLUSTER_ROWS+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
+                  psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)+cr_psum*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
                 end else begin
-                  psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)*CLUSTER_ROWS+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum] <= 0;
+                  psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)+cr_psum*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_psum] <= 0;
                 end
               end
             end
@@ -536,7 +531,7 @@ module psum_pipeline #(
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
-                    psum_buffer_en_r[cc_psum*CLUSTER_ROWS*((NUM_GLB_PSUM+1)/2)+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
+                    psum_buffer_en_r[cc_psum*((NUM_GLB_PSUM+1)/2)+cr_psum*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
                     psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                   end
                 end
@@ -628,7 +623,7 @@ module psum_pipeline #(
                   for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                     for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                       for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
-                        psum_buffer_en_r[cc_psum*CLUSTER_ROWS*((NUM_GLB_PSUM+1)/2)+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
+                        psum_buffer_en_r[cc_psum*((NUM_GLB_PSUM+1)/2)+cr_psum*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
                         psum_buffer_addr_array[cc_psum][cr_psum][g_psum]                                    <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                       end
                     end
@@ -695,12 +690,12 @@ module psum_pipeline #(
               if (CLUSTER_COLUMNS*NUM_GLB_PSUM>= 8) begin
                 for (cr_psum = 0; cr_psum < TRANS_WORDS/2; cr_psum = cr_psum + 1) begin
                   pre_quantized_value[2*cr_psum]     <= (quant_mant[current_filter] *
-                  (psum_buffer_data_r[((fsm_x_cl_psum_q3+(cr_psum/2))*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM)+(fsm_y_cl_psum_q3*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+
+                  (psum_buffer_data_r[((fsm_x_cl_psum_q3+(cr_psum/2))*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+(fsm_y_cl_psum_q3*CLUSTER_COLUMNS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+
                   ((cr_psum%2)*TRANS_BITWIDTH_PSUM*PARALLEL_MACS)+:TRANS_BITWIDTH_PSUM]
                   + quant_offset[current_filter]))
                   >>> current_shift;
                   pre_quantized_value[2*cr_psum + 1] <= (quant_mant[current_filter] *
-                  (psum_buffer_data_r[((fsm_x_cl_psum_q3+(cr_psum/2))*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM)+(fsm_y_cl_psum_q3*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+
+                  (psum_buffer_data_r[((fsm_x_cl_psum_q3+(cr_psum/2))*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+(fsm_y_cl_psum_q3*CLUSTER_COLUMNS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+
                   ((cr_psum%2)*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+TRANS_BITWIDTH_PSUM)+:TRANS_BITWIDTH_PSUM]
                   + quant_offset[current_filter]))
                   >>> current_shift;
@@ -710,11 +705,11 @@ module psum_pipeline #(
                   for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                     for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                       pre_quantized_value[(TRANS_WORDS/2)*cr_psum+2*cc_psum]     <= (quant_mant[current_filter] *
-                      (psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+(cr_psum+(fsm_y_cl_psum_q3))*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM]
+                      (psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum+(fsm_y_cl_psum_q3))*TRANS_BITWIDTH_PSUM*CLUSTER_COLUMNS*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM]
                       + quant_offset[current_filter]))
                       >>> current_shift;
                       pre_quantized_value[(TRANS_WORDS/2)*cr_psum+2*cc_psum + 1] <= (quant_mant[current_filter] *
-                      (psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+(cr_psum+(fsm_y_cl_psum_q3))*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]
+                      (psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum+(fsm_y_cl_psum_q3))*TRANS_BITWIDTH_PSUM*CLUSTER_COLUMNS*NUM_GLB_PSUM+TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]
                       + quant_offset[current_filter]))
                       >>> current_shift;
                     end
