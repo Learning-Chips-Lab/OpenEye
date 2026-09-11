@@ -102,15 +102,10 @@ module mux_iact #(
     input                              c_i
 );
   integer j;
-  genvar i;
 
-  wire [WIDTH-1:0] a_w[0:(I_COUNT)-1];
-  for (i = 0; i < I_COUNT; i = i + 1) begin
-    assign a_w[i] = a_i[(WIDTH*(i+1))-1:(WIDTH*i)];
-  end
-  always @* begin : configure_mux
+always @* begin : configure_mux
     if (sel_i < I_COUNT) begin
-      a_o = a_w[sel_i];
+      a_o = a_i[sel_i*WIDTH +: WIDTH];
       b_o = b_i[sel_i];
     end else begin
       a_o = 0;
