@@ -1153,7 +1153,6 @@ class LayerParameters(object):
 
         # Calculate channel iteration metrics
         self.diff_iact_layer = math.ceil(self.input_shape[3]/self.used_channels)
-        self.iact_glb_writing_cycles = self.diff_iact_layer*(self.iact_size_y+2*self.padding_y)*(self.iact_size_x+2*self.padding_x)*self.channel_div_trans
         if (layer_number != max_layers - 1):
             # Store next layer's channel requirements for inter-layer optimization
             self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
@@ -1170,6 +1169,8 @@ class LayerParameters(object):
         self.calculate_used_Y_cluster(params)
         self.calculate_used_refreshes(params)
         self.calculate_computing_matrix(params)
+        self.iact_x_add_up = self.iact_size_x + self.add_up
+        self.iact_glb_writing_cycles = self.diff_iact_layer*(self.iact_size_y+2*self.padding_y)*(self.iact_x_add_up+2*self.padding_x)*self.channel_div_trans
         # === Phase 7: Calculate timing parameters ===
         # Partial sum delay for accumulation pipeline
         if (params.SERIAL):
@@ -1257,7 +1258,6 @@ class LayerParameters(object):
             psum_cycles = 2
         else:
             psum_cycles = 1
-        self.iact_x_add_up = self.iact_size_x + self.add_up
         if (layer_number != max_layers - 1):
             self.fsm_psum_limit = math.ceil(self.iact_x_add_up * self.filters * self.iact_size_y /4)
             self.fsm_psum_limit = self.fsm_psum_limit + 11

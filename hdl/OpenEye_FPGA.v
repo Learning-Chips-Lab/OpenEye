@@ -2775,7 +2775,7 @@ end
             .needed_y_cls_i              (needed_y_cls_reg),
             .needed_iact_channel_cycles_i(iact_channel_max_cycles),
             .fc_size_i                   (fc_size_reg),
-            .iact_size_x_i               (iact_size_x),
+            .iact_x_add_up               (iact_x_add_up),
             .iact_size_y_i               (iact_size_y),
             .iact_channels_per_pe_i      (iact_channels_per_pe),
             .channel_div_trans           (channel_div_trans),

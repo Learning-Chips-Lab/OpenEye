@@ -93,7 +93,7 @@ module iact_stream_constructor #(
     input      [             $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                                  8-1:0] needed_iact_channel_cycles_i,
     input      [                                 14-1:0] fc_size_i,
-    input signed [                               12-1:0] iact_size_x_i,
+    input signed [                               12-1:0] iact_x_add_up,
     input signed [                                8-1:0] iact_size_y_i,
     input signed [                                4-1:0] iact_channels_per_pe_i,
     input      [                                    1:0] channel_div_trans,
@@ -525,13 +525,13 @@ reg enable_write_to_storage;
                   enable_write_to_storage <= 1;
                 end
                 x_pos_in_w_cycle <= x_pos_in_w_cycle + 1;
-                if (x_pos_in_w_cycle == iact_size_x_i + 2 - 1) begin
+                if (x_pos_in_w_cycle == iact_x_add_up + 2 - 1) begin
                   x_pos_in_w_cycle <= 0;
                 end
               end
               if (ram_wr_en & !enable_write_to_storage) begin
                 x_range_lower_bound <= x_start;
-                if (iact_size_x_i > x_range_lower_bound + (CLUSTERS * PE_X)) begin
+                if (iact_x_add_up > x_range_lower_bound + (CLUSTERS * PE_X)) begin
                   x_range_lower_bound <= x_range_lower_bound + (CLUSTERS * PE_X);
                 end
               end
