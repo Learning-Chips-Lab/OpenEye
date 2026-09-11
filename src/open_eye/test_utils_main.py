@@ -550,7 +550,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
             y_cor = les.y_start
             for cl_y in range(params.Clusters_Y//layer_params.used_Y_cluster) :
                 for cl_x in range(params.Clusters_X) :
-                    if (x_cor >= layer_params.psum_size_x) :
+                    if (x_cor >= layer_params.psum_size_x+layer_params.add_up) :
                         if (kernel_counter < layer_params.different_kernels_per_calculation - 1) :
                             kernel_counter = kernel_counter + 1
                             x_cor = les.x_start
@@ -572,7 +572,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                         file_dma_ref.write(temp_string+ "\n")
             filter = filter + 1
         if ((filter >= layer_params.filters)) :
-            if (x_cor >= layer_params.psum_size_x) :
+            if (x_cor >= layer_params.psum_size_x+layer_params.add_up) :
                 les.x_start = 0
             else :
                 les.x_start = x_cor

@@ -397,10 +397,8 @@ reg [1023:0] fst_path;
   reg [19:0] finished_cycles_psum;                     // Count of completed psum output passes; determines when last_data fires.
   reg reset_cycle;                                     // Pulse that resets all iteration counters (current_cycle, iact_cycle_count, etc.) to 0.
   wire send_data_out;                                  // When 1: final results go directly to DMA output (PSUM_SEND_RESULTS). When 0: quantize and loop back as next-layer iact.
-  wire [2:0] add_up;                                   // Extra overlap columns beyond iact_size_x needed for the sliding iact window (from dma_storage).
   wire [7:0] iact_x_line_repetitions;                  // How many times each iact x-line is reused across cluster columns (from dma_storage).
   wire [7:0] buffer_cycles_for_x_iact;                 // How many times the Iact GLBs need to cycle for a given iact_x_size.
-  reg [7:0] psum_x_with_add_up;
   wire [16:0] fsm_psum_limit;                          // Total fsm_psum_cycle count before SEND_PSUM_TO_IACT returns to PSUM_IDLE.
   wire [$clog2(CLUSTERS+1)-1:0] cluster_per_conv_cycle;// Amount of clusters, that are written IACTs in parallel 
 
@@ -871,11 +869,11 @@ reg [1023:0] fst_path;
               end
             end
           end
-          param_array_reg <= ((kernels_per_calc * iact_size_x / NUM_GLB_PSUM) | param_array_reg>>(CLUSTERS-(kernels_per_calc * iact_size_x / NUM_GLB_PSUM)));
+          param_array_reg <= ((kernels_per_calc * iact_x_add_up / NUM_GLB_PSUM) | param_array_reg>>(CLUSTERS-(kernels_per_calc * iact_x_add_up / NUM_GLB_PSUM)));
           param_array_reg <= ((param_array_reg << 2) | param_array_reg>>(CLUSTERS-2));
           
           if (fsm_current_state == CONVERT_IACT) begin
-            fsm_iact_params <= fsm_iact_params + kernels_per_calc * ((iact_size_x - 1 + (2 * NUM_GLB_PSUM)) / (2 * NUM_GLB_PSUM));
+            fsm_iact_params <= fsm_iact_params + kernels_per_calc * ((iact_x_add_up - 1 + (2 * NUM_GLB_PSUM)) / (2 * NUM_GLB_PSUM));
           end
         end else begin
           param_array_reg <= conv_array_reg;
@@ -891,7 +889,7 @@ reg [1023:0] fst_path;
 
         for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin 
           iact_converter_params_reg[a][fsm_row][37:32] <= fsm_row_offset;
-          iact_converter_params_reg[a][fsm_row][15:8]  <= iact_size_x;
+          iact_converter_params_reg[a][fsm_row][15:8]  <= iact_x_add_up;
           iact_converter_params_reg[a][fsm_row][7:0]   <= iact_converter_c;
 
           if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
@@ -902,13 +900,13 @@ reg [1023:0] fst_path;
             iact_converter_params_reg[a][fsm_row][31:24] <= iact_converter_x;
             iact_converter_params_reg[a][fsm_row][23:16] <= iact_converter_y;
           end else begin
-            if ((a != 0) & ((iact_converter_x + a[7:0] * iact_x_per_cluster) >= iact_size_x)) begin
+            if ((a != 0) & ((iact_converter_x + a[7:0] * iact_x_per_cluster) >= iact_x_add_up)) begin
               iact_converter_params_reg[a][fsm_row][31:24] <= 0;
             end else begin
               iact_converter_params_reg[a][fsm_row][31:24] <= iact_converter_x + a[7:0] * iact_x_per_cluster;
             end
             
-            if ((a != 0) & ((iact_converter_x + a[7:0] * iact_x_per_cluster) >= iact_size_x) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
+            if ((a != 0) & ((iact_converter_x + a[7:0] * iact_x_per_cluster) >= iact_x_add_up) & (fsm_iact_params_kernel == kernels_per_calc - 1)) begin
               iact_converter_params_reg[a][fsm_row][23:16] <= iact_converter_y + 1;
             end else begin
               iact_converter_params_reg[a][fsm_row][23:16] <= iact_converter_y;
@@ -925,9 +923,9 @@ reg [1023:0] fst_path;
           end
         end
         iact_converter_x <= iact_converter_x + (CLUSTER_COLUMNS * iact_x_per_cluster);
-        if (((((iact_converter_x + (CLUSTER_COLUMNS * iact_x_per_cluster)) * iact_x_line_repetitions) >= iact_size_x * needed_y_cls_reg) | (fully_connected_layer))) begin
+        if (((((iact_converter_x + (CLUSTER_COLUMNS * iact_x_per_cluster)) * iact_x_line_repetitions) >= iact_x_add_up * needed_y_cls_reg) | (fully_connected_layer))) begin
           iact_converter_x <= 0;
-          if (((iact_converter_x + iact_x_per_cluster) >= iact_size_x) & (!fully_connected_layer) & (kernels_per_calc != 1) & (iact_x_per_cluster < iact_size_x)) begin
+          if (((iact_converter_x + iact_x_per_cluster) >= iact_x_add_up) & (!fully_connected_layer) & (kernels_per_calc != 1) & (iact_x_per_cluster < iact_x_add_up)) begin
             iact_converter_x <= iact_x_per_cluster;
           end
           fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
@@ -1533,7 +1531,6 @@ end
       reset_cycle                        <= 0;
       select_ram_counter                 <= 0;
       select_ram_counter2                <= 0;
-      psum_x_with_add_up                 <= 0;
       iact_converter_cycles              <= 0;
       iact_converter_buffer_addr_cycles  <= 0;
       send_data_reg                      <= 0;
@@ -1743,7 +1740,6 @@ end
         GET_ROUTER_CONFIG: begin
           status_reg_enable_reg <= 0;
           ready_dma_o           <= 1;
-          psum_x_with_add_up    <= psum_size_x + add_up;
           if (enable_dma_i_reg) begin
             fsm_cycle <= fsm_cycle + 1;
             if(fsm_cycle == FSM_CEIL_IACT_RTR_CCLS + FSM_CEIL_WGHT_RTR_CCLS + FSM_CEIL_PSUM_RTR_CCLS - 1 | (CLUSTERS == 1)) begin
@@ -2543,7 +2539,7 @@ end
       .iact_channel_max_cycles(iact_channel_max_cycles),
       .iact_channels_per_pe_next_layer(iact_channels_per_pe_next_layer),
       .filters(filters),
-      .psum_x_with_add_up(psum_x_with_add_up),
+      .psum_x_with_add_up(iact_x_add_up),
       .psum_x_all_cluster(psum_x_all_cluster),
       .iteration_for_kernels(iteration_for_kernels),
       .needed_cycles(needed_cycles),
@@ -2960,7 +2956,6 @@ end
         .wght_addr_len_reg(wght_addr_len_reg),
         .send_data_out(send_data_out),
         .needed_iact_buffer_words(needed_iact_buffer_words),
-        .add_up_reg(add_up),
         .iact_x_line_repetitions_reg(iact_x_line_repetitions),
         .buffer_cycles_for_x_iact(buffer_cycles_for_x_iact),
         .start_param_array(start_param_array),

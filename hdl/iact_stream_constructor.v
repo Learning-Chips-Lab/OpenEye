@@ -446,6 +446,7 @@ reg enable_write_to_storage;
       end else begin
         channels_q          <= channels;
         ram_wr_addr_q       <= ram_wr_addr;
+        ram_wr_en_q         <= ram_wr_en;
         case (fsm_current_state)
           FSM_INITIALIZE: begin
             fsm_cycle              <= 0;
@@ -506,7 +507,6 @@ reg enable_write_to_storage;
           end
 
           WRITE_TO_MEMORY: begin
-            ram_wr_en_q <= ram_wr_en;
             if (ram_wr_en) begin
               for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
                 for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
@@ -561,11 +561,11 @@ reg enable_write_to_storage;
                   kernel_y_counter    <= 0;
                 end
               end
-              if (fsm_cycle == needed_iact_buffer_words_i) begin
-                fsm_cycle         <= 0;
-                fsm_current_state <= GET_PARAMETER;
-                ram_wr_en         <= 0;
-              end
+            end
+            if (fsm_cycle == needed_iact_buffer_words_i) begin
+              fsm_cycle         <= 0;
+              fsm_current_state <= GET_PARAMETER;
+              ram_wr_en         <= 0;
             end
           end
 

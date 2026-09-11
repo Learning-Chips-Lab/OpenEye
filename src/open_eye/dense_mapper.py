@@ -218,7 +218,6 @@ class DenseMapper(LayerMapper):
             "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
             "send_data_out": layer_params.send_values_out,
             "needed_iact_buffer_words": layer_params.needed_iact_buffer_words,
-            "add_up_reg":layer_params.add_up,
             "iact_x_line_repetitions_reg":layer_params.iact_x_line_repetitions,
             "buffer_cycles_for_x_iact" : layer_params.buffer_cycles_for_x_iact,
             "start_param_array" : layer_params.start_param_array,

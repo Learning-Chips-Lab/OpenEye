@@ -50,7 +50,6 @@ registers:
   - {name: channel_div_trans, width: 2}
   - {name: send_data_out, width: 1}
   - {name: needed_iact_buffer_words, width: int(BUFFER_WIDTH)}
-  - {name: add_up_reg, width: 3}
   - {name: iact_x_line_repetitions_reg, width: 8}
   - {name: buffer_cycles_for_x_iact, width: 8}
   - {name: start_param_array, width: int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)}

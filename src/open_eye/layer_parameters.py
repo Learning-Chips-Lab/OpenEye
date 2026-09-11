@@ -525,43 +525,20 @@ class LayerParameters(object):
             amount_of_psum_per_cycle = min(params.Clusters_Y*params.Clusters_X*params.PEs_X,8)
             # === MASKING PHASE 1: Handle non-aligned output width ===
             # If output width doesn't evenly divide by PEs_X, some PEs will be unused
-            if(((self.output_shape[1]) % amount_of_psum_per_cycle) != 0):
-                # Calculate padding needed to align to PE arrays
-                if (self.different_kernels_per_calculation == 1):
-                    self.add_up = (amount_of_psum_per_cycle - ((self.output_shape[1]) % amount_of_psum_per_cycle))
-                else:
-                    self.add_up = 8 - (self.output_shape[1] % 8)
-                #if ((self.output_shape[1] % (params.PEs_X)) != 0):
-                #    self.add_up = (params.PEs_X)- (self.output_shape[1] % params.PEs_X)
-                x_count       = 0
-                kernel_number = 0
-                # Disable PEs in the partial row that exceed output width
-                for y_cluster in range(params.Clusters_Y):
-                    for x_cluster in range(params.Clusters_X):
-                        if ((x_count >= self.output_shape[1]) & (kernel_number < self.different_kernels_per_calculation - 1)):
-                            x_count = 0
-                            kernel_number = kernel_number + 1
-                        for x_pe in range(params.PEs_X):
-                            if (x_count >= self.output_shape[1]):
-                                for y_pe in range(params.PEs_Y):
-                                    self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
-                            x_count = x_count + 1
-            else:
-                # Output width perfectly aligned - no padding needed
-                self.add_up = 0
-                if (self.iact_x_line_repetitions != 1):
-                    self.add_up = (self.output_shape[1]) % (params.Clusters_Y * params.Clusters_X * params.PEs_X)
-                if (self.different_kernels_per_calculation != 1):
-                    self.add_up = (self.output_shape[1]) % (params.Clusters_Y * params.Clusters_X * params.PEs_X)
+            calculation_ress = math.floor((params.Clusters * params.PEs_X)/self.different_kernels_per_calculation)
+            self.add_up = (self.output_shape[1]) % calculation_ress
+            self.add_up = calculation_ress - self.add_up
+            self.add_up = self.add_up % calculation_ress
+            self.iact_x_add_up = self.iact_size_x + self.add_up
             # === MASKING PHASE 2: Eliminate PEs beyond computation requirements ===
             # Calculate total number of X positions needed per computation cycle
-            x_values_per_cycle = (self.calc_X + self.add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation
+            x_values_per_cycle = self.iact_x_add_up * self.y_lines_per_calculation * self.different_kernels_per_calculation
             for x_cluster in range(params.Clusters_X):
                 for y_cluster in range(params.Clusters_Y):
                     for y_pe in range(params.PEs_Y):
                         for x_pe in range(params.PEs_X):
                             # Calculate linear position of this PE in the flattened array
-                            x_pos_in_pes = x_cluster * params.PEs_X + (y_cluster//self.used_Y_cluster) * params.PEs_X * params.Clusters_X + x_pe
+                            x_pos_in_pes = (x_cluster * params.PEs_X) + ((y_cluster//self.used_Y_cluster) * params.PEs_X * params.Clusters_X) + x_pe
                             # Disable PEs beyond the required computation width
                             if(x_pos_in_pes >= x_values_per_cycle):
                                 self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
@@ -1066,7 +1043,7 @@ class LayerParameters(object):
         self.iact_write_inc_1 = self.iact_write_limit_2 * self.iact_buffer_words_per_write
         self.iact_write_inc_2 = self.iact_buffer_words_per_write
 
-        self.pagu_wght_limit = int((self.iact_size_x%params.NUM_GLB_PSUM)+self.iact_size_x) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
+        self.pagu_wght_limit = int((self.iact_x_add_up%params.NUM_GLB_PSUM)+self.iact_x_add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
 
         self.psum_pagu_loop_limit_0 = 4 - 1
         self.psum_pagu_addr_inc_0 = 1
@@ -1169,7 +1146,6 @@ class LayerParameters(object):
         self.calculate_used_Y_cluster(params)
         self.calculate_used_refreshes(params)
         self.calculate_computing_matrix(params)
-        self.iact_x_add_up = self.iact_size_x + self.add_up
         self.iact_glb_writing_cycles = self.diff_iact_layer*(self.iact_size_y+2*self.padding_y)*(self.iact_x_add_up+2*self.padding_x)*self.channel_div_trans
         # === Phase 7: Calculate timing parameters ===
         # Partial sum delay for accumulation pipeline
@@ -1219,7 +1195,7 @@ class LayerParameters(object):
         else :
             self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*self.channel_div_trans*2
         if (self.buffer_cycles_for_x_iact == 1):
-            self.start_param_array = (1 << math.ceil((self.different_kernels_per_calculation * self.y_lines_per_calculation * self.used_Y_cluster * math.ceil(self.iact_size_x / params.NUM_GLB_PSUM)))) - 1
+            self.start_param_array = (1 << math.ceil((self.different_kernels_per_calculation * self.y_lines_per_calculation * self.used_Y_cluster * math.ceil(self.iact_x_add_up / params.NUM_GLB_PSUM)))) - 1
         else:
             self.start_param_array = (1 << math.ceil((params.Clusters_X*params.Clusters_Y)/self.buffer_cycles_for_x_iact)) - 1
         # Calculated the limit of iact buffers that need activations
@@ -1334,7 +1310,7 @@ class LayerParameters(object):
                                             for _ in range(params.PEs_Y)]
                                             for _ in range(params.Clusters_Y)]
                                             for _ in range(params.Clusters_X)]
-            if(self.kernel_size[0] < 3):
+            if(self.kernel_size[0] < params.PEs_Y):
                 for x_cluster in range(params.Clusters_X):
                     for y_cluster in range(params.Clusters_Y):
                         for y_pe in range(params.PEs_Y):
@@ -1344,7 +1320,6 @@ class LayerParameters(object):
 
             if(((self.output_shape[1]) % (params.PEs_X * params.Clusters_X)) != 0):
                 if((self.output_shape[1] < 8) | ((self.output_shape[1] > 12) & (self.output_shape[1] < 16))):
-                    self.add_up = (params.PEs_X * params.Clusters_X)- (self.output_shape[1] % (params.PEs_X * params.Clusters_X))
                     yc_step = math.ceil(self.output_shape[1]/(params.PEs_X*params.Clusters_X))
                     yc_start = yc_step - 1
                     yc_end = params.Clusters_Y
@@ -1355,8 +1330,6 @@ class LayerParameters(object):
                                     self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
                 else:
                     assert False, "Kernel cant be caclulated"
-            else:
-                self.add_up = 0
 
             self.used_channels = 1
 
