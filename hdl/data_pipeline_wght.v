@@ -383,7 +383,7 @@ module data_pipeline_wght #(
   // Unpack data_i into two 12-bit sub-words.
   genvar w_gen;
   for (w_gen = 0; w_gen < PARALLEL_MACS; w_gen = w_gen + 1) begin
-    assign input_words_w[w_gen] = data_i[(12*w_gen)+:12];
+    assign input_words_w[w_gen] = data_i[((SECOND_PAYLOAD_WIDTH+4*SPARSITY_EN)*w_gen)+:(SECOND_PAYLOAD_WIDTH+4*SPARSITY_EN)];
   end
 
   // overhead_w: total overhead (non-zero position count) contributed by
@@ -396,6 +396,9 @@ module data_pipeline_wght #(
       assign overhead_temp[w_gen+1] = input_words_w[w_gen+1][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH] + overhead_temp[w_gen];
     end
     assign overhead_w = overhead_temp[PARALLEL_MACS-1];
+    // overhead_next_word: look-ahead overhead tag from sub-word 0.
+    //   Used to detect a filter boundary before updating overhead_reg.
+    assign overhead_next_word = input_words_w[0][11:8];
   end else begin
     for (w_gen = 0; w_gen < PARALLEL_MACS; w_gen = w_gen + 1) begin
       assign overhead_temp[w_gen] = 0;
@@ -403,9 +406,6 @@ module data_pipeline_wght #(
     assign overhead_w = 0;
   end
 
-  // overhead_next_word: look-ahead overhead tag from sub-word 0.
-  //   Used to detect a filter boundary before updating overhead_reg.
-  assign overhead_next_word = input_words_w[0][11:8];
 
   // premade_spad_2_output: corrected second SPAD output word.
   //   Sparse: replace bits [11:8] (overhead tag) with overhead_output.
