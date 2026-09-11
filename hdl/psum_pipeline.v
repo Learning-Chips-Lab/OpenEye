@@ -337,7 +337,7 @@ module psum_pipeline #(
               if (fully_connected_layer) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
-                    psum_buffer_data_w[fsm_x_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cr_psum*CLUSTER_COLOUMNS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_psum*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS] <= data_dma_i_reg[TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0];
+                    psum_buffer_data_w[fsm_x_cl_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+g_psum*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+:TRANS_BITWIDTH_PSUM*PARALLEL_MACS] <= data_dma_i_reg[TRANS_BITWIDTH_PSUM*PARALLEL_MACS-1:0];
                   end
                 end
                 psum_buffer_en_w <= 0;

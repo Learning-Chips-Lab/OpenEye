@@ -201,10 +201,12 @@ def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v
 
     # 3) Write ULTRA-LOW-LUT dma_storage.v module (Pipelined Shift Structure)
     with open(DMA_STORAGE_OUT, "w+") as dv:
+
         dv.write("// Auto-generated from {}\n//\n".format(YAML_FILE))
         dv.write("// DMA Storage Module - Pipelined Shift Register Architecture\n//\n")
         dv.write("// Optimized for minimum LUT footprint. Eliminates the address decoder completely.\n")
         dv.write("// Data is shifted sequentially into a configuration pipe register chain.\n\n")
+        dv.write("\n`timescale 1ns / 1ps\n")
         dv.write("`include \"regmap_params.vh\"\n\n")
 
         # Module header
