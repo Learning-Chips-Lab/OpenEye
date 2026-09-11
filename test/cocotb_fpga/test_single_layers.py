@@ -59,7 +59,10 @@ def test_single_conv_layer(
     os.environ["NUM_GLB_PSUM"] = str(NUM_GLB_PSUM)
     os.environ["NUM_GLB_WGHT"] = str(NUM_GLB_WGHT)
 
-    layer = "MNIST"
+    # The model the testbench builds. "MNIST" runs the whole 6-layer MNIST
+    # net and ignores the size parameters above; "Convolution" builds the
+    # single conv layer those parameters describe. Override via LAYER.
+    layer = os.environ.get("LAYER", "MNIST")
     dut = 'OpenEye_FPGA'
     module = 'OpenEye_FPGA_tb'
     toplevel = dut

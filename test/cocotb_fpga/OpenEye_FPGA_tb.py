@@ -231,12 +231,19 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
 
     if os.environ.get("OPENEYE_PROBE_FSM"):
-        cocotb.start_soon(rtl_test_utils.probe_fsm_states(ptp, dut))
+        cocotb.start_soon(rtl_test_utils.probe_fsm_states(ptp, dut, oep=openeye_parameter))
+        cocotb.start_soon(rtl_test_utils.monitor_iact_handoff(ptp, dut))
+    if os.environ.get("DUMP_PSUM_BUFFERS") and not os.environ.get("OPENEYE_PROBE_FSM"):
+        cocotb.start_soon(rtl_test_utils.monitor_iact_handoff(ptp, dut))
     if os.environ.get("PROBE_PSUM_STREAM"):
         cocotb.start_soon(rtl_test_utils.probe_psum_stream(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_PSUM_CAPTURE"):
         cocotb.start_soon(rtl_test_utils.trace_psum_capture(ptp, dut, openeye_parameter))
         cocotb.start_soon(rtl_test_utils.trace_bias_load(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_CONVERTER"):
+        cocotb.start_soon(rtl_test_utils.trace_converter(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_PE_IACT"):
+        cocotb.start_soon(rtl_test_utils.trace_pe_iact(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_PE_PSUM"):
         cocotb.start_soon(rtl_test_utils.trace_pe_psum(ptp, dut, openeye_parameter))
 
@@ -246,6 +253,14 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     for layer_number, layer in reversed(list(enumerate(model))):
         layer_parameters[max_layers - layer_number - 1] = lp.LayerParameters(layer_parameters, layer, openeye_parameter, layer_number, max_layers)
     layer_parameters = list(reversed(layer_parameters))
+    for n, lpar in enumerate(layer_parameters):
+        logger.info("layer %d/%d %s: in=%sx%s ch=%s filters=%s send_values_out=%s "
+                    "store_in_psum=%s transmissions=%s output_cycles=%s psum_output_words=%s",
+                    n, max_layers, lpar.layer_name, getattr(lpar, "iact_size_x", "?"),
+                    getattr(lpar, "iact_size_y", "?"), getattr(lpar, "channels", "?"),
+                    getattr(lpar, "filters", "?"), lpar.send_values_out,
+                    getattr(lpar, "store_in_psum", "?"), getattr(lpar, "needed_total_transmissions", "?"),
+                    getattr(lpar, "output_cycles", "?"), getattr(lpar, "psum_output_words", "?"))
     # Create the OpenEye parameters and the DRAM given the model
     dram = DRAM.DRAMContents(model, layer_parameters)
     time_printer.timestamp("Initialized DRAM. ", logger)
