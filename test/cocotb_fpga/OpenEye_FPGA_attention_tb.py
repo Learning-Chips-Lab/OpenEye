@@ -154,6 +154,10 @@ async def _run_attention(dut):
     cocotb.start_soon(clk.start())
     await cocotb.start_soon(
         rtl_test_utils.reset_all_signals(ptp, dut, params.SERIAL))
+    if os.environ.get("OPENEYE_PROBE_FSM"):
+        # Same opt-in diagnostics as OpenEye_FPGA_tb; with OPENEYE_FAIL_ON_STALL
+        # a stalled pass fails in minutes instead of waiting for the sim timeout.
+        cocotb.start_soon(rtl_test_utils.probe_fsm_states(ptp, dut, oep=params))
 
     executed = 0
     for stage in scheduler.stages():
