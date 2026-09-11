@@ -141,7 +141,18 @@ def check_results(params, file_1,file_2):
             logger.error("Reference Data: %s   %s", ref, " ".join(decode_words(line1)))
             logger.error("Output Data   : %s   %s", out, " ".join(decode_words(line2)))
             return False
-        
+
+    # zip() stops at the shorter file. A DUT that emitted fewer words than the
+    # reference used to pass unchecked; any non-padding reference line beyond
+    # the end of the output is a missing result.
+    missing = [i for i, line in enumerate(lines1[len(lines2):], start=len(lines2))
+               if line.strip() and not set(line.strip()) <= {"0"}]
+    if missing:
+        logger.error("Output has %d lines but the reference has %d; %d non-zero reference "
+                     "lines have no output (first at line %d)",
+                     len(lines2), len(lines1), len(missing), missing[0] + 1)
+        return False
+
     logger.debug('No differences found between files')
     return True
 

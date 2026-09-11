@@ -759,8 +759,12 @@ def compare_dram_with_ref(layer_params, ref_output, dram):
     - Maintains processing even after finding errors
     """
     logger.info("Results are checked.")
-    """
-    if "Conv" in str(layer_params.layer_name):
+    # This body was wrapped in a string literal (f7e9dde), which made the
+    # function return True unconditionally and every FPGA end-to-end test
+    # pass regardless of the DUT output. It is the authoritative check, so it
+    # has to stay live; report how many values differ, not only the first.
+    name = str(layer_params.layer_name)
+    if "Conv" in name:
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
@@ -769,30 +773,23 @@ def compare_dram_with_ref(layer_params, ref_output, dram):
             p = mp.Process(target = compare_dram_with_ref_mp, args = (f, ref_output[f], dram[f], return_dict))
             p.start()
             jobs.append(p)
-        
+
         for proc in range(len(jobs)):
             jobs[proc].join()
 
-        for f in range(len(ref_output)):
-            if (return_dict[f] == False) :
-                return False
+        failed = [f for f in range(len(ref_output)) if return_dict[f] == False]
+        if failed:
+            logger.error("%d of %d feature maps differ from the reference (first: %s)",
+                         len(failed), len(ref_output), failed[:8])
+            return False
 
-    elif "Dense" in str(layer_params.layer_name):
-        for f in range(len(ref_output)):
-            if dram[f] != ref_output[f]:
-                logger.error(f'Difference found at f = {f}')
-                logger.error(f'ReferenceData: {str(ref_output[f])}')
-                logger.error(f'Output Stream: {str(dram[f])}')
-                return False
-            
-    elif "Pooling" in str(layer_params.layer_name):
-        for f in range(len(ref_output)):
-            if dram[f] != ref_output[f]:
-                logger.error(f'Difference found at f = {f}')
-                logger.error(f'ReferenceData: {str(ref_output[f])}')
-                logger.error(f'Output Stream: {str(dram[f])}')
-                return False
-    """
+    elif "Dense" in name or "Pooling" in name:
+        mismatches = [f for f in range(len(ref_output)) if dram[f] != ref_output[f]]
+        if mismatches:
+            logger.error("%d of %d outputs differ from the reference", len(mismatches), len(ref_output))
+            for f in mismatches[:8]:
+                logger.error("  f = %d: reference %s, DUT %s", f, ref_output[f], dram[f])
+            return False
     return True
 
 def compare_dram_with_ref_mp(f, ref_output, dram, return_dict):

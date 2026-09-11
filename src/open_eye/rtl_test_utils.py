@@ -314,6 +314,15 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
                 logger.info("DUT expects %s = %d", name, int(getattr(dut, name).value))
             except Exception as exc:
                 logger.info("DUT %s unreadable (%s)", name, type(exc).__name__)
+        try:
+            logger.info("DUT compute_mask_reg = %s", hex(int(dut.compute_mask_reg.value)))
+        except Exception as exc:
+            logger.info("DUT compute_mask_reg unreadable (%s)", type(exc).__name__)
+        for name in ("send_data_out", "store_in_psum", "fully_connected_layer"):
+            try:
+                logger.info("DUT %s = %d", name, int(getattr(dut, name).value))
+            except Exception as exc:
+                logger.info("DUT %s unreadable (%s)", name, type(exc).__name__)
         logger.info("Host will send: iact %d, wght %d, psum %d, quantize %d words",
                     len(stream[strdic.stream_parallel_dict["iact"]]),
                     len(stream[strdic.stream_parallel_dict["wght"]]),
@@ -361,7 +370,240 @@ fsm_probe_samples = [0]
 fsm_state_trace = []
 
 
-async def probe_fsm_states(ptp, dut, stall_report_after=20000):
+async def trace_pe_iact(ptp, dut, oep, max_lines=200):
+    """Per-cycle iact trace at one PE (opt-in: TRACE_PE_IACT=cx,cy,col,row).
+
+    Logs every cycle any iact lane is valid at the PE: which lane the PE
+    selects, lane valid/ready, the lane data, and whether the PE's iact data
+    SPAD is written. Shows whether a selected PE sees the words at all and,
+    if so, why it does not store them.
+    """
+    try:
+        cx, cy, col, row = [int(v) for v in os.environ.get("TRACE_PE_IACT", "0,0,0,0").split(",")]
+        pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
+              .pe_cluster.gen_X[col].gen_Y[row].pe)
+        sp = pe.iact_data_SPad
+    except Exception as exc:
+        logger.error("trace_pe_iact: PE not reachable (%s)", type(exc).__name__)
+        return
+
+    def txt(sig):
+        try:
+            return str(sig.value)
+        except Exception:
+            return "?"
+
+    lines = 0
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        en = txt(pe.iact_enable_i)
+        if "1" not in en:
+            continue
+        logger.info("peiact t=%s st=%s sel=%s en=%s rdy=%s data=%s | spad we=%s addr=%s d=%s",
+                    cocotb.utils.get_sim_time("ns"), txt(pe.current_state_computing),
+                    txt(pe.iact_select_i), en, txt(pe.iact_ready_o), txt(pe.iact_data_i),
+                    txt(sp.we_i), txt(sp.addr_i), txt(sp.data_i))
+        lines += 1
+
+
+async def trace_converter(ptp, dut, oep, max_lines=260):
+    """Per-cycle trace of one iact converter (opt-in: TRACE_CONVERTER=cx,cy).
+
+    Follows the iact data from BUFFER_A cell 0 into the converter's window,
+    its internal RAM writes, the ENCODE reads and the words it hands to the
+    array. Logs only cycles with some activity, from CONVERT_IACT on.
+    """
+    try:
+        cx, cy = [int(v) for v in os.environ.get("TRACE_CONVERTER", "0,0").split(",")]
+        cv = dut.IACT_CONVERTER_X[cx].IACT_CONVERTER_Y[cy].iact_stream_constructor
+        cell0 = dut.BUFFER_A[0].iact_layer_buffer
+    except Exception as exc:
+        logger.error("trace_converter: converter not reachable (%s)", type(exc).__name__)
+        return
+
+    def txt(sig):
+        try:
+            return str(sig.value)
+        except Exception:
+            return "?"
+
+    def hexv(sig):
+        t = txt(sig)
+        if t and set(t) <= {"0", "1"}:
+            return hex(int(t, 2))
+        return "X" if ("x" in t.lower() or "z" in t.lower()) else t
+
+    lines = 0
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            st = int(dut.fsm_current_state.value)
+        except ValueError:
+            continue
+        if st < 8:
+            continue
+        active = ("1" in txt(cv.enable_store) or "1" in txt(cv.ram_wr_en_q)
+                  or "1" in txt(cv.ram_rd_en) or "1" in txt(cv.iact_enable_o)
+                  or "1" in txt(cell0.rd_en_i))
+        if not active:
+            continue
+        logger.info("convtrace t=%s st=%d enc=%s | A0 rd=%s addr=%s q=%s | win=%s store=%s | "
+                    "wr=%s waddr=%s | rd=%s raddr=%s rdata=%s | en_o=%s data_o=%s",
+                    cocotb.utils.get_sim_time("ns"), st, hexv(cv.fsm_enc_current_state),
+                    txt(cell0.rd_en_i), hexv(cell0.addr_i), hexv(cell0.data_o),
+                    hexv(cv.storage_i), txt(cv.enable_store),
+                    txt(cv.ram_wr_en_q), hexv(cv.ram_wr_addr_q),
+                    txt(cv.ram_rd_en), hexv(cv.ram_rd_addr), hexv(cv.ram_data_o),
+                    txt(cv.iact_enable_o), hexv(cv.iact_data_o))
+        lines += 1
+
+
+def dump_pe_occupancy(dut, oep, depth=32):
+    """Log how many of the first `depth` words each PE has written.
+
+    One line per cluster, one cell per PE (column/row): iact data SPAD /
+    weight data SPAD / psum lane 0. Cheap enough to call when a run stalls,
+    which is exactly when the end-of-run dumps never get a chance to run.
+    """
+    for cx in range(oep.Clusters_X):
+        for cy in range(oep.Clusters_Y):
+            cells = []
+            for col in range(oep.PEs_X):
+                for row in range(oep.PEs_Y):
+                    try:
+                        pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
+                              .pe_cluster.gen_X[col].gen_Y[row].pe)
+                    except Exception:
+                        cells.append("c%dr%d:?" % (col, row))
+                        continue
+                    counts = []
+                    for mem in (lambda: pe.iact_data_SPad, lambda: pe.weight_data_SPad,
+                                lambda: pe.gen_serial_psum_spad.gen_psum_spad[0].psum_SPad):
+                        try:
+                            m = mem().ram.impl.mem
+                            n = 0
+                            for a in range(depth):
+                                try:
+                                    int(m[a].value)
+                                    n += 1
+                                except ValueError:
+                                    pass
+                                except IndexError:
+                                    break
+                            counts.append(str(n))
+                        except Exception:
+                            counts.append("?")
+                    cells.append("c%dr%d:%s" % (col, row, "/".join(counts)))
+            logger.error("occupancy cluster(%d,%d) iact/wght/psum0: %s", cx, cy, " ".join(cells))
+
+
+def _written_words(mem, depth):
+    """Count words among the first `depth` addresses that are not X."""
+    n = 0
+    for a in range(depth):
+        try:
+            int(mem[a].value)
+            n += 1
+        except ValueError:
+            pass
+        except IndexError:
+            break
+    return n
+
+
+def dump_iact_path(dut, oep, depth=64):
+    """Log written-word counts along the iact path: BUFFER_A, then iact GLBs.
+
+    Together with dump_pe_occupancy this shows where iacts stop: never
+    stored in the FPGA iact buffer, stored but never written into a
+    cluster's iact GLBs, or in the GLBs but never delivered to the PEs.
+    """
+    cells = []
+    for cell in range(oep.IACT_RAM_CELLS):
+        try:
+            cells.append(_written_words(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem, depth))
+        except Exception:
+            cells.append("?")
+    logger.error("iact path BUFFER_A written words per cell (first %d addrs): %s", depth, cells)
+    if oep.SERIAL:
+        return  # no cluster iact GLBs in the SERIAL build (GLB_cluster gen_iact is empty)
+    for cx in range(oep.Clusters_X):
+        for cy in range(oep.Clusters_Y):
+            glbs = []
+            for g in range(oep.NUM_GLB_IACT):
+                try:
+                    glb = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
+                           .glb_cluster.gen_iact[g].iact_glb.impl.mem)
+                    glbs.append(_written_words(glb, depth))
+                except Exception as exc:
+                    glbs.append("?(%s)" % type(exc).__name__)
+            logger.error("iact path cluster(%d,%d) iact GLB written words: %s", cx, cy, glbs)
+
+
+# Filled by monitor_iact_handoff, reported by report_iact_handoff.
+iact_handoff_counts = {"enable": {}, "handshake": {}, "choose": {}, "cycles": 0}
+
+
+async def monitor_iact_handoff(ptp, dut):
+    """Count iact valid and handshake cycles per bit at the OpenEye_Parallel input.
+
+    In the SERIAL FPGA build there are no cluster iact GLBs: the converter
+    drives iact_data/enable/choose into OpenEye_Parallel directly. Counting
+    enable and enable&ready per bit shows whether the converter emits nothing,
+    emits on the wrong lanes, or emits without being accepted.
+    """
+    def read(name):
+        try:
+            return int(getattr(dut, name).value)
+        except Exception:
+            return None
+
+    while True:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        iact_handoff_counts["cycles"] += 1
+        en = read("iact_enable_i_oep_w")
+        if not en:
+            continue
+        rdy = read("iact_ready_o_oep_w") or 0
+        bit = 0
+        while en >> bit:
+            if (en >> bit) & 1:
+                iact_handoff_counts["enable"][bit] = iact_handoff_counts["enable"].get(bit, 0) + 1
+                if (rdy >> bit) & 1:
+                    iact_handoff_counts["handshake"][bit] = iact_handoff_counts["handshake"].get(bit, 0) + 1
+            bit += 1
+        ch = read("iact_choose_i_oep_w")
+        if ch is not None:
+            key = (hex(ch), hex(en))
+            if key in iact_handoff_counts["choose"] or len(iact_handoff_counts["choose"]) < 32:
+                iact_handoff_counts["choose"][key] = iact_handoff_counts["choose"].get(key, 0) + 1
+
+
+def report_iact_handoff(oep=None):
+    c = iact_handoff_counts
+    logger.error("iact handoff over %d cycles: enable cycles per bit %s, handshakes per bit %s",
+                 c["cycles"], dict(sorted(c["enable"].items())), dict(sorted(c["handshake"].items())))
+    # Which PE each (choose, enable) combination actually selects. Each PE
+    # has a $clog2(NUM_GLB_IACT+1)-bit field; NUM_GLB_IACT means "none".
+    for (ch, en), n in sorted(c["choose"].items(), key=lambda kv: -kv[1]):
+        line = "  %d valid cycles with enable=%s choose=%s" % (n, en, ch)
+        if oep is not None:
+            w = max(1, (oep.NUM_GLB_IACT).bit_length())
+            pes = oep.PEs_X * oep.PEs_Y
+            v = int(ch, 16)
+            parts = []
+            for cl in range(oep.Clusters_X * oep.Clusters_Y):
+                sel = []
+                for pe in range(pes):
+                    f = (v >> ((cl * pes + pe) * w)) & ((1 << w) - 1)
+                    if f != oep.NUM_GLB_IACT:
+                        sel.append("c%dr%d<-g%d" % (pe % oep.PEs_X, pe // oep.PEs_X, f))
+                parts.append("cl%d[%s]" % (cl, ",".join(sel) if sel else "none"))
+            line += " -> " + " ".join(parts)
+        logger.error(line)
+
+
+async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
     """Record every main-FSM state the DUT enters (opt-in diagnostic).
 
     Sampling every clock costs simulation time, so the testbench only starts
@@ -384,8 +626,18 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000):
                     fsm_state_trace.append((str(cocotb.utils.get_sim_time("ns")), state))
                 # Log live: a test that stalls may never reach a check that
                 # would otherwise report the trace.
-                logger.info("FSM state -> %d at %s ns", state,
-                            cocotb.utils.get_sim_time("ns"))
+                # Also sample the decoded config fields that steer the FSM:
+                # they come from dma_storage's shift chain, so a stray write
+                # after GET_PARAMETERS would change them mid-layer.
+                fields = []
+                for name in ("fsm_psum_current_state", "send_data_out", "store_in_psum",
+                             "trans_cycles_iact", "trans_cycles_psum"):
+                    try:
+                        fields.append("%s=%d" % (name, int(getattr(dut, name).value)))
+                    except Exception:
+                        fields.append("%s=?" % name)
+                logger.info("FSM state -> %d at %s ns (%s)", state,
+                            cocotb.utils.get_sim_time("ns"), ", ".join(fields))
                 stuck_for = 0
                 reported = False
             else:
@@ -396,14 +648,31 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000):
                 if stuck_for == stall_report_after and not reported:
                     reported = True
                     counters = []
-                    for name in ("fsm_cycle", "fsm_psum_cycle", "trans_cycles_iact",
-                                 "trans_cycles_wght", "trans_cycles_psum"):
+                    for name in ("fsm_cycle", "fsm_psum_cycle", "fsm_psum_current_state",
+                                 "trans_cycles_iact", "trans_cycles_wght", "trans_cycles_psum"):
                         try:
                             counters.append("%s=%d" % (name, int(getattr(dut, name).value)))
                         except Exception:
                             pass
                     logger.error("FSM stuck in state %d for %d cycles: %s",
                                  state, stuck_for, ", ".join(counters))
+                    try:
+                        pp = dut.psum_pipeline_inst
+                        for name in ("psum_enable_o", "psum_ready_o_reg", "router_mode_psum"):
+                            logger.error("  %s = %s", name, str(getattr(pp, name).value))
+                        for name in ("iact_ready_o_oep_w", "iact_enable_i_oep_w"):
+                            logger.error("  %s = %s", name, str(getattr(dut, name).value))
+                        for name in ("router_mode_iact", "router_mode_wght", "router_mode_psum"):
+                            try:
+                                logger.error("  DUT %s = %s", name, str(getattr(dut, name).value))
+                            except Exception:
+                                pass
+                    except Exception as exc:
+                        logger.error("  psum handshake vectors unreadable (%s)", type(exc).__name__)
+                    report_iact_handoff(oep)
+                    if oep is not None:
+                        dump_iact_path(dut, oep)
+                        dump_pe_occupancy(dut, oep)
             previous = state
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
@@ -1188,6 +1457,131 @@ async def probe_psum_stream(ptp, dut, oep):
         previous = value
 
 
+async def trace_psum_capture(ptp, dut, oep, max_lines=400):
+    """Per-cycle trace of the psum feed and capture (opt-in: TRACE_PSUM_CAPTURE).
+
+    Logs every clock while the PSUM FSM is in CALCULATE_PSUM (2) or
+    PSUM_GET_RESULTS (3) for cluster column 0, row 0, GLB 0: the counter that
+    ends each state, the buffer address and read data, the word driven into
+    the array (psum_data_i_reg) with its enable, the returning valid and the
+    buffer write enable. Fields are sliced from the bus text so X bits in
+    unrelated slots do not blank them.
+    """
+    pp = dut.psum_pipeline_inst
+    try:
+        aw = int(dut.BUFFER_WIDTH_PSUM.value)
+    except Exception:
+        aw = 14
+
+    def field(sig, lo, width, signed=None):
+        txt = str(sig.value)
+        bits = txt[len(txt) - lo - width:len(txt) - lo]
+        if any(c not in "01" for c in bits):
+            return "X"
+        v = int(bits, 2)
+        return _signed(v & ((1 << signed) - 1), signed) if signed else v
+
+    lines = 0
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            state = int(pp.fsm_psum_current_state.value)
+        except ValueError:
+            continue
+        if state not in (2, 3):
+            continue
+        logger.info("psumtrace t=%s st=%d cyc=%s addr=%s rd=%s data_i=%s en_i=%s en_o=%s wen=%s",
+                    cocotb.utils.get_sim_time("ns"), state,
+                    field(pp.fsm_psum_cycle, 0, 8),
+                    field(pp.psum_buffer_addr, 0, aw),
+                    field(pp.psum_buffer_data_r, 0, 32, 20),
+                    field(pp.psum_data_i_reg, 0, 32, 20),
+                    field(pp.psum_enable_i_reg, 0, 1),
+                    field(pp.psum_enable_o, 0, 1),
+                    field(pp.psum_buffer_en_w, 0, 1))
+        lines += 1
+
+
+async def trace_pe_psum(ptp, dut, oep, max_lines=500):
+    """Per-cycle psum SPAD port trace of one PE (opt-in: TRACE_PE_PSUM).
+
+    Watches PE (cluster 0,0; PE column 0; top PE row) at each lane's psum SPAD
+    ports, which is where a lane's accumulation actually lands. Logs only
+    cycles with a SPAD write or an incoming psum_enable_i.
+    """
+    pe = (dut.OpenEye_Parallel.gen_x[0].gen_y[0].OpenEye_Cluster
+          .pe_cluster.gen_X[0].gen_Y[oep.PEs_Y - 1].pe)
+    spads = [pe.gen_serial_psum_spad.gen_psum_spad[l].psum_SPad
+             for l in range(oep.PARALLEL_MACS)]
+
+    def val(sig, signed_bits=None):
+        try:
+            v = int(sig.value)
+        except ValueError:
+            return "X"
+        return _signed(v & ((1 << signed_bits) - 1), signed_bits) if signed_bits else v
+
+    lines = 0
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        we = [val(sp.we_i) for sp in spads]
+        pen = val(pe.psum_enable_i)
+        if pen != 1 and not any(w == 1 for w in we):
+            continue
+        lanes = []
+        for l, sp in enumerate(spads):
+            lanes.append("L%d we=%s aw=%s d=%s ar=%s" % (
+                l, we[l], val(sp.addr_w_i), val(sp.data_i, 20), val(sp.addr_r_i)))
+        logger.info("petrace t=%s st=%s pen=%s pin=%s | %s",
+                    cocotb.utils.get_sim_time("ns"), val(pe.current_state_computing),
+                    pen, val(pe.psum_data_i, 20), " | ".join(lanes))
+        lines += 1
+
+
+async def trace_bias_load(ptp, dut, oep, max_lines=120):
+    """Trace psum-buffer writes while the main FSM is in GET_BIAS (state 5).
+
+    Opt-in via TRACE_PSUM_CAPTURE. Shows which buffer address and data each
+    bias word lands on, for cluster column 0 and 1 (row 0, GLB pair 0).
+    Addresses are read from the bus text so X bits elsewhere do not abort.
+    """
+    pp = dut.psum_pipeline_inst
+    ng = oep.NUM_GLB_PSUM
+    cr = oep.Clusters_Y
+    try:
+        aw = int(dut.BUFFER_WIDTH_PSUM.value)
+    except Exception:
+        aw = 14
+    pairs = (ng + 1) // 2
+
+    def field(sig, lo, width, signed=None):
+        txt = str(sig.value)
+        bits = txt[len(txt) - lo - width:len(txt) - lo]
+        if any(c not in "01" for c in bits):
+            return "X"
+        v = int(bits, 2)
+        return _signed(v & ((1 << signed) - 1), signed) if signed else v
+
+    lines = 0
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            st = int(dut.fsm_current_state.value)
+        except ValueError:
+            continue
+        if st != 5:
+            continue
+        logger.info("biastrace t=%s dma_in=%s en_w=%s addr[x0,x1]=%s,%s data_w[x0,x1]=%s,%s",
+                    cocotb.utils.get_sim_time("ns"),
+                    field(pp.data_dma_i_reg, 0, 32, 20),
+                    field(pp.psum_buffer_en_w, 0, oep.Clusters_X * cr * pairs),
+                    field(pp.psum_buffer_addr, 0, aw),
+                    field(pp.psum_buffer_addr, cr * pairs * aw, aw),
+                    field(pp.psum_buffer_data_w, 0, 32, 20),
+                    field(pp.psum_buffer_data_w, 32 * cr * ng, 32, 20))
+        lines += 1
+
+
 def dump_pe_psum_spads(dut, oep, pe_col=0, max_addr=20):
     """Print the psum SPADs of one PE inside the FPGA design.
 
@@ -1200,14 +1594,67 @@ def dump_pe_psum_spads(dut, oep, pe_col=0, max_addr=20):
     # PE column 0 is enabled for Dense layers (layer_parameters disables
     # x_pe != 0), so the column is fixed but the row has to be searched.
     for cl_x in range(oep.Clusters_X):
+     for cl_y in range(oep.Clusters_Y):
       for pe_row in range(oep.PEs_Y):
         try:
-            pe = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[0].OpenEye_Cluster
+            pe = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[cl_y].OpenEye_Cluster
                   .pe_cluster.gen_X[pe_col].gen_Y[pe_row].pe)
         except Exception as exc:
-            logger.info("PE [%d][row %d] not reachable (%s)", cl_x, pe_row,
-                        type(exc).__name__)
+            logger.info("PE [%d][%d][row %d] not reachable (%s)", cl_x, cl_y,
+                        pe_row, type(exc).__name__)
             return
+        occ = []
+        for label, path in (("iact", "iact_data_SPad"), ("wght", "weight_data_SPad")):
+            try:
+                m = getattr(pe, path).ram.impl.mem
+                written = 0
+                for addr in range(64):
+                    try:
+                        int(m[addr].value)
+                        written += 1
+                    except ValueError:
+                        pass
+                    except IndexError:
+                        break
+                occ.append("%s=%d" % (label, written))
+            except Exception as exc:
+                occ.append("%s=?(%s)" % (label, type(exc).__name__))
+        logger.info("PE[x=%d][y=%d][col=%d][row=%d] written operand words (of first 64): %s",
+                    cl_x, cl_y, pe_col, pe_row, " ".join(occ))
+        if os.environ.get("DUMP_WGHT_WORDS") and cl_y == 0 and pe_row == oep.PEs_Y - 1:
+            # Decode each weight word the way PE.v's sparse unpack does:
+            # lane p = bits [12p +: 12] = {overhead[3:0], payload[7:0]}. The
+            # overhead feeds the psum address offset (wght_data_spad_oh_acc),
+            # so a non-zero value in a raw (uncompressed) stream moves lanes.
+            for path in ("weight_data_SPad", "gen_wght_addr_spad.weight_addr_SPad"):
+                try:
+                    m = pe
+                    for part in path.split("."):
+                        m = getattr(m, part)
+                    m = m.ram.impl.mem
+                except Exception as exc:
+                    logger.info("PE[x=%d] %s not reachable (%s)", cl_x, path, type(exc).__name__)
+                    continue
+                dec = []
+                for addr in range(28):
+                    try:
+                        w = int(m[addr].value)
+                    except ValueError:
+                        dec.append("X")
+                        continue
+                    except IndexError:
+                        break
+                    if path == "weight_data_SPad":
+                        lanes = []
+                        for lane in range(oep.PARALLEL_MACS):
+                            f = (w >> (12 * lane)) & 0xFFF
+                            pay = f & 0xFF
+                            pay = pay - 256 if pay & 0x80 else pay
+                            lanes.append("%d:%d" % (f >> 8, pay))
+                        dec.append("/".join(lanes))
+                    else:
+                        dec.append(str(w))
+                logger.info("PE[x=%d][row=%d] %s = %s", cl_x, pe_row, path, " ".join(dec))
         for lane in range(oep.PARALLEL_MACS):
             try:
                 mem = pe.gen_serial_psum_spad.gen_psum_spad[lane].psum_SPad.ram.impl.mem
@@ -1225,8 +1672,8 @@ def dump_pe_psum_spads(dut, oep, pe_col=0, max_addr=20):
                 except IndexError:
                     break
             if any(w != "X" for w in words):
-                logger.info("PE[x=%d][col=%d][row=%d] psum_SPad lane %d = %s",
-                            cl_x, pe_col, pe_row, lane, words)
+                logger.info("PE[x=%d][y=%d][col=%d][row=%d] psum_SPad lane %d = %s",
+                            cl_x, cl_y, pe_col, pe_row, lane, words)
 
 
 def dump_psum_buffers(dut, oep, max_addr=None):
@@ -1367,6 +1814,9 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
             logger.info("dma word %2d = %s", idx, vals)
 
     if os.environ.get("DUMP_PSUM_BUFFERS"):
+        report_iact_handoff(oep)
+        dump_iact_path(dut, oep)
+        dump_pe_occupancy(dut, oep)
         dump_pe_psum_spads(dut, oep)
         dump_psum_buffers(dut, oep)
         if psum_stream_counts:

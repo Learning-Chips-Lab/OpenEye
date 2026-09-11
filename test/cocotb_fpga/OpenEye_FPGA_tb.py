@@ -231,9 +231,21 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
 
     if os.environ.get("OPENEYE_PROBE_FSM"):
-        cocotb.start_soon(rtl_test_utils.probe_fsm_states(ptp, dut))
+        cocotb.start_soon(rtl_test_utils.probe_fsm_states(ptp, dut, oep=openeye_parameter))
+        cocotb.start_soon(rtl_test_utils.monitor_iact_handoff(ptp, dut))
+    if os.environ.get("DUMP_PSUM_BUFFERS") and not os.environ.get("OPENEYE_PROBE_FSM"):
+        cocotb.start_soon(rtl_test_utils.monitor_iact_handoff(ptp, dut))
     if os.environ.get("PROBE_PSUM_STREAM"):
         cocotb.start_soon(rtl_test_utils.probe_psum_stream(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_PSUM_CAPTURE"):
+        cocotb.start_soon(rtl_test_utils.trace_psum_capture(ptp, dut, openeye_parameter))
+        cocotb.start_soon(rtl_test_utils.trace_bias_load(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_CONVERTER"):
+        cocotb.start_soon(rtl_test_utils.trace_converter(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_PE_IACT"):
+        cocotb.start_soon(rtl_test_utils.trace_pe_iact(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_PE_PSUM"):
+        cocotb.start_soon(rtl_test_utils.trace_pe_psum(ptp, dut, openeye_parameter))
 
     # Process the layers of the model one after another
     max_layers = len(model)
@@ -241,10 +253,27 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     for layer_number, layer in reversed(list(enumerate(model))):
         layer_parameters[max_layers - layer_number - 1] = lp.LayerParameters(layer_parameters, layer, openeye_parameter, layer_number, max_layers)
     layer_parameters = list(reversed(layer_parameters))
+    for n, lpar in enumerate(layer_parameters):
+        logger.info("layer %d/%d %s: in=%sx%s ch=%s filters=%s send_values_out=%s "
+                    "store_in_psum=%s transmissions=%s output_cycles=%s psum_output_words=%s",
+                    n, max_layers, lpar.layer_name, getattr(lpar, "iact_size_x", "?"),
+                    getattr(lpar, "iact_size_y", "?"), getattr(lpar, "channels", "?"),
+                    getattr(lpar, "filters", "?"), lpar.send_values_out,
+                    getattr(lpar, "store_in_psum", "?"), getattr(lpar, "needed_total_transmissions", "?"),
+                    getattr(lpar, "output_cycles", "?"), getattr(lpar, "psum_output_words", "?"))
     # Create the OpenEye parameters and the DRAM given the model
     dram = DRAM.DRAMContents(model, layer_parameters)
     time_printer.timestamp("Initialized DRAM. ", logger)
     dram.write_initial_data_to_dram(model, layer_parameters, sparse_iacts, sparse_wghts)
+    if os.environ.get("OPENEYE_ZERO_IACTS"):
+        # Debug: zero the first layer's input so every product is 0 and each
+        # output must equal its bias alone. This isolates the bias/psum feed
+        # from the iact and weight delivery paths. The reference is computed
+        # from the same DRAM, so it stays consistent.
+        def _zero(x):
+            return [_zero(v) for v in x] if isinstance(x, list) else 0
+        dram.fmap[0] = _zero(dram.fmap[0])
+        logger.info("OPENEYE_ZERO_IACTS: layer-0 input zeroed")
     test_amount = 1
     for _ in range(test_amount) :
         for layer_number, layer in enumerate(model):
@@ -282,7 +311,17 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                             elif("Pooling" in str(layer_parameters[layer_number].layer_name)):
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
-                            if(logging.DEBUG >= log_level):
+                            if os.environ.get("DUMP_PSUM_BUFFERS") and "Dense" in str(layer_parameters[layer_number].layer_name):
+                                # Debug listing of every filter; compare_dram_with_ref below
+                                # asserts, but only logs the first few mismatches.
+                                for f in range(len(calculated_results)):
+                                    logger.info("dense f=%2d ref=%s dut=%s", f, calculated_results[f],
+                                                dram.fmap[1 + layer_number][f])
+                            # The Dense dma_stream_ref.txt layout does not match the FC
+                            # read-out (one psum per DMA word, columns interleaved), so
+                            # the line compare can only fail. compare_dram_with_ref below
+                            # checks every Dense output exactly, per filter.
+                            if(logging.DEBUG >= log_level) and ("Dense" not in str(layer_parameters[layer_number].layer_name)):
                                 assert gtu.check_results(openeye_parameter, 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                                         'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
                             assert tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])

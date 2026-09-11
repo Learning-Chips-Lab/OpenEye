@@ -68,6 +68,9 @@ async def reset_all_signals(ptp,dut):
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.pe_router_psum_ready_i), 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.enable_stream_i), 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), 0))
+    # gemm_mode_i selects the row->bank iact override; left undriven it reads X
+    # and makes every PE's iact_select X. GEMM tests raise it after reset.
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.gemm_mode_i), 0))
 
     # Fixed 3 clock cycles of reset
     await Timer(3*ptp.clk_cycle, units="ns")

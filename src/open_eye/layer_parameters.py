@@ -1645,18 +1645,21 @@ class LayerParameters(object):
         # follow. psum_pipeline.v's fully_connected_layer branch advances the
         # bias buffer address every cycle (one bias word per cycle), so this
         # is simply the stream length, not scaled by
-        # PSUM_CYCLES_ONE_WORD_ALL_CELLS like Conv's packed-word scheme.
-        self.trans_cycles_psum = self.used_psum_per_PE
+        # PSUM_CYCLES_ONE_WORD_ALL_CELLS like Conv's packed-word scheme. The
+        # stream carries one bias word per filter per cluster column.
+        self.trans_cycles_psum = self.used_psum_per_PE * params.Clusters_X
         self.lower_bound = (self.padding_y * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions) - 1
         self.upper_bound = (self.padding_y+self.iact_size_y) * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions
         self.overhang_discrepancy = (self.used_channels*params.NUM_GLB_WGHT)%(params.WORDS_PER_CYCLE*4)
-        # One DMA output word carries PARALLEL_MACS psums, and the filters are
-        # split across the cluster columns rather than repeated per column, so
-        # both factors divide out. Multiplying by Clusters_X and not dividing by
-        # PARALLEL_MACS asked the readout for 4x too many words, and the surplus
-        # came back as never-written (X) psum-buffer locations on data_dma_o.
-        self.psum_output_words = int(self.output_cycles * self.filters
-                                     * self.needed_wght_cycles / params.PARALLEL_MACS)
+        # PSUM_SEND_RESULTS in FC mode emits one DMA word per cluster column per
+        # psum-buffer address, and each word carries a single psum (only GLB 0
+        # of cluster row 0 holds a result; the rest of the word is zero). So
+        # the count is addresses (used_psum_per_PE) times cluster columns. The
+        # old Clusters*NUM_GLB_PSUM factor asked for 4x too many words (the
+        # surplus read back as X), and dividing by PARALLEL_MACS asked for
+        # half, dropping cluster column 1 and the upper buffer addresses.
+        self.psum_output_words = int(self.output_cycles * self.used_psum_per_PE
+                                     * params.Clusters_X * self.needed_wght_cycles)
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))
