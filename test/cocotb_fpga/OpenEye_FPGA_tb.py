@@ -321,10 +321,16 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                             # read-out (one psum per DMA word, columns interleaved), so
                             # the line compare can only fail. compare_dram_with_ref below
                             # checks every Dense output exactly, per filter.
+                            # Run both checks before asserting: the value-level compare
+                            # reports how many outputs differ, which the line compare of
+                            # the reference file cannot, and an early assert hid it.
+                            dram_ok = tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
+                            file_ok = True
                             if(logging.DEBUG >= log_level) and ("Dense" not in str(layer_parameters[layer_number].layer_name)):
-                                assert gtu.check_results(openeye_parameter, 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
-                                                        'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
-                            assert tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
+                                file_ok = gtu.check_results(openeye_parameter, 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
+                                                            'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
+                            assert dram_ok and file_ok, "result check failed: values %s, reference file %s" % (
+                                "ok" if dram_ok else "differ", "ok" if file_ok else "differs")
                         else :
                             await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
                             time_printer.timestamp("Ready signal detected. Start new stream " , logger)

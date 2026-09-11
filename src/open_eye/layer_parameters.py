@@ -262,8 +262,8 @@ class LayerParameters(object):
         self.store_in_psum = 0                 # Store in psum memory flag
         self.limit_increase = 0                # Amount of Iact Storages, that incrase adresses
         self.limit_increase_mod = 0            # Module amount of Iact Storages, that incrase adresses
-        self.lower_bound = 0,
-        self.upper_bound = 0,
+        self.lower_bound = 0
+        self.upper_bound = 0
         self.iteration_for_kernels = 1         # Amount of iterations per kernel
         self.needed_wght_cycles = 1            # Number of cycles for wght
         self.fsm_psum_limit = 1                # Number of cycles for psum
@@ -280,7 +280,7 @@ class LayerParameters(object):
         self.overhang_discrepancy = 0
         self.psum_output_words = 1             # Neede transmissions for output
         self.wght_cycles_one_word_all_ram = 0
-        self.iact_glb_writing_cycles = 0,
+        self.iact_glb_writing_cycles = 0   # (was "= 0," - a tuple that crashed Dense register packing)
 
         # === Control Flags ===
         self.send_values_out = 1               # Send outputs to DRAM
@@ -1621,6 +1621,10 @@ class LayerParameters(object):
         self.buffer_cycles_for_x_iact = params.Clusters_Y
         self.iact_converter_max_cycles = 1
         self.iact_buffer_words_per_write = self.diff_iact_layer * (math.ceil(self.used_iact_per_PE/2) * self.needed_Iact_writes) + 1
+        # CONVERT_IACT ends after iact_glb_writing_cycles since 983fc95; that
+        # register is only computed for conv layers and left Dense at 0, so a
+        # Dense layer converted no iacts at all. Keep the pre-983fc95 limit.
+        self.iact_glb_writing_cycles = self.iact_buffer_words_per_write
         
         self.iact_size_c = self.used_iact_per_PE * params.NUM_GLB_WGHT * self.diff_iact_layer
 

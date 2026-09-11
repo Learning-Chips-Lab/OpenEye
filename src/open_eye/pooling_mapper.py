@@ -117,7 +117,7 @@ class PoolingMapper(LayerMapper):
         # === REGISTER PACKING ===
         # Pack all layer configuration parameters into hardware register format
         # Uses pack_registers() utility from regmap_pack module
-        from regmap_pack import pack_registers
+        from open_eye.generator import pack_registers
         words = pack_registers({
         "wght_cycles_reg": layer_params.needed_wght_transmissions,
         "stride_x": layer_params.strideX,
@@ -460,8 +460,10 @@ class PoolingMapper(LayerMapper):
         router_cycle = 0  # Tracks bit position in serial mode
 
         # Configure partial sum routers based on PE distribution
-        for cl_x in range(params.Clusters_X):
-            for cl_y in range(params.Clusters_Y):
+        # Row-major cluster order (cr*CLUSTER_COLUMNS + cc), matching how
+        # OpenEye_Parallel and psum_pipeline index router_mode_psum since 983fc95.
+        for cl_y in range(params.Clusters_Y):
+            for cl_x in range(params.Clusters_X):
                 for router in range(params.Psum_Routers):
                     # Case 1: Single PE per column - use local handling only
                     if((layer_params.used_Y_cluster == 1)):

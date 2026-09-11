@@ -613,6 +613,15 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
     previous = None
     stuck_for = 0
     reported = False
+    # OPENEYE_FAIL_ON_STALL=<cycles>: fail the test once neither FSM has made
+    # progress for that many cycles. A hung FPGA run otherwise sits until the
+    # 15 ms sim timeout, which is hours of wall-clock time per test.
+    try:
+        fail_after = int(os.environ.get("OPENEYE_FAIL_ON_STALL", "0"))
+    except ValueError:
+        fail_after = 0
+    progress_key = None
+    idle_for = 0
     while True:
         fsm_probe_samples[0] += 1
         try:
@@ -674,6 +683,25 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
                         dump_iact_path(dut, oep)
                         dump_pe_occupancy(dut, oep)
             previous = state
+        if fail_after:
+            key = [state]
+            for name in ("fsm_psum_current_state", "fsm_psum_cycle"):
+                try:
+                    key.append(int(getattr(dut, name).value))
+                except Exception:
+                    key.append(None)
+            key = tuple(key)
+            if key == progress_key:
+                idle_for += 1
+                if idle_for == fail_after:
+                    if not reported:
+                        logger.error("FSM stuck (main state, psum state, psum cycle) = %s", key)
+                    raise AssertionError(
+                        "No FSM progress for %d cycles (main state, psum state, psum cycle) = %s; "
+                        "see the stall diagnostics above" % (fail_after, key))
+            else:
+                progress_key = key
+                idle_for = 0
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
 

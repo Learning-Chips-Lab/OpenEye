@@ -122,6 +122,43 @@ def regmap_transmissions(regmap_yaml_path):
     return len(transmissions)
 
 
+def _default_regmap_dir():
+    """Authoritative regmap.yaml location (test/cocotb_fpga); REGMAP_DIR overrides."""
+    return os.environ.get("REGMAP_DIR", os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "test", "cocotb_fpga"))
+
+
+def pack_registers(values, regmap_yaml_path=None):
+    """Pack register values into DMA status words for the current configuration.
+
+    Same result as the generated regmap_pack.pack_registers, but the layout is
+    computed here from regmap.yaml and this process's configuration instead of
+    being read from src/open_eye/regmap_pack.py. That file is shared by every
+    runner and rewritten with each test's configuration, so tests running in
+    parallel packed their status words with another test's layout (register
+    widths scale with CLUSTER_ROWS etc.) and the DUT decoded shifted fields.
+    """
+    transmissions, _ = layout_registers(regmap_yaml_path or _default_regmap_dir())
+    words = [0] * len(transmissions)
+    for regs in transmissions:
+        for reg in regs:
+            val = values.get(reg["name"], 0)
+            mask = (1 << reg["width"]) - 1
+            words[reg["trans"]] |= (val & mask) << reg["pos"]
+    return words
+
+
+def unpack_registers(words, regmap_yaml_path=None):
+    """Inverse of pack_registers for the current configuration."""
+    transmissions, _ = layout_registers(regmap_yaml_path or _default_regmap_dir())
+    values = {}
+    for regs in transmissions:
+        for reg in regs:
+            mask = (1 << reg["width"]) - 1
+            values[reg["name"]] = (words[reg["trans"]] >> reg["pos"]) & mask
+    return values
+
+
 def create_regmap_params_vh_file(regmap_yaml_path, output_vh_path=None, output_v_path=None, output_py_path=None):
     """Generate DMA register map files from YAML specification."""
 

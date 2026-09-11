@@ -125,7 +125,7 @@ class DenseMapper(LayerMapper):
         # === REGISTER PACKING ===
         # Pack all layer configuration parameters into hardware register format
         # Uses pack_registers() utility from regmap_pack module
-            from regmap_pack import pack_registers
+            from open_eye.generator import pack_registers
             words = pack_registers({
             "wght_cycles_reg": layer_params.needed_refreshes_mx[layer_repetition][0],
             "stride_x_reg": layer_params.strideX,
@@ -528,8 +528,10 @@ class DenseMapper(LayerMapper):
         router_cycle = 0  # Track position within current DMA word
 
         # Iterate through all clusters and routers
-        for cl_x in range(params.Clusters_X):
-            for cl_y in range(params.Clusters_Y):
+        # Row-major cluster order (cr*CLUSTER_COLUMNS + cc), matching how
+        # OpenEye_Parallel and psum_pipeline index router_mode_psum since 983fc95.
+        for cl_y in range(params.Clusters_Y):
+            for cl_x in range(params.Clusters_X):
                 for router in range(params.Psum_Routers):
                     # Determine routing mode based on PE usage pattern
                     if((layer_params.used_Y_cluster == 1) | (params.Clusters_Y==1)):

@@ -181,7 +181,7 @@ module psum_pipeline #(
       for (cc_fc = 0; cc_fc < CLUSTER_COLUMNS; cc_fc = cc_fc + 1) begin
         if (cc_fc*DMA_BITWIDTH + TRANS_BITWIDTH_PSUM <= TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM) begin
           psum_readout_src[cc_fc*DMA_BITWIDTH+:TRANS_BITWIDTH_PSUM] =
-            psum_buffer_data_r[cc_fc*TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM];
+            psum_buffer_data_r[cc_fc*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM];
         end
       end
     end
@@ -480,7 +480,7 @@ module psum_pipeline #(
                   psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                 end
                 results_ready = results_ready & (psum_enable_o[cc_psum*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_psum * 2] |
-                ((router_mode_psum[cc_psum * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTER_ROWS != 1)));
+                ((router_mode_psum[cc_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTER_ROWS != 1)));
                 if (psum_enable_o[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] != 0) begin
                   psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)+cr_psum*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
                 end else begin
