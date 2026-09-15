@@ -170,7 +170,6 @@ class ConvMapper(LayerMapper):
         "iact_needed_cycles": layer_params.iact_stream_cycles,
         "kernels_per_calc": layer_params.different_kernels_per_calculation,
         "y_lines_per_calc": layer_params.y_lines_per_calculation,
-        "output_cycles": layer_params.output_cycles, 
         "store_in_psum": layer_params.store_in_psum,
         "max_pooling": layer_params.max_pooling,
         "fully_connected_layer": layer_params.fully_connected,

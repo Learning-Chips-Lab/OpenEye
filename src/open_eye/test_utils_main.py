@@ -43,6 +43,48 @@ import multiprocessing as mp
 
 logger = logging.getLogger("cocotb")
 
+
+def max_parallel_jobs():
+    """How many helper processes may run at once (override: OPENEYE_MAX_PROCS).
+
+    Half the cores by default, so a test leaves room for the simulator it is
+    feeding and for the other pytest workers.
+    """
+    try:
+        limit = int(os.environ.get("OPENEYE_MAX_PROCS", "0"))
+    except ValueError:
+        limit = 0
+    if limit < 1:
+        limit = max(1, (os.cpu_count() or 2) // 2)
+    return limit
+
+
+def run_jobs_bounded(make_process, count):
+    """Run `count` helper processes, keeping at most max_parallel_jobs() alive.
+
+    The reference calculations below used to start one process per filter or
+    per transmission up front and join them afterwards, so a 16-filter layer
+    put 16 interpreters on the machine at once; several pytest workers together
+    drove the load average past 90 on an 8-core host and made it unusable. The
+    work and the results are unchanged, only staggered.
+
+    Args:
+        make_process: callable taking the job index and returning mp.Process
+        count: number of jobs to run
+    """
+    limit = max_parallel_jobs()
+    running = []
+    for index in range(count):
+        while len(running) >= limit:
+            for job in running:
+                job.join(0.05)
+            running = [job for job in running if job.is_alive()]
+        proc = make_process(index)
+        proc.start()
+        running.append(proc)
+    for job in running:
+        job.join()
+
 def get_verilog_sources(hdl_dir):
     """Gather all Verilog source files from a directory tree.
     
@@ -139,16 +181,13 @@ def write_stream(params, layer_params, dram_layer_content, sparse_iacts, sparse_
     return_dict = manager.dict()
     jobs = []
 
-    for layer_repetition in range(layer_params.needed_total_transmissions):
-        p = mp.Process(target=write_stream_layer_mp, 
-                      args=(params, layer_params, dram_layer_content, 
-                            return_dict, layer_repetition, 
-                            sparse_iacts, sparse_wghts))
-        p.start()
-        jobs.append(p)
-
-    for proc in range(len(jobs)):
-        jobs[proc].join()
+    run_jobs_bounded(
+        lambda layer_repetition: mp.Process(
+            target=write_stream_layer_mp,
+            args=(params, layer_params, dram_layer_content,
+                  return_dict, layer_repetition,
+                  sparse_iacts, sparse_wghts)),
+        layer_params.needed_total_transmissions)
         
     return return_dict
 
@@ -225,14 +264,11 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
             manager = mp.Manager()
             return_dict = manager.dict()
             jobs = []
-            for layer_repetition in range(layer_params.needed_total_transmissions):
-                p = mp.Process(target = calculate_dw_output_stream_mp, \
-                               args = (layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict))
-                p.start()
-                jobs.append(p)
-            
-            for proc in range(len(jobs)):
-                jobs[proc].join()
+            run_jobs_bounded(
+                lambda layer_repetition: mp.Process(
+                    target = calculate_dw_output_stream_mp,
+                    args = (layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict)),
+                layer_params.needed_total_transmissions)
             for layer_repetition in range(layer_params.needed_total_transmissions):
                 output_order.append(return_dict[layer_repetition])
     elif "Conv" in str(layer_params.layer_name):
@@ -244,14 +280,11 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
-        for layer_repetition in range(layer_params.needed_total_transmissions):
-            p = mp.Process(target = calculate_conv_output_stream_mp, \
-                            args = (layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict))
-            p.start()
-            jobs.append(p)
-        
-        for proc in range(len(jobs)):
-            jobs[proc].join()
+        run_jobs_bounded(
+            lambda layer_repetition: mp.Process(
+                target = calculate_conv_output_stream_mp,
+                args = (layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict)),
+            layer_params.needed_total_transmissions)
         for layer_repetition in range(layer_params.needed_total_transmissions):
             output_order.append(return_dict[layer_repetition])
     elif "Dense" in str(layer_params.layer_name):
@@ -410,12 +443,10 @@ def write_psum_file(layer_params, layer_number, dram, calculated_results):
                 psum_ref[c].write("\n")
             psum_ref[c].close()
     elif "Conv" in str(layer_params.layer_name):
-        for f in range(layer_params.output_shape[3]):
-            p = mp.Process(target = write_psum_file_conv_mp, args = (f, layer_params, calculated_results, return_dict))
-            p.start()
-            jobs.append(p)
-        for proc in range(len(jobs)):
-            jobs[proc].join()
+        run_jobs_bounded(
+            lambda f: mp.Process(target = write_psum_file_conv_mp,
+                                 args = (f, layer_params, calculated_results, return_dict)),
+            layer_params.output_shape[3])
         psum_ref = [0 for f in range(layer_params.output_shape[3])]
         for f in range(layer_params.output_shape[3]):
             psum_ref[f] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_' +  str(f) + '.csv')
@@ -445,12 +476,10 @@ def collect_results(layer_number, layer_params, dram, serial):
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
-        for x in range(layer_params.filters):
-            p = mp.Process(target = calculate_dense_results_mp, args = (x, layer_params, layer_number, dram, calculated_results[x], return_dict))
-            p.start()
-            jobs.append(p)
-        for proc in range(len(jobs)):
-            jobs[proc].join()
+        run_jobs_bounded(
+            lambda x: mp.Process(target = calculate_dense_results_mp,
+                                 args = (x, layer_params, layer_number, dram, calculated_results[x], return_dict)),
+            layer_params.filters)
         calculated_results = return_dict
 
     elif "Depthwise" in str(layer_params.layer_name):
@@ -481,16 +510,13 @@ def collect_results(layer_number, layer_params, dram, serial):
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
-        max_parallel_jobs = 1
-        semaphore = mp.Semaphore(max_parallel_jobs)
+        conv_job_limit = 1
+        semaphore = mp.Semaphore(conv_job_limit)
 
-        for f in range(layer_params.output_shape[3]):
-            p = mp.Process(target = calculate_conv_results_mp, args = (f, layer_number, layer_params, serial, dram, calculated_results[f], return_dict, semaphore))
-            p.start()
-            jobs.append(p)
-        
-        for proc in range(len(jobs)):
-            jobs[proc].join()
+        run_jobs_bounded(
+            lambda f: mp.Process(target = calculate_conv_results_mp,
+                                 args = (f, layer_number, layer_params, serial, dram, calculated_results[f], return_dict, semaphore)),
+            layer_params.output_shape[3])
 
         calculated_results = return_dict
 
@@ -769,13 +795,10 @@ def compare_dram_with_ref(layer_params, ref_output, dram):
         return_dict = manager.dict()
         jobs = []
 
-        for f in range(len(ref_output)):
-            p = mp.Process(target = compare_dram_with_ref_mp, args = (f, ref_output[f], dram[f], return_dict))
-            p.start()
-            jobs.append(p)
-
-        for proc in range(len(jobs)):
-            jobs[proc].join()
+        run_jobs_bounded(
+            lambda f: mp.Process(target = compare_dram_with_ref_mp,
+                                 args = (f, ref_output[f], dram[f], return_dict)),
+            len(ref_output))
 
         failed = [f for f in range(len(ref_output)) if return_dict[f] == False]
         if failed:

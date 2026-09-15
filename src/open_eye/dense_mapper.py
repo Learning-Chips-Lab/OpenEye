@@ -128,8 +128,8 @@ class DenseMapper(LayerMapper):
             from open_eye.generator import pack_registers
             words = pack_registers({
             "wght_cycles_reg": layer_params.needed_refreshes_mx[layer_repetition][0],
-            "stride_x_reg": layer_params.strideX,
-            "stride_y_reg": layer_params.strideY,
+            "stride_x": layer_params.strideX,
+            "stride_y": layer_params.strideY,
             "skipIact_reg": layer_params.skipIact,
             "skipWght_reg": layer_params.skipWght,
             "skipPsum_reg": layer_params.skipPsum,
@@ -220,6 +220,15 @@ class DenseMapper(LayerMapper):
             "needed_iact_buffer_words": layer_params.needed_iact_buffer_words,
             "iact_x_line_repetitions_reg":layer_params.iact_x_line_repetitions,
             "buffer_cycles_for_x_iact" : layer_params.buffer_cycles_for_x_iact,
+            # ConvMapper sends these four; DenseMapper did not, so the DUT read 0.
+            # overhang_discrepancy is computed for Dense (write_dense_layer) and was
+            # simply never packed. The other three are still left at their defaults
+            # by the Dense path, so they go out as 0 until write_dense_layer sets
+            # them - sending them here at least makes that visible in one place.
+            "iact_x_per_cluster": layer_params.iact_x_per_cluster,
+            "iact_x_add_up": layer_params.iact_x_add_up,
+            "psum_x_all_cluster": layer_params.psum_x_all_cluster,
+            "overhang_discrepancy": layer_params.overhang_discrepancy,
             "start_param_array" : layer_params.start_param_array,
             "limit_increase" : layer_params.limit_increase,
             "lower_bound" : layer_params.lower_bound,
@@ -254,7 +263,7 @@ class DenseMapper(LayerMapper):
             "psum_pagu_cs_limit_1" : layer_params.psum_pagu_cs_limit_1,
             "psum_pagu_cs_limit_2" : layer_params.psum_pagu_cs_limit_2,
             "psum_pagu_cs_inc_0" : layer_params.psum_pagu_cs_inc_0,
-            "psum_pagu_loop_inc_1" : layer_params.psum_pagu_cs_inc_1,
+            "psum_pagu_cs_inc_1" : layer_params.psum_pagu_cs_inc_1,
             "psum_pagu_cs_inc_2" : layer_params.psum_pagu_cs_inc_2,
             "psum_pagu_loop_limit_0" : layer_params.psum_pagu_loop_limit_0,
             "psum_pagu_loop_limit_1" : layer_params.psum_pagu_loop_limit_1,

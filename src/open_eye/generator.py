@@ -139,6 +139,16 @@ def pack_registers(values, regmap_yaml_path=None):
     widths scale with CLUSTER_ROWS etc.) and the DUT decoded shifted fields.
     """
     transmissions, _ = layout_registers(regmap_yaml_path or _default_regmap_dir())
+    known = {reg["name"] for regs in transmissions for reg in regs}
+    # A caller key that matches no register is silently dropped while the
+    # register it was meant for stays 0, so a single misspelling in a mapper
+    # sends a wrong configuration to the DUT with no visible error. Raise
+    # instead: the register names are a fixed contract with regmap.yaml.
+    unknown = sorted(set(values) - known)
+    if unknown:
+        raise KeyError(
+            "pack_registers: %d key(s) match no register in regmap.yaml: %s. "
+            "Check the spelling against the register list." % (len(unknown), ", ".join(unknown)))
     words = [0] * len(transmissions)
     for regs in transmissions:
         for reg in regs:
