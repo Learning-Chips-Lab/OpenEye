@@ -1513,6 +1513,13 @@ class LayerParameters(object):
         self.used_channels = params.NUM_GLB_IACT*math.ceil(self.iact_size_x/(params.Clusters_Y*params.NUM_GLB_IACT))
         # Calculate Iact Cycles
         self.needed_Iact_writes = math.ceil(params.PEs_Y/params.NUM_GLB_IACT)
+        # 83a47b6 dropped the add_up_reg register and rewired the HDL's
+        # psum_x_with_add_up port to iact_x_add_up. The conv path sets that, the
+        # Dense path does not, so the port fell from psum_size_x + add_up to 0.
+        # Restore the value the port carried before; both terms keep their
+        # defaults here because write_dense_layer does not run
+        # calculate_computing_matrix.
+        self.iact_x_add_up = self.psum_size_x + self.add_up
         self.calculate_transmission_cycles(params)
 
         # Calculate the number of refreshes needed for the layer

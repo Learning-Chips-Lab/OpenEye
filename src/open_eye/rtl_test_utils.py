@@ -667,6 +667,16 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
                                  state, stuck_for, ", ".join(counters))
                     try:
                         pp = dut.psum_pipeline_inst
+                        # CALCULATE_PSUM only evaluates results_ready while
+                        # psum_ready_i_reg is non-zero, so a stall with
+                        # fsm_psum_cycle == 0 is ambiguous without these two:
+                        # either the request never went out (psum_ready_i_reg
+                        # == 0) or some GLB never answered (results_ready == 0).
+                        for name in ("psum_ready_i_reg", "results_ready"):
+                            try:
+                                logger.error("  %s = %s", name, str(getattr(pp, name).value))
+                            except Exception:
+                                logger.error("  %s unreadable", name)
                         for name in ("psum_enable_o", "psum_ready_o_reg", "router_mode_psum"):
                             logger.error("  %s = %s", name, str(getattr(pp, name).value))
                         for name in ("iact_ready_o_oep_w", "iact_enable_i_oep_w"):
