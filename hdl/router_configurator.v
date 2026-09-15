@@ -150,7 +150,16 @@ module router_configurator #(
     end else begin
       if (compute_reg_i) begin
         if (fully_connected_layer_i) begin
-          psum_choose_i_reg_o <= {CLUSTER_COLUMNS{{NUM_GLB_PSUM{1'b1}}, {((CLUSTER_ROWS - 1) * NUM_GLB_PSUM){1'b0}}}};
+          // Row-major: OpenEye_Parallel indexes this vector as
+          // cr*CLUSTER_COLUMNS*NUM_GLB_PSUM + cc*NUM_GLB_PSUM + g (983fc95),
+          // so select the LAST cluster row across every column. That row ends
+          // the accumulation chain (router mode 3) and is where the psum data
+          // actually enters the PEs; the rows above only forward it downward,
+          // and their ext_mem ready follows the bottom neighbour's ready.
+          // The previous CLUSTER_COLUMNS-replicated form picked the same last
+          // row but laid the bits out column-major, so with a row-major index
+          // it deselected half the array and pinned its accept-ready to 0.
+          psum_choose_i_reg_o <= {{(CLUSTER_COLUMNS * NUM_GLB_PSUM){1'b1}}, {((CLUSTER_ROWS - 1) * CLUSTER_COLUMNS * NUM_GLB_PSUM){1'b0}}};
         end else begin
           if (needed_y_cls_reg_i == 1) begin
             psum_choose_i_reg_o <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);

@@ -677,6 +677,24 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
                                 logger.error("  %s = %s", name, str(getattr(pp, name).value))
                             except Exception:
                                 logger.error("  %s unreadable", name)
+                        # psum_choose gates the PE cluster's accept-ready through a
+                        # demux (a_out = sel ? in : 0), so a zero ready is ambiguous
+                        # until we know whether the select or the PE is the cause.
+                        try:
+                            logger.error("  psum_choose_i_reg = %s", str(dut.psum_choose_i_reg.value))
+                        except Exception:
+                            logger.error("  psum_choose_i_reg unreadable")
+                        for cx in range(oep.Clusters_X):
+                            for cy in range(oep.Clusters_Y):
+                                try:
+                                    cl = dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
+                                    logger.error("  cluster(%d,%d) pe_router_psum_ready_out=%s enable_in=%s",
+                                                 cx, cy,
+                                                 str(cl.pe_router_psum_ready_out.value),
+                                                 str(cl.pe_router_psum_enable_in.value))
+                                except Exception as exc:
+                                    logger.error("  cluster(%d,%d) psum ready unreadable (%s)",
+                                                 cx, cy, type(exc).__name__)
                         for name in ("psum_enable_o", "psum_ready_o_reg", "router_mode_psum"):
                             logger.error("  %s = %s", name, str(getattr(pp, name).value))
                         for name in ("iact_ready_o_oep_w", "iact_enable_i_oep_w"):
