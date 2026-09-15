@@ -70,8 +70,14 @@ module psum_pipeline #(
     input wire [8*QUANT_AMOUNT-1:0] quant_offset_flat,
     input wire [7*QUANT_AMOUNT-1:0] quant_exp_flat,
     input wire [25*QUANT_AMOUNT-1:0] quant_mant_flat,
-    input wire [16:0] fsm_psum_limit,
-    input wire [15:0] output_words,
+    input wire [ 16:0] fsm_psum_limit,
+    input wire [ 15:0] output_words,
+    input wire [  3:0] psum_cluster_limit_0,
+    input wire [  3:0] psum_cluster_limit_1,
+    input wire [  3:0] psum_cluster_limit_2,
+    input wire [  3:0] psum_cluster_inc_0,
+    input wire [  3:0] psum_cluster_inc_1,
+    input wire [  3:0] psum_cluster_inc_2,
     input wire [8-1:0] psum_cycle_loop_limit_0,
     input wire [8-1:0] psum_cycle_loop_limit_1,
     input wire [8-1:0] psum_cycle_loop_limit_2,
@@ -115,19 +121,26 @@ module psum_pipeline #(
   localparam GET_PARAMETERS =  4'd1;
   localparam GET_BIAS = 4'd5;
 
+  localparam PSUM_CLSUTER_SELECT_WIDTH = CLUSTERS == 1 ? 1 : $clog2(CLUSTERS);
+
   reg [7:0] storage_cycles;
+  reg [4:0] psum_select_cnt_0;
+  reg [4:0] psum_select_cnt_1;
+  reg [4:0] psum_select_cnt_2;
   reg [15:0] psum_cycle_loop_cnt_0;
   reg [7:0] psum_cycle_loop_cnt_1;
   reg [7:0] psum_cycle_loop_cnt_2;
   reg [7:0] psum_cycle_loop_cnt_3;
   reg [7:0] psum_cycle_loop_cnt_4;
   reg [3:0] sending_cluster_rows;
+  reg [3:0]  psum_cluster_select_0;
+  reg [3:0]  psum_cluster_select_1;
+  reg [3:0]  psum_cluster_select_2;
   reg [11:0] psum_cycle_addr_0;
   reg [11:0] psum_cycle_addr_1;
   reg [11:0] psum_cycle_addr_2;
   reg [11:0] psum_cycle_addr_3;
   reg [11:0] psum_cycle_addr_4;
-  reg [3:0] fsm_psum_row_offset;
   reg [7:0] iact_channel_counter_reg;
   reg [17:0] finished_cycles_psum;
   reg [BUFFER_WIDTH-1:0] psum_buffer_addr_storage;
@@ -135,14 +148,8 @@ module psum_pipeline #(
   reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][((NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_w_int;
   reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][((NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_r_int;
   reg [1:0] fsm_x_cl_psum;
-  reg [1:0] fsm_x_cl_psum_q1;
-  reg [1:0] fsm_x_cl_psum_q2;
-  reg [1:0] fsm_x_cl_psum_q3;
-  reg [7:0] fsm_y_cl_psum_offset;
   reg [7:0] fsm_y_cl_psum;
-  reg [7:0] fsm_y_cl_psum_q1;
-  reg [7:0] fsm_y_cl_psum_q2;
-  reg [7:0] fsm_y_cl_psum_q3;
+  reg [PSUM_CLSUTER_SELECT_WIDTH-1:0] psum_cluster_select;
   reg [3:0] fsm_psum_r;
   reg [3:0] fsm_psum_r_q;
   reg [7:0] fsm_x_cl_psum_reg;
@@ -191,6 +198,12 @@ module psum_pipeline #(
   assign current_shift = quant_exp[current_filter];
 
   
+  wire [3:0] psum_cluster_select_0_next;
+  wire [3:0] psum_cluster_select_1_next;
+  wire [3:0] psum_cluster_select_2_next;
+  assign psum_cluster_select_0_next = psum_cluster_select_0 + psum_cluster_inc_0 >= CLUSTERS ? psum_cluster_select_0 + psum_cluster_inc_0 - CLUSTERS : psum_cluster_select_0 + psum_cluster_inc_0;
+  assign psum_cluster_select_1_next = psum_cluster_select_1 + psum_cluster_inc_1 >= CLUSTERS ? psum_cluster_select_1 + psum_cluster_inc_1 - CLUSTERS : psum_cluster_select_1 + psum_cluster_inc_1;
+  assign psum_cluster_select_2_next = psum_cluster_select_2 + psum_cluster_inc_2 >= CLUSTERS ? psum_cluster_select_2 + psum_cluster_inc_2 - CLUSTERS : psum_cluster_select_2 + psum_cluster_inc_2;
   wire [BUFFER_WIDTH-1:0] psum_cycle_addr_0_next;
   wire [BUFFER_WIDTH-1:0] psum_cycle_addr_1_next;
   wire [BUFFER_WIDTH-1:0] psum_cycle_addr_2_next;
@@ -235,7 +248,7 @@ module psum_pipeline #(
           end
         end
       end
-      psum_buffer_addr_storage <= 0;
+      psum_buffer_addr_storage    <= 0;
       psum_enable_i_reg           <= 0;
       psum_ready_i_reg            <= 0;
       storage_cycles              <= 0;
@@ -248,30 +261,30 @@ module psum_pipeline #(
       data_dma_o                  <= 0;
       fsm_x_cl_psum               <= 0;
       fsm_y_cl_psum               <= 0;
-      fsm_y_cl_psum_offset        <= 0;
       fsm_psum_r                  <= 0;
       fsm_psum_r_q                <= 0;
       psum_buffer_en_r            <= 0;
       last_data_o                 <= 0;
       current_filter              <= 0;
+      
+      psum_select_cnt_0           <= 0;
+      psum_select_cnt_1           <= 0;
+      psum_select_cnt_2           <= 0;
       psum_cycle_loop_cnt_0       <= 0;
       psum_cycle_loop_cnt_1       <= 0;
       psum_cycle_loop_cnt_2       <= 0;
       psum_cycle_loop_cnt_3       <= 0;
       psum_cycle_loop_cnt_4       <= 0;
       sending_cluster_rows        <= 0;
+      psum_cluster_select_0       <= 0;
+      psum_cluster_select_1       <= 0;
+      psum_cluster_select_2       <= 0;
       psum_cycle_addr_0           <= 0;
       psum_cycle_addr_1           <= 0;
       psum_cycle_addr_2           <= 0;
       psum_cycle_addr_3           <= 0;
       psum_cycle_addr_4           <= 0;
-      fsm_psum_row_offset         <= 0;
-      fsm_y_cl_psum_q1            <= 0;
-      fsm_y_cl_psum_q2            <= 0;
-      fsm_y_cl_psum_q3            <= 0;
-      fsm_x_cl_psum_q1            <= 0;
-      fsm_x_cl_psum_q2            <= 0;
-      fsm_x_cl_psum_q3            <= 0;
+      psum_cluster_select         <= 0;
       psum_data_i_reg             <= 0;
       psum_cycle_count            <= 0;
       finished_cycles_psum        <= 0;
@@ -290,6 +303,9 @@ module psum_pipeline #(
           psum_buffer_en_w    <= 0;
           psum_enable_i_reg   <= 0;
           current_filter      <= 0;
+          psum_select_cnt_0     <= 0;
+          psum_select_cnt_1     <= 0;
+          psum_select_cnt_2     <= 0;
           psum_cycle_loop_cnt_0 <= 0;
           psum_data_i_reg     <= 0;
           if (ready_dma_i == 1) begin
@@ -553,6 +569,9 @@ module psum_pipeline #(
         WAIT_FOR_SENDING_RESULTS: begin
           fsm_psum_cycle       <= fsm_psum_cycle + 1;
           fsm_psum_last_state  <= WAIT_FOR_SENDING_RESULTS;
+          psum_select_cnt_0     <= 0;
+          psum_select_cnt_1     <= 0;
+          psum_select_cnt_2     <= 0;
           psum_cycle_loop_cnt_0 <= 0;
           if (send_data_out) begin
             if (fsm_psum_cycle == 2) begin
@@ -587,17 +606,22 @@ module psum_pipeline #(
                 fsm_psum_current_state <= PSUM_IDLE;
               end
               fsm_psum_cycle        <= 0;
+              psum_select_cnt_0     <= 0;
+              psum_select_cnt_1     <= 0;
+              psum_select_cnt_2     <= 0;
               psum_cycle_loop_cnt_0 <= 0;
               psum_cycle_loop_cnt_1 <= 0;
               psum_cycle_loop_cnt_2 <= 0;
               psum_cycle_loop_cnt_3 <= 0;
               psum_cycle_loop_cnt_4 <= 0;
+              psum_cluster_select_0 <= 0;
+              psum_cluster_select_1 <= 0;
+              psum_cluster_select_2 <= 0;
               psum_cycle_addr_0     <= 0;
               psum_cycle_addr_1     <= 0;
               psum_cycle_addr_2     <= 0;
               psum_cycle_addr_3     <= 0;
               psum_cycle_addr_4     <= 0;
-              fsm_psum_row_offset   <= 0;
             end
           end
           fsm_psum_r    <= 0;
@@ -624,8 +648,6 @@ module psum_pipeline #(
               data_dma_o_q1      <= data_dma_o_q2;
               data_dma_o_q2      <= 0;
               fsm_psum_r_q       <= fsm_psum_r;
-              fsm_x_cl_psum_q1   <= fsm_x_cl_psum;
-              fsm_y_cl_psum_q1   <= fsm_y_cl_psum;
               psum_buffer_data_temp_reg <= psum_buffer_data_temp_reg;
             end
             psum_buffer_en_r   <= 0;
@@ -710,59 +732,40 @@ module psum_pipeline #(
             end
           end
         end
-
         SEND_PSUM_TO_IACT: begin
-          fsm_y_cl_psum_q1 <= fsm_y_cl_psum;
-          fsm_y_cl_psum_q2 <= fsm_y_cl_psum_q1;
-          fsm_y_cl_psum_q3 <= fsm_y_cl_psum_q2;
-          fsm_x_cl_psum_q1 <= fsm_x_cl_psum;
-          fsm_x_cl_psum_q2 <= fsm_x_cl_psum_q1;
-          fsm_x_cl_psum_q3 <= fsm_x_cl_psum_q2;
           if (fsm_psum_cycle >= 3) begin
-            if (!fully_connected_layer | (CLUSTERS == 1)) begin
-              if (CLUSTER_COLUMNS*NUM_GLB_PSUM>= 8) begin
-                for (cr_psum = 0; cr_psum < TRANS_WORDS/2; cr_psum = cr_psum + 1) begin
-                  pre_quantized_value[2*cr_psum]     <= (quant_mant[current_filter] *
-                  (psum_buffer_data_r[((fsm_x_cl_psum_q3+(cr_psum/2))*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+(fsm_y_cl_psum_q3*CLUSTER_COLUMNS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+
-                  ((cr_psum%2)*TRANS_BITWIDTH_PSUM*PARALLEL_MACS)+:TRANS_BITWIDTH_PSUM]
-                  + quant_offset[current_filter]))
-                  >>> current_shift;
-                  pre_quantized_value[2*cr_psum + 1] <= (quant_mant[current_filter] *
-                  (psum_buffer_data_r[((fsm_x_cl_psum_q3+(cr_psum/2))*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+(fsm_y_cl_psum_q3*CLUSTER_COLUMNS*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM)+
-                  ((cr_psum%2)*TRANS_BITWIDTH_PSUM*PARALLEL_MACS+TRANS_BITWIDTH_PSUM)+:TRANS_BITWIDTH_PSUM]
-                  + quant_offset[current_filter]))
-                  >>> current_shift;
-                end
-              end else begin
-                if (CLUSTERS*NUM_GLB_PSUM > TRANS_WORDS) begin
-                  for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                    for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
-                      pre_quantized_value[(TRANS_WORDS/2)*cr_psum+2*cc_psum]     <= (quant_mant[current_filter] *
-                      (psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum+(fsm_y_cl_psum_q3))*TRANS_BITWIDTH_PSUM*CLUSTER_COLUMNS*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM]
-                      + quant_offset[current_filter]))
-                      >>> current_shift;
-                      pre_quantized_value[(TRANS_WORDS/2)*cr_psum+2*cc_psum + 1] <= (quant_mant[current_filter] *
-                      (psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+(cr_psum+(fsm_y_cl_psum_q3))*TRANS_BITWIDTH_PSUM*CLUSTER_COLUMNS*NUM_GLB_PSUM+TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM]
-                      + quant_offset[current_filter]))
-                      >>> current_shift;
-                    end
-                  end
-                end else begin
-                  for (cc_psum = 0; cc_psum < TRANS_WORDS; cc_psum = cc_psum + 1) begin
-                    pre_quantized_value[cc_psum] <=psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
+            if (CLUSTERS != 1) begin 
+              for (cc_psum = 0; cc_psum < TRANS_WORDS; cc_psum = cc_psum + 1) begin
+                pre_quantized_value[cc_psum] <= psum_buffer_data_r[psum_cluster_select*TRANS_BITWIDTH_PSUM*TRANS_WORDS+cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
+              end
+              psum_cluster_select_0 <= psum_cluster_select_0_next;
+              psum_cluster_select <= psum_cluster_select_0_next;
+              psum_select_cnt_0 <= psum_select_cnt_0 + 1;
+              if (psum_select_cnt_0 == psum_cluster_limit_0) begin
+                psum_select_cnt_0   <= 0;
+                psum_cluster_select_0 <= psum_cluster_select_1_next;
+                psum_cluster_select_1 <= psum_cluster_select_1_next;
+                psum_cluster_select   <= psum_cluster_select_1_next;
+                psum_select_cnt_1 <= psum_select_cnt_1 + 1;
+                if (psum_select_cnt_1 == psum_cluster_limit_1) begin
+                  psum_select_cnt_1     <= 0;
+                  psum_cluster_select_0 <= psum_cluster_select_2_next;
+                  psum_cluster_select_1 <= psum_cluster_select_2_next;
+                  psum_cluster_select_2 <= psum_cluster_select_2_next;
+                  psum_cluster_select   <= psum_cluster_select_2_next;
+                  psum_select_cnt_2 <= psum_select_cnt_2 + 1;
+                  if (psum_select_cnt_2 == psum_cluster_limit_2) begin
+                    psum_select_cnt_2     <= 0;
+                    psum_cluster_select_0 <= 0;
+                    psum_cluster_select_1 <= 0;
+                    psum_cluster_select_2 <= 0;
+                    psum_cluster_select   <= 0;
                   end
                 end
               end
             end else begin
-              pre_quantized_value[0] <= (quant_mant[current_filter] *
-              (psum_buffer_data_r[0+:TRANS_BITWIDTH_PSUM]
-              + quant_offset[current_filter]))
-              >>> current_shift;
-              if (CLUSTER_ROWS == 2) begin
-                pre_quantized_value[1] <= (quant_mant[current_filter] *
-                (psum_buffer_data_r[TRANS_BITWIDTH_PSUM*CLUSTER_ROWS*NUM_GLB_PSUM+:TRANS_BITWIDTH_PSUM]
-                + quant_offset[current_filter]))
-                >>> current_shift;
+              for (cc_psum = 0; cc_psum < TRANS_WORDS; cc_psum = cc_psum + 1) begin
+                pre_quantized_value[cc_psum] <= psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
               end
             end
           end
@@ -799,55 +802,12 @@ module psum_pipeline #(
                   end
                 end
               end
-            end
+            end 
           end
           for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
             for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
               for (g_psum = 0; g_psum < ((NUM_GLB_PSUM+1)/2); g_psum = g_psum + 1) begin
                 psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_cycle_addr_0;
-              end
-            end
-          end
-          if (psum_size_x > NUM_GLB_PSUM * CLUSTER_COLUMNS) begin
-            if (iact_channels_per_pe_next_layer == 4) begin
-              fsm_y_cl_psum <= next_fsm_y_cl_psum;
-              if (next_fsm_y_cl_psum >= CLUSTER_ROWS | (next_fsm_y_cl_psum*(NUM_GLB_PSUM*CLUSTER_COLUMNS) >= psum_x_all_cluster)) begin
-                fsm_y_cl_psum <= 0;
-              end
-            end else begin
-              if ((psum_cycle_loop_cnt_3 == psum_size_y  - 1)) begin
-                fsm_y_cl_psum <= next_fsm_y_cl_psum;
-                if (next_fsm_y_cl_psum >= CLUSTER_ROWS | (next_fsm_y_cl_psum*(NUM_GLB_PSUM*CLUSTER_COLUMNS) >= psum_x_all_cluster)) begin
-                  fsm_y_cl_psum <= 0;
-                end
-              end
-            end
-          end else begin
-            if (psum_size_x <= 4) begin
-              fsm_x_cl_psum <= fsm_x_cl_psum + 1;
-              if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
-                fsm_x_cl_psum <= 0;
-                fsm_y_cl_psum <= fsm_y_cl_psum + 1;
-                if (fsm_y_cl_psum == fsm_y_cl_psum_offset +  kernels_per_calc/4 - 1) begin
-                  fsm_y_cl_psum <= fsm_y_cl_psum_offset;
-                  if (psum_cycle_loop_cnt_3 == psum_size_y  - 1) begin
-                    fsm_y_cl_psum        <= fsm_y_cl_psum + 1;
-                    fsm_y_cl_psum_offset <= fsm_y_cl_psum + 1;
-                    if (fsm_y_cl_psum + 1 >= CLUSTER_ROWS) begin
-                      fsm_y_cl_psum        <= 0;
-                      fsm_y_cl_psum_offset <= 0;
-                    end
-                  end
-                end
-              end
-            end else begin
-              if (!fully_connected_layer) begin
-                if (psum_cycle_loop_cnt_3 == psum_size_y - 1) begin
-                  fsm_y_cl_psum <= next_fsm_y_cl_psum;
-                  if (next_fsm_y_cl_psum >= CLUSTER_ROWS) begin
-                    fsm_y_cl_psum <= 0;
-                  end
-                end
               end
             end
           end
@@ -859,7 +819,6 @@ module psum_pipeline #(
             fsm_psum_current_state      <= PSUM_IDLE;
             fsm_psum_r                  <= 0;
             fsm_y_cl_psum               <= 0;
-            fsm_y_cl_psum_offset        <= 0;
             fsm_x_cl_psum               <= 0;
             psum_cycle_loop_cnt_0       <= 0;
           end

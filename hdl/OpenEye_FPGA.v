@@ -213,6 +213,7 @@ module OpenEye_FPGA #(
     parameter UNPACKED_TRACES_ENABLED = 1,
 
     //Pooling Features
+    parameter MAX_POOLING = 1,
     parameter AVERAGE_POOLING = 0,
 
     //Pooling Features
@@ -422,6 +423,12 @@ reg [1023:0] fst_path;
   wire [11:0] iact_write_inc_1;
   wire [11:0] iact_write_inc_2;
   wire [ 9:0] pagu_wght_limit;
+  wire [4-1:0]psum_pagu_cs_limit_0;
+  wire [4-1:0]psum_pagu_cs_limit_1;
+  wire [4-1:0]psum_pagu_cs_limit_2;
+  wire [4-1:0]psum_pagu_cs_inc_0;
+  wire [4-1:0]psum_pagu_cs_inc_1;
+  wire [4-1:0]psum_pagu_cs_inc_2;
   wire [8-1:0]psum_pagu_loop_limit_0;
   wire [8-1:0]psum_pagu_loop_limit_1;
   wire [8-1:0]psum_pagu_loop_limit_2;
@@ -528,7 +535,7 @@ reg [1023:0] fst_path;
   wire [BRANCHES_CLOG == 0 ? 0 : BRANCHES_CLOG-1:0] choose_iact_buffer_input;                                // Value choose_iact_buffer should take when the host is loading new activations (from dma_storage).
   wire [BRANCHES_CLOG == 0 ? 0 : BRANCHES_CLOG-1:0] choose_iact_buffer_output;                               // Value choose_iact_buffer should take when psums are being written back as activations (from dma_storage).
   wire fully_connected_layer;                                   // When 1: layer is a fully-connected (FC) layer; modifies iact packing and weight/psum addressing (from dma_storage).
-  wire max_pooling;                                             // When 1: skip compute; instead run a 2×2 max-pool on the iact buffer (from dma_storage).
+  wire pooling;                                             // When 1: skip compute; instead run a 2×2 max-pool on the iact buffer (from dma_storage).
   reg [           BUFFER_WIDTH-1:0] iact_buffer_addr_reg      [IACT_RAM_CELLS-1:0]; // Per-cell read/write address; advanced by the sliding-window logic in CONVERT_IACT.
   reg [           BUFFER_WIDTH-1:0] buffer_addr_temp_reg; // Saved address snapshot used to restart a cell's address in MAXPOOLING_SEND.
 
@@ -650,7 +657,7 @@ reg [1023:0] fst_path;
   //                                                          ├─(skipPsum)──► GET_QUANTIZE
   //                                                          └─► GET_BIAS ──► GET_QUANTIZE
   //                                                                             └─► GET_OFFSET
-  //                                                                                  ├─(max_pooling)─► MAXPOOLING_READ ─► MAXPOOLING_SEND ─► GET_PARAMETERS
+  //                                                                                  ├─(pooling)─► MAXPOOLING_READ ─► MAXPOOLING_SEND ─► GET_PARAMETERS
   //                                                                                  └─► START_CONVERTER ─► CONVERT_IACT ─► WAIT_CYCLE
   //                                                                                                                             ├─(send_data_out)─► WAIT_FOR_RESULTS ─► GET_PARAMETERS
   //                                                                                                                             └─► RECEIVE_PSUMS_TO_IACT ─(PSUM_IDLE)─► GET_PARAMETERS
@@ -1727,7 +1734,7 @@ end
         // - Latches iact_size_c = iact_channels_per_pe * iact_channel_max_cycles
         //   (FC: multiplied by NUM_GLB_WGHT for full row sweep).
         // - Latches psum_x_with_add_up = psum_size_x + add_up.
-        // - max_pooling mode: asserts read-enable for all buffer cells so
+        // - pooling mode: asserts read-enable for all buffer cells so
         //   the converter buffer is pre-warmed.
         //
         // While enable_dma_i_reg: counts fsm_cycle over the expected router
@@ -1735,7 +1742,7 @@ end
         // On the last word:
         // - Clears fsm_cycle, deasserts status_reg_enable_reg.
         // - Transitions: GET_IACT normally; GET_WGHT if skipIact; GET_OFFSET
-        //   if max_pooling (no iact load needed, jump straight to pooling).
+        //   if pooling (no iact load needed, jump straight to pooling).
         // -------------------------------------------------------------------
         GET_ROUTER_CONFIG: begin
           status_reg_enable_reg <= 0;
@@ -1755,7 +1762,7 @@ end
                 fsm_current_state   <= GET_WGHT;
                 wght_buffer_wr_addr <= ~0;
               end
-              if (max_pooling) begin
+              if (pooling) begin
                 ready_dma_o       <= 0;
                 fsm_current_state <= GET_QUANTIZE;
               end
@@ -1926,7 +1933,7 @@ end
         // - Initialises overhang_counter = overhang_discrepancy (fractional
         //   cell accumulator seeded from GET_BIAS computation).
         // - Asserts ready_dma_o; clears wght_buffer_en_w.
-        // - max_pooling: deasserts ready_dma_o and asserts all buffer read
+        // - pooling: deasserts ready_dma_o and asserts all buffer read
         //   enables (pooling pass doesn't need DMA input here).
         // - On each enable_dma_i_reg pulse:
         //   * Increments fsm_cycle.
@@ -1960,7 +1967,7 @@ end
               quant_reg[(a+1)*DMA_BITWIDTH+:DMA_BITWIDTH] <= quant_reg[a*DMA_BITWIDTH+:DMA_BITWIDTH];
             end
           end
-          if (max_pooling) begin
+          if (pooling) begin
             ready_dma_o <= 0;
             for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
               iact_buffer_en_r[a] <= 1;
@@ -1973,7 +1980,7 @@ end
             fsm_last_state        <= GET_QUANTIZE;
             fsm_current_state     <= START_CONVERTER;
             buffer_addr_upper_limit <= initial_upper_limit;
-            if (max_pooling) begin
+            if (pooling) begin
               fsm_cycle           <= 2;
               fsm_current_state   <= MAXPOOLING_READ;
               select_ram_counter  <= 0;
@@ -2574,6 +2581,12 @@ end
       .psum_cnt(psum_cnt),
       .current_filter(current_filter),
       .output_words(psum_output_words),
+      .psum_cluster_limit_0(psum_pagu_cs_limit_0),
+      .psum_cluster_limit_1(psum_pagu_cs_limit_1),
+      .psum_cluster_limit_2(psum_pagu_cs_limit_2),
+      .psum_cluster_inc_0(psum_pagu_cs_inc_0),
+      .psum_cluster_inc_1(psum_pagu_cs_inc_1),
+      .psum_cluster_inc_2(psum_pagu_cs_inc_2),
       .psum_cycle_loop_limit_0(psum_pagu_loop_limit_0),
       .psum_cycle_loop_limit_1(psum_pagu_loop_limit_1),
       .psum_cycle_loop_limit_2(psum_pagu_loop_limit_2),
@@ -2940,7 +2953,7 @@ end
         .kernels_per_calc(kernels_per_calc),
         .y_lines_per_calc(y_lines_per_calc),
         .store_in_psum(store_in_psum),
-        .max_pooling(max_pooling),
+        .max_pooling(pooling),
         .fully_connected_layer(fully_connected_layer),
         .choose_iact_buffer_output(choose_iact_buffer_output),
         .choose_iact_buffer_input(choose_iact_buffer_input),
@@ -2990,6 +3003,12 @@ end
         .iact_write_inc_1(iact_write_inc_1),
         .iact_write_inc_2(iact_write_inc_2),
         .pagu_wght_limit(pagu_wght_limit),
+        .psum_pagu_cs_limit_0(psum_pagu_cs_limit_0),
+        .psum_pagu_cs_limit_1(psum_pagu_cs_limit_1),
+        .psum_pagu_cs_limit_2(psum_pagu_cs_limit_2),
+        .psum_pagu_cs_inc_0(psum_pagu_cs_inc_0),
+        .psum_pagu_cs_inc_1(psum_pagu_cs_inc_1),
+        .psum_pagu_cs_inc_2(psum_pagu_cs_inc_2),
         .psum_pagu_loop_limit_0(psum_pagu_loop_limit_0),
         .psum_pagu_loop_limit_1(psum_pagu_loop_limit_1),
         .psum_pagu_loop_limit_2(psum_pagu_loop_limit_2),

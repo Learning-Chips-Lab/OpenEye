@@ -224,6 +224,13 @@ class ConvMapper(LayerMapper):
         "iact_write_inc_1" : layer_params.iact_write_inc_1,
         "iact_write_inc_2" : layer_params.iact_write_inc_2,
         "pagu_wght_limit" : layer_params.pagu_wght_limit,
+        "psum_pagu_cs_limit_0" : layer_params.psum_pagu_cs_limit_0,
+        "psum_pagu_cs_limit_1" : layer_params.psum_pagu_cs_limit_1,
+        "psum_pagu_cs_limit_2" : layer_params.psum_pagu_cs_limit_2,
+        "psum_pagu_cs_inc_0" : layer_params.psum_pagu_cs_inc_0,
+        "psum_pagu_cs_inc_1" : layer_params.psum_pagu_cs_inc_1,
+        "psum_pagu_cs_inc_2" : layer_params.psum_pagu_cs_inc_2,
+
         "psum_pagu_loop_limit_0" : layer_params.psum_pagu_loop_limit_0,
         "psum_pagu_loop_limit_1" : layer_params.psum_pagu_loop_limit_1,
         "psum_pagu_loop_limit_2" : layer_params.psum_pagu_loop_limit_2,

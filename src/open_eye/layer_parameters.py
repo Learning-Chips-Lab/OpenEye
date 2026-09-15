@@ -330,6 +330,12 @@ class LayerParameters(object):
         self.iact_write_inc_1 = 0
         self.iact_write_inc_2 = 0
         self.pagu_wght_limit = 0
+        self.psum_pagu_cs_limit_0 = 0
+        self.psum_pagu_cs_limit_1 = 0
+        self.psum_pagu_cs_limit_2 = 0
+        self.psum_pagu_cs_inc_0 = 0
+        self.psum_pagu_cs_inc_1 = 0
+        self.psum_pagu_cs_inc_2 = 0
         self.psum_pagu_loop_limit_0 = 0
         self.psum_pagu_loop_limit_1 = 0
         self.psum_pagu_loop_limit_2 = 0
@@ -1045,20 +1051,30 @@ class LayerParameters(object):
 
         self.pagu_wght_limit = int((self.iact_x_add_up%params.NUM_GLB_PSUM)+self.iact_x_add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
 
-        self.psum_pagu_loop_limit_0 = 4 - 1
-        self.psum_pagu_addr_inc_0 = 1
+        self.psum_pagu_cs_limit_0 = 4 - 1
+        self.psum_pagu_cs_limit_1 = math.ceil(self.used_X_cluster/self.different_kernels_per_calculation) - 1
+        self.psum_pagu_cs_limit_2 = 2 - 1
+        if (self.different_kernels_per_calculation == 1):
+            self.psum_pagu_cs_inc_0 = 0
+        else:
+            self.psum_pagu_cs_inc_0 = math.ceil(self.used_X_cluster/self.different_kernels_per_calculation)
+        self.psum_pagu_cs_inc_1 = 1
+        self.psum_pagu_cs_inc_2 = 0
 
-        self.psum_pagu_loop_limit_1 = self.iact_x_line_repetitions * self.iact_size_y - 1
-        self.psum_pagu_addr_inc_1 = self.filters
+        self.psum_pagu_loop_limit_0 = self.different_kernels_per_calculation - 1
+        self.psum_pagu_addr_inc_0 = 0
 
-        self.psum_pagu_loop_limit_2 = math.ceil(self.filters/4) - 1
-        self.psum_pagu_addr_inc_2 = 4
+        self.psum_pagu_loop_limit_1 = math.ceil(4/self.different_kernels_per_calculation) - 1
+        self.psum_pagu_addr_inc_1 = 1
 
-        self.psum_pagu_loop_limit_3 = 0
-        self.psum_pagu_addr_inc_3 = 0
+        self.psum_pagu_loop_limit_2 =  math.ceil(self.used_X_cluster/self.different_kernels_per_calculation) - 1
+        self.psum_pagu_addr_inc_2 = 0
 
-        self.psum_pagu_loop_limit_4 = 0
-        self.psum_pagu_addr_inc_4 = 0
+        self.psum_pagu_loop_limit_3 = self.iact_x_line_repetitions * self.iact_size_y - 1
+        self.psum_pagu_addr_inc_3 = self.filters
+
+        self.psum_pagu_loop_limit_4 = math.ceil(self.filters/4) - 1
+        self.psum_pagu_addr_inc_4 = math.ceil(4/self.different_kernels_per_calculation)
 
     def  calculate_transmission_cycles(self, params):
         self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_BITWIDTH)
@@ -1155,8 +1171,10 @@ class LayerParameters(object):
             self.psum_delay = int(max([(math.ceil(self.needed_refreshes_mx[layer_repetition][0]/2) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
 
         # Check if X-cluster usage is aligned
-        if((self.output_shape[2] % params.PEs_X)== 0):
-            self.used_X_cluster = 1
+        if(self.psum_size_x >= params.PEs_X*params.Clusters):
+            self.used_X_cluster = params.Clusters
+        else:
+            self.used_X_cluster = params.Clusters
 
         # Calculate data field lengths for DMA
         self.iact_addr_len = 1
