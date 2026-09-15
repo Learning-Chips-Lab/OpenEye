@@ -1071,7 +1071,7 @@ class LayerParameters(object):
         self.psum_pagu_addr_inc_2 = 0
 
         self.psum_pagu_loop_limit_3 = self.iact_x_line_repetitions * self.iact_size_y - 1
-        self.psum_pagu_addr_inc_3 = self.filters
+        self.psum_pagu_addr_inc_3 = math.ceil(self.filters/self.different_kernels_per_calculation)
 
         self.psum_pagu_loop_limit_4 = math.ceil(self.filters/4) - 1
         self.psum_pagu_addr_inc_4 = math.ceil(4/self.different_kernels_per_calculation)
