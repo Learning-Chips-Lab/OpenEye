@@ -126,6 +126,7 @@ module OpenEye_FPGA #(
       parameter SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
       parameter TRANS_BITWIDTH_IACT = 24,
       parameter TRANS_BITWIDTH_WGHT = 8,
+      parameter STRIDE_ENABLED = 0,
   `else
     `include "parameters_FPGA.vh"
       // Defaultvalues
@@ -215,9 +216,6 @@ module OpenEye_FPGA #(
     //Pooling Features
     parameter MAX_POOLING = 1,
     parameter AVERAGE_POOLING = 0,
-
-    //Pooling Features
-    parameter STRIDE_ENABLED = 0,
 
     //Channels per word
     parameter CHANNELS_PER_WORD = 4,
@@ -1398,6 +1396,10 @@ end
   wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_oep_w;    // Packed iact data from all converters.
   wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;  // Per-GLB iact-valid flags from converters.
 
+    wire [11:0] x_bound;
+    wire [11:0] y_bound;
+    assign x_bound = STRIDE_ENABLED == 1? iact_x_add_up + padding_x - stride_x : iact_x_add_up + padding_x - 1;
+    assign y_bound = STRIDE_ENABLED == 1? iact_size_y + padding_y - stride_y : iact_size_y + padding_y - 1;
   // -----------------------------------------------------------------------
   // Process 6: Main FSM
   // The central sequencing process.  It steps through the 15 states defined
@@ -2070,10 +2072,10 @@ end
               if (iact_channel_sending_cycle2 == channel_div_trans - 1) begin
                 iact_channel_sending_cycle2 <= 0;
                 current_x <= current_x + NUM_GLB_IACT;
-                if (current_x == iact_x_add_up + padding_x - 1) begin
+                if (current_x == x_bound) begin 
                   current_x <= -padding_x;
                   current_y <= current_y + 1;
-                  if (current_y == iact_size_y + padding_y - 1) begin
+                  if (current_y == y_bound) begin
                     current_y <= -padding_y;
                   end
                 end
@@ -2799,7 +2801,7 @@ end
             .y_lines_per_calc            (y_lines_per_calc),
             .fully_connected_i           (fully_connected_layer),
             .needed_iact_buffer_words_i  (iact_buffer_words_per_write),
-            .iact_words_per_compute(iact_words_per_compute),
+            .iact_words_per_compute      (iact_words_per_compute),
             .rd_loop_limit_0             (iact_read_limit_0),
             .rd_loop_limit_1             (iact_read_limit_1),
             .rd_loop_limit_2             (iact_read_limit_2),

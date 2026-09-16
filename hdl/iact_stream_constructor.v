@@ -521,18 +521,18 @@ reg enable_write_to_storage;
               end
               if (router_cycle == 0) begin
                 enable_write_to_storage <= 0;
-                if ((x_pos_in_w_cycle >= x_range_lower_bound) & (x_pos_in_w_cycle < x_range_lower_bound + PE_X + PE_Y - 1)) begin
+                if ((x_pos_in_w_cycle >= x_range_lower_bound) & (x_pos_in_w_cycle < x_range_lower_bound + needed_iact_router_cycles_i)) begin
                   enable_write_to_storage <= 1;
                 end
                 x_pos_in_w_cycle <= x_pos_in_w_cycle + 1;
-                if (x_pos_in_w_cycle == iact_x_add_up + 2 - 1) begin
+                if (x_pos_in_w_cycle == iact_x_add_up + 2 - stride_x_i) begin
                   x_pos_in_w_cycle <= 0;
                 end
               end
               if (ram_wr_en & !enable_write_to_storage) begin
                 x_range_lower_bound <= x_start;
-                if (iact_x_add_up > x_range_lower_bound + (CLUSTERS * PE_X)) begin
-                  x_range_lower_bound <= x_range_lower_bound + (CLUSTERS * PE_X);
+                if (iact_x_add_up > x_range_lower_bound + ((CLUSTERS * PE_X) * stride_x_i)) begin
+                  x_range_lower_bound <= x_range_lower_bound + ((CLUSTERS * PE_X) * stride_x_i);
                 end
               end
             end else begin

@@ -163,22 +163,6 @@ module router_configurator #(
         end else begin
           if (needed_y_cls_reg_i == 1) begin
             psum_choose_i_reg_o <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
-          end else begin
-            // Same row-major rule as the fully-connected branch above: the
-            // index is cr*CLUSTER_COLUMNS*NUM_GLB_PSUM + cc*NUM_GLB_PSUM + g,
-            // so one cluster ROW spans CLUSTER_COLUMNS*NUM_GLB_PSUM bits, not
-            // NUM_GLB_PSUM. Select the last row of each needed_y_cls group -
-            // that row terminates the accumulation chain. Grouping by
-            // NUM_GLB_PSUM selected a cluster COLUMN in every row instead.
-            if (needed_y_cls_reg_i == 2) begin
-              psum_choose_i_reg_o <= {(CLUSTER_ROWS/2){{(CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b1}}, {(CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b0}}}};
-            end else begin
-              if (CLUSTER_ROWS == 8) begin
-                psum_choose_i_reg_o <= {(CLUSTER_ROWS/4){{(CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b1}}, {(3*CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b0}}}};
-              end else begin
-                psum_choose_i_reg_o <= {(4){{(CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b1}}, {(2*CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b0}}}};
-              end
-            end
           end
         end
       end

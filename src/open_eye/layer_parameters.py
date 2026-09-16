@@ -220,7 +220,8 @@ class LayerParameters(object):
         # === Convolution Parameters ===
         self.strideX = 1                       # Stride in X dimension
         self.strideY = 1                       # Stride in Y dimension
-        self.add_up = 0                        # Padding adjustment for alignment
+        self.add_up = 0                        # Padding adjustment for alignment (Input)
+        self.psum_add_up = 0                   # Padding adjustment for alignment (Output)
         self.complete_iacts_in_design = 0      # Flag for complete activation availability
         self.max_pooling = 0                   # Pooling layer flag
         self.output_cycles = 0                 # Output generation cycles
@@ -532,9 +533,10 @@ class LayerParameters(object):
             # === MASKING PHASE 1: Handle non-aligned output width ===
             # If output width doesn't evenly divide by PEs_X, some PEs will be unused
             calculation_ress = math.floor((params.Clusters * params.PEs_X)/self.different_kernels_per_calculation)
-            self.add_up = (self.output_shape[1]) % calculation_ress
-            self.add_up = calculation_ress - self.add_up
-            self.add_up = self.add_up % calculation_ress
+            self.psum_add_up = (self.output_shape[1]) % calculation_ress
+            self.psum_add_up = calculation_ress - self.psum_add_up
+            self.psum_add_up = self.psum_add_up % calculation_ress
+            self.add_up = self.psum_add_up * self.strideX
             self.iact_x_add_up = self.iact_size_x + self.add_up
             # === MASKING PHASE 2: Eliminate PEs beyond computation requirements ===
             # Calculate total number of X positions needed per computation cycle
@@ -1018,7 +1020,7 @@ class LayerParameters(object):
         self.iact_converter_buffer_addr_max_cycles = self.channel_div_trans * self.needed_Iact_writes
 
     def  get_pagu_values(self, params):
-        self.iact_read_limit_0 = (self.channel_div_trans*6) - 1
+        self.iact_read_limit_0 = (self.channel_div_trans*self.needed_Iact_writes) - 1
         self.iact_read_limit_1 = math.ceil(self.diff_iact_layer) - 1
         self.iact_read_limit_2 = self.needed_wght_cycles - 1
         self.iact_read_limit_3 = self.iact_x_line_repetitions - 1
@@ -1029,10 +1031,11 @@ class LayerParameters(object):
         self.iact_read_inc_1 = self.iact_repetitions_per_write
         self.iact_read_inc_2 = (self.iact_size_y + self.padding_y * 2) * self.iact_repetitions_per_write
         if (params.Clusters == 1):
-            self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM
+            self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM * self.strideX
         else:
             self.iact_read_inc_3 = self.channel_div_trans * self.needed_Iact_writes
-        self.iact_read_inc_4 = self.iact_repetitions_per_write
+        #self.iact_read_inc_3 = 4
+        self.iact_read_inc_4 = self.iact_repetitions_per_write*self.strideY
 
         if (self.used_channels == 1):
             lines_in_words = ((self.iact_size_y+(self.padding_y*2)+1)/2)
@@ -1162,13 +1165,12 @@ class LayerParameters(object):
         self.calculate_used_Y_cluster(params)
         self.calculate_used_refreshes(params)
         self.calculate_computing_matrix(params)
-        self.iact_glb_writing_cycles = self.diff_iact_layer*(self.iact_size_y+2*self.padding_y)*(self.iact_x_add_up+2*self.padding_x)*self.channel_div_trans
+        x_size = (self.iact_x_add_up+2*self.padding_x-self.strideX+1)
+        y_size = (self.iact_size_y+2*self.padding_y-self.strideY+1)
+        self.iact_glb_writing_cycles = self.diff_iact_layer*y_size*x_size*self.channel_div_trans + 1
         # === Phase 7: Calculate timing parameters ===
         # Partial sum delay for accumulation pipeline
-        if (params.SERIAL):
-            self.psum_delay = int(max([(math.ceil(self.used_psum_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
-        else :
-            self.psum_delay = int(max([(math.ceil(self.needed_refreshes_mx[layer_repetition][0]/2) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
+        self.psum_delay = int(max([(math.ceil(self.used_psum_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
 
         # Check if X-cluster usage is aligned
         if(self.psum_size_x >= params.PEs_X*params.Clusters):
@@ -1209,7 +1211,7 @@ class LayerParameters(object):
         self.buffer_cycles_for_x_iact = math.ceil((self.strideX*(addition+(params.Clusters_X*params.Clusters_Y*params.PEs_X)))/(params.IACT_RAM_CELLS*(8//4)))
         self.buffer_cycles_for_x_iact = 1
         if (self.buffer_cycles_for_x_iact == 1):
-            self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*math.ceil((self.channel_div_trans*(self.kernel_size[1]+self.iact_size_y-1)))*2
+            self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*math.ceil((self.channel_div_trans*(self.kernel_size[1]+self.iact_size_y-self.strideY)))*2
         else :
             self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*self.channel_div_trans*2
         if (self.buffer_cycles_for_x_iact == 1):
@@ -1264,13 +1266,13 @@ class LayerParameters(object):
             self.iact_converter_max_cycles = self.buffer_cycles_for_x_iact*self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1)
         if (self.buffer_cycles_for_x_iact == 1):
             full_temp = self.needed_Iact_writes * self.channel_div_trans
-            less_temp = (self.needed_Iact_writes-2) * self.channel_div_trans
+            less_temp = (self.needed_Iact_writes-3 + self.strideX) * self.channel_div_trans
             if (self.kernel_size[0] <= (params.Clusters-1) * params.NUM_GLB_PSUM * self.strideX):
                 self.iact_repetitions_per_write =  self.iact_x_line_repetitions * full_temp
-                self.iact_buffer_words_per_write =  self.iact_repetitions_per_write * ((self.iact_size_y + self.kernel_size[1]) - 1) * math.ceil(self.channels/4)
+                self.iact_buffer_words_per_write =  self.iact_repetitions_per_write * ((self.iact_size_y + self.kernel_size[1]) - self.strideY) * math.ceil(self.channels/4)
             else:
                 self.iact_repetitions_per_write = (self.iact_x_line_repetitions-1) * less_temp + full_temp
-                self.iact_buffer_words_per_write =  self.iact_repetitions_per_write * ((self.iact_size_y + self.kernel_size[1]) - 1) * math.ceil(self.channels/4)
+                self.iact_buffer_words_per_write =  self.iact_repetitions_per_write * ((self.iact_size_y + self.kernel_size[1]) - self.strideY) * math.ceil(self.channels/4)
 
         else:
             self.iact_buffer_words_per_write = self.needed_Iact_writes * self.channel_div_trans

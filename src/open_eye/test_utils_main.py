@@ -598,7 +598,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                         file_dma_ref.write(temp_string+ "\n")
             filter = filter + 1
         if ((filter >= layer_params.filters)) :
-            if (x_cor >= layer_params.psum_size_x+layer_params.add_up) :
+            if (x_cor >= layer_params.psum_size_x+layer_params.psum_add_up) :
                 les.x_start = 0
             else :
                 les.x_start = x_cor

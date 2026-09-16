@@ -56,7 +56,7 @@ module psum_pipeline #(
     input wire [7:0] iact_channel_max_cycles,
     input wire [3:0] iact_channels_per_pe_next_layer,
     input wire [5:0] filters,
-    input wire [7:0] psum_x_with_add_up,
+    input wire [11:0] psum_x_with_add_up,
     input wire [15:0] psum_x_all_cluster,
     input wire [3:0] iteration_for_kernels,
     input wire [17:0] needed_cycles,

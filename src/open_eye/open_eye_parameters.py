@@ -239,6 +239,11 @@ class OpenEyeParameters(object):
         except:
             self.DMA_BITWIDTH = 64          # AXI bus width for DMA transfers (64 bits)
 
+        try:
+            self.STRIDE_ENABLED = int(os.getenv("STRIDE_ENABLED"))
+        except:
+            self.STRIDE_ENABLED = 0          # AXI bus width for DMA transfers (64 bits)
+
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode
 
