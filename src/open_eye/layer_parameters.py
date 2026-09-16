@@ -1521,7 +1521,7 @@ class LayerParameters(object):
         # Restore the value the port carried before; both terms keep their
         # defaults here because write_dense_layer does not run
         # calculate_computing_matrix.
-        self.iact_x_add_up = self.psum_size_x + self.add_up
+        self.iact_x_add_up = self.iact_size_x
         self.calculate_transmission_cycles(params)
 
         # Calculate the number of refreshes needed for the layer

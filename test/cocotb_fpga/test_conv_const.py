@@ -60,7 +60,7 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("KERNEL_SIZE_Y",  [3])
 @pytest.mark.parametrize("INPUT_SIZE_X",   [8])
 @pytest.mark.parametrize("INPUT_SIZE_Y",   [1])
-@pytest.mark.parametrize("INPUT_CHANNELS", [1])
+@pytest.mark.parametrize("INPUT_CHANNELS", [4])
 # Both operands constant: see the module docstring. Keep them at 1 so the
 # output reads directly as a product count; a second value guards against a
 # fault that happens to be invisible at 1 (for example a dropped multiply).
@@ -69,7 +69,7 @@ clk_delay_unit_out = "ps"
 # cannot be blamed on the multi-row psum accumulation chain. CLUSTER_ROWS=2
 # adds exactly that chain and nothing else, so the pair isolates it.
 @pytest.mark.parametrize("CLUSTER_ROWS", [1, 2])
-@pytest.mark.parametrize("NUM_GLB_IACT", [3])
+@pytest.mark.parametrize("NUM_GLB_IACT", [1])
 @pytest.mark.parametrize("NUM_GLB_PSUM", [4])
 @pytest.mark.parametrize("NUM_GLB_WGHT", [3])
 def test_conv_const_operands(
@@ -174,8 +174,8 @@ if __name__ == "__main__":
 
     test_conv_const_operands(
         NUM_FILTERS=4, STRIDE=1, KERNEL_SIZE_X=3, KERNEL_SIZE_Y=3,
-        INPUT_SIZE_X=8, INPUT_SIZE_Y=1, INPUT_CHANNELS=1,
+        INPUT_SIZE_X=8, INPUT_SIZE_Y=1, INPUT_CHANNELS=4,
         CONST_VALUE=1,
-        CLUSTER_ROWS=1, NUM_GLB_IACT=3, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3,
+        CLUSTER_ROWS=1, NUM_GLB_IACT=1, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3,
         request=_Request(),
     )
