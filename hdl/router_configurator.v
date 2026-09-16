@@ -137,6 +137,15 @@ module router_configurator #(
   // Loop variables
   integer cc, cr, g;
 
+  // Replication counts for the psum_choose patterns below. A concatenation
+  // repeat of zero is illegal, and CLUSTER_ROWS/2 or /4 goes to zero on small
+  // arrays, so clamp to 1. Those branches cannot be selected on such an array
+  // anyway - needed_y_cls_reg_i can never exceed CLUSTER_ROWS - but every
+  // branch still has to elaborate.
+  localparam PSUM_CHOOSE_ROW_BITS = CLUSTER_COLUMNS * NUM_GLB_PSUM;
+  localparam PSUM_CHOOSE_REP_2    = (CLUSTER_ROWS / 2) > 0 ? (CLUSTER_ROWS / 2) : 1;
+  localparam PSUM_CHOOSE_REP_4    = (CLUSTER_ROWS / 4) > 0 ? (CLUSTER_ROWS / 4) : 1;
+
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       router_mode_iact_o                  <= 0;
@@ -171,12 +180,12 @@ module router_configurator #(
             // that row terminates the accumulation chain. Grouping by
             // NUM_GLB_PSUM selected a cluster COLUMN in every row instead.
             if (needed_y_cls_reg_i == 2) begin
-              psum_choose_i_reg_o <= {(CLUSTER_ROWS/2){{(CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b1}}, {(CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b0}}}};
+              psum_choose_i_reg_o <= {PSUM_CHOOSE_REP_2{{PSUM_CHOOSE_ROW_BITS{1'b1}}, {PSUM_CHOOSE_ROW_BITS{1'b0}}}};
             end else begin
               if (CLUSTER_ROWS == 8) begin
-                psum_choose_i_reg_o <= {(CLUSTER_ROWS/4){{(CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b1}}, {(3*CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b0}}}};
+                psum_choose_i_reg_o <= {PSUM_CHOOSE_REP_4{{PSUM_CHOOSE_ROW_BITS{1'b1}}, {(3*PSUM_CHOOSE_ROW_BITS){1'b0}}}};
               end else begin
-                psum_choose_i_reg_o <= {(4){{(CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b1}}, {(2*CLUSTER_COLUMNS*NUM_GLB_PSUM){1'b0}}}};
+                psum_choose_i_reg_o <= {(4){{PSUM_CHOOSE_ROW_BITS{1'b1}}, {(2*PSUM_CHOOSE_ROW_BITS){1'b0}}}};
               end
             end
           end
