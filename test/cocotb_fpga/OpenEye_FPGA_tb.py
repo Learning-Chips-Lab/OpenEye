@@ -258,12 +258,14 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     layer_parameters = list(reversed(layer_parameters))
     for n, lpar in enumerate(layer_parameters):
         logger.info("layer %d/%d %s: in=%sx%s ch=%s filters=%s send_values_out=%s "
-                    "store_in_psum=%s transmissions=%s output_cycles=%s psum_output_words=%s",
+                    "store_in_psum=%s transmissions=%s output_cycles=%s psum_output_words=%s "
+                    "used_Y_cluster=%s used_X_cluster=%s",
                     n, max_layers, lpar.layer_name, getattr(lpar, "iact_size_x", "?"),
                     getattr(lpar, "iact_size_y", "?"), getattr(lpar, "channels", "?"),
                     getattr(lpar, "filters", "?"), lpar.send_values_out,
                     getattr(lpar, "store_in_psum", "?"), getattr(lpar, "needed_total_transmissions", "?"),
-                    getattr(lpar, "output_cycles", "?"), getattr(lpar, "psum_output_words", "?"))
+                    getattr(lpar, "output_cycles", "?"), getattr(lpar, "psum_output_words", "?"),
+                    getattr(lpar, "used_Y_cluster", "?"), getattr(lpar, "used_X_cluster", "?"))
     # Create the OpenEye parameters and the DRAM given the model
     dram = DRAM.DRAMContents(model, layer_parameters)
     time_printer.timestamp("Initialized DRAM. ", logger)

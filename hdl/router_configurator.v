@@ -137,6 +137,15 @@ module router_configurator #(
   // Loop variables
   integer cc, cr, g;
 
+  // Replication counts for the psum_choose patterns below. A concatenation
+  // repeat of zero is illegal, and CLUSTER_ROWS/2 or /4 goes to zero on small
+  // arrays, so clamp to 1. Those branches cannot be selected on such an array
+  // anyway - needed_y_cls_reg_i can never exceed CLUSTER_ROWS - but every
+  // branch still has to elaborate.
+  localparam PSUM_CHOOSE_ROW_BITS = CLUSTER_COLUMNS * NUM_GLB_PSUM;
+  localparam PSUM_CHOOSE_REP_2    = (CLUSTER_ROWS / 2) > 0 ? (CLUSTER_ROWS / 2) : 1;
+  localparam PSUM_CHOOSE_REP_4    = (CLUSTER_ROWS / 4) > 0 ? (CLUSTER_ROWS / 4) : 1;
+
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       router_mode_iact_o                  <= 0;
