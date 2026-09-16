@@ -274,6 +274,28 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
             return [_zero(v) for v in x] if isinstance(x, list) else 0
         dram.fmap[0] = _zero(dram.fmap[0])
         logger.info("OPENEYE_ZERO_IACTS: layer-0 input zeroed")
+    if os.environ.get("OPENEYE_CONST_IACTS"):
+        # Debug: force every layer-0 activation to one constant. With c = 1 the
+        # expected output of a Dense filter is sum(weights) + bias, so a DUT
+        # value that is short by a factor or an offset says how many product
+        # terms actually accumulated - which zeroed inputs cannot show, since
+        # they make every product vanish regardless of how many are summed.
+        const_iact = int(os.environ["OPENEYE_CONST_IACTS"])
+        def _const(x):
+            return [_const(v) for v in x] if isinstance(x, list) else const_iact
+        dram.fmap[0] = _const(dram.fmap[0])
+        logger.info("OPENEYE_CONST_IACTS: layer-0 input set to %d", const_iact)
+    if os.environ.get("OPENEYE_CONST_WGHTS"):
+        # Debug: force every weight to one constant. Combined with
+        # OPENEYE_CONST_IACTS=1 each Dense output becomes exactly
+        # (terms accumulated) * const + bias, so the DUT value minus the bias
+        # counts how many products the PEs actually summed. That is the one
+        # number neither the zero-input nor the constant-input control can give.
+        const_wght = int(os.environ["OPENEYE_CONST_WGHTS"])
+        def _const_w(x):
+            return [_const_w(v) for v in x] if isinstance(x, list) else const_wght
+        dram.weights = _const_w(dram.weights)
+        logger.info("OPENEYE_CONST_WGHTS: all weights set to %d", const_wght)
     test_amount = 1
     for _ in range(test_amount) :
         for layer_number, layer in enumerate(model):
