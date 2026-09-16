@@ -408,7 +408,7 @@ class LayerParameters(object):
             # based on available PE resources divided by input width
             self.different_kernels_per_calculation = usable_pes//self.output_shape[1]
             # Limit to at most ceil(output_channels/8) kernels
-            self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.output_shape[3]/4))
+            self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.channels/4))
             # Calculate how many Y lines can be processed per computation
             self.y_lines_per_calculation = math.floor(usable_pes/self.output_shape[1]/self.different_kernels_per_calculation)
             # Limit by available Y clusters and input height
