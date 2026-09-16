@@ -64,7 +64,11 @@ clk_delay_unit_out = "ps"
 # Both operands constant: see the module docstring. Keep them at 1 so the
 # output reads directly as a product count; a second value guards against a
 # fault that happens to be invisible at 1 (for example a dropped multiply).
-@pytest.mark.parametrize("CONST_VALUE", [1, 2])
+# 8 is included because 1 and 2 both quantize to the same interlayer byte:
+# if the reference and the DUT are BOTH constant across operand values, the
+# check cannot discriminate, and only a value far enough apart shows whether
+# either side actually tracks the input.
+@pytest.mark.parametrize("CONST_VALUE", [1, 2, 8])
 # CLUSTER_ROWS=1 keeps the mapping to a single cluster row, so a failure here
 # cannot be blamed on the multi-row psum accumulation chain. CLUSTER_ROWS=2
 # adds exactly that chain and nothing else, so the pair isolates it.
