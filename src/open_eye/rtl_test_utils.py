@@ -544,6 +544,152 @@ def dump_iact_path(dut, oep, depth=64):
 iact_handoff_counts = {"enable": {}, "handshake": {}, "choose": {}, "cycles": 0}
 
 
+# Per-cluster iact handshake counts, one entry per (cluster_x, cluster_y, stage).
+cluster_iact_counts = {}
+
+
+async def monitor_cluster_iact(ptp, dut, oep):
+    """Count iact handshakes at each hop inside every OpenEye_Cluster.
+
+    The top-level monitor above only sees the array boundary, where all
+    clusters look identical. When the PEs of one cluster row end up empty, the
+    question is which hop drops the data: the cluster input, the GLB bypass, or
+    the router output into the PE cluster. Counting enable & ready at all three
+    per cluster answers that without a waveform.
+    """
+    stages = (("ext", "ext_mem_iact_enable_i", "ext_mem_iact_ready_o"),
+              ("glb", "glb_cluster_iact_enable", "glb_cluster_iact_ready"),
+              ("pe", "pe_iact_enable", "pe_iact_ready"))
+    clusters = []
+    for cx in range(oep.Clusters_X):
+        for cy in range(oep.Clusters_Y):
+            try:
+                clusters.append(((cx, cy),
+                                 dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster))
+            except Exception:
+                pass
+            for name, _, _ in stages:
+                cluster_iact_counts[(cx, cy, name)] = 0
+
+    while True:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        for key, cl in clusters:
+            for name, en_sig, rdy_sig in stages:
+                try:
+                    en = int(getattr(cl, en_sig).value)
+                    rdy = int(getattr(cl, rdy_sig).value)
+                except Exception:
+                    continue
+                if en & rdy:
+                    cluster_iact_counts[(key[0], key[1], name)] += bin(en & rdy).count("1")
+                    # Every PE accepts the same number of transfers regardless of
+                    # cluster row, so the remaining difference has to be payload:
+                    # count how many accepted words actually carry data. With
+                    # OPENEYE_CONST_IACTS=1 every real activation is non-zero, so
+                    # a zero word means the converter sent an empty slice.
+                    if name == "pe":
+                        try:
+                            data = int(getattr(cl, "pe_iact_data").value)
+                        except Exception:
+                            continue
+                        key_nz = (key[0], key[1], "pe_nonzero")
+                        cluster_iact_counts.setdefault(key_nz, 0)
+                        if data:
+                            cluster_iact_counts[key_nz] += 1
+
+
+pe_iact_counts = {}
+
+
+async def monitor_pe_iact(ptp, dut, oep, pe_col=0):
+    """Per PE: count enable, and enable & ready, on the lane it selects.
+
+    The cluster-level counters show identical traffic reaching every cluster
+    while only some clusters' PEs end up holding data, so the question is
+    whether a PE never sees valid data on its selected lane, sees it and
+    refuses it, or accepts it and fails to store it. Only a per-PE, per-lane
+    count separates those three.
+    """
+    pes = []
+    for cx in range(oep.Clusters_X):
+        for cy in range(oep.Clusters_Y):
+            for row in range(oep.PEs_Y):
+                try:
+                    pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
+                          .pe_cluster.gen_X[pe_col].gen_Y[row].pe)
+                except Exception:
+                    continue
+                pes.append(((cx, cy, row), pe))
+                pe_iact_counts[(cx, cy, row)] = {"sel": None, "en": 0, "hs": 0}
+
+    while True:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        for key, pe in pes:
+            try:
+                sel = int(pe.iact_select_i.value)
+                en = int(pe.iact_enable_i.value)
+                rdy = int(pe.iact_ready_o.value)
+            except Exception:
+                continue
+            rec = pe_iact_counts[key]
+            rec["sel"] = sel
+            if sel >= oep.NUM_GLB_IACT:
+                continue
+            if (en >> sel) & 1:
+                rec["en"] += 1
+                if (rdy >> sel) & 1:
+                    rec["hs"] += 1
+
+
+def report_pe_iact():
+    """Log the per-PE iact lane counts gathered by monitor_pe_iact."""
+    if not pe_iact_counts:
+        return
+    logger.error("per-PE iact on selected lane (sel=lane, en=valid cycles, hs=accepted):")
+    for key in sorted(pe_iact_counts):
+        r = pe_iact_counts[key]
+        logger.error("  cluster(%d,%d) row %d: sel=%s en=%d hs=%d",
+                     key[0], key[1], key[2], r["sel"], r["en"], r["hs"])
+
+
+def dump_compute_mask(dut, oep):
+    """Log the PE compute mask as the array actually sees it, per cluster.
+
+    Weights reach every PE but activations stop at some cluster rows, and the
+    per-PE compute enable is the one gate on the iact store path that the
+    weight path does not share. Reading it beats deriving it: the mask crosses
+    two index conventions (Python packs PE-row-major, OpenEye_Parallel slices
+    per cluster) and either could be the one that is wrong.
+    """
+    try:
+        logger.error("compute_mask_i = %s", str(dut.OpenEye_Parallel.compute_mask_i.value))
+    except Exception:
+        logger.error("compute_mask_i unreadable")
+    for cx in range(oep.Clusters_X):
+        for cy in range(oep.Clusters_Y):
+            try:
+                cl = dut.OpenEye_Parallel.gen_x[cx].gen_y[cy]
+                logger.error("  cluster(%d,%d) compute_cluster_i_w=%s", cx, cy,
+                             str(cl.compute_cluster_i_w.value))
+            except Exception as exc:
+                logger.error("  cluster(%d,%d) compute_cluster_i_w unreadable (%s)",
+                             cx, cy, type(exc).__name__)
+
+
+def report_cluster_iact():
+    """Log the per-cluster, per-hop iact handshake counts."""
+    if not cluster_iact_counts:
+        return
+    logger.error("per-cluster iact handshakes (enable & ready, summed over lanes):")
+    seen = sorted({(cx, cy) for cx, cy, _ in cluster_iact_counts})
+    for cx, cy in seen:
+        logger.error("  cluster(%d,%d) ext=%s glb=%s pe=%s pe_nonzero_cycles=%s", cx, cy,
+                     cluster_iact_counts.get((cx, cy, "ext"), 0),
+                     cluster_iact_counts.get((cx, cy, "glb"), 0),
+                     cluster_iact_counts.get((cx, cy, "pe"), 0),
+                     cluster_iact_counts.get((cx, cy, "pe_nonzero"), 0))
+
+
 async def monitor_iact_handoff(ptp, dut):
     """Count iact valid and handshake cycles per bit at the OpenEye_Parallel input.
 
@@ -1871,6 +2017,9 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
 
     if os.environ.get("DUMP_PSUM_BUFFERS"):
         report_iact_handoff(oep)
+        report_cluster_iact()
+        report_pe_iact()
+        dump_compute_mask(dut, oep)
         dump_iact_path(dut, oep)
         dump_pe_occupancy(dut, oep)
         dump_pe_psum_spads(dut, oep)
