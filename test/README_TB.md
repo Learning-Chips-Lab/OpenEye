@@ -284,6 +284,42 @@ Current testbenches in this directory:
 
 For comprehensive testing, consider using CocoTB testbenches where available.
 
+## Debug switches (environment variables)
+
+All opt-in unless noted. They exist because a bare pass/fail says nothing about
+*why* a result is wrong; each one turns a mismatch into a measurement.
+
+### FPGA top level (`test/cocotb_fpga/`)
+
+| Variable | Effect |
+|---|---|
+| `OPENEYE_PROBE_FSM=1` | Log every main-FSM transition with the decoded config fields that steer it. |
+| `OPENEYE_FAIL_ON_STALL=<cycles>` | Fail once neither FSM advances for that many cycles, instead of running to the 15 ms sim timeout (hours of wall clock). The report names the FSM states, the psum handshake vectors, the router modes and the per-PE iact/weight counts. Needs `OPENEYE_PROBE_FSM`. |
+| `OPENEYE_ZERO_IACTS=1` | Zero layer 0's input, so every output must equal its bias alone. Separates the bias/psum path from iact and weight delivery. |
+| `OPENEYE_CONST_IACTS=<v>` | Force every layer-0 activation to a constant. |
+| `OPENEYE_CONST_WGHTS=<v>` | Force every weight to a constant. With both at 1 each output becomes a *count* of the products that actually accumulated - this is how "gemm is wrong" became "gemm accumulates 9 of 32 products". **Always sweep at least two values**: a single constant cannot distinguish a data-independent DUT from a degenerate reference. |
+| `DUMP_CLUSTER_IACT=1` | Per cluster, count iact handshakes at three hops (`ext`, `glb`, `pe`) plus how many carried non-zero payload; per PE, the selected lane with its valid and accepted counts. This is what showed activations arriving at every cluster and only some carrying data. |
+| `DUMP_PSUM_BUFFERS=1` | End-of-run dump: per-PE SPAD occupancy, psum buffers, iact path, and the reports above. |
+| `OPENEYE_MAX_PROCS=<n>` | Cap the helper processes the reference calculation spawns. Without it one pytest worker started 37 processes and drove an 8-core machine to load 94; at `3` it is 7 processes and load ~12. |
+
+### PE cluster (`test/cocotb_PE_cluster/`)
+
+| Variable | Effect |
+|---|---|
+| `OPENEYE_PSUM_TERMS=1` | On a psum mismatch, print every product feeding that psum as `(weight, iact, product, pe_y)`, and flag any single term or operand mis-pairing that accounts for the difference. |
+| *(always on)* | The SPAD encoder reports any zero run that does not fit its overhead field. An undecodable weight stream would make every downstream psum comparison meaningless, so this is checked before the terms are interpreted. |
+
+## Focused regression tests
+
+The big parametrised suites are too large to run whole (`test_PE_CLUSTER.py`
+alone collects 32256 cases), so these hold everything fixed but the one axis
+that matters:
+
+| Test | Purpose | Runtime |
+|---|---|---|
+| `test/cocotb_PE_cluster/test_PE_CLUSTER_sparse.py` | Weight-sparsity sweep at one shape and seed. Turns the sparse failures into a monotone curve: `PARALLEL_MACS=2` passes to 30 % and fails from 40 %. | ~15 s, 14 cases |
+| `test/cocotb_fpga/test_conv_const.py` | Smallest conv the FPGA top level can run, with constant operands, so each output is a product count. Uses `LAYER=Convolution` (two stacked conv layers), which exercises the interlayer write-back *without* a pooling layer in between - the MNIST net cannot separate the two. | ~65 s per case |
+
 ## References
 
 - Generic Makefile: `test/Makefile`

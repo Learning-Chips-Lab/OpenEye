@@ -349,20 +349,29 @@ async def get_psum(ptp, dut, iacts_array, wghts_array, psum_array):
 
     current_iact = 0
     iact_line = 0
+    # OPENEYE_PSUM_TERMS=1 records every product that goes into each psum, so a
+    # mismatch can be reported as "which term is missing" instead of only "the
+    # total is wrong". The sparse weight path fails at a single psum position,
+    # and the difference there is expected to equal one skipped product.
+    record_terms = bool(os.environ.get("OPENEYE_PSUM_TERMS"))
+    terms = {} if record_terms else None
     for pe_x in range(int(dut.PE_COLUMNS.value)):
         for pe_y in range(int(dut.PE_ROWS.value)):
             for iact_y in range(len(iact[pe_x + pe_y])):
                 for iact_x in range(len(iact[pe_x + pe_y][iact_y])):
                     for wght_x in range(len(wght[pe_y][current_iact])):
-                        control[pe_x][wght_x] = (
-                            control[pe_x][wght_x]
-                            + wght[pe_y][current_iact + iact_line][wght_x]
-                            * iact[pe_x + pe_y][iact_y][iact_x]
-                        )
+                        w = wght[pe_y][current_iact + iact_line][wght_x]
+                        a = iact[pe_x + pe_y][iact_y][iact_x]
+                        control[pe_x][wght_x] = control[pe_x][wght_x] + w * a
+                        if record_terms:
+                            terms.setdefault((pe_x, wght_x), []).append(
+                                (int(w), int(a), int(w) * int(a), pe_y))
                     current_iact = current_iact + 1
                 iact_line = current_iact + iact_line
                 current_iact = 0
             iact_line = 0
+    global psum_terms
+    psum_terms = terms
 
     global first_error_found
     first_error_found = check_psum(
@@ -431,8 +440,52 @@ def check_psum(captured, control, pe_columns):
             )
             if value != expected:
                 first_error_found = 1
+                _report_missing_term(pe_x, idx, value, expected)
     print("First error is: " + str(first_error_found))
     return first_error_found
+
+
+psum_terms = None
+
+
+def _report_missing_term(pe_x, wght_x, value, expected):
+    """Name the product(s) that account for a psum mismatch.
+
+    Needs OPENEYE_PSUM_TERMS=1 (get_psum records the terms then). A sparse-path
+    failure should differ from the reference by exactly one skipped product, so
+    printing the terms whose value equals the difference turns "the total is
+    wrong" into "this weight times this activation never arrived".
+    """
+    report_spad_overflow()
+    if not psum_terms:
+        return
+    contributing = psum_terms.get((pe_x, wght_x))
+    if not contributing:
+        return
+    diff = expected - value
+    exact = [t for t in contributing if t[2] == diff]
+    zeros = sum(1 for t in contributing if t[0] == 0)
+    print("  psum[pe_x=%d][%d]: diff=%d over %d terms (%d with weight 0)"
+          % (pe_x, wght_x, diff, len(contributing), zeros))
+    if exact:
+        for w, a, prod, pe_y in exact:
+            print("    diff equals a single term: wght=%d * iact=%d = %d (pe_y=%d)"
+                  % (w, a, prod, pe_y))
+    else:
+        # No clean omission: print the operand pairs so a mis-pairing shows up.
+        # If the DUT multiplied a weight by the wrong activation the difference
+        # is w*(a_correct - a_used), which a list of bare products cannot show.
+        print("    no single term equals the diff; (wght, iact, product, pe_y):")
+        print("      %s" % (contributing,))
+        pairs = []
+        for w, a, prod, pe_y in contributing:
+            if w == 0:
+                continue
+            for w2, a2, prod2, pe_y2 in contributing:
+                if w * a2 == prod - diff:
+                    pairs.append("wght %d paired with iact %d instead of %d" % (w, a2, a))
+        if pairs:
+            print("      mis-pairing candidates: %s" % (pairs[:4],))
 
 async def send_wght(ptp, dut, data_array):
     global signals_dict
@@ -582,6 +635,28 @@ async def send_to_spad(ptp, spad, data_signal, addr_bits, trans_bits, data_bits,
     # Clear the signal after transmission complete
     cocotb.start_soon(rtl_test_utils.set_input(ptp, data_signal, 0))
 
+# Zero-run encodings that did not fit their overhead field, recorded by
+# generate_spad and reported by report_spad_overflow().
+_spad_overflow = []
+
+
+def report_spad_overflow():
+    """Log any zero-run that overflowed its overhead field during encoding.
+
+    A sparse weight stream whose skip count does not fit is undecodable, so a
+    psum mismatch downstream says nothing about the hardware. Call this before
+    trusting a sparse-mode failure.
+    """
+    if not _spad_overflow:
+        return False
+    print("  SPAD ENCODER: %d zero-run(s) exceeded the overhead field:"
+          % len(_spad_overflow))
+    for y, x, overhead, bits in _spad_overflow[:8]:
+        print("    row %d, col %d: skip=%d does not fit in %d bits (max %d)"
+              % (y, x, overhead, bits, (1 << bits) - 1))
+    return True
+
+
 def generate_spad(
     array, addr_spad_words, data_spad_words, bitwidth, sisd, offset, ignore_zeros
 ):
@@ -639,6 +714,15 @@ def generate_spad(
             # the next row starts on a fresh word. SISD mode stores one value
             # per word, so padding there would inject a bogus zero weight.
             if (data[y][x] != 0) | (not ignore_zeros) | (simd & (len(data[y]) - 1 == x) & (current_count%2 != 0)):
+                # The skip count occupies (offset - bitwidth) bits above the
+                # payload. It is never clamped here and is not reset between
+                # rows, so a long zero run silently shifts past its field and
+                # corrupts the neighbouring packed value. Report it rather than
+                # emitting a stream the hardware cannot decode.
+                if ignore_zeros:
+                    oh_bits = offset - bitwidth
+                    if oh_bits > 0 and overhead >= (1 << oh_bits):
+                        _spad_overflow.append((y, x, overhead, oh_bits))
                 if (data[y][x] < 0):
                     temp_data = data[y][x] + 2**bitwidth
                 else :
