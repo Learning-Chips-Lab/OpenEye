@@ -94,7 +94,6 @@ module iact_stream_constructor #(
     input      [                                  8-1:0] needed_iact_channel_cycles_i,
     input      [                                 14-1:0] fc_size_i,
     input signed [                               12-1:0] iact_x_add_up,
-    input signed [                                8-1:0] iact_size_y_i,
     input signed [                                4-1:0] iact_channels_per_pe_i,
     input      [                                    1:0] channel_div_trans,
     input      [                                  8-1:0] x_lines_i,
@@ -104,7 +103,6 @@ module iact_stream_constructor #(
     input      [                                  4-1:0] wght_size_y_i,
     input      [                                  3-1:0] stride_x_i,
     input      [                                  3-1:0] stride_y_i,
-    input      [                                    3:0] iact_x_per_cluster_i,
     input      [                                  4-1:0] y_lines_per_calc,
     input                                                fully_connected_i,
     input      [                                   11:0] needed_iact_buffer_words_i,
@@ -395,6 +393,9 @@ module iact_stream_constructor #(
         end
       end
     end
+reg [11:0] iact_values_per_cluster_transmit;
+reg [10:0] x_pos_inc;
+
 reg enable_write_to_storage;
     integer signed r, w;
     always @(posedge clk_i, negedge rst_ni) begin
@@ -402,7 +403,7 @@ reg enable_write_to_storage;
       if (!rst_ni) begin
         // Initialize the FSM cycle counter to 0 for tracking FSM state transitions
         fsm_cycle                     <= 0;
-        enable_write_to_storage                    <= 0;
+        enable_write_to_storage       <= 0;
         wr_addr_0                     <= 0;
         wr_addr_1                     <= 0;
         wr_addr_2                     <= 0;
@@ -437,6 +438,8 @@ reg enable_write_to_storage;
         rd_cycle_loop_cnt_2           <= 0;
         rd_cycle_loop_cnt_3           <= 0;
         rd_cycle_loop_cnt_4           <= 0;
+        iact_values_per_cluster_transmit <= 0;
+        x_pos_inc                        <= 0;
         for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
           for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
             mem_data_payload_reg[r][w]  <= 0;
@@ -450,7 +453,7 @@ reg enable_write_to_storage;
         case (fsm_current_state)
           FSM_INITIALIZE: begin
             fsm_cycle              <= 0;
-            enable_write_to_storage               <= 0;
+            enable_write_to_storage <= 0;
             wr_addr_1              <= 0;
             wr_addr_2              <= 0;
             router_cycle           <= 0;
@@ -485,6 +488,11 @@ reg enable_write_to_storage;
             iact_router_counter        <= 0;
             kernel_y_counter           <= 0;
             iacts_in_one_trans         <= ((values_per_word+1) / WORDS_PER_CYCLE);
+            if (fully_connected_i) begin
+              iact_values_per_cluster_transmit <= iact_channels_per_pe_i * PE_Y;
+            end else begin
+              iact_values_per_cluster_transmit <= needed_iact_router_cycles_i;
+            end
             if (enable_store) begin
               ram_wr_addr         <= address_storage;
               fsm_current_state   <= WRITE_TO_MEMORY;
@@ -494,6 +502,11 @@ reg enable_write_to_storage;
               wr_cycle_loop_cnt_0 <= ~0;
               x_pos_in_w_cycle    <= 0;
               x_range_lower_bound <= x_start;
+              if (fully_connected_i) begin
+                x_pos_inc <= CLUSTER_ROWS * iact_values_per_cluster_transmit;
+              end else begin
+                x_pos_inc <= ((CLUSTERS * PE_X) * stride_x_i);
+              end
               
               if (0 == (iacts_in_one_trans - 1)) begin
                 router_cycle        <= 0;
@@ -514,14 +527,14 @@ reg enable_write_to_storage;
                 end
               end
             end
-            if (!fully_connected_i & CLUSTERS != 1) begin
+            if (CLUSTERS != 1) begin
               router_cycle <= router_cycle + 1;
               if (router_cycle == (2 - 1)) begin
                 router_cycle <= 0;
               end
               if (router_cycle == 0) begin
                 enable_write_to_storage <= 0;
-                if ((x_pos_in_w_cycle >= x_range_lower_bound) & (x_pos_in_w_cycle < x_range_lower_bound + needed_iact_router_cycles_i)) begin
+                if ((x_pos_in_w_cycle >= x_range_lower_bound) & (x_pos_in_w_cycle < x_range_lower_bound + iact_values_per_cluster_transmit)) begin
                   enable_write_to_storage <= 1;
                 end
                 x_pos_in_w_cycle <= x_pos_in_w_cycle + 1;
@@ -531,8 +544,8 @@ reg enable_write_to_storage;
               end
               if (ram_wr_en & !enable_write_to_storage) begin
                 x_range_lower_bound <= x_start;
-                if (iact_x_add_up > x_range_lower_bound + ((CLUSTERS * PE_X) * stride_x_i)) begin
-                  x_range_lower_bound <= x_range_lower_bound + ((CLUSTERS * PE_X) * stride_x_i);
+                if (iact_x_add_up > x_range_lower_bound + x_pos_inc) begin
+                  x_range_lower_bound <= x_range_lower_bound + x_pos_inc;
                 end
               end
             end else begin
