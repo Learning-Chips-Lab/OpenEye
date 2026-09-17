@@ -318,7 +318,8 @@ that matters:
 | Test | Purpose | Runtime |
 |---|---|---|
 | `test/cocotb_PE_cluster/test_PE_CLUSTER_sparse.py` | Weight-sparsity sweep at one shape and seed. Turns the sparse failures into a monotone curve: `PARALLEL_MACS=2` passes to 30 % and fails from 40 %. | ~15 s, 14 cases |
-| `test/cocotb_fpga/test_conv_const.py` | Smallest conv the FPGA top level can run, with constant operands, so each output is a product count. Uses `LAYER=Convolution` (two stacked conv layers), which exercises the interlayer write-back *without* a pooling layer in between - the MNIST net cannot separate the two. | ~65 s per case |
+| `test/cocotb_fpga/test_conv_const.py::test_conv_const_single_layer` | One conv layer with constant operands, so each output is a product count. Compute and read-out only, no interlayer step. | ~65 s per case, 6 cases |
+| `test/cocotb_fpga/test_conv_const.py::test_conv_const_two_layers` | Two stacked conv layers (`LAYER=Convolution_Stack`): the only focused test of the interlayer psum->iact write-back, with no pooling layer in between - the MNIST net cannot separate the two. Sweeps c = 1 and 8, because 1 and 2 quantise to the same interlayer byte. | ~65 s per case, 8 cases |
 
 ## References
 

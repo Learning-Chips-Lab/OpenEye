@@ -3,37 +3,59 @@
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
 
-"""Smallest convolution the FPGA top level can run, with constant operands.
+"""Smallest convolutions the FPGA top level can run, with constant operands.
 
 Why this exists
 ---------------
 Every other FPGA conv test uses random weights and activations, so when the
 result is wrong the only thing the failure tells you is "wrong". With every
-activation and every weight forced to 1, each output becomes a *count*:
+activation and every weight forced to one constant c, each output becomes a
+*count*:
 
-    out[f][y][x] = (terms that actually accumulated) + bias[f]
+    out[f][y][x] = (terms that actually accumulated) * c**2 + bias[f]
 
 and for an interior pixel the correct count is KERNEL_X * KERNEL_Y * CHANNELS.
 A DUT value short by a whole factor therefore names how many products reached
 the MACs, which is the question random data cannot answer. That is exactly how
 the gemm shortfall was pinned down to 9 of 32 products (see
-OPENEYE_CONST_IACTS / OPENEYE_CONST_WGHTS in OpenEye_FPGA_tb.py); this test
-makes the same probe available for the convolution path.
+OPENEYE_CONST_IACTS / OPENEYE_CONST_WGHTS in OpenEye_FPGA_tb.py).
 
-It is also deliberately tiny - an 8x8 input with 1 channel and 4 filters - so
-it runs in well under a minute and can be iterated on while debugging, unlike
-the MNIST net that test_single_layers.py builds by default.
+The two tests
+-------------
+test_conv_const_single_layer   LAYER=Convolution, one conv layer. Checks the
+                               compute and read-out path end to end with no
+                               interlayer step involved.
 
-LAYER=Convolution builds two stacked conv layers (see data_create.create_layer),
-which means this test also exercises the interlayer psum->iact write-back
-without a pooling layer in between. That matters: in the MNIST net the failing
-interlayer check sits after a Pooling layer, so conv and pooling cannot be told
-apart there.
+test_conv_const_two_layers     LAYER=Convolution_Stack, two stacked conv
+                               layers. The first layer's psums are quantised
+                               and written back into the iact buffer as the
+                               second layer's input, so this is the only
+                               focused test of the interlayer write-back. It
+                               has no pooling layer in between: in the MNIST
+                               net the failing interlayer check sits after a
+                               Pooling layer, so conv and pooling cannot be
+                               told apart there.
+
+They are split because a single-layer failure and a write-back failure are
+different bugs. When LAYER=Convolution changed from two layers to one, the
+old combined test silently stopped exercising the write-back while still
+failing for another reason - nothing in its output said so.
+
+Known state (2026-09-16/17)
+---------------------------
+single layer:  all configs fail, 4 of 4 feature maps differ.
+two layers:    the interlayer write-back ignores the computed psums. With
+               CLUSTER_ROWS=2 the buffer holds 0x2020202000000000 for c = 1, 2
+               and 8 alike while the reference moves; with CLUSTER_ROWS=1 it is
+               never written (reads back X).
+
+Both tests are tiny - an 8-wide input and 4 filters - so a case runs in about
+a minute and they can be iterated on while debugging, unlike the MNIST net
+that test_single_layers.py builds by default.
 
 Usage:
     pytest test_conv_const.py -v
-    # or, for the arithmetic to be interpretable, run a single config:
-    pytest "test_conv_const.py::test_conv_const_operands[2-3-4-3-1-1-8-3-3-1-4]" -v
+    pytest test_conv_const.py -v -k two_layers
 """
 
 import os
@@ -53,40 +75,24 @@ clk_delay_unit_in  = "ps"
 clk_delay_out      = 100
 clk_delay_unit_out = "ps"
 
+# Fixed geometry shared by both tests: small enough to run in about a minute.
+NUM_FILTERS   = 4
+STRIDE        = 1
+KERNEL_SIZE_X = 3
+KERNEL_SIZE_Y = 3
+INPUT_SIZE_X  = 8
+INPUT_SIZE_Y  = 1
+NUM_GLB_PSUM  = 4
+NUM_GLB_WGHT  = 3
 
-@pytest.mark.parametrize("NUM_FILTERS",    [4])
-@pytest.mark.parametrize("STRIDE",         [1])
-@pytest.mark.parametrize("KERNEL_SIZE_X",  [3])
-@pytest.mark.parametrize("KERNEL_SIZE_Y",  [3])
-@pytest.mark.parametrize("INPUT_SIZE_X",   [8])
-@pytest.mark.parametrize("INPUT_SIZE_Y",   [1])
-@pytest.mark.parametrize("INPUT_CHANNELS", [4])
-# Both operands constant: see the module docstring. Keep them at 1 so the
-# output reads directly as a product count; a second value guards against a
-# fault that happens to be invisible at 1 (for example a dropped multiply).
-# 8 is included because 1 and 2 both quantize to the same interlayer byte:
-# if the reference and the DUT are BOTH constant across operand values, the
-# check cannot discriminate, and only a value far enough apart shows whether
-# either side actually tracks the input.
-@pytest.mark.parametrize("CONST_VALUE", [1, 2, 8])
-# CLUSTER_ROWS=1 keeps the mapping to a single cluster row, so a failure here
-# cannot be blamed on the multi-row psum accumulation chain. CLUSTER_ROWS=2
-# adds exactly that chain and nothing else, so the pair isolates it.
-@pytest.mark.parametrize("CLUSTER_ROWS", [1, 2])
-@pytest.mark.parametrize("NUM_GLB_IACT", [1])
-@pytest.mark.parametrize("NUM_GLB_PSUM", [4])
-@pytest.mark.parametrize("NUM_GLB_WGHT", [3])
-def test_conv_const_operands(
-    NUM_FILTERS, STRIDE, KERNEL_SIZE_X, KERNEL_SIZE_Y,
-    INPUT_SIZE_X, INPUT_SIZE_Y, INPUT_CHANNELS,
-    CONST_VALUE,
-    CLUSTER_ROWS, NUM_GLB_IACT, NUM_GLB_PSUM, NUM_GLB_WGHT,
-    request,
-):
+
+def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
+                    input_channels, request):
+    """Build and simulate one constant-operand conv configuration."""
     # OpenEyeParameters and parameters.vh read these from the environment at
     # generation time, so they have to be set before create_vh_file_from_envvars.
-    os.environ["CLUSTER_ROWS"] = str(CLUSTER_ROWS)
-    os.environ["NUM_GLB_IACT"] = str(NUM_GLB_IACT)
+    os.environ["CLUSTER_ROWS"] = str(cluster_rows)
+    os.environ["NUM_GLB_IACT"] = str(num_glb_iact)
     os.environ["NUM_GLB_PSUM"] = str(NUM_GLB_PSUM)
     os.environ["NUM_GLB_WGHT"] = str(NUM_GLB_WGHT)
     # Fixed platform configuration, matching the other cocotb_fpga runners.
@@ -136,14 +142,14 @@ def test_conv_const_operands(
             "CLOCK_DELAY_UNIT_INPUT":  clk_delay_unit_in,
             "CLOCK_DELAY_OUTPUT":      str(clk_delay_out),
             "CLOCK_DELAY_UNIT_OUTPUT": clk_delay_unit_out,
-            "LAYER":             "Convolution",
+            "LAYER":             layer_mode,
             "NUM_FILTERS":       str(NUM_FILTERS),
             "STRIDE":            str(STRIDE),
             "KERNEL_SIZE_X":     str(KERNEL_SIZE_X),
             "KERNEL_SIZE_Y":     str(KERNEL_SIZE_Y),
             "INPUT_SIZE_X":      str(INPUT_SIZE_X),
             "INPUT_SIZE_Y":      str(INPUT_SIZE_Y),
-            "INPUT_CHANNELS":    str(INPUT_CHANNELS),
+            "INPUT_CHANNELS":    str(input_channels),
             # Dense (non-sparse) data: zero-skipping would make the product
             # count depend on the sparsity pattern and defeat the whole point.
             "USE_RANDOM_VALUES": "1",
@@ -152,14 +158,14 @@ def test_conv_const_operands(
             "USE_SPARSE_WEIGHTS": "0",
             # The two hooks that make the arithmetic interpretable. The
             # reference is recomputed from the same DRAM, so it stays exact.
-            "OPENEYE_CONST_IACTS": str(CONST_VALUE),
-            "OPENEYE_CONST_WGHTS": str(CONST_VALUE),
+            "OPENEYE_CONST_IACTS": str(const_value),
+            "OPENEYE_CONST_WGHTS": str(const_value),
             # Fail a hang in minutes instead of running to the 15 ms sim
             # timeout; the stall report names the FSM states and per-PE counts.
             "OPENEYE_PROBE_FSM":      "1",
             "OPENEYE_FAIL_ON_STALL":  "100000",
-            "CLUSTER_ROWS": str(CLUSTER_ROWS),
-            "NUM_GLB_IACT": str(NUM_GLB_IACT),
+            "CLUSTER_ROWS": str(cluster_rows),
+            "NUM_GLB_IACT": str(num_glb_iact),
             "NUM_GLB_PSUM": str(NUM_GLB_PSUM),
             "NUM_GLB_WGHT": str(NUM_GLB_WGHT),
             "LOGGER_LEVEL": "10",
@@ -169,6 +175,42 @@ def test_conv_const_operands(
     )
 
 
+# c = 1 reads directly as a product count; c = 2 guards against a fault that is
+# invisible when every operand is 1 (a dropped multiply, say).
+@pytest.mark.parametrize("CONST_VALUE", [1, 2, 8])
+# CLUSTER_ROWS=1 keeps the mapping to one cluster row; CLUSTER_ROWS=2 adds the
+# multi-row psum accumulation chain and nothing else, so the pair isolates it.
+@pytest.mark.parametrize("CLUSTER_ROWS", [1, 2])
+def test_conv_const_single_layer(CONST_VALUE, CLUSTER_ROWS, request):
+    """One conv layer: compute and read-out, no interlayer write-back."""
+    _run_conv_const("Convolution", CONST_VALUE, CLUSTER_ROWS,
+                    num_glb_iact=1, input_channels=4, request=request)
+
+
+# 1 and 2 quantise to the same interlayer byte, so a write-back that ignores
+# its input looks identical to a reference that happens to be constant. Only a
+# value far apart (8) shows whether either side tracks the operands, which is
+# how the data-independent write-back was proven. c = 2 adds nothing here.
+@pytest.mark.parametrize("CONST_VALUE", [1, 8])
+@pytest.mark.parametrize("CLUSTER_ROWS", [1, 2])
+# Two geometries. (iact=3, ch=1) is the configuration that first reproduced the
+# data-independent write-back; (iact=1, ch=4) matches the single-layer test, so
+# a difference between the tests is not a difference in geometry.
+@pytest.mark.parametrize("NUM_GLB_IACT,INPUT_CHANNELS", [(3, 1), (1, 4)],
+                         ids=["iact3_ch1", "iact1_ch4"])
+def test_conv_const_two_layers(CONST_VALUE, CLUSTER_ROWS, NUM_GLB_IACT,
+                               INPUT_CHANNELS, request):
+    """Two stacked conv layers: exercises the interlayer psum->iact write-back.
+
+    The testbench checks the iact buffer the second layer reads before that
+    layer runs (rtl_test_utils.compare_iact_storage), so a write-back failure
+    is reported there, ahead of the final output comparison.
+    """
+    _run_conv_const("Convolution_Stack", CONST_VALUE, CLUSTER_ROWS,
+                    num_glb_iact=NUM_GLB_IACT, input_channels=INPUT_CHANNELS,
+                    request=request)
+
+
 if __name__ == "__main__":
     class _Node:
         nodeid = "conv_const_standalone"
@@ -176,10 +218,7 @@ if __name__ == "__main__":
     class _Request:
         node = _Node()
 
-    test_conv_const_operands(
-        NUM_FILTERS=4, STRIDE=1, KERNEL_SIZE_X=3, KERNEL_SIZE_Y=3,
-        INPUT_SIZE_X=8, INPUT_SIZE_Y=1, INPUT_CHANNELS=4,
-        CONST_VALUE=1,
-        CLUSTER_ROWS=1, NUM_GLB_IACT=1, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3,
+    test_conv_const_two_layers(
+        CONST_VALUE=8, CLUSTER_ROWS=2, NUM_GLB_IACT=3, INPUT_CHANNELS=1,
         request=_Request(),
     )

@@ -23,6 +23,8 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
     Args:
         layer_mode (str): Type of layer to create. Supported values:
             - "Convolution": Standard 2D convolution layer
+            - "Convolution_Stack": Two stacked 2D convolution layers (exercises
+              the interlayer psum->iact write-back)
             - "Depthwise_Convolution": Depthwise 2D convolution layer
             - "FC": Fully connected (Dense) layer
             - "Pooling": Conv2D followed by MaxPooling2D and another Conv2D
@@ -68,6 +70,13 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             #model.add(tf.keras.layers.Flatten())
             #model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
 
+        case "Convolution_Stack":
+            # Two stacked Conv2D layers. The first layer's psums are quantised
+            # and written back into the iact buffer as the second layer's input,
+            # so this mode exercises the interlayer psum->iact write-back that
+            # "Convolution" (a single layer) never reaches.
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, filters), strides = strides))
         case "Depthwise_Convolution":
             model.add(tf.keras.layers.DepthwiseConv2D((kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "GEMM":
