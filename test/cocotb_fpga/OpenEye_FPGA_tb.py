@@ -238,6 +238,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     if os.environ.get("DUMP_CLUSTER_IACT"):
         cocotb.start_soon(rtl_test_utils.monitor_cluster_iact(ptp, dut, openeye_parameter))
         cocotb.start_soon(rtl_test_utils.monitor_pe_iact(ptp, dut, openeye_parameter))
+        cocotb.start_soon(rtl_test_utils.monitor_converter_store(ptp, dut, openeye_parameter))
     if os.environ.get("PROBE_PSUM_STREAM"):
         cocotb.start_soon(rtl_test_utils.probe_psum_stream(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_PSUM_CAPTURE"):

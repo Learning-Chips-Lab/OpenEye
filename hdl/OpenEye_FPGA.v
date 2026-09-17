@@ -1040,7 +1040,16 @@ end
       if (fsm_last_state == GET_PARAMETERS) begin
         conv_array_reg <= start_param_array;
         if (fully_connected_layer) begin
-          conv_array_reg <= 3;
+          // Enable every cluster at once. The value 3 sets only the bits of
+          // cluster row 0 (the bit index is col + row*CLUSTER_COLUMNS) and
+          // relied on the rotate-left-by-2 below to hand the remaining rows
+          // their turn on later encode steps. There is no later step:
+          // iact_converter_enc_enable is asserted once in START_CONVERTER and
+          // cleared on the first CONVERT_IACT cycle, so the rotation never
+          // takes effect. Every row above 0 was therefore never told to
+          // commit and its clusters received nothing but zero payload, which
+          // left a 32-wide Dense layer accumulating 9 of 32 products.
+          conv_array_reg <= {CLUSTERS{1'b1}};
         end
       end
       for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin

@@ -601,6 +601,77 @@ async def monitor_cluster_iact(ptp, dut, oep):
 pe_iact_counts = {}
 
 
+converter_store_counts = {}
+conv_array_seen = {}
+
+
+async def monitor_converter_store(ptp, dut, oep):
+    """Count the store-enable pulses each iact converter receives.
+
+    OpenEye_FPGA Process 4 gates every converter's commit with
+    conv_array_reg[col + row*CLUSTER_COLUMNS] AND an iact_converter_cycles
+    limit. In FC mode conv_array_reg starts at 3 (cluster row 0) and rotates
+    left by 2 per encode step, so later rows only get their turn if the cycle
+    limit has not already expired. When a cluster row ends up receiving only
+    zero payload, this separates "never told to commit" from "committed the
+    wrong data".
+    """
+    for cx in range(oep.Clusters_X):
+        for cy in range(oep.Clusters_Y):
+            converter_store_counts[(cx, cy)] = 0
+    while True:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            val = int(dut.conv_array_reg.value)
+            conv_array_seen[val] = conv_array_seen.get(val, 0) + 1
+        except Exception:
+            pass
+        # iact_converter_en_store_reg is a nested *unpacked* array, which Icarus
+        # does not expose over VPI (every read came back 0, including for a
+        # cluster row that demonstrably receives data). Reconstruct the pulse
+        # from the three plain signals that drive it in Process 4 instead:
+        #   en_store[col][row] = enc_enable
+        #                      & conv_array_reg[col + row*CLUSTER_COLUMNS]
+        #                      & (iact_converter_cycles <= max_cycles - 1)
+        try:
+            enc = int(dut.iact_converter_enc_enable.value)
+            arr = int(dut.conv_array_reg.value)
+            cyc = int(dut.iact_converter_cycles.value)
+            mx = int(dut.iact_converter_max_cycles.value)
+        except Exception:
+            continue
+        converter_store_counts["enc_enable_cycles"] = \
+            converter_store_counts.get("enc_enable_cycles", 0) + (1 if enc else 0)
+        converter_store_counts["cycles_max"] = max(
+            converter_store_counts.get("cycles_max", 0), cyc)
+        converter_store_counts["max_cycles"] = mx
+        if not enc or mx == 0 or cyc > mx - 1:
+            continue
+        for cx in range(oep.Clusters_X):
+            for cy in range(oep.Clusters_Y):
+                if (arr >> (cx + cy * oep.Clusters_X)) & 1:
+                    converter_store_counts[(cx, cy)] += 1
+
+
+def report_converter_store():
+    """Log the per-converter store-enable counts and the conv_array_reg values."""
+    if not converter_store_counts:
+        return
+    logger.error("iact converter store-enable pulses per cluster (reconstructed):")
+    for key in sorted(k for k in converter_store_counts if isinstance(k, tuple)):
+        logger.error("  cluster(col=%d,row=%d): en_store=%d",
+                     key[0], key[1], converter_store_counts[key])
+    logger.error("  enc_enable high for %d cycles; iact_converter_cycles reached %d,"
+                 " limit max_cycles=%d",
+                 converter_store_counts.get("enc_enable_cycles", 0),
+                 converter_store_counts.get("cycles_max", 0),
+                 converter_store_counts.get("max_cycles", 0))
+    if conv_array_seen:
+        top = sorted(conv_array_seen.items(), key=lambda kv: -kv[1])[:8]
+        logger.error("  conv_array_reg values (value: cycles): %s",
+                     ", ".join("0x%x: %d" % (v, n) for v, n in top))
+
+
 async def monitor_pe_iact(ptp, dut, oep, pe_col=0):
     """Per PE: count enable, and enable & ready, on the lane it selects.
 
@@ -2019,6 +2090,7 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         report_iact_handoff(oep)
         report_cluster_iact()
         report_pe_iact()
+        report_converter_store()
         dump_compute_mask(dut, oep)
         dump_iact_path(dut, oep)
         dump_pe_occupancy(dut, oep)
