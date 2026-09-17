@@ -406,9 +406,9 @@ class LayerParameters(object):
             self.iact_x_line_repetitions = 1
             # Calculate how many different kernels can be processed simultaneously
             # based on available PE resources divided by input width
-            self.different_kernels_per_calculation = usable_pes//self.output_shape[1]
+            self.different_kernels_per_calculation = usable_pes//self.psum_size_x
             # Limit to at most ceil(output_channels/8) kernels
-            self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.channels/4))
+            self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.filters/4))
             # Calculate how many Y lines can be processed per computation
             self.y_lines_per_calculation = math.floor(usable_pes/self.output_shape[1]/self.different_kernels_per_calculation)
             # Limit by available Y clusters and input height
@@ -1073,7 +1073,7 @@ class LayerParameters(object):
         self.psum_pagu_loop_limit_2 =  math.ceil(self.used_X_cluster/self.different_kernels_per_calculation) - 1
         self.psum_pagu_addr_inc_2 = 0
 
-        self.psum_pagu_loop_limit_3 = self.iact_x_line_repetitions * self.iact_size_y - 1
+        self.psum_pagu_loop_limit_3 = self.iact_x_line_repetitions * self.psum_size_y - 1
         self.psum_pagu_addr_inc_3 = math.ceil(self.filters/self.different_kernels_per_calculation)
 
         self.psum_pagu_loop_limit_4 = math.ceil(self.filters/4) - 1
