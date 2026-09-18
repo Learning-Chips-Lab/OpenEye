@@ -1855,6 +1855,43 @@ async def trace_bias_load(ptp, dut, oep, max_lines=120):
         lines += 1
 
 
+async def trace_psum_capture_slices(ptp, dut, oep, max_lines=40):
+    """Log psum_data_o_w split per cluster on every capture cycle.
+
+    psum_buffer_data_w is a straight copy of psum_data_o_w, so whatever a
+    cluster's slice holds when its psum_buffer_en_w bit is set is exactly what
+    lands in that cluster's buffer. When a buffer ends up with a value that
+    belongs to no single cluster, this says whether the bus already carried it
+    (an accumulation-chain problem) or the capture picked the wrong slice.
+    """
+    tp = oep.DATA_PSUM_BITWIDTH
+    try:
+        width = int(dut.TRANS_BITWIDTH_PSUM.value)
+    except Exception:
+        width = tp
+    lines = 0
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            en = int(dut.psum_buffer_en_w.value)
+            if not en:
+                continue
+            data = int(dut.psum_data_o_w.value)
+            enable = int(dut.psum_enable_o.value)
+        except Exception:
+            continue
+        parts = []
+        for cr in range(oep.Clusters_Y):
+            for cc in range(oep.Clusters_X):
+                base = (cc * oep.NUM_GLB_PSUM
+                        + cr * oep.Clusters_X * oep.NUM_GLB_PSUM)
+                val = _signed((data >> (base * width)) & ((1 << tp) - 1), tp)
+                parts.append("c(%d,%d)=%d" % (cc, cr, val))
+        logger.error("capture en_w=0x%x psum_enable_o=0x%x %s",
+                     en, enable, " ".join(parts))
+        lines += 1
+
+
 async def trace_pe_calc_loop(ptp, dut, oep, cl_x=0, cl_y=0, pe_row=0, pe_col=0,
                              max_lines=120):
     """Trace one PE's sparse CALCULATING loop, to see why it stops early.
