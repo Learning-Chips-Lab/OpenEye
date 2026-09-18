@@ -538,7 +538,7 @@ reg enable_write_to_storage;
                   enable_write_to_storage <= 1;
                 end
                 x_pos_in_w_cycle <= x_pos_in_w_cycle + 1;
-                if (x_pos_in_w_cycle == iact_x_add_up + 2 - stride_x_i) begin
+                if (x_pos_in_w_cycle == iact_x_add_up + wght_size_x - stride_x_i - 1) begin
                   x_pos_in_w_cycle <= 0;
                 end
               end

@@ -1266,7 +1266,7 @@ class LayerParameters(object):
             self.iact_converter_max_cycles = self.buffer_cycles_for_x_iact*self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1)
         if (self.buffer_cycles_for_x_iact == 1):
             full_temp = self.needed_Iact_writes * self.channel_div_trans
-            less_temp = (self.needed_Iact_writes-3 + self.strideX) * self.channel_div_trans
+            less_temp = (self.needed_Iact_writes-self.kernel_size[0] + self.strideX) * self.channel_div_trans
             if (self.kernel_size[0] <= (params.Clusters-1) * params.NUM_GLB_PSUM * self.strideX):
                 self.iact_repetitions_per_write =  self.iact_x_line_repetitions * full_temp
                 self.iact_buffer_words_per_write =  self.iact_repetitions_per_write * ((self.iact_size_y + self.kernel_size[1]) - self.strideY) * math.ceil(self.channels/4)
