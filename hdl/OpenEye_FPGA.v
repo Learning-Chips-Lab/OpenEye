@@ -2080,7 +2080,13 @@ end
               iact_channel_sending_cycle2 <= iact_channel_sending_cycle2 + 1;
               if (iact_channel_sending_cycle2 == channel_div_trans - 1) begin
                 iact_channel_sending_cycle2 <= 0;
-                current_x <= current_x + NUM_GLB_IACT;
+                // The pipeline forwards one activation pair per cycle
+                // (iact_input_window_q is 2*DATA_IACT_BITWIDTH wide), so for a
+                // fully-connected layer the window must advance by 2, not by
+                // NUM_GLB_IACT. Stepping by 3 skipped positions and, combined
+                // with the gate below, ended the sweep after 6 steps: 12 of 32
+                // activations. Convolution keeps the per-lane step.
+                current_x <= current_x + (fully_connected_layer ? 2 : NUM_GLB_IACT);
                 if (current_x == x_bound) begin 
                   current_x <= -padding_x;
                   current_y <= current_y + 1;
@@ -2090,7 +2096,13 @@ end
                 end
               end 
               iact_input_window_q <= 0;
-              if ((current_x >= 0) & (current_y >= 0) & (current_x < iact_size_x) & (current_y < iact_size_y)) begin
+              // iact_size_x arrives halved for FC layers (dense_mapper sends
+              // ceil(iact_size_x/2), a word count) while current_x counts
+              // activations, so the sweep stopped at half the input. fc_size_reg
+              // carries the full FC input size.
+              if ((current_x >= 0) & (current_y >= 0) &
+                  (current_x < (fully_connected_layer ? fc_size_reg : iact_size_x)) &
+                  (current_y < iact_size_y)) begin
                 iact_input_window       <= iact_input_window >> 16;
                 iact_input_window_q     <= iact_input_window[15:0];
                 relative_pos            <= relative_pos + 1;

@@ -235,6 +235,21 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         cocotb.start_soon(rtl_test_utils.monitor_iact_handoff(ptp, dut))
     if os.environ.get("DUMP_PSUM_BUFFERS") and not os.environ.get("OPENEYE_PROBE_FSM"):
         cocotb.start_soon(rtl_test_utils.monitor_iact_handoff(ptp, dut))
+    if os.environ.get("TRACE_CONVERTER_GATE"):
+        cocotb.start_soon(rtl_test_utils.trace_converter_gate(ptp, dut, openeye_parameter))
+    if os.environ.get("DUMP_IACT_BUFFER"):
+        async def _dump_buf():
+            from cocotb.triggers import Timer as _T
+            for _ in range(400):
+                await _T(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+            rtl_test_utils.dump_iact_buffer_values(dut, openeye_parameter)
+        cocotb.start_soon(_dump_buf())
+    if os.environ.get("TRACE_CONVERT_WINDOW"):
+        cocotb.start_soon(rtl_test_utils.trace_convert_window(ptp, dut, openeye_parameter))
+    if os.environ.get("DUMP_CONVERT_LIMITS"):
+        cocotb.start_soon(rtl_test_utils.dump_convert_iact_limits(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_IACT_LANES"):
+        cocotb.start_soon(rtl_test_utils.trace_iact_lanes(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_PSUM_SLICES"):
         cocotb.start_soon(rtl_test_utils.trace_psum_capture_slices(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_PE_CALC"):

@@ -1855,6 +1855,205 @@ async def trace_bias_load(ptp, dut, oep, max_lines=120):
         lines += 1
 
 
+async def trace_converter_gate(ptp, dut, oep, col=0, row=0, max_lines=30):
+    """Trace the per-cluster acceptance gate inside one iact converter.
+
+    WRITE_TO_MEMORY only commits while x_pos_in_w_cycle lies in
+    [x_range_lower_bound, +iact_values_per_cluster_transmit). fe1be9f gated the
+    block that advances x_pos_in_w_cycle with !fully_connected_i, so for an FC
+    layer these counters may never move - which would cap how many activations
+    a cluster ever accepts.
+    """
+    try:
+        inst = (dut.IACT_CONVERTER_X[col].IACT_CONVERTER_Y[row]
+                .iact_stream_constructor)
+    except Exception as exc:
+        logger.error("converter gate: instance unreachable (%s)", type(exc).__name__)
+        return
+    names = ("fsm_current_state", "enable_write_to_storage", "x_pos_in_w_cycle",
+             "x_range_lower_bound", "iact_values_per_cluster_transmit",
+             "x_pos_inc", "router_cycle", "ram_wr_en", "ram_wr_addr",
+             "fsm_cycle", "needed_iact_buffer_words_i", "fully_connected_i")
+    lines, prev = 0, None
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        vals = []
+        for n in names:
+            try:
+                vals.append(int(getattr(inst, n).value))
+            except Exception:
+                vals.append(-1)
+        if vals == prev:
+            continue
+        prev = vals
+        logger.error("convgate %s", " ".join("%s=%d" % (n, v) for n, v in zip(names, vals)))
+        lines += 1
+
+
+def dump_iact_buffer_values(dut, oep, cells=4, addrs=6):
+    """Print the activations actually stored in BUFFER_A.
+
+    The converter sweep can be correct and still deliver zeros if the buffer
+    it reads was never filled. With a ramp input every stored activation is
+    non-zero, so this separates "converter drops data" from "data was never
+    written".
+    """
+    logger.error("BUFFER_A contents (payload bytes per cell):")
+    for cell in range(cells):
+        vals = []
+        try:
+            mem = dut.BUFFER_A[cell].iact_layer_buffer.impl.mem
+        except Exception as exc:
+            logger.error("  cell %d unreachable (%s)", cell, type(exc).__name__)
+            continue
+        for addr in range(addrs):
+            try:
+                word = int(mem[addr].value)
+            except ValueError:
+                vals.append("X")
+                continue
+            except IndexError:
+                break
+            vals.append("/".join(str((word >> (b * 8)) & 0xFF) for b in range(8)))
+        logger.error("  cell %d: %s", cell, " | ".join(vals))
+
+
+async def trace_convert_window(ptp, dut, oep, max_lines=40):
+    """Trace the CONVERT_IACT sliding window: current_x/current_y and the gate.
+
+    The window only shifts while
+    (current_x >= 0) & (current_y >= 0) & (current_x < iact_size_x) &
+    (current_y < iact_size_y); each shift emits two activations. If fewer
+    activations arrive than iact_size_x*2, this shows which term of that gate
+    stops it and at what x it happens.
+    """
+    names = ("fsm_cycle", "current_x", "current_y", "iact_size_x", "iact_size_y",
+             "x_bound", "relative_pos", "current_pos_in_iact_glb",
+             "iact_channel_sending_cycle1", "iact_channel_sending_cycle2",
+             "iact_channels_counter")
+    lines = 0
+    prev = None
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            if int(dut.fsm_current_state.value) != 8:
+                continue
+        except ValueError:
+            continue
+        vals = []
+        for n in names:
+            try:
+                v = int(getattr(dut, n).value)
+                if n in ("current_x", "current_y") and v > (1 << 11):
+                    v -= (1 << 12)  # signed window position
+                vals.append(v)
+            except Exception:
+                vals.append(-1)
+        if vals == prev:
+            continue
+        prev = vals
+        logger.error("convwin %s", " ".join("%s=%d" % (n, v) for n, v in zip(names, vals)))
+        lines += 1
+
+
+async def dump_convert_iact_limits(ptp, dut, oep):
+    """Log the counters that bound CONVERT_IACT, once the state is reached.
+
+    CONVERT_IACT exits on fsm_cycle == iact_glb_writing_cycles, but raising
+    that value did not lengthen the stream, so some other counter ends the
+    conversion first. Print them all with the values the DUT actually
+    decoded, instead of guessing which Python parameter is responsible.
+    """
+    names = ("iact_glb_writing_cycles", "iact_channel_max_cycles", "iact_size_c",
+             "iact_converter_max_cycles", "channel_div_trans", "iact_x_add_up",
+             "iact_size_x", "iact_size_y", "iact_x_per_cluster",
+             "iact_values_per_cluster_transmit", "needed_iact_buffer_words",
+             "iact_words_per_compute", "fully_connected_layer")
+    seen = False
+    last_cycle = 0
+    while True:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            state = int(dut.fsm_current_state.value)
+        except ValueError:
+            continue
+        if state == 8:  # CONVERT_IACT
+            seen = True
+            try:
+                last_cycle = int(dut.fsm_cycle.value)
+            except Exception:
+                pass
+            continue
+        if seen and state != 8:
+            vals = []
+            for n in names:
+                try:
+                    vals.append("%s=%d" % (n, int(getattr(dut, n).value)))
+                except Exception:
+                    vals.append("%s=?" % n)
+            logger.error("CONVERT_IACT ended at fsm_cycle=%d; %s",
+                         last_cycle, " ".join(vals))
+            return
+
+
+async def trace_iact_lanes(ptp, dut, oep, cluster=0, max_words=40,
+                           give_up_after=1200):
+    """Record the activation word each iact GLB lane delivers, per cluster.
+
+    iact_choose binds GLB lane g to PE row g, so for a Dense layer the lanes
+    must carry *different* slices of K. Counting handshakes cannot show that -
+    identical lanes handshake exactly like distinct ones. This logs the actual
+    payload per lane on each accepted transfer, so a broadcast (all lanes the
+    same) is visible directly.
+    """
+    lanes = {}
+    cycles = 0
+    try:
+        width = int(dut.TRANS_BITWIDTH_IACT.value)
+    except Exception:
+        width = oep.IACT_WOH_Bitwidth
+    pay_bits = oep.IACT_Bitwidth
+    while True:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        cycles += 1
+        # Report on a cycle budget as well as on a full sample. Only 18
+        # transfers per lane arrive in this layer, so a sample target above
+        # that would collect data and never print it.
+        if cycles >= give_up_after:
+            break
+        try:
+            en = int(dut.iact_enable_i_oep_w.value)
+            rdy = int(dut.iact_ready_o_oep_w.value)
+            data = int(dut.iact_data_i_oep_w.value)
+        except Exception:
+            continue
+        hs = en & rdy
+        if not hs:
+            continue
+        for g in range(oep.NUM_GLB_IACT):
+            bit = cluster * oep.NUM_GLB_IACT + g
+            if not ((hs >> bit) & 1):
+                continue
+            word = (data >> (bit * width)) & ((1 << width) - 1)
+            val = _signed(word & ((1 << pay_bits) - 1), pay_bits)
+            # Skip zero payloads: a convolution starts in the padded region, so
+            # the first transfers are all zeros and would fill the sample
+            # before any real activation appears. With a ramp input every
+            # genuine activation is non-zero.
+            if val == 0:
+                continue
+            seq = lanes.setdefault(g, [])
+            if len(seq) < max_words:
+                seq.append(val)
+        if all(len(v) >= max_words for v in lanes.values()) and len(lanes) == oep.NUM_GLB_IACT:
+            break
+    if not lanes:
+        logger.error("iact lane trace: no accepted transfers seen in %d cycles", cycles)
+    for g in sorted(lanes):
+        logger.error("iact lane g=%d into cluster %d (%d words): %s",
+                     g, cluster, len(lanes[g]), lanes[g])
+
+
 async def trace_psum_capture_slices(ptp, dut, oep, max_lines=40):
     """Log psum_data_o_w split per cluster on every capture cycle.
 

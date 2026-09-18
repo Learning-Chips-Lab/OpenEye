@@ -1620,13 +1620,25 @@ class LayerParameters(object):
         self.iteration_for_kernels = math.ceil(self.diff_iact_layer_next_layer / self.different_kernels_per_calculation)
         self.buffer_cycles_for_x_iact = params.Clusters_Y
         self.iact_converter_max_cycles = 1
-        self.iact_buffer_words_per_write = self.diff_iact_layer * (math.ceil(self.used_iact_per_PE/2) * self.needed_Iact_writes) + 1
+        self.iact_size_c = self.used_iact_per_PE * params.NUM_GLB_WGHT * self.diff_iact_layer
+        # Caps the converter's WRITE_TO_MEMORY phase (needed_iact_buffer_words_i):
+        # it ends at fsm_cycle == this value and two activations leave per
+        # cycle, so 7 gave 14 of the 36 activations the layer needs. Derive it
+        # from iact_size_c like the conversion length above.
+        self.iact_buffer_words_per_write = self.iact_size_c
         # CONVERT_IACT ends after iact_glb_writing_cycles since 983fc95; that
         # register is only computed for conv layers and left Dense at 0, so a
         # Dense layer converted no iacts at all. Keep the pre-983fc95 limit.
-        self.iact_glb_writing_cycles = self.iact_buffer_words_per_write
+        # CONVERT_IACT ends at fsm_cycle == iact_glb_writing_cycles and the
+        # converter emits 2 activations per cycle, so this sets how many
+        # activations the array receives. iact_buffer_words_per_write gives 7
+        # cycles = 14 activations, but the layer needs iact_size_c = 36
+        # (used_iact_per_PE * NUM_GLB_WGHT * diff_iact_layer). Derive it from
+        # that instead: all PE rows share one stream, each latching its own
+        # portion, so the stream must cover every row.
+        self.iact_glb_writing_cycles = self.iact_size_c
         
-        self.iact_size_c = self.used_iact_per_PE * params.NUM_GLB_WGHT * self.diff_iact_layer
+
 
         # Must equal len(DenseWghtStreamMapper.get_wght_stream()). That
         # stream is built per-PE by create_pe_data_wght_stream, which packs
