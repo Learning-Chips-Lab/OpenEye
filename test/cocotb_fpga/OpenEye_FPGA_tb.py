@@ -306,6 +306,28 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
             return [_const_w(v) for v in x] if isinstance(x, list) else const_wght
         dram.weights = _const_w(dram.weights)
         logger.info("OPENEYE_CONST_WGHTS: all weights set to %d", const_wght)
+    if os.environ.get("OPENEYE_RAMP_IACTS"):
+        # Layer-0 activation k becomes k+1, so a PE's stored payloads name the
+        # exact input positions it received. Constant operands can only show
+        # how many activations arrived, never which ones.
+        def _ramp(x, ctr=[0]):
+            if isinstance(x, list):
+                return [_ramp(v, ctr) for v in x]
+            ctr[0] += 1
+            return ctr[0]
+        dram.fmap[0] = _ramp(dram.fmap[0])
+        logger.info("OPENEYE_RAMP_IACTS: layer-0 input set to 1..N in flat order")
+    if os.environ.get("DUMP_INPUT_IACTS"):
+        # Print the first activations of layer 0 so the values a PE holds can
+        # be matched against the input vector. Every PE holding the same window
+        # means the converter broadcasts instead of partitioning K.
+        try:
+            flat = dram.fmap[0]
+            while isinstance(flat, list) and flat and isinstance(flat[0], list):
+                flat = [v for sub in flat for v in sub]
+            logger.info("layer-0 input activations (first 34): %s", flat[:34])
+        except Exception as exc:
+            logger.info("could not flatten layer-0 input (%s)", type(exc).__name__)
     test_amount = 1
     for _ in range(test_amount) :
         for layer_number, layer in enumerate(model):

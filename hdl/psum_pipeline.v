@@ -492,7 +492,13 @@ module psum_pipeline #(
           for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
             for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
               for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
-                if (psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)*CLUSTER_ROWS+cr_psum*((NUM_GLB_PSUM+1)/2)+g_psum]) begin
+                // Row-major, matching how psum_buffer_en_w is written below and
+                // wired to the buffer RAMs in OpenEye_FPGA. The column-major
+                // form checked bits 4-5 for cluster (col 1, row 0) whose enable
+                // sits at bits 2-3, so that cluster's write address never
+                // advanced: all of its filter results overwrote address 0 and
+                // only the last one survived.
+                if (psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)+cr_psum*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_psum]) begin
                   psum_buffer_addr_array[cc_psum][cr_psum][g_psum] <= psum_buffer_addr_array[cc_psum][cr_psum][g_psum] + 1;
                 end
                 results_ready = results_ready & (psum_enable_o[cc_psum*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_psum * 2] |

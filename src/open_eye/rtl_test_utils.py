@@ -1873,11 +1873,15 @@ async def trace_psum_capture_slices(ptp, dut, oep, max_lines=40):
     while lines < max_lines:
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         try:
-            en = int(dut.psum_buffer_en_w.value)
-            if not en:
-                continue
-            data = int(dut.psum_data_o_w.value)
             enable = int(dut.psum_enable_o.value)
+            # GET_BIAS also drives psum_buffer_en_w (to ~0) with no results on
+            # the bus, which swamps the log. Only the result-capture phase has
+            # psum_enable_o non-zero, so key on that instead.
+            if not enable:
+                continue
+            en = int(dut.psum_buffer_en_w.value)
+            data = int(dut.psum_data_o_w.value)
+            state = int(dut.fsm_psum_current_state.value)
         except Exception:
             continue
         parts = []
@@ -1887,8 +1891,8 @@ async def trace_psum_capture_slices(ptp, dut, oep, max_lines=40):
                         + cr * oep.Clusters_X * oep.NUM_GLB_PSUM)
                 val = _signed((data >> (base * width)) & ((1 << tp) - 1), tp)
                 parts.append("c(%d,%d)=%d" % (cc, cr, val))
-        logger.error("capture en_w=0x%x psum_enable_o=0x%x %s",
-                     en, enable, " ".join(parts))
+        logger.error("capture psum_state=%d en_w=0x%x psum_enable_o=0x%x %s",
+                     state, en, enable, " ".join(parts))
         lines += 1
 
 
@@ -1996,8 +2000,26 @@ def dump_pe_iact_config(dut, oep, pe_col=0):
                             break
                 except Exception as exc:
                     addrs = ["?(%s)" % type(exc).__name__]
-                logger.error("  cluster(%d,%d) row %d: %s nonzero_payloads=%d iact_addr_spad=%s",
-                             cl_x, cl_y, pe_row, " ".join(fields), nz, addrs)
+                # Decode the stored activations themselves. Counts alone cannot
+                # show a wrong or duplicated activation set, which is what a
+                # constant-weight run exposes as a fixed output offset.
+                vals = []
+                try:
+                    mem = pe.iact_data_SPad.ram.impl.mem
+                    pay_bits = int(dut.DATA_IACT_BITWIDTH.value)
+                    for addr in range(len(mem)):
+                        try:
+                            word = int(mem[addr].value)
+                        except ValueError:
+                            vals.append(None)
+                            continue
+                        except IndexError:
+                            break
+                        vals.append(_signed(word & ((1 << pay_bits) - 1), pay_bits))
+                except Exception:
+                    pass
+                logger.error("  cluster(%d,%d) row %d: %s nonzero_payloads=%d iact_addr_spad=%s payloads=%s",
+                             cl_x, cl_y, pe_row, " ".join(fields), nz, addrs, vals)
 
 
 def dump_pe_psum_values(dut, oep, pe_col=0, max_addr=8):
