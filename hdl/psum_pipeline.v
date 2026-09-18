@@ -497,7 +497,11 @@ module psum_pipeline #(
                 end
                 results_ready = results_ready & (psum_enable_o[cc_psum*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_psum * 2] |
                 ((router_mode_psum[cc_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTER_ROWS != 1)));
-                if (psum_enable_o[cc_psum*NUM_GLB_PSUM*CLUSTER_ROWS+cr_psum*NUM_GLB_PSUM+g_psum * 2] != 0) begin
+                // Row-major, as OpenEye_Parallel drives psum_enable_o and as the
+                // results_ready term above already reads it. The column-major
+                // form looked at bit 8 for cluster (col 1, row 0) whose enable
+                // sits at bit 4, so that cluster never captured its result.
+                if (psum_enable_o[cc_psum*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_psum * 2] != 0) begin
                   psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)+cr_psum*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_psum] <= 1;
                 end else begin
                   psum_buffer_en_w[cc_psum*((NUM_GLB_PSUM+1)/2)+cr_psum*CLUSTER_COLUMNS*((NUM_GLB_PSUM+1)/2)+g_psum] <= 0;

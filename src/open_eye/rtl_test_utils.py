@@ -601,6 +601,77 @@ async def monitor_cluster_iact(ptp, dut, oep):
 pe_iact_counts = {}
 
 
+converter_store_counts = {}
+conv_array_seen = {}
+
+
+async def monitor_converter_store(ptp, dut, oep):
+    """Count the store-enable pulses each iact converter receives.
+
+    OpenEye_FPGA Process 4 gates every converter's commit with
+    conv_array_reg[col + row*CLUSTER_COLUMNS] AND an iact_converter_cycles
+    limit. In FC mode conv_array_reg starts at 3 (cluster row 0) and rotates
+    left by 2 per encode step, so later rows only get their turn if the cycle
+    limit has not already expired. When a cluster row ends up receiving only
+    zero payload, this separates "never told to commit" from "committed the
+    wrong data".
+    """
+    for cx in range(oep.Clusters_X):
+        for cy in range(oep.Clusters_Y):
+            converter_store_counts[(cx, cy)] = 0
+    while True:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            val = int(dut.conv_array_reg.value)
+            conv_array_seen[val] = conv_array_seen.get(val, 0) + 1
+        except Exception:
+            pass
+        # iact_converter_en_store_reg is a nested *unpacked* array, which Icarus
+        # does not expose over VPI (every read came back 0, including for a
+        # cluster row that demonstrably receives data). Reconstruct the pulse
+        # from the three plain signals that drive it in Process 4 instead:
+        #   en_store[col][row] = enc_enable
+        #                      & conv_array_reg[col + row*CLUSTER_COLUMNS]
+        #                      & (iact_converter_cycles <= max_cycles - 1)
+        try:
+            enc = int(dut.iact_converter_enc_enable.value)
+            arr = int(dut.conv_array_reg.value)
+            cyc = int(dut.iact_converter_cycles.value)
+            mx = int(dut.iact_converter_max_cycles.value)
+        except Exception:
+            continue
+        converter_store_counts["enc_enable_cycles"] = \
+            converter_store_counts.get("enc_enable_cycles", 0) + (1 if enc else 0)
+        converter_store_counts["cycles_max"] = max(
+            converter_store_counts.get("cycles_max", 0), cyc)
+        converter_store_counts["max_cycles"] = mx
+        if not enc or mx == 0 or cyc > mx - 1:
+            continue
+        for cx in range(oep.Clusters_X):
+            for cy in range(oep.Clusters_Y):
+                if (arr >> (cx + cy * oep.Clusters_X)) & 1:
+                    converter_store_counts[(cx, cy)] += 1
+
+
+def report_converter_store():
+    """Log the per-converter store-enable counts and the conv_array_reg values."""
+    if not converter_store_counts:
+        return
+    logger.error("iact converter store-enable pulses per cluster (reconstructed):")
+    for key in sorted(k for k in converter_store_counts if isinstance(k, tuple)):
+        logger.error("  cluster(col=%d,row=%d): en_store=%d",
+                     key[0], key[1], converter_store_counts[key])
+    logger.error("  enc_enable high for %d cycles; iact_converter_cycles reached %d,"
+                 " limit max_cycles=%d",
+                 converter_store_counts.get("enc_enable_cycles", 0),
+                 converter_store_counts.get("cycles_max", 0),
+                 converter_store_counts.get("max_cycles", 0))
+    if conv_array_seen:
+        top = sorted(conv_array_seen.items(), key=lambda kv: -kv[1])[:8]
+        logger.error("  conv_array_reg values (value: cycles): %s",
+                     ", ".join("0x%x: %d" % (v, n) for v, n in top))
+
+
 async def monitor_pe_iact(ptp, dut, oep, pe_col=0):
     """Per PE: count enable, and enable & ready, on the lane it selects.
 
@@ -1784,6 +1855,183 @@ async def trace_bias_load(ptp, dut, oep, max_lines=120):
         lines += 1
 
 
+async def trace_psum_capture_slices(ptp, dut, oep, max_lines=40):
+    """Log psum_data_o_w split per cluster on every capture cycle.
+
+    psum_buffer_data_w is a straight copy of psum_data_o_w, so whatever a
+    cluster's slice holds when its psum_buffer_en_w bit is set is exactly what
+    lands in that cluster's buffer. When a buffer ends up with a value that
+    belongs to no single cluster, this says whether the bus already carried it
+    (an accumulation-chain problem) or the capture picked the wrong slice.
+    """
+    tp = oep.DATA_PSUM_BITWIDTH
+    try:
+        width = int(dut.TRANS_BITWIDTH_PSUM.value)
+    except Exception:
+        width = tp
+    lines = 0
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        try:
+            en = int(dut.psum_buffer_en_w.value)
+            if not en:
+                continue
+            data = int(dut.psum_data_o_w.value)
+            enable = int(dut.psum_enable_o.value)
+        except Exception:
+            continue
+        parts = []
+        for cr in range(oep.Clusters_Y):
+            for cc in range(oep.Clusters_X):
+                base = (cc * oep.NUM_GLB_PSUM
+                        + cr * oep.Clusters_X * oep.NUM_GLB_PSUM)
+                val = _signed((data >> (base * width)) & ((1 << tp) - 1), tp)
+                parts.append("c(%d,%d)=%d" % (cc, cr, val))
+        logger.error("capture en_w=0x%x psum_enable_o=0x%x %s",
+                     en, enable, " ".join(parts))
+        lines += 1
+
+
+async def trace_pe_calc_loop(ptp, dut, oep, cl_x=0, cl_y=0, pe_row=0, pe_col=0,
+                             max_lines=120):
+    """Trace one PE's sparse CALCULATING loop, to see why it stops early.
+
+    The loop advances to the next activation when the weight range is used up
+    (wght_data_end <= wght_data_SPad_addr + 1) and terminates on either the
+    activation count or wght_data_vec >= wght_data_end. When a PE accumulates
+    fewer products than its activation count allows, only a cycle-by-cycle view
+    of those counters says which of the two ended it.
+    """
+    try:
+        fsm = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[cl_y].OpenEye_Cluster
+               .pe_cluster.gen_X[pe_col].gen_Y[pe_row].pe.gen_sparse_fsm)
+    except Exception as exc:
+        logger.error("trace_pe_calc_loop: PE unreachable (%s)", type(exc).__name__)
+        return
+    names = ("current_state_computing", "iact_addr_current", "iact_addr_count",
+             "wght_data_vec", "wght_data_end", "wght_data_start",
+             "wght_data_SPad_addr", "values_valid", "computing")
+    lines = 0
+    prev = None
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        vals = []
+        for n in names:
+            try:
+                vals.append(int(getattr(fsm, n).value))
+            except Exception:
+                vals.append(-1)
+        if vals == prev:
+            continue
+        prev = vals
+        if vals[0] == 0 and vals[8] == 0:
+            continue
+        logger.error("calc %s", " ".join("%s=%d" % (n, v) for n, v in zip(names, vals)))
+        lines += 1
+
+
+def dump_pe_iact_config(dut, oep, pe_col=0):
+    """Print each PE's iact loop bounds and how many activations it holds.
+
+    The compute loop in PE.v runs to channel_reg_C0 * iact_addr_max_reg, where
+    iact_addr_max_reg is a 4-bit field of the PE config word
+    (stream_data[21:18]). If a PE accumulates fewer products than its slice
+    should contain, this separates the two possible causes: a loop bound that
+    is too small (the PE was told to read fewer) from a SPAD holding fewer
+    non-zero payloads than the bound allows (the converter sent fewer).
+    """
+    logger.error("PE iact config and SPAD payload counts:")
+    width = oep.IACT_Bitwidth + getattr(oep, "IACT_WOH_Bitwidth", oep.IACT_Bitwidth) \
+        if False else None
+    for cl_y in range(oep.Clusters_Y):
+        for cl_x in range(oep.Clusters_X):
+            for pe_row in range(oep.PEs_Y):
+                try:
+                    pe = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[cl_y].OpenEye_Cluster
+                          .pe_cluster.gen_X[pe_col].gen_Y[pe_row].pe)
+                except Exception as exc:
+                    logger.error("  cluster(%d,%d) row %d unreachable (%s)",
+                                 cl_x, cl_y, pe_row, type(exc).__name__)
+                    continue
+                fields = []
+                for name in ("iact_addr_max_reg", "channel_reg_C0", "filters_reg_M0"):
+                    try:
+                        fields.append("%s=%d" % (name, int(getattr(pe, name).value)))
+                    except Exception:
+                        fields.append("%s=?" % name)
+                # Count non-zero payloads in the iact data SPAD. The sparse word
+                # is {overhead, payload}; with constant operands every real
+                # activation has payload != 0, so this is how many arrived.
+                nz = unwritten = 0
+                try:
+                    mem = pe.iact_data_SPad.ram.impl.mem
+                    pay_bits = int(dut.DATA_IACT_BITWIDTH.value)
+                    for addr in range(len(mem)):
+                        try:
+                            word = int(mem[addr].value)
+                        except ValueError:
+                            unwritten += 1
+                            continue
+                        except IndexError:
+                            break
+                        if word & ((1 << pay_bits) - 1):
+                            nz += 1
+                except Exception as exc:
+                    fields.append("spad=?(%s)" % type(exc).__name__)
+                # The sparse FSM's loop exit (PE.v CALCULATING, block 6)
+                # compares iact_addr_current against iact_addr_SPad_data_r -
+                # the activation count read from the iact ADDRESS SPAD, which
+                # the converter writes. That is a different source than the
+                # iact_addr_max_reg config field, so dump it too: a count of 3
+                # where the slice holds 6 would end the loop at half.
+                addrs = []
+                try:
+                    amem = pe.gen_iact_addr_spad.iact_addr_SPad.ram.impl.mem
+                    for addr in range(8):
+                        try:
+                            addrs.append(int(amem[addr].value))
+                        except ValueError:
+                            addrs.append(None)
+                        except IndexError:
+                            break
+                except Exception as exc:
+                    addrs = ["?(%s)" % type(exc).__name__]
+                logger.error("  cluster(%d,%d) row %d: %s nonzero_payloads=%d iact_addr_spad=%s",
+                             cl_x, cl_y, pe_row, " ".join(fields), nz, addrs)
+
+
+def dump_pe_psum_values(dut, oep, pe_col=0, max_addr=8):
+    """Print each PE's psum SPAD values, not just how many words are written.
+
+    With OPENEYE_CONST_IACTS=1 and OPENEYE_CONST_WGHTS=1 every product is 1, so
+    a psum value *is* the number of products that PE accumulated. Summing the
+    lanes that feed one output then says exactly where a shortfall sits: an
+    even split means every PE is short by the same amount (a per-PE activation
+    count), an uneven one means some lanes never ran.
+    """
+    logger.error("PE psum SPAD values (const operands: value == products accumulated):")
+    for cl_y in range(oep.Clusters_Y):
+        for cl_x in range(oep.Clusters_X):
+            for pe_row in range(oep.PEs_Y):
+                try:
+                    pe = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[cl_y].OpenEye_Cluster
+                          .pe_cluster.gen_X[pe_col].gen_Y[pe_row].pe)
+                    mem = pe.gen_serial_psum_spad.gen_psum_spad[0].psum_SPad.ram.impl.mem
+                except Exception as exc:
+                    logger.error("  cluster(%d,%d) row %d unreachable (%s)",
+                                 cl_x, cl_y, pe_row, type(exc).__name__)
+                    continue
+                vals = []
+                for addr in range(max_addr):
+                    try:
+                        vals.append(_signed(int(mem[addr].value), oep.DATA_PSUM_BITWIDTH))
+                    except ValueError:
+                        vals.append(None)
+                    except IndexError:
+                        break
+                logger.error("  cluster(%d,%d) row %d: %s", cl_x, cl_y, pe_row, vals)
+
+
 def dump_pe_psum_spads(dut, oep, pe_col=0, max_addr=20):
     """Print the psum SPADs of one PE inside the FPGA design.
 
@@ -2019,10 +2267,13 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         report_iact_handoff(oep)
         report_cluster_iact()
         report_pe_iact()
+        report_converter_store()
         dump_compute_mask(dut, oep)
         dump_iact_path(dut, oep)
         dump_pe_occupancy(dut, oep)
         dump_pe_psum_spads(dut, oep)
+        dump_pe_psum_values(dut, oep)
+        dump_pe_iact_config(dut, oep)
         dump_psum_buffers(dut, oep)
         if psum_stream_counts:
             logger.info("psum_enable_o asserted cycles per bit: %s",
