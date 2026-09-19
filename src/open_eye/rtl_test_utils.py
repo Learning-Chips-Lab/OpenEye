@@ -24,7 +24,7 @@ import math
 import cocotb
 import numpy as np
 import open_eye.iact_stream_mapper as iact_stream_mapper
-from cocotb.triggers import Timer
+from cocotb.triggers import FallingEdge, Timer
 import open_eye.stream_dicts as strdic
 import random
 
@@ -1728,6 +1728,52 @@ async def probe_psum_stream(ptp, dut, oep):
             if (value >> bit) & 1:
                 psum_stream_counts[bit] = psum_stream_counts.get(bit, 0) + 1
         previous = value
+
+
+async def trace_conv_writeback(ptp, dut, max_lines=160):
+    """Trace psum selection, quantization and activation writes after settling.
+
+    Opt in with TRACE_CONV_WRITEBACK. Unknown lanes are printed individually
+    so an unused RAM bank cannot hide the bank being debugged.
+    """
+    pp = dut.psum_pipeline_inst
+
+    def value(signal):
+        try:
+            return int(signal.value)
+        except ValueError:
+            return "X"
+
+    def words(signal, width):
+        bits = str(signal.value)
+        return [int(bits[max(0, end-width):end], 2)
+                if all(b in "01" for b in bits[max(0, end-width):end]) else "X"
+                for end in range(len(bits), 0, -width)]
+
+    lines = 0
+    while lines < max_lines:
+        await FallingEdge(dut.clk_i)
+        state = value(pp.fsm_psum_current_state)
+        if state not in (3, 4, 6) and not (state == 0 and value(dut.fsm_current_state) == 11):
+            continue
+        logger.info("convwrite st=%s cyc=%s select=%s addr=%s rd=%s pre=%s "
+                    "router=%s pen=%s pwen=%s pren=%s pdata=%s "
+                    "filter=%s mant=%s shift=%s offset=%s quant=%s wen=%s wdata=%s",
+                    state, value(pp.fsm_psum_cycle), value(pp.psum_cluster_select),
+                    words(pp.psum_buffer_addr, int(dut.BUFFER_WIDTH_PSUM.value)),
+                    words(pp.psum_buffer_data_r, len(pp.pre_quantized_value[0])),
+                    [value(pp.pre_quantized_value[i]) for i in range(len(pp.pre_quantized_value))],
+                    value(pp.router_mode_psum), value(pp.psum_enable_o),
+                    value(pp.psum_buffer_en_w), value(pp.psum_buffer_en_r),
+                    words(pp.psum_buffer_data_w, len(pp.pre_quantized_value[0])),
+                    value(pp.current_filter),
+                    value(pp.gen_quant_unit[0].u_quant_unit.quant_mant),
+                    value(pp.current_shift),
+                    value(pp.gen_quant_unit[0].u_quant_unit.quant_offset),
+                    words(pp.quantized_value_flat, 8),
+                    [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))],
+                    words(dut.iact_buffer_data_w, 64))
+        lines += 1
 
 
 async def trace_psum_capture(ptp, dut, oep, max_lines=400):

@@ -122,6 +122,9 @@ module psum_pipeline #(
   localparam GET_BIAS = 4'd5;
 
   localparam PSUM_CLSUTER_SELECT_WIDTH = CLUSTERS == 1 ? 1 : $clog2(CLUSTERS);
+  // Match the activation packer's active lanes, independently of how many
+  // quantization units were instantiated.
+  localparam WRITEBACK_WORDS = TRANS_WORDS < NUM_GLB_PSUM ? TRANS_WORDS : NUM_GLB_PSUM;
 
   reg [7:0] storage_cycles;
   reg [4:0] psum_select_cnt_0;
@@ -753,7 +756,10 @@ module psum_pipeline #(
           if (fsm_psum_cycle >= 3) begin
             if (CLUSTERS != 1) begin 
               for (cc_psum = 0; cc_psum < TRANS_WORDS; cc_psum = cc_psum + 1) begin
-                pre_quantized_value[cc_psum] <= psum_buffer_data_r[psum_cluster_select*TRANS_BITWIDTH_PSUM*TRANS_WORDS+cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
+                if (cc_psum < WRITEBACK_WORDS)
+                  pre_quantized_value[cc_psum] <= psum_buffer_data_r[psum_cluster_select*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
+                else
+                  pre_quantized_value[cc_psum] <= 0;
               end
               psum_cluster_select_0 <= psum_cluster_select_0_next;
               psum_cluster_select <= psum_cluster_select_0_next;
@@ -782,7 +788,10 @@ module psum_pipeline #(
               end
             end else begin
               for (cc_psum = 0; cc_psum < TRANS_WORDS; cc_psum = cc_psum + 1) begin
-                pre_quantized_value[cc_psum] <= psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
+                if (cc_psum < WRITEBACK_WORDS)
+                  pre_quantized_value[cc_psum] <= psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
+                else
+                  pre_quantized_value[cc_psum] <= 0;
               end
             end
           end

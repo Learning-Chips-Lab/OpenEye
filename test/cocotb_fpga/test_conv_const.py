@@ -38,14 +38,11 @@ test_conv_const_two_layers     LAYER=Convolution_Stack, two stacked conv
 
 The explicit Convolution_Single mode and layer-count assertion keep the
 control independent of the legacy Convolution model, which has two layers.
+The ramp tests additionally distinguish spatial positions and output channels.
 
-Known state (2026-09-16/17)
----------------------------
-single layer:  all configs fail, 4 of 4 feature maps differ.
-two layers:    the interlayer write-back ignores the computed psums. With
-               CLUSTER_ROWS=2 the buffer holds 0x2020202000000000 for c = 1, 2
-               and 8 alike while the reference moves; with CLUSTER_ROWS=1 it is
-               never written (reads back X).
+The September 19 debugging milestone targets CLUSTER_ROWS=2, NUM_GLB_IACT=1,
+INPUT_CHANNELS=4. The one-channel geometry and CLUSTER_ROWS=1 remain separate
+regressions; see doc/test_status_handover.md for measured results.
 
 Both tests are tiny - an 8-wide input and 4 filters - so a case runs in about
 a minute and they can be iterated on while debugging, unlike the MNIST net
@@ -85,7 +82,8 @@ NUM_GLB_WGHT  = 3
 
 
 def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
-                    input_channels, request):
+                    input_channels, request, ramp_iacts=False,
+                    psum_width=20, trans_words=8, bias_step=0):
     """Build and simulate one constant-operand conv configuration."""
     # OpenEyeParameters and parameters.vh read these from the environment at
     # generation time, so they have to be set before create_vh_file_from_envvars.
@@ -93,9 +91,11 @@ def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
     os.environ["NUM_GLB_IACT"] = str(num_glb_iact)
     os.environ["NUM_GLB_PSUM"] = str(NUM_GLB_PSUM)
     os.environ["NUM_GLB_WGHT"] = str(NUM_GLB_WGHT)
+    os.environ["DATA_PSUM_BITWIDTH"] = str(psum_width)
+    os.environ["TRANS_WORDS"] = str(trans_words)
     # Fixed platform configuration, matching the other cocotb_fpga runners.
-    # QUANT_AMOUNT must stay 1024: conv_mapper.write_quantize sends 512 DMA
-    # words and GET_QUANTIZE expects QUANT_AMOUNT/2 of them.
+    # Use the standard quantization table: 1024 entries of 40 bits produce
+    # 640 DMA words, matching GET_QUANTIZE's derived transfer count.
     os.environ["BRANCHES"]        = "1"
     os.environ["BUFFER_WIDTH"]    = "12"
     os.environ["QUANT_AMOUNT"]    = "1024"
@@ -159,6 +159,8 @@ def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
             # reference is recomputed from the same DRAM, so it stays exact.
             "OPENEYE_CONST_IACTS": str(const_value),
             "OPENEYE_CONST_WGHTS": str(const_value),
+            "OPENEYE_RAMP_IACTS": "1" if ramp_iacts else "",
+            "OPENEYE_BIAS_STEP": str(bias_step) if bias_step else "",
             # Fail a hang in minutes instead of running to the 15 ms sim
             # timeout; the stall report names the FSM states and per-PE counts.
             "OPENEYE_PROBE_FSM":      "1",
@@ -208,6 +210,26 @@ def test_conv_const_two_layers(CONST_VALUE, CLUSTER_ROWS, NUM_GLB_IACT,
     _run_conv_const("Convolution_Stack", CONST_VALUE, CLUSTER_ROWS,
                     num_glb_iact=NUM_GLB_IACT, input_channels=INPUT_CHANNELS,
                     request=request)
+
+
+@pytest.mark.parametrize("psum_width", [20, 32])
+@pytest.mark.parametrize("trans_words", [4, 8])
+def test_conv_ramp_writeback(psum_width, trans_words, request):
+    """Nonuniform pixels expose ordering errors hidden by constant operands.
+
+    Check the intermediate activation RAM and the second layer's DMA output,
+    with both a partial and a full DMA payload and extra quantizer lanes.
+    """
+    _run_conv_const("Convolution_Stack", 8, 2, num_glb_iact=1,
+                    input_channels=4, request=request, ramp_iacts=True,
+                    psum_width=psum_width, trans_words=trans_words)
+
+
+def test_conv_channel_order(request):
+    """Distinguish spatial positions and output channels across write-back."""
+    _run_conv_const("Convolution_Stack", 8, 2, num_glb_iact=1,
+                    input_channels=4, request=request, ramp_iacts=True,
+                    bias_step=128)
 
 
 if __name__ == "__main__":
