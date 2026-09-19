@@ -390,7 +390,7 @@ module data_pipeline_wght #(
   //   both sub-words in the current data_i word.
 
   wire [3:0] overhead_temp [PARALLEL_MACS-1:0];
-  if (SPARSITY_EN) begin
+  if (SPARSITY_EN) begin : gen_overhead_sparse
     assign overhead_temp[0] = input_words_w[0][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH];
     for (w_gen = 0; w_gen < PARALLEL_MACS-1; w_gen = w_gen + 1) begin
       assign overhead_temp[w_gen+1] = input_words_w[w_gen+1][SECOND_PAYLOAD_WIDTH+:SECOND_OVERHEAD_WIDTH] + overhead_temp[w_gen];
@@ -399,7 +399,7 @@ module data_pipeline_wght #(
     // overhead_next_word: look-ahead overhead tag from sub-word 0.
     //   Used to detect a filter boundary before updating overhead_reg.
     assign overhead_next_word = input_words_w[0][11:8];
-  end else begin
+  end else begin : gen_overhead_dense
     for (w_gen = 0; w_gen < PARALLEL_MACS; w_gen = w_gen + 1) begin
       assign overhead_temp[w_gen] = 0;
     end

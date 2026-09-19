@@ -55,10 +55,8 @@
 ///   and source enables data transfer
 ///
 /// Parameters:
-///   IS_TOPLEVEL            - Decides, wether modul is topmodul or not
 ///   LEFT_CLUSTER           - Indicates, if cluster is on the left side
 ///   TOP_CLUSTER            - Decides, wether this cluster is the topmost cluster
-///   BOTTOM_CLUSTER         - Indicates, wether this cluster is the topmost cluster
 ///   DATA_IACT_BITWIDTH     - Width of input activation data
 ///   DATA_WGHT_BITWIDTH     - Width of weight data
 ///   DATA_PSUM_BITWIDTH     - Width of partial sum data, used in internal accumulator
@@ -74,9 +72,6 @@
 ///   CLUSTER_ROWS           - Amount of rows of clusters
 ///   CLUSTER_COLUMNS        - Amount of columns of clusters
 ///   CLUSTERS               - Amount of clusters
-///   IACT_PER_PE            - Maximum Iact Words in process element
-///   WGHT_PER_PE            - Maximum Wght Words in process element
-///   PSUM_PER_PE            - Maximum Psum Words in process element
 ///   IACT_MEM_ADDR_WORDS    - Number of words in IACT GLB
 ///   PSUM_MEM_ADDR_WORDS    - Number of words in PSUM GLB
 ///   IACT_MEM_ADDR_BITS     - Width of words in IACT GLB
@@ -111,11 +106,9 @@
 ///
 
 module OpenEye_Cluster #(
-    parameter IS_TOPLEVEL         = 1,
     parameter SERIAL              = 0,
     parameter LEFT_CLUSTER        = 0,
     parameter TOP_CLUSTER         = 0,
-    parameter BOTTOM_CLUSTER      = 0,
     parameter PARALLEL_MACS       = 2,
     parameter SPARSITY_EN         = 1,  // 1=sparse mode (default), 0=dense mode
     parameter DATA_IACT_BITWIDTH  = 8,
@@ -134,9 +127,6 @@ module OpenEye_Cluster #(
     parameter CLUSTER_ROWS        = 8,
     parameter CLUSTER_COLUMNS     = 2,
     parameter CLUSTERS            = CLUSTER_COLUMNS * CLUSTER_ROWS,
-    parameter IACT_PER_PE         = 16,
-    parameter WGHT_PER_PE         = 192,
-    parameter PSUM_PER_PE         = 16,
     parameter IACT_MEM_ADDR_WORDS = 512,
     parameter IACT_MEM_ADDR_BITS  = $clog2(IACT_MEM_ADDR_WORDS),
     parameter PSUM_MEM_ADDR_WORDS = 384,
@@ -266,9 +256,6 @@ module OpenEye_Cluster #(
   wire [                    NUM_GLB_WGHT-1:0] pe_wght_enable;
 
   ///IACT Wire
-  wire [                    NUM_GLB_IACT-1:0] router_cluster_iact_ready;
-  wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] router_cluster_iact_data;
-  wire [                    NUM_GLB_IACT-1:0] router_cluster_iact_enable;
 
   wire [                    NUM_GLB_IACT-1:0] pe_iact_ready;
   wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] pe_iact_data;
@@ -381,7 +368,6 @@ module OpenEye_Cluster #(
   /////////////////////////////////////////
   GLB_cluster #(
       .SERIAL             (SERIAL),
-      .PARALLEL_MACS      (PARALLEL_MACS),
       .DATA_IACT_BITWIDTH (TRANS_BITWIDTH_IACT),
       .DATA_PSUM_BITWIDTH (TRANS_BITWIDTH_PSUM),
       .DATA_WGHT_BITWIDTH (TRANS_BITWIDTH_WGHT),

@@ -95,19 +95,19 @@ module delay_cluster #(
   generate
     genvar i;
     for (i = 0; i < NUM_STAGES; i = i + 1) begin : gen_data_shift
-      if (i == 0) begin
+      if (i == 0) begin : gen_first
         assign data_stage[i*DATA_BITWIDTH +: DATA_BITWIDTH] = data_i;
-    end else begin
+      end else begin : gen_next
         assign data_stage[i*DATA_BITWIDTH +: DATA_BITWIDTH] = data_regs[(i-1)*DATA_BITWIDTH +: DATA_BITWIDTH];
+      end
     end
-  end
   endgenerate
 
   generate
     for (i = 0; i < NUM_STAGES; i = i + 1) begin : gen_enable_shift
-      if (i == 0) begin
+      if (i == 0) begin : gen_first
         assign enable_stage[i] = enable_i;
-      end else begin
+      end else begin : gen_next
         assign enable_stage[i] = enable_regs[i-1];
       end
     end
@@ -115,9 +115,9 @@ module delay_cluster #(
 
   generate
     for (i = 0; i < NUM_STAGES; i = i + 1) begin : gen_ready_shift
-      if (i == 0) begin
+      if (i == 0) begin : gen_first
         assign ready_stage[i] = ready_i;
-      end else begin
+      end else begin : gen_next
         assign ready_stage[i] = ready_regs[i-1];
       end
     end

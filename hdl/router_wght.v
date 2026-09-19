@@ -106,7 +106,6 @@ module router_wght #(
   wire e00;
   wire e01;
   wire e10;
-  wire e11;
   wire r00;
   wire r01;
   wire r10;
@@ -139,7 +138,6 @@ module router_wght #(
   assign e01 = router_mode_i ? 0 : enable_src_port_0;
 
   assign e10 = router_mode_i ? enable_src_port_1 : 0;
-  assign e11 = router_mode_i ? 0 : 0;
 
 
   ///Destination Port: Ready

@@ -322,7 +322,6 @@ module PE_cluster #(
             .WGHT_ADDR_ADDR        (WGHT_ADDR_WORDS),
             .PSUM_ADDR             (PSUM_WORDS),
             .TRANS_BITWIDTH_IACT   (TRANS_BITWIDTH_IACT),
-            .TRANS_BITWIDTH_WGHT   (TRANS_BITWIDTH_WGHT),
             .NUM_GLB_IACT          (NUM_GLB_IACT)
         ) pe (
             .clk_i(clk_i),

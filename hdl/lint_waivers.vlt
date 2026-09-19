@@ -1,0 +1,61 @@
+// Lint waivers for the CI lint run (see .github/workflows/lint.yml).
+// Only cases where fixing the warning is not sensible are listed here:
+// module interfaces that must stay stable, configuration-dependent logic,
+// and structural artifacts of generate arrays.
+`verilator_config
+
+// --- Intentionally unconnected outputs -------------------------------------
+// Systolic pass-through is not routed above cluster level (see OpenEye_Cluster.v).
+lint_off -rule PINCONNECTEMPTY -file "*OpenEye_Cluster.v" -match "*iact_pass_*"
+// adder_tree.valid_o is not used by the PE.
+lint_off -rule PINMISSING -file "*PE.v" -match "*valid_o*"
+
+// --- Reset synchronizer ----------------------------------------------------
+// The synchronizer chain is reset asynchronously and also read synchronously,
+// which is the intended structure of a reset synchronizer.
+lint_off -rule SYNCASYNCNET -file "*RST_SYNC.v"
+
+// --- Interface parameters/ports kept for compatibility ---------------------
+// These configuration input ports of OpenEye_Parallel are not read inside the
+// module. They are part of the port list driven by OpenEye_FPGA and the testbenches.
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*'fraction_bit_i'*"
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*'needed_x_cls_i'*"
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*'needed_iact_cycles_i'*"
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*'iact_size_x_i'*"
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*'wght_addr_len_i'*"
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*'pooling_cluster_mode_i'*"
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*'input_activations_i'*"
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*'needed_psum_storage_cycles_i'*"
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*'needed_iact_channel_cycles_i'*"
+// Top-level parameter that OpenEye_FPGA and the test Makefiles set.
+lint_off -rule UNUSEDPARAM -file "*OpenEye_Parallel.v" -match "*'WGHT_PER_PE'*"
+// Cluster ports that are currently not used inside OpenEye_Cluster.
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Cluster.v" -match "*'bano_cluster_mode_i'*"
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Cluster.v" -match "*'af_cluster_mode_i'*"
+// Read by test/cocotb_PE_cluster/PE_cluster_tb.py through the DUT handle.
+lint_off -rule UNUSEDPARAM -file "*PE_cluster.v" -match "*'DATA_WGHT_OVERHEAD'*"
+// Port of delay_cluster that is not read inside the module.
+lint_off -rule UNUSEDSIGNAL -file "*delay_cluster.v" -match "*'delay_psum_glb_i'*"
+// The PE only decodes the low 9 bits of the 12 bit config stream word.
+lint_off -rule UNUSEDSIGNAL -file "*PE.v" -match "*'data_stream_i'*"
+// Documented implementation hint of the RAM wrapper for physical implementations.
+lint_off -rule UNUSEDPARAM -file "*RAM_DP_RW.v" -match "*'Implementation'*"
+
+// --- Configuration dependent logic -----------------------------------------
+// Systolic pass-through is only active for SYSTOLIC_GEMM_EN=1.
+lint_off -rule UNUSEDSIGNAL -file "*PE_cluster.v" -match "*'iact_pass_*"
+lint_off -rule UNUSEDSIGNAL -file "*PE.v" -match "*'iact_pass_*"
+// Only the low bit of these psum ready vectors is read.
+lint_off -rule UNUSEDSIGNAL -file "*PE_cluster.v" -match "*'pe_router_psum_ready_i'*"
+lint_off -rule UNUSEDSIGNAL -file "*PE_cluster.v" -match "*'psum_ready_reg'*"
+// Adder 3 exists only for SERIAL=1, the lint run elaborates SERIAL=0.
+lint_off -rule UNUSEDSIGNAL -file "*PE.v" -match "*'adder_tree_*"
+lint_off -rule UNDRIVEN -file "*PE.v" -match "*'adder_tree_o'*"
+// Output of the iact SPad that the PE does not use.
+lint_off -rule UNUSEDSIGNAL -file "*PE.v" -match "*'first_spad_words_iact_S'*"
+
+// --- Cluster array edges ---------------------------------------------------
+// Every cluster instance declares the vertical links to both neighbours, the
+// links that point out of the array (top row / bottom row) stay unused.
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*_top_*_cluster_w'*"
+lint_off -rule UNUSEDSIGNAL -file "*OpenEye_Parallel.v" -match "*_bottom_*_cluster_w'*"

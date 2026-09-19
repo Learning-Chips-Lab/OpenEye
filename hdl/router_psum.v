@@ -132,13 +132,6 @@ module router_psum #(
     output                  enable_dst_port_2
 );
 
-  ///Status Signals in Router
-  ////////////////////////////////////////
-  wire [1:0] l_status;
-  wire       h_status;
-
-  assign {h_status, l_status} = router_mode_i;
-
   ///Signals in Router
   ////////////////////////////////////////
 
@@ -151,11 +144,9 @@ module router_psum #(
   wire e20;
   wire e21;
   wire e22;
-  wire r00;
   wire r01;
   wire r02;
   wire r10;
-  wire r11;
   wire r12;
   wire r20;
   wire r21;
@@ -271,14 +262,6 @@ module router_psum #(
   ///Destination Port: Ready
   ////////////////////////////////////////
 
-  assign r00 = (router_mode_i[2:0] == 3'd0) ? 1 :
-               (router_mode_i[2:0] == 3'd1) ? 0 :
-               (router_mode_i[2:0] == 3'd2) ? 0 :
-               (router_mode_i[2:0] == 3'd3) ? 0 :
-               (router_mode_i[2:0] == 3'd4) ? 1 :
-               (router_mode_i[2:0] == 3'd5) ? 1 :
-               (router_mode_i[2:0] == 3'd6) ? 1 :
-               (router_mode_i[2:0] == 3'd7) ? 1 : 0;
   assign r10 = (router_mode_i[2:0] == 3'd0) ? ready_dst_port_0 :
                (router_mode_i[2:0] == 3'd1) ? 1 :
                (router_mode_i[2:0] == 3'd2) ? 0 :
@@ -304,14 +287,6 @@ module router_psum #(
                (router_mode_i[2:0] == 3'd5) ? 1 :
                (router_mode_i[2:0] == 3'd6) ? 1 :
                (router_mode_i[2:0] == 3'd7) ? ready_dst_port_1 : 0;
-  assign r11 = (router_mode_i[2:0] == 3'd0) ? 1 :
-               (router_mode_i[2:0] == 3'd1) ? 1 :
-               (router_mode_i[2:0] == 3'd2) ? 0 :
-               (router_mode_i[2:0] == 3'd3) ? 0 :
-               (router_mode_i[2:0] == 3'd4) ? 1 :
-               (router_mode_i[2:0] == 3'd5) ? 1 :
-               (router_mode_i[2:0] == 3'd6) ? 0 :
-               (router_mode_i[2:0] == 3'd7) ? 0 : 0;
   assign r21 = (router_mode_i[2:0] == 3'd0) ? 0 :
                (router_mode_i[2:0] == 3'd1) ? 0 :
                (router_mode_i[2:0] == 3'd2) ? 1 :

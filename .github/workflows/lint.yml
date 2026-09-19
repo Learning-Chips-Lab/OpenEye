@@ -14,4 +14,4 @@ jobs:
         # PE.v and PE_cluster.v `include generated parameter headers that only
         # exist in a simulation build directory; the ifdef fallbacks give the
         # linter the same defaults.
-        run: verilator --lint-only -Wall -Ihdl/ +define+USE_INTERNAL_PARAMS_PE +define+USE_INTERNAL_PARAMS_PE_cluster hdl/OpenEye_Parallel.v
+        run: verilator --lint-only -Wall -Ihdl/ +define+USE_INTERNAL_PARAMS_PE +define+USE_INTERNAL_PARAMS_PE_cluster hdl/lint_waivers.vlt hdl/OpenEye_Parallel.v
