@@ -1369,6 +1369,8 @@ end
   reg        [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window_q;
   reg        [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window_q2;
 
+  reg fc_storage_valid_q, fc_storage_valid_q2;
+
   reg [ 7:0] iact_channel_counter_reg;  // Registered copy of iact_channels_counter for cross-process use.
 
   // --- PSUM FSM state registers ---
@@ -1606,6 +1608,8 @@ end
       iact_input_window            <= 0;
       iact_input_window_q          <= 0;
       iact_input_window_q2         <= 0;
+      fc_storage_valid_q          <= 0;
+      fc_storage_valid_q2         <= 0;
       iact_channel_sending_cycle1  <= 0;
       iact_channel_sending_cycle2  <= 0;
     end else begin
@@ -1613,6 +1617,8 @@ end
         pooling_buffer_old_q[a] <= pooling_buffer_old[a];
       end
       iact_input_window_q2 <= iact_input_window_q;
+      fc_storage_valid_q <= 0;
+      fc_storage_valid_q2 <= fc_storage_valid_q;
       case (fsm_current_state)
 
         // -------------------------------------------------------------------
@@ -2089,7 +2095,7 @@ end
                 // with the gate below, ended the sweep after 6 steps: 12 of 32
                 // activations. Convolution keeps the per-lane step.
                 current_x <= current_x + (fully_connected_layer ? 2 : NUM_GLB_IACT);
-                if (current_x == x_bound) begin 
+                if (!fully_connected_layer & (current_x == x_bound)) begin
                   current_x <= -padding_x;
                   current_y <= current_y + 1;
                   if (current_y == y_bound) begin
@@ -2098,6 +2104,8 @@ end
                 end
               end 
               iact_input_window_q <= 0;
+              // Include zero padding so every FC bank receives a complete tile.
+              fc_storage_valid_q <= fully_connected_layer & (current_x < iact_size_c);
               // iact_size_x arrives halved for FC layers (dense_mapper sends
               // ceil(iact_size_x/2), a word count) while current_x counts
               // activations, so the sweep stopped at half the input. fc_size_reg
@@ -2107,6 +2115,8 @@ end
                   (current_y < iact_size_y)) begin
                 iact_input_window       <= iact_input_window >> 16;
                 iact_input_window_q     <= iact_input_window[15:0];
+                if (fully_connected_layer & (current_x + 1 >= fc_size_reg))
+                  iact_input_window_q[15:8] <= 0;
                 relative_pos            <= relative_pos + 1;
                 if (relative_pos == IACT_RAM_CELLS - 1) begin
                   relative_pos             <= 0;
@@ -2783,6 +2793,7 @@ end
         iact_stream_constructor #(
             .CLUSTER_COLUMNS   (CLUSTER_COLUMNS),
             .CLUSTER_ROWS      (CLUSTER_ROWS),
+            .CLUSTER_ROW_ID    (j_gen),
             .SPARSITY_EN       (SPARSITY_EN),
             .NUM_GLB_IACT      (NUM_GLB_IACT),
             .PE_X              (NUM_GLB_PSUM),
@@ -2796,6 +2807,7 @@ end
             .clk_i                       (clk_i),
             .rst_ni                      (rst_n),
             .storage_i                   (iact_input_window_q2),
+            .fc_storage_valid_i          (fc_storage_valid_q2),
             .reset_cycle_i               (reset_cycle),
             .params                      (iact_converter_params_reg[i_gen][j_gen]),
             .enable_config               (iact_converter_en_cfg_reg[i_gen][j_gen]),

@@ -55,6 +55,7 @@ module iact_stream_constructor #(
     parameter  CALC_DATA_WIDTH     = 32,   // Calculation precision
     parameter  CLUSTER_COLUMNS     = 2,    // Number of PE cluster coloumns
     parameter  SPARSITY_EN         = 1,    // Enabled Sparsity Overhead
+    parameter  CLUSTER_ROW_ID      = 0,    // Row owning this FC K-slice
     parameter  CLUSTER_ROWS        = 8,    // Number of PE cluster rows
     parameter  NUM_GLB_IACT        = 3,    // Global buffer interfaces
     parameter  PE_X                = 4,    // PE array width
@@ -84,6 +85,7 @@ module iact_stream_constructor #(
     input                                                enable_config,
     input                                                enable_store,
     input                                                enable_converter,
+    input                                                fc_storage_valid_i, // storage_i contains one FC activation pair
     input      [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] storage_i,
     output reg                                           ready_o,
     input      [                       NUM_GLB_IACT-1:0] iact_ready_i,
@@ -126,6 +128,12 @@ module iact_stream_constructor #(
     input      [                                    3:0] padding_x,
     input      [                                    3:0] padding_y
 );
+  // Dense input arrives as consecutive pairs. Pairs rotate through PE rows,
+  // then through cluster rows, matching DenseWghtStreamMapper.
+  reg [IACT_CHOOSE_BITS-1:0] fc_store_bank, fc_write_bank_q;
+  reg [$clog2(CLUSTER_ROWS+1)-1:0] fc_store_row;
+  reg [3:0] fc_store_pair;
+  reg [ADDRWIDTH-1:0] fc_store_addr;
   reg                           ram_wr_en;
   reg                           ram_wr_en_q;
   reg                           configured;
@@ -229,6 +237,47 @@ module iact_stream_constructor #(
         rd_addr_3                  <= 0;
         rd_addr_4                  <= 0;
       end else begin
+        if (fully_connected_i) begin
+          iact_enable_o <= 0;
+          iact_choose_o <= {PES{NUM_GLB_IACT[IACT_CHOOSE_BITS-1:0]}};
+          for (per = 0; per < PE_Y; per = per + 1) begin
+            iact_choose_o[per*PE_X*IACT_CHOOSE_BITS+:IACT_CHOOSE_BITS] <= per;
+          end
+          if (enable_store) begin
+            ram_rd_addr <= 0;
+            rd_addr_2 <= 0;
+          end
+          case (fsm_enc_current_state)
+            IDLE: begin
+              ram_rd_en <= 0;
+              if ((fsm_enc_cycle == 1) & (&iact_ready_i)) begin
+                fsm_enc_current_state <= ENCODE;
+                fsm_enc_cycle <= 0;
+                ram_rd_addr <= rd_addr_2;
+                ram_rd_en <= 1;
+              end
+            end
+            ENCODE: begin
+              fsm_enc_cycle <= fsm_enc_cycle + 1;
+              // RAM_SP has two read stages. Prefetch each pair, then hold
+              // its output for the two clocks used by data_pipeline_iact.
+              if (!fsm_enc_cycle[0]) begin
+                ram_rd_addr <= ram_rd_addr + 1;
+              end
+              if ((fsm_enc_cycle >= 2) &
+                  (fsm_enc_cycle < {1'b0, iact_channels_per_pe_i[3:0]} + 2)) begin
+                iact_enable_o <= {NUM_GLB_IACT{1'b1}};
+                if (!fsm_enc_cycle[0]) iact_data_o <= ram_data_o;
+              end
+              if (fsm_enc_cycle == {1'b0, iact_channels_per_pe_i[3:0]} + 2) begin
+                fsm_enc_current_state <= IDLE;
+                fsm_enc_cycle <= 0;
+                ram_rd_en <= 0;
+                rd_addr_2 <= rd_addr_2 + (iact_channels_per_pe_i[3:0] >> 1);
+              end
+            end
+          endcase
+        end else begin
         case (fsm_enc_current_state)
           IDLE: begin
             iact_data_o                <= 0;
@@ -373,6 +422,7 @@ module iact_stream_constructor #(
             fsm_enc_current_state <= IDLE;
           end
         endcase
+        end
         if (enable_converter & configured) begin
           fsm_enc_cycle <= 1;
         end
@@ -402,6 +452,11 @@ reg enable_write_to_storage;
       // Reset
       if (!rst_ni) begin
         // Initialize the FSM cycle counter to 0 for tracking FSM state transitions
+        fc_store_bank                 <= 0;
+        fc_write_bank_q               <= 0;
+        fc_store_row                  <= 0;
+        fc_store_pair                 <= 0;
+        fc_store_addr                 <= 0;
         fsm_cycle                     <= 0;
         enable_write_to_storage       <= 0;
         wr_addr_0                     <= 0;
@@ -450,6 +505,40 @@ reg enable_write_to_storage;
         channels_q          <= channels;
         ram_wr_addr_q       <= ram_wr_addr;
         ram_wr_en_q         <= ram_wr_en;
+        if (fully_connected_i) begin
+          ready_o <= 1;
+          ram_wr_en <= 0;
+          ram_wr_en_q <= 0;
+          if (enable_store) begin
+            fc_store_bank <= 0;
+            fc_store_row <= 0;
+            fc_store_pair <= 0;
+            fc_store_addr <= 0;
+          end else if (fc_storage_valid_i) begin
+            if (fc_store_row == CLUSTER_ROW_ID) begin
+              ram_wr_en_q <= 1;
+              ram_wr_addr_q <= fc_store_addr;
+              fc_write_bank_q <= fc_store_bank;
+              for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
+                for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
+                  if (r == fc_store_bank)
+                    mem_data_payload_reg[r][w] <= storage_i[w*DATA_IACT_BITWIDTH+:DATA_IACT_BITWIDTH];
+                end
+              end
+            end
+            fc_store_bank <= fc_store_bank + 1;
+            if (fc_store_bank == PE_Y - 1) begin
+              fc_store_bank <= 0;
+              if (fc_store_row == CLUSTER_ROW_ID) fc_store_addr <= fc_store_addr + 1;
+              fc_store_pair <= fc_store_pair + 1;
+              if (fc_store_pair == (iact_channels_per_pe_i[3:0] >> 1) - 1) begin
+                fc_store_pair <= 0;
+                fc_store_row <= fc_store_row + 1;
+                if (fc_store_row == CLUSTER_ROWS - 1) fc_store_row <= 0;
+              end
+            end
+          end
+        end else begin
         case (fsm_current_state)
           FSM_INITIALIZE: begin
             fsm_cycle              <= 0;
@@ -587,6 +676,7 @@ reg enable_write_to_storage;
 
           end
         endcase
+        end
         if (enable_config) begin
           fsm_row_offset <= params[35:32];
           channels       <= params[(PARAMS_SIZE/4)-1:0];
@@ -599,6 +689,11 @@ reg enable_write_to_storage;
         wght_size_y                   <= wght_size_y_i;
         if (reset_cycle_i) begin
           fsm_current_state <= FSM_INITIALIZE;
+          fc_store_bank <= 0;
+          fc_store_row <= 0;
+          fc_store_pair <= 0;
+          fc_store_addr <= 0;
+          if (fully_connected_i) ram_wr_en_q <= 0;
         end
       end
     end
@@ -614,8 +709,8 @@ reg enable_write_to_storage;
       ) iact_buffer_SP (
           .clk_i   (clk_i),
           .rd_en_i (ram_rd_en),
-          .wr_en_i (ram_wr_en_q),
-          .addr_i  (ram_rd_addr | ram_wr_addr_q),
+          .wr_en_i (ram_wr_en_q & (!fully_connected_i | (fc_write_bank_q == r_gen))),
+          .addr_i  (fully_connected_i ? (ram_wr_en_q ? ram_wr_addr_q : ram_rd_addr) : (ram_rd_addr | ram_wr_addr_q)),
           .data_i  (ram_data_i_w),
           .data_o  (ram_data_o_w)
       );

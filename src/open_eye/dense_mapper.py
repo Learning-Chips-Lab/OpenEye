@@ -193,7 +193,7 @@ class DenseMapper(LayerMapper):
             "fc_size_reg": layer_params.iact_size_x,
             "iact_size_x": math.ceil(layer_params.iact_size_x/2),
             "iact_size_y": layer_params.iact_size_y,
-            "iact_size_c": layer_params.used_iact_per_PE * params.NUM_GLB_WGHT * layer_params.diff_iact_layer,
+            "iact_size_c": layer_params.iact_size_c,
             "padding_x": layer_params.padding_x,
             "padding_y": layer_params.padding_y,
             "psum_size_x":math.ceil(layer_params.iact_size_x/layer_params.strideX),
