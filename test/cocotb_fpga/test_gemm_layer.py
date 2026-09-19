@@ -7,7 +7,7 @@
 Full-system OpenEye_FPGA simulation of a GEMM layer under both dataflows.
 
 A GEMM layer (C = A x B + bias, realized as a single Dense layer) is run
-through the complete DMA flow twice:
+through the complete DMA flow with one and two MAC lanes under both dataflows:
 
   - DATAFLOW=row_stationary:    the classic dense/FC mapping; iact routing
                                 is derived from the iact_choose pattern of
@@ -19,9 +19,9 @@ through the complete DMA flow twice:
                                 keeps its output tile stationary in the
                                 local psum SPad.
 
-Both runs use the same stimulus and the same TensorFlow reference
-(rtl_test_utils.compare_stream_Dense), so a pass in the second
-parametrization demonstrates the output-stationary dataflow end to end:
+Every run checks random operands against the exact integer Dense reference
+(test_utils_main.collect_results), so a pass demonstrates the selected
+routing mode end to end:
 DMA words -> dma_storage.gemm_mode -> OpenEye_Parallel -> OpenEye_Cluster
 -> PE_cluster row/bank binding -> PE MAC/accumulate -> psum readout.
 
@@ -48,6 +48,7 @@ clk_delay_out      = 100
 clk_delay_unit_out = "ps"
 
 
+@pytest.mark.parametrize("PARALLEL_MACS", [1, 2])
 @pytest.mark.parametrize("INPUT_SIZE",   [32])   # K (inner dimension)
 @pytest.mark.parametrize("OUTPUT_SIZE",  [32])   # N (output columns)
 @pytest.mark.parametrize("CLUSTER_ROWS", [2])
@@ -60,10 +61,12 @@ def test_gemm_layer(
     CLUSTER_ROWS, NUM_GLB_IACT, NUM_GLB_PSUM, NUM_GLB_WGHT,
     DATAFLOW,
     request,
+    PARALLEL_MACS,
 ):
     # OpenEyeParameters and the parameters.vh generator read these at import
     # of the accelerator dimensions, so they must be set before
     # create_vh_file_from_envvars runs.
+    os.environ["PARALLEL_MACS"] = str(PARALLEL_MACS)
     os.environ["CLUSTER_ROWS"] = str(CLUSTER_ROWS)
     os.environ["NUM_GLB_IACT"] = str(NUM_GLB_IACT)
     os.environ["NUM_GLB_PSUM"] = str(NUM_GLB_PSUM)
@@ -143,6 +146,29 @@ def test_gemm_layer(
     )
 
 
+@pytest.mark.parametrize("input_size", [31, 63])
+def test_gemm_split_k_padding(input_size, request):
+    """Odd K, zero-padded tails and input sizes spanning multiple buffer words."""
+    test_gemm_layer(
+        INPUT_SIZE=input_size, OUTPUT_SIZE=8,
+        CLUSTER_ROWS=2, NUM_GLB_IACT=3, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3,
+        DATAFLOW="row_stationary", PARALLEL_MACS=2, request=request,
+    )
+
+
+@pytest.mark.parametrize("shape", [(4, 4), (8, 8), (4, 8), (8, 4), (16, 16)],
+                         ids=lambda shape: f"K{shape[0]}-N{shape[1]}")
+@pytest.mark.parametrize("parallel_macs", [1, 2])
+@pytest.mark.parametrize("dataflow", ["row_stationary", "output_stationary"])
+def test_gemm_split_k_shapes(shape, parallel_macs, dataflow, request):
+    """Square/rectangular GEMMs, including K slices containing only padding."""
+    test_gemm_layer(
+        INPUT_SIZE=shape[0], OUTPUT_SIZE=shape[1],
+        CLUSTER_ROWS=2, NUM_GLB_IACT=3, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3,
+        DATAFLOW=dataflow, PARALLEL_MACS=parallel_macs, request=request,
+    )
+
+
 if __name__ == "__main__":
     class _Node:
         nodeid = "gemm_layer_standalone"
@@ -152,5 +178,6 @@ if __name__ == "__main__":
         INPUT_SIZE=32, OUTPUT_SIZE=32,
         CLUSTER_ROWS=2, NUM_GLB_IACT=3, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3,
         DATAFLOW="output_stationary",
+        PARALLEL_MACS=2,
         request=_Request(),
     )
