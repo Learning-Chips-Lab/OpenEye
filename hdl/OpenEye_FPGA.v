@@ -1148,7 +1148,9 @@ end
       compute_reg <= 0;
       if (send_data_reg | sending_data) begin
         sending_data <= 1;
-        fsm_sending_cycle <= fsm_sending_cycle + PARALLEL_MACS;
+        // wghts_per_pe and the RAM address count packed words. One word
+        // leaves the buffer each clock, regardless of its MAC lane count.
+        fsm_sending_cycle <= fsm_sending_cycle + 1;
         if (!sending_data) begin
           for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
             for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
