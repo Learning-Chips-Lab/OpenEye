@@ -1527,7 +1527,7 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
         reordered_matrix = [matrix[i] for i in cluster_order]
         flat_list = [item for row in reordered_matrix for item in row]
         """
-        words = (oep.DMA_BITWIDTH//oep.DATA_PSUM_BITWIDTH)
+        words = oep.DMA_BITWIDTH // 32
         dut._log.info("Output Stream started")
         used_clusters_per_calc = math.ceil(layer_parameters.iact_size_x / 4) * 4
         values_per_transmission = math.ceil(layer_parameters.different_kernels_per_calculation*used_clusters_per_calc/2)

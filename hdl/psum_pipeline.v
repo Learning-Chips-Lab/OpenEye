@@ -171,6 +171,15 @@ module psum_pipeline #(
   wire [TRANS_BITWIDTH_PSUM*TRANS_WORDS-1:0] pre_quantized_value_flat;
   wire [8-1:0] quant_result[TRANS_WORDS-1:0];
   reg [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_buffer_data_temp_reg;
+  // Convolution emits PSUM_OUTPUT_WORDS tightly packed accumulator values
+  // per DMA beat, with unused high DMA bits zero. Advancing by DMA_BITWIDTH
+  // drops bits whenever the accumulator width is less than a DMA slot.
+  localparam CONV_DMA_PAYLOAD_WIDTH = PSUM_OUTPUT_WORDS * TRANS_BITWIDTH_PSUM;
+  localparam CONV_BIAS_CYCLES = (CLUSTERS * NUM_GLB_PSUM + PSUM_OUTPUT_WORDS - 1) / PSUM_OUTPUT_WORDS;
+  wire [DMA_BITWIDTH-1:0] psum_dma_word = fully_connected_layer ?
+      psum_buffer_data_temp_reg[0+:DMA_BITWIDTH] :
+      {{(DMA_BITWIDTH-CONV_DMA_PAYLOAD_WIDTH){1'b0}},
+       psum_buffer_data_temp_reg[0+:CONV_DMA_PAYLOAD_WIDTH]};
 
   // Read-out source for PSUM_SEND_RESULTS. A fully-connected layer leaves one
   // result per cluster column per buffer address, in GLB 0 of cluster row 0
@@ -370,12 +379,10 @@ module psum_pipeline #(
                   psum_buffer_en_w <= ~0;
                 end
               end else begin
-                psum_buffer_data_w[0+:DMA_BITWIDTH] <= data_dma_i_reg;
-                for (g_psum = 0; g_psum < PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1; g_psum = g_psum + 1) begin
-                  psum_buffer_data_w[DMA_BITWIDTH*(1+g_psum)+:DMA_BITWIDTH] <= psum_buffer_data_w[DMA_BITWIDTH*g_psum+:DMA_BITWIDTH];
-                end
+                psum_buffer_data_w <= (psum_buffer_data_w << CONV_DMA_PAYLOAD_WIDTH) |
+                    data_dma_i_reg[0+:CONV_DMA_PAYLOAD_WIDTH];
                 psum_buffer_en_w <= 0;
-                if (psum_cycle_count == PSUM_CYCLES_ONE_WORD_ALL_CELLS - 1) begin
+                if (psum_cycle_count == CONV_BIAS_CYCLES - 1) begin
                   psum_cycle_count <= 0;
                   for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                     for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
@@ -646,8 +653,8 @@ module psum_pipeline #(
                 (fsm_psum_cycle >= 1 & CLUSTER_COLUMNS != 1)) begin
               psum_cycle_loop_cnt_0     <= psum_cycle_loop_cnt_0 + 1;
               enable_dma_o              <= 1;
-              data_dma_o                <= psum_buffer_data_temp_reg[0+:DMA_BITWIDTH];
-              psum_buffer_data_temp_reg <= psum_buffer_data_temp_reg >> DMA_BITWIDTH;
+              data_dma_o                <= psum_dma_word;
+              psum_buffer_data_temp_reg <= psum_buffer_data_temp_reg >> (fully_connected_layer ? DMA_BITWIDTH : CONV_DMA_PAYLOAD_WIDTH);
             end
             if (psum_cycle_loop_cnt_1 == 0) begin
               psum_buffer_data_temp_reg <= psum_readout_src;
@@ -729,11 +736,11 @@ module psum_pipeline #(
             if (data_dma_o_counter != 2) begin
               data_dma_o_counter        <= data_dma_o_counter + 1;
               if (data_dma_o_counter == 0) begin
-                data_dma_o_q1             <= psum_buffer_data_temp_reg[0+:DMA_BITWIDTH];
-                psum_buffer_data_temp_reg <= psum_buffer_data_temp_reg >> DMA_BITWIDTH;
+                data_dma_o_q1             <= psum_dma_word;
+                psum_buffer_data_temp_reg <= psum_buffer_data_temp_reg >> (fully_connected_layer ? DMA_BITWIDTH : CONV_DMA_PAYLOAD_WIDTH);
               end
               if (data_dma_o_counter == 1) begin
-                data_dma_o_q2 <= psum_buffer_data_temp_reg[0+:DMA_BITWIDTH];
+                data_dma_o_q2 <= psum_dma_word;
               end
               psum_cycle_loop_cnt_1 <= psum_cycle_loop_cnt_1 + 1;
               if (psum_cycle_loop_cnt_1 == 0) begin

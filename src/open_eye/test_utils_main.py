@@ -553,7 +553,9 @@ def refresh_position(x_cor, y_cor, filter, y_line_counter, kernel_counter, layer
     return x_cor, y_cor, filter, y_line_counter, kernel_counter
 
 def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref):
-    words_per_transmission = params.DMA_BITWIDTH//params.DATA_PSUM_BITWIDTH
+    # FPGA readout transfers two psums per 64-bit beat (one per 32-bit
+    # beat), even when the accumulator itself is narrower than 32 bits.
+    words_per_transmission = params.DMA_BITWIDTH // 32
     filter_cycles = ((layer_params.filters//layer_params.used_psum_per_PE)//layer_params.different_kernels_per_calculation)
     output_number = layer_params.iact_size_y*layer_params.iact_size_x*layer_params.filters
     needed_refreshes = math.ceil(output_number / (layer_params.iact_size_x * layer_params.different_kernels_per_calculation * layer_params.y_lines_per_calculation) / layer_params.used_psum_per_PE)
@@ -592,7 +594,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                                         temp_string = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH) + temp_string
 
                                     x_cor = x_cor + 1
-                        file_dma_ref.write(temp_string+ "\n")
+                        file_dma_ref.write(temp_string.zfill(params.DMA_BITWIDTH) + "\n")
             filter = filter + 1
         if ((filter >= layer_params.filters)) :
             if (x_cor >= layer_params.psum_size_x+layer_params.psum_add_up) :
