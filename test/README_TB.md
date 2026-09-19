@@ -15,6 +15,52 @@ make
 make TB=my_testbench
 ```
 
+## Dense/GEMM split-K regression
+
+The FPGA Dense path splits K across cluster rows and distributes consecutive
+activation pairs round-robin across the PE rows within each cluster. Cluster
+columns compute different output features. For K=32, two cluster rows and three
+PE rows, the ramp input `1..32` is assigned as follows:
+
+| Cluster row | PE row 0 | PE row 1 | PE row 2 |
+|---|---|---|---|
+| 0 | 1, 2, 7, 8, 13, 14 | 3, 4, 9, 10, 15, 16 | 5, 6, 11, 12, 17, 18 |
+| 1 | 19, 20, 25, 26, 31, 32 | 21, 22, 27, 28, 0, 0 | 23, 24, 29, 30, 0, 0 |
+
+`fc_storage_valid_i` marks a pair on the converter input. Each converter writes
+only its cluster row's pairs, with one bank per PE row. During readout it holds
+each pair for two clocks, matching the PE activation pipeline, and sends exactly
+the configured number of activations per PE. Padding is included in the input
+stream; the PE may omit zero activations when constructing its sparse scratchpad.
+Both routing modes still reduce partial K results vertically.
+
+The full-system sweep covers K×N = 4×4, 8×8, 4×8, 8×4, 16×16 and 32×32
+with both MAC widths and routing modes, plus 31×8 and 63×8 padding cases.
+These are matrix dimensions; the hardware array remains two cluster columns
+by two cluster rows. Dense reference dot products run in-process to avoid
+starting a Python interpreter for every output; their results are independently
+checked against NumPy in `test/test_dense_reference.py`.
+
+Run from the repository root:
+
+```bash
+# Fast converter checks: bank assignment, zeros, input gaps, repeated loads,
+# two K tiles, and waiting for the PE cluster to become ready.
+openeye_env/bin/python3 -m pytest -q test/cocotb_iact_stream_constructor/test_fc_split_k.py
+
+# Complete DMA-to-output checks with random operands, both MAC widths and
+# routing modes, plus odd K sizes. Run serially to avoid shared runner state.
+OPENEYE_MAX_PROCS=2 openeye_env/bin/python3 -m pytest -q test/cocotb_fpga/test_gemm_layer.py
+
+# A ramp identifies input positions; constant operands alone cannot detect
+# activations sent to the wrong PE.
+OPENEYE_MAX_PROCS=2 OPENEYE_RAMP_IACTS=1 OPENEYE_CONST_WGHTS=1 \
+  openeye_env/bin/python3 -m pytest -q test/cocotb_fpga/test_gemm_layer.py
+```
+
+These system tests exercise a single Dense input vector (M=1), rather than
+batched GEMM or a complete Transformer/SSM model.
+
 ## Command Line Options
 
 ### Option 1: Using the Makefile (Recommended)
