@@ -22,7 +22,8 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
 
     Args:
         layer_mode (str): Type of layer to create. Supported values:
-            - "Convolution": Standard 2D convolution layer
+            - "Convolution": Legacy two-layer convolution model
+            - "Convolution_Single": One 2D convolution layer (no write-back)
             - "Convolution_Stack": Two stacked 2D convolution layers (exercises
               the interlayer psum->iact write-back)
             - "Depthwise_Convolution": Depthwise 2D convolution layer
@@ -60,6 +61,8 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
         np.random.seed(int(_seed))
     model = tf.keras.models.Sequential()
     match layer_mode:
+        case "Convolution_Single":
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides=strides))
         case "Convolution":
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(8, 2, channels), strides = 1))
@@ -74,7 +77,7 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             # Two stacked Conv2D layers. The first layer's psums are quantised
             # and written back into the iact buffer as the second layer's input,
             # so this mode exercises the interlayer psum->iact write-back that
-            # "Convolution" (a single layer) never reaches.
+            # "Convolution_Single" never reaches.
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, filters), strides = strides))
         case "Depthwise_Convolution":

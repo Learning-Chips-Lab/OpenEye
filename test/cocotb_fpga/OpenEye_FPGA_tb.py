@@ -205,6 +205,10 @@ async def single_layer_test(dut):
         model = SimpleMNISTConvNet()
         model = o2m.get_model(model)
         trunc_model = truncate_model(model)
+    if os.environ.get("OPENEYE_EXPECT_LAYERS"):
+        expected_layers = int(os.environ["OPENEYE_EXPECT_LAYERS"])
+        assert len(trunc_model) == expected_layers, (
+            f"{layer_mode}: expected {expected_layers} layers, got {len(trunc_model)}")
     await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, trunc_model)
 
 def truncate_model(model):

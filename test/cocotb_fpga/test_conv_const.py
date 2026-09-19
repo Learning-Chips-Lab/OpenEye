@@ -22,7 +22,7 @@ OPENEYE_CONST_IACTS / OPENEYE_CONST_WGHTS in OpenEye_FPGA_tb.py).
 
 The two tests
 -------------
-test_conv_const_single_layer   LAYER=Convolution, one conv layer. Checks the
+test_conv_const_single_layer   LAYER=Convolution_Single, one conv layer. Checks the
                                compute and read-out path end to end with no
                                interlayer step involved.
 
@@ -36,10 +36,8 @@ test_conv_const_two_layers     LAYER=Convolution_Stack, two stacked conv
                                Pooling layer, so conv and pooling cannot be
                                told apart there.
 
-They are split because a single-layer failure and a write-back failure are
-different bugs. When LAYER=Convolution changed from two layers to one, the
-old combined test silently stopped exercising the write-back while still
-failing for another reason - nothing in its output said so.
+The explicit Convolution_Single mode and layer-count assertion keep the
+control independent of the legacy Convolution model, which has two layers.
 
 Known state (2026-09-16/17)
 ---------------------------
@@ -143,6 +141,7 @@ def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
             "CLOCK_DELAY_OUTPUT":      str(clk_delay_out),
             "CLOCK_DELAY_UNIT_OUTPUT": clk_delay_unit_out,
             "LAYER":             layer_mode,
+            "OPENEYE_EXPECT_LAYERS": "1" if layer_mode == "Convolution_Single" else "2",
             "NUM_FILTERS":       str(NUM_FILTERS),
             "STRIDE":            str(STRIDE),
             "KERNEL_SIZE_X":     str(KERNEL_SIZE_X),
@@ -183,7 +182,7 @@ def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
 @pytest.mark.parametrize("CLUSTER_ROWS", [1, 2])
 def test_conv_const_single_layer(CONST_VALUE, CLUSTER_ROWS, request):
     """One conv layer: compute and read-out, no interlayer write-back."""
-    _run_conv_const("Convolution", CONST_VALUE, CLUSTER_ROWS,
+    _run_conv_const("Convolution_Single", CONST_VALUE, CLUSTER_ROWS,
                     num_glb_iact=1, input_channels=4, request=request)
 
 
