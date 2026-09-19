@@ -1855,7 +1855,7 @@ async def trace_bias_load(ptp, dut, oep, max_lines=120):
         lines += 1
 
 
-async def trace_converter_gate(ptp, dut, oep, col=0, row=0, max_lines=30):
+async def trace_converter_gate(ptp, dut, oep, col=0, row=0, max_lines=80):
     """Trace the per-cluster acceptance gate inside one iact converter.
 
     WRITE_TO_MEMORY only commits while x_pos_in_w_cycle lies in
@@ -1870,9 +1870,10 @@ async def trace_converter_gate(ptp, dut, oep, col=0, row=0, max_lines=30):
     except Exception as exc:
         logger.error("converter gate: instance unreachable (%s)", type(exc).__name__)
         return
+    tag = "c%dr%d" % (col, row)
     names = ("fsm_current_state", "enable_write_to_storage", "x_pos_in_w_cycle",
-             "x_range_lower_bound", "iact_values_per_cluster_transmit",
-             "x_pos_inc", "router_cycle", "ram_wr_en", "ram_wr_addr",
+             "x_range_lower_bound", "x_start", "iact_values_per_cluster_transmit",
+             "x_pos_inc", "fsm_row_offset", "ram_wr_en",
              "fsm_cycle", "needed_iact_buffer_words_i", "fully_connected_i")
     lines, prev = 0, None
     while lines < max_lines:
@@ -1886,7 +1887,8 @@ async def trace_converter_gate(ptp, dut, oep, col=0, row=0, max_lines=30):
         if vals == prev:
             continue
         prev = vals
-        logger.error("convgate %s", " ".join("%s=%d" % (n, v) for n, v in zip(names, vals)))
+        logger.error("convgate[%s] %s", tag,
+                     " ".join("%s=%d" % (n, v) for n, v in zip(names, vals)))
         lines += 1
 
 

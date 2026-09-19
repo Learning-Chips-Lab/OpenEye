@@ -236,7 +236,9 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     if os.environ.get("DUMP_PSUM_BUFFERS") and not os.environ.get("OPENEYE_PROBE_FSM"):
         cocotb.start_soon(rtl_test_utils.monitor_iact_handoff(ptp, dut))
     if os.environ.get("TRACE_CONVERTER_GATE"):
-        cocotb.start_soon(rtl_test_utils.trace_converter_gate(ptp, dut, openeye_parameter))
+        # Both cluster rows, to compare their acceptance windows directly.
+        cocotb.start_soon(rtl_test_utils.trace_converter_gate(ptp, dut, openeye_parameter, col=0, row=0))
+        cocotb.start_soon(rtl_test_utils.trace_converter_gate(ptp, dut, openeye_parameter, col=0, row=1))
     if os.environ.get("DUMP_IACT_BUFFER"):
         async def _dump_buf():
             from cocotb.triggers import Timer as _T
