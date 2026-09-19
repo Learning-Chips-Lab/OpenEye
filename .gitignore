@@ -306,3 +306,4 @@ literature/*
 # coding assistance
 *.vscode
 CLAUDE.md
+notes.md
