@@ -475,7 +475,6 @@ module psum_pipeline #(
               fsm_psum_current_state <= PSUM_GET_RESULTS;
               results_ready          <= 1;
               fsm_psum_cycle         <= 0;
-              psum_enable_i_reg      <= 0;
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
                   for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
@@ -532,6 +531,7 @@ module psum_pipeline #(
           if (fsm_psum_cycle == filters) begin
             fsm_psum_cycle         <= 0;
             psum_transmitted       <= 1;
+            psum_enable_i_reg      <= 0;
             if ((finished_cycles_psum == needed_cycles - 1)) begin
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin

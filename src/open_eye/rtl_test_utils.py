@@ -837,6 +837,8 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
         fail_after = int(os.environ.get("OPENEYE_FAIL_ON_STALL", "0"))
     except ValueError:
         fail_after = 0
+    if fail_after:
+        stall_report_after = min(stall_report_after, fail_after)
     progress_key = None
     idle_for = 0
     while True:
@@ -875,7 +877,8 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
                     reported = True
                     counters = []
                     for name in ("fsm_cycle", "fsm_psum_cycle", "fsm_psum_current_state",
-                                 "trans_cycles_iact", "trans_cycles_wght", "trans_cycles_psum"):
+                                 "trans_cycles_iact", "trans_cycles_wght", "trans_cycles_psum",
+                                 "current_cycle", "needed_cycles", "single_iteration"):
                         try:
                             counters.append("%s=%d" % (name, int(getattr(dut, name).value)))
                         except Exception:
@@ -889,7 +892,7 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
                         # fsm_psum_cycle == 0 is ambiguous without these two:
                         # either the request never went out (psum_ready_i_reg
                         # == 0) or some GLB never answered (results_ready == 0).
-                        for name in ("psum_ready_i_reg", "results_ready"):
+                        for name in ("psum_ready_i_reg", "psum_enable_i_reg", "results_ready", "finished_cycles_psum"):
                             try:
                                 logger.error("  %s = %s", name, str(getattr(pp, name).value))
                             except Exception:
@@ -909,6 +912,12 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
                                                  cx, cy,
                                                  str(cl.pe_router_psum_ready_out.value),
                                                  str(cl.pe_router_psum_enable_in.value))
+                                    states = [str(cl.pe_cluster.gen_X[x].gen_Y[y].pe.current_state_computing.value)
+                                              for y in range(oep.PEs_Y) for x in range(oep.PEs_X)]
+                                    logger.error("  cluster(%d,%d) PE states by row: %s", cx, cy, states)
+                                    pe = cl.pe_cluster.gen_X[0].gen_Y[0].pe
+                                    logger.error("  cluster(%d,%d) first PE psum_enable_i=%s psum_select=%s",
+                                                 cx, cy, str(pe.psum_enable_i.value), str(pe.psum_select.value))
                                 except Exception as exc:
                                     logger.error("  cluster(%d,%d) psum ready unreadable (%s)",
                                                  cx, cy, type(exc).__name__)
