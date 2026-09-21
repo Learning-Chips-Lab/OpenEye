@@ -257,8 +257,8 @@ module OpenEye_Parallel #(
   reg  [  ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_reg;
   reg  [  ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_reg;
   reg  [  ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_reg;
-  reg  [ IACT_MEM_ADDR_BITS*CLUSTERS*NUM_GLB_IACT-1:0] mem_addr_iact;
-  reg  [ PSUM_MEM_ADDR_BITS*CLUSTERS*NUM_GLB_PSUM-1:0] mem_addr_psum;
+  wire [ IACT_MEM_ADDR_BITS*CLUSTERS*NUM_GLB_IACT-1:0] mem_addr_iact;
+  wire [ PSUM_MEM_ADDR_BITS*CLUSTERS*NUM_GLB_PSUM-1:0] mem_addr_psum;
   reg  [TRANS_BITWIDTH_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] psum_data_i_reg;
   reg  [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_enable_i_reg;
   reg  [                    CLUSTERS*NUM_GLB_PSUM-1:0] psum_ready_i_reg;
@@ -330,9 +330,11 @@ module OpenEye_Parallel #(
 
   always @(posedge clk_i, negedge rst_ni) begin
     if (!rst_ni) begin  ///Reset
-      iact_data_i_reg <= 0;
+      iact_data_i_reg   <= 0;
+      iact_enable_i_reg <= 0;
     end else begin
-      iact_data_i_reg <= iact_data_i;
+      iact_data_i_reg   <= iact_data_i;
+      iact_enable_i_reg <= iact_enable_i;
     end
   end
   ///#######################
@@ -369,7 +371,7 @@ module OpenEye_Parallel #(
         end
         SECOND_PARAMS: begin
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{4{1'd0}},  {iact_channels_per_pe_i_reg}};
+          data_stream_reg        <= {{(12 - $clog2(IACT_ADDR_PER_PE + 1)) {1'd0}}, iact_channels_per_pe_i_reg};
           fsm_transmission_state <= THIRD_PARAMS;
         end
         THIRD_PARAMS: begin
@@ -381,7 +383,7 @@ module OpenEye_Parallel #(
           // handshake PE.v's stream_data logic expects) rather than removed,
           // to avoid changing the cycle count consumers rely on elsewhere.
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{3{1'd0}}, {filters_i_reg}};
+          data_stream_reg        <= {{(12 - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_i_reg};
           fsm_transmission_state <= IDLE_TRANSMI;
         end
         default: begin
@@ -431,7 +433,7 @@ module OpenEye_Parallel #(
       data_mode_i_reg             <= data_mode_i;
       gemm_mode_i_reg             <= gemm_mode_i;
       raw_wght_i_reg              <= raw_wght_i;
-      needed_cycles_i_reg         <= needed_cycles_i;
+      needed_cycles_i_reg         <= {2'b00, needed_cycles_i};
       needed_y_cls_i_reg          <= needed_y_cls_i;
       filters_i_reg               <= filters_i;
       iact_channels_per_pe_i_reg  <= iact_channels_per_pe_i;
@@ -479,7 +481,7 @@ module OpenEye_Parallel #(
           cycle_break_counter   <= 0;
           if (psum_transmitted_i & (iact_enable_i == 0) & (wght_enable_i == 0)) begin
             cycle_break_counter <= cycle_break_counter + 1;
-            if (cycle_break_counter >= needed_y_cls_i_reg << 1) begin
+            if (cycle_break_counter >= ({{(8 - $clog2(CLUSTER_ROWS + 1)) {1'b0}}, needed_y_cls_i_reg} << 1)) begin
               cycle_break_counter <= 0;
               start_new_cycle     <= 1;
               if (start_new_cycle != 1) begin
@@ -784,6 +786,14 @@ module OpenEye_Parallel #(
     end
 
     genvar cr_gen, cc_gen, pec_gen, per_gen, g_gen;
+
+    // In SERIAL mode GLB_cluster has no RAMs and ignores the addresses. The
+    // parallel (SERIAL=0) mode needs an address generator that does not exist
+    // yet, the addresses stay undriven there on purpose so lint keeps flagging it.
+    if (SERIAL) begin : gen_glb_addr_unused
+      assign mem_addr_iact = {(IACT_MEM_ADDR_BITS * CLUSTERS * NUM_GLB_IACT) {1'b0}};
+      assign mem_addr_psum = {(PSUM_MEM_ADDR_BITS * CLUSTERS * NUM_GLB_PSUM) {1'b0}};
+    end
 
     if (IS_TOPLEVEL) begin : gen_pipelined_ports
 

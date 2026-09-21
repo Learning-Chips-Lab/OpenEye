@@ -504,7 +504,9 @@ module PE #(
     localparam integer PSUM_DATA = DATA_PSUM_BITWIDTH,
     localparam integer PSUM_ADDR_BITWIDTH = $clog2(PSUM_ADDR),
     localparam integer PSUM_WORDS_PER_TRANSFER = (SERIAL == 1 ? 1 : PARALLEL_MACS),
-    localparam integer TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER
+    localparam integer TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * PSUM_WORDS_PER_TRANSFER,
+    // Lane count as psum SPad address, for address arithmetic in PSUM_ADDR_BITWIDTH bits
+    localparam [PSUM_ADDR_BITWIDTH-1:0] PARALLEL_MACS_ADDR = PARALLEL_MACS[PSUM_ADDR_BITWIDTH-1:0]
 
 ) (
     input                                             clk_i,
@@ -705,7 +707,7 @@ module PE #(
   // captures iact_pass_data_i into iact_data_current_3 so the standard MAC
   // pipeline uses the streamed value rather than the local SPad.
   generate
-    if (SYSTOLIC_GEMM_EN) begin : gen_systolic_pass
+    if (SYSTOLIC_GEMM_EN != 0) begin : gen_systolic_pass
       // One pipeline register: accept → hold for one cycle → forward
       always @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
@@ -831,7 +833,7 @@ module PE #(
     // Approach 3: in systolic mode use the pass-through value instead of the SPad pipeline
     assign mult_fac_1[pmc] = wght_data_spad_pay[pmc];
     // Approach 3: in systolic mode use the pass-through value instead of the SPad pipeline
-    assign mult_fac_2[pmc] = (SYSTOLIC_GEMM_EN && iact_pass_enable_i) ? iact_pass_data_i : iact_data_current_3;
+    assign mult_fac_2[pmc] = ((SYSTOLIC_GEMM_EN != 0) && iact_pass_enable_i) ? iact_pass_data_i : iact_data_current_3;
     // Adder summand 1: select psum source with bypass logic
     // Priority: zero if not accumulating > adder bypass > SPad bypass > normal SPad read
     assign adder_summand_1[pmc] =
@@ -904,7 +906,7 @@ module PE #(
       stream_data <= 0;
     end else begin
       if (enable_stream_i) begin
-        stream_data[8:0]   <= data_stream_i;
+        stream_data[8:0]   <= data_stream_i[8:0];
         stream_data[17:9]  <= stream_data[8:0];
         stream_data[26:18] <= stream_data[17:9];
       end
@@ -1009,9 +1011,9 @@ module PE #(
           adder_en[mac_i]             <= 0;
           psum_data_SPad_en_r[mac_i]  <= 0;
           psum_data_SPad_en_w[mac_i]  <= 0;
-          psum_spad_addr_mem[mac_i]   <= mac_i;
-          psum_spad_addr_delay[mac_i] <= mac_i;
-          psum_spad_addr_w[mac_i]     <= mac_i;
+          psum_spad_addr_mem[mac_i]   <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
+          psum_spad_addr_delay[mac_i] <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
+          psum_spad_addr_w[mac_i]     <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
           reuse_psum_spad[mac_i]      <= 0;
           reused_data[mac_i]          <= 0;
           psum_data_delay[mac_i]      <= 0;
@@ -1556,7 +1558,7 @@ module PE #(
               if (SERIAL == 1) begin
                 psum_spad_addr_mem[mac_i] <= 0;
               end else begin
-                psum_spad_addr_mem[mac_i] <= mac_i;
+                psum_spad_addr_mem[mac_i] <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
               end
             end
 
@@ -1579,9 +1581,9 @@ module PE #(
                 if (SERIAL) begin
                   psum_spad_addr_mem[mac_i] <= 0;
                 end else begin
-                  psum_spad_addr_mem[mac_i] <= mac_i;
+                  psum_spad_addr_mem[mac_i] <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
                 end
-                psum_spad_addr_w[mac_i] <= mac_i + PARALLEL_MACS;
+                psum_spad_addr_w[mac_i] <= mac_i[PSUM_ADDR_BITWIDTH-1:0] + PARALLEL_MACS_ADDR;
               end
             end
             if (psum_enable_i) begin
@@ -1686,11 +1688,11 @@ module PE #(
           psum_data_SPad_en_r[mac_i]   <= 0;
           psum_data_SPad_en_w[mac_i]   <= 0;
           adder_en[mac_i]              <= 0;
-          psum_spad_addr_mem[mac_i]    <= mac_i;
+          psum_spad_addr_mem[mac_i]    <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
           reuse_psum_spad[mac_i]       <= 0;
           reused_data[mac_i]           <= 0;
-          psum_spad_addr_delay[mac_i]  <= mac_i;
-          psum_spad_addr_w[mac_i]      <= mac_i;
+          psum_spad_addr_delay[mac_i]  <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
+          psum_spad_addr_w[mac_i]      <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
           // SERIAL-mode psum memory
           used_psum_memory[mac_i]      <= 0;
           psum_data_delay[mac_i]       <= 0;
@@ -1745,9 +1747,9 @@ module PE #(
             for (mac_i = 0; mac_i < PARALLEL_MACS; mac_i=mac_i+1) begin
             psum_data_SPad_en_r[mac_i]  <= computing;
             psum_data_SPad_en_w[mac_i]  <= 0;
-            psum_spad_addr_delay[mac_i] <= mac_i;
-            psum_spad_addr_w[mac_i]     <= mac_i;
-            psum_spad_addr_mem[mac_i]   <= mac_i;
+            psum_spad_addr_delay[mac_i] <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
+            psum_spad_addr_w[mac_i]     <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
+            psum_spad_addr_mem[mac_i]   <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
             adder_en[mac_i]             <= 0;
             reuse_psum_spad[mac_i]      <= 0;
             reused_data[mac_i]          <= 0;
@@ -1800,7 +1802,7 @@ module PE #(
               wght_filter <= wght_filter + PARALLEL_MACS;
             end
             for (mac_i = 0; mac_i < PARALLEL_MACS; mac_i=mac_i+1) begin
-              psum_spad_addr_mem[mac_i] <= mac_i;
+              psum_spad_addr_mem[mac_i] <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
             end
           end
 
@@ -1853,7 +1855,7 @@ module PE #(
               iact_data_SPad_addr  <= iact_data_SPad_addr + 1;
               mux_iact_ready       <= 0;
               for (mac_i = 0; mac_i < PARALLEL_MACS; mac_i=mac_i+1) begin
-                psum_spad_addr_mem[mac_i] <= mac_i;
+                psum_spad_addr_mem[mac_i] <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
               end
             end
 
@@ -1892,7 +1894,7 @@ module PE #(
             end
             if (wght_filter == PARALLEL_MACS) begin
               for (mac_i = 0; mac_i < PARALLEL_MACS; mac_i=mac_i+1) begin
-                psum_spad_addr_mem[mac_i] <= mac_i;
+                psum_spad_addr_mem[mac_i] <= mac_i[PSUM_ADDR_BITWIDTH-1:0];
               end
             end
 
@@ -1945,7 +1947,7 @@ module PE #(
             end
             for (mac_i = 0; mac_i < PARALLEL_MACS; mac_i=mac_i+1) begin
               psum_spad_addr_delay[mac_i] <= psum_spad_addr_r[mac_i];
-              psum_spad_addr_w[mac_i]     <= mac_i + PARALLEL_MACS;
+              psum_spad_addr_w[mac_i]     <= mac_i[PSUM_ADDR_BITWIDTH-1:0] + PARALLEL_MACS_ADDR;
               adder_en[mac_i]             <= values_valid;
                 if (computing_2) begin
                   psum_spad_addr_w[mac_i] <= psum_spad_addr_delay[mac_i];
@@ -2336,7 +2338,7 @@ module PE #(
   wire [PARALLEL_MACS*DATA_PSUM_BITWIDTH-1 : 0] psum_mult_combined_w;
   wire [PARALLEL_MACS*DATA_PSUM_BITWIDTH-1 : 0] psum_addr_combined_w;
   for (pmc = 0; pmc < PARALLEL_MACS; pmc=pmc+1) begin
-    assign psum_data_combined_w[pmc*DATA_PSUM_BITWIDTH+:DATA_PSUM_BITWIDTH] = psum_data_delay[pmc];
+    assign psum_data_combined_w[pmc*DATA_PSUM_BITWIDTH+:DATA_PSUM_BITWIDTH] = psum_data_delay[pmc][DATA_PSUM_BITWIDTH-1:0];
     assign psum_mult_combined_w[pmc*DATA_PSUM_BITWIDTH+:DATA_PSUM_BITWIDTH] = mult_o_w[pmc];
     assign adder_summand_2[pmc] = psum_addr_combined_w[pmc*DATA_PSUM_BITWIDTH+:DATA_PSUM_BITWIDTH];
   end

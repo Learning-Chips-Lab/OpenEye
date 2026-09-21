@@ -260,6 +260,7 @@ module GLB_cluster #(
     ) begin
       assign gen_psum[glb_counter].psum_glb_re_in_w = (ext_mem_psum_enable_i[glb_counter] & !data_write_enable_i);
       assign gen_psum[glb_counter].psum_glb_we_in_w = (ext_mem_psum_enable_i[glb_counter] & data_write_enable_i) | (router_cluster_psum_enable_i[glb_counter] & (!data_write_enable_i));
+      assign router_cluster_psum_enable_o[glb_counter] = router_cluster_psum_enable_o_delay_2[glb_counter];
       assign router_cluster_psum_enable_o_delay_1[glb_counter] = ext_mem_psum_enable_i[glb_counter] & (!data_write_enable_i);
       for (bit_counter = 0; bit_counter < PSUM_MEM_ADDR_BITS; bit_counter = bit_counter + 1) begin
         assign gen_psum[glb_counter].psum_glb_addr_in_w[bit_counter] = ext_mem_psum_addr_i[PSUM_MEM_ADDR_BITS*glb_counter+bit_counter];
