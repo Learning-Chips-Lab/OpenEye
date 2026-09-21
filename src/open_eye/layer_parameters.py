@@ -1028,14 +1028,14 @@ class LayerParameters(object):
         self.iact_read_inc_0 = int((self.iact_size_y + self.padding_y * 2) * self.needed_Iact_writes * self.channel_div_trans)
         self.iact_read_inc_0 = 1
         self.iact_read_inc_1 = self.channel_div_trans * self.needed_Iact_writes
-        self.iact_read_inc_1 = self.iact_repetitions_per_write
-        self.iact_read_inc_2 = (self.iact_size_y + self.padding_y * 2) * self.iact_repetitions_per_write
+        self.iact_read_inc_1 = self.iact_repetitions_per_write * params.NUM_GLB_IACT
+        self.iact_read_inc_2 = (self.iact_size_y + self.padding_y * 2) * self.iact_read_inc_1
         if (params.Clusters == 1):
             self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM * self.strideX
         else:
-            self.iact_read_inc_3 = self.channel_div_trans * self.needed_Iact_writes
+            self.iact_read_inc_3 = self.channel_div_trans * self.needed_Iact_writes * params.NUM_GLB_IACT
         #self.iact_read_inc_3 = 4
-        self.iact_read_inc_4 = self.iact_repetitions_per_write*self.strideY
+        self.iact_read_inc_4 = self.iact_read_inc_1*self.strideY
 
         if (self.used_channels == 1):
             lines_in_words = ((self.iact_size_y+(self.padding_y*2)+1)/2)
@@ -1276,6 +1276,9 @@ class LayerParameters(object):
 
         else:
             self.iact_buffer_words_per_write = self.needed_Iact_writes * self.channel_div_trans
+        # Input storage is serial, while the read schedule broadcasts one
+        # neighboring pixel per activation port in parallel.
+        self.iact_buffer_words_per_write *= params.NUM_GLB_IACT
         self.iact_words_per_compute = ((self.needed_Iact_writes * self.kernel_size[1] ) * self.used_channels) + 1
 
         self.lower_bound = (self.padding_y * self.buffer_cycles_for_x_iact * self.iact_x_line_repetitions) - 1

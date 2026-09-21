@@ -2091,13 +2091,9 @@ end
               iact_channel_sending_cycle2 <= iact_channel_sending_cycle2 + 1;
               if (iact_channel_sending_cycle2 == channel_div_trans - 1) begin
                 iact_channel_sending_cycle2 <= 0;
-                // The pipeline forwards one activation pair per cycle
-                // (iact_input_window_q is 2*DATA_IACT_BITWIDTH wide), so for a
-                // fully-connected layer the window must advance by 2, not by
-                // NUM_GLB_IACT. Stepping by 3 skipped positions and, combined
-                // with the gate below, ended the sweep after 6 steps: 12 of 32
-                // activations. Convolution keeps the per-lane step.
-                current_x <= current_x + (fully_connected_layer ? 2 : NUM_GLB_IACT);
+                // The input sweep is serial: one channel pair of one pixel.
+                // Parallel activation ports are populated by the constructor.
+                current_x <= current_x + (fully_connected_layer ? 2 : 1);
                 if (!fully_connected_layer & (current_x == x_bound)) begin
                   current_x <= -padding_x;
                   current_y <= current_y + 1;
@@ -2118,10 +2114,16 @@ end
                   (current_y < iact_size_y)) begin
                 iact_input_window       <= iact_input_window >> 16;
                 iact_input_window_q     <= iact_input_window[15:0];
+                if (!fully_connected_layer && (iact_channels_per_pe == 1)) begin
+                  iact_input_window <= iact_input_window >> DATA_IACT_BITWIDTH;
+                  iact_input_window_q <= iact_input_window[DATA_IACT_BITWIDTH-1:0];
+                end
                 if (fully_connected_layer & (current_x + 1 >= fc_size_reg))
                   iact_input_window_q[15:8] <= 0;
                 relative_pos            <= relative_pos + 1;
-                if (relative_pos == IACT_RAM_CELLS - 1) begin
+                if (relative_pos == ((!fully_connected_layer && (iact_channels_per_pe == 1)) ?
+                    (IACT_RAM_CELLS_WORD_BITWIDTH / DATA_IACT_BITWIDTH - 1) :
+                    (IACT_RAM_CELLS_WORD_BITWIDTH / (2 * DATA_IACT_BITWIDTH) - 1))) begin
                   relative_pos             <= 0;
                   current_pos_in_iact_glb  <= current_pos_in_iact_glb + 1;
                   if (current_pos_in_iact_glb == IACT_RAM_CELLS - 1) begin
