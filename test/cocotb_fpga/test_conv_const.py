@@ -40,9 +40,9 @@ The explicit Convolution_Single mode and layer-count assertion keep the
 control independent of the legacy Convolution model, which has two layers.
 The ramp tests additionally distinguish spatial positions and output channels.
 
-The September 19 debugging milestone targets CLUSTER_ROWS=2, NUM_GLB_IACT=1,
-INPUT_CHANNELS=4. The one-channel geometry and CLUSTER_ROWS=1 remain separate
-regressions; see doc/test_status_handover.md for measured results.
+The activation-mapping controls cross one/four input channels with one/three
+activation ports at CLUSTER_ROWS=2. CLUSTER_ROWS=1 remains a separate
+regression; see doc/test_status_handover.md for measured results.
 
 Both tests are tiny - an 8-wide input and 4 filters - so a case runs in about
 a minute and they can be iterated on while debugging, unlike the MNIST net
@@ -164,7 +164,7 @@ def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
             # Fail a hang in minutes instead of running to the 15 ms sim
             # timeout; the stall report names the FSM states and per-PE counts.
             "OPENEYE_PROBE_FSM":      "1",
-            "OPENEYE_FAIL_ON_STALL":  "100000",
+            "OPENEYE_FAIL_ON_STALL":  os.environ.get("OPENEYE_FAIL_ON_STALL", "100000"),
             "CLUSTER_ROWS": str(cluster_rows),
             "NUM_GLB_IACT": str(num_glb_iact),
             "NUM_GLB_PSUM": str(NUM_GLB_PSUM),
@@ -230,6 +230,23 @@ def test_conv_channel_order(request):
     _run_conv_const("Convolution_Stack", 8, 2, num_glb_iact=1,
                     input_channels=4, request=request, ramp_iacts=True,
                     bias_step=128)
+
+
+@pytest.mark.parametrize("num_glb_iact", [1, 3])
+@pytest.mark.parametrize("input_channels", [1, 4])
+def test_conv_input_mapping(input_channels, num_glb_iact, request):
+    """Separate channel packing from activation-port routing without write-back."""
+    _run_conv_const("Convolution_Single", 8, 2,
+                    num_glb_iact=num_glb_iact, input_channels=input_channels,
+                    request=request)
+
+
+@pytest.mark.parametrize("num_glb_iact", [1, 3])
+def test_conv_single_channel_writeback(num_glb_iact, request):
+    """One-channel input followed by four-channel input, with distinct pixels."""
+    _run_conv_const("Convolution_Stack", 8, 2,
+                    num_glb_iact=num_glb_iact, input_channels=1,
+                    request=request, ramp_iacts=True, bias_step=128)
 
 
 if __name__ == "__main__":
