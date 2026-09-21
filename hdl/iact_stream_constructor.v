@@ -137,6 +137,7 @@ module iact_stream_constructor #(
   // Single-channel rows share the two subwords consumed by the PE pipeline.
   reg [ADDRWIDTH-1:0] single_write_column, single_write_row;
   reg single_write_half, single_write_half_q, single_read_half;
+  reg single_output_half;
   wire single_channel = !fully_connected_i && (iact_channels_per_pe_i == 1);
   wire [ADDRWIDTH-1:0] conv_row_words =
       needed_iact_router_cycles_i * NUM_GLB_IACT * channel_div_trans;
@@ -223,12 +224,16 @@ module iact_stream_constructor #(
       ((single_channel && !single_read_half) ? 0 : rd_addr_inc_1);
   assign rd_addr_inc_2_next = rd_addr_2 + rd_addr_inc_2;
   assign rd_addr_inc_3_next = rd_addr_3 + rd_addr_inc_3;
-  assign rd_addr_inc_4_next = rd_addr_4 + rd_addr_inc_4;
+  // Single-channel RAM words hold two image rows. Move by whole row pairs,
+  // keeping the remaining half-row for the next window's initial read.
+  assign rd_addr_inc_4_next = rd_addr_4 + (single_channel ?
+      ((({1'b0, stride_y_i} + single_output_half) >> 1) * conv_row_words) : rd_addr_inc_4);
 
     integer pec, per, b;
     always @(posedge clk_i, negedge rst_ni) begin
       if (!rst_ni) begin
         single_read_half          <= 0;
+        single_output_half        <= 0;
         fsm_enc_current_state      <= IDLE;
         iact_data_o                <= 0;
         iact_enable_o              <= 0;
@@ -303,6 +308,7 @@ module iact_stream_constructor #(
             current_iact_cycle_reg     <= 0;
             if (enable_store) begin
               single_read_half <= 0;
+              single_output_half <= 0;
               ram_rd_addr <= 0;
               rd_addr_0   <= 0;
               rd_addr_1   <= 0;
@@ -319,6 +325,7 @@ module iact_stream_constructor #(
               end else begin
                 fsm_enc_current_state      <= ENCODE;
                 fsm_enc_cycle              <= 0;
+                single_read_half          <= single_output_half;
                 current_iact_cycle_reg     <= ~0;
                 // The window register is pre-decremented so its first advance
                 // lands on row 0. It used to start at ~0 with a +1 step; since
@@ -418,6 +425,7 @@ module iact_stream_constructor #(
                   rd_addr_3           <= rd_addr_inc_3_next;
                   rd_cycle_loop_cnt_3 <= rd_cycle_loop_cnt_3 + 1;
                   if (rd_cycle_loop_cnt_3 == rd_loop_limit_3) begin
+                    if (single_channel) single_output_half <= single_output_half ^ stride_y_i[0];
                     rd_cycle_loop_cnt_3 <= 0;
                     ram_rd_addr         <= rd_addr_inc_4_next;
                     rd_addr_0           <= rd_addr_inc_4_next;
@@ -447,6 +455,7 @@ module iact_stream_constructor #(
         end
         if (reset_cycle_i) begin
           single_read_half          <= 0;
+          single_output_half        <= 0;
           fsm_enc_current_state      <= IDLE;
           iact_data_o                <= 0;
           iact_enable_o              <= 0;

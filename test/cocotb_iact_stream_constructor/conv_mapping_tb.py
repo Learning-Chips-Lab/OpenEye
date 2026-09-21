@@ -13,6 +13,8 @@ async def convolution_window(dut):
     ports = int(os.environ["CONV_PORTS"])
     channels = int(os.environ["CONV_CHANNELS"])
     x_start = int(os.environ["CONV_X_START"])
+    height = int(os.environ["CONV_HEIGHT"])
+    rows = height + 2
     pairs = (channels + 1) // 2
     groups = 6 // ports
     choose_bits = ports.bit_length()
@@ -31,12 +33,14 @@ async def convolution_window(dut):
         "iact_channels_per_pe_i": channels, "channel_div_trans": pairs,
         "iact_x_add_up": 8, "needed_iact_router_cycles_i": groups,
         "wght_size_x_i": 3, "wght_size_y_i": 3, "stride_x_i": 1,
-        "stride_y_i": 1, "needed_iact_buffer_words_i": 18 * pairs,
+        "stride_y_i": 1, "needed_iact_buffer_words_i": rows * 6 * pairs,
         "iact_words_per_compute": groups * 3 * channels + 1,
         "rd_loop_limit_0": groups * pairs - 1, "rd_addr_inc_0": 1,
-        "rd_addr_inc_1": 6 * pairs, "wr_loop_limit_0": 18 * pairs - 1,
-        "wr_loop_limit_2": 2, "wr_addr_inc_0": 1,
-        "wr_addr_inc_1": 36 * pairs, "wr_addr_inc_2": 18 * pairs,
+        "rd_addr_inc_1": 6 * pairs, "rd_addr_inc_4": 6 * pairs,
+        "wr_loop_limit_0": rows * 6 * pairs - 1,
+        "wr_loop_limit_2": rows - 1, "wr_addr_inc_0": 1,
+        "wr_addr_inc_1": (rows - 1) * rows * 6 * pairs,
+        "wr_addr_inc_2": rows * 6 * pairs,
         "iact_ready_i": (1 << ports) - 1,
     }
     for name, value in config.items():
@@ -69,7 +73,7 @@ async def convolution_window(dut):
         dut.enable_store.value = 0
         for _ in range(2):
             await tick()
-        for y in range(3):
+        for y in range(rows):
             for x in range(10):
                 for pair in range(pairs):
                     word = value(y, x, 2 * pair)
@@ -79,33 +83,36 @@ async def convolution_window(dut):
                     await tick()
         for _ in range(8):
             await tick()
-        dut.iact_ready_i.value = 0
-        dut.enable_converter.value = 1
-        await tick()
-        dut.enable_converter.value = 0
-        for _ in range(3):
+        for output_y in range(height):
+            dut.iact_ready_i.value = 0
+            dut.enable_converter.value = 1
             await tick()
-            assert int(dut.iact_enable_o.value) == 0
-        dut.iact_ready_i.value = (1 << ports) - 1
-        seen = [[] for _ in range(12)]
-        held = [0] * 12
-        for _ in range(groups * 3 * channels + 12):
-            await tick()
-            enable = int(dut.iact_enable_o.value)
-            if not enable:
-                continue
-            data = int(dut.iact_data_o.value)
-            choose = int(dut.iact_choose_o.value)
-            for pe in range(12):
-                bank = (choose >> (pe * choose_bits)) & ((1 << choose_bits) - 1)
-                if bank >= ports or not (enable & (1 << bank)):
+            dut.enable_converter.value = 0
+            for _ in range(3):
+                await tick()
+                assert int(dut.iact_enable_o.value) == 0
+            dut.iact_ready_i.value = (1 << ports) - 1
+            seen = [[] for _ in range(12)]
+            held = [0] * 12
+            for _ in range(groups * 3 * channels + 12):
+                await tick()
+                enable = int(dut.iact_enable_o.value)
+                if not enable:
                     continue
-                # The PE latches a pair on its first enabled cycle, then
-                # consumes the saved high subword on its next enabled cycle.
-                if len(seen[pe]) % 2 == 0:
-                    held[pe] = (data >> (bank * 24)) & 0xffffff
-                seen[pe].append((held[pe] >> (12 * (len(seen[pe]) % 2))) & 255)
-        for pe in range(12):
-            x = x_start + pe % 4 + pe // 4
-            expected = [value(y, x, c) for y in range(3) for c in range(channels)]
-            assert seen[pe] == expected, (load, pe, seen[pe], expected)
+                data = int(dut.iact_data_o.value)
+                choose = int(dut.iact_choose_o.value)
+                for pe in range(12):
+                    bank = (choose >> (pe * choose_bits)) & ((1 << choose_bits) - 1)
+                    if bank >= ports or not (enable & (1 << bank)):
+                        continue
+                    # Single-channel output rows alternate their initial
+                    # subword, matching data_pipeline_iact's uneven ending.
+                    slot = (len(seen[pe]) + (output_y % 2 if channels == 1 else 0)) % 2
+                    if slot == 0 or not seen[pe]:
+                        held[pe] = (data >> (bank * 24)) & 0xffffff
+                    seen[pe].append((held[pe] >> (12 * slot)) & 255)
+            for pe in range(12):
+                x = x_start + pe % 4 + pe // 4
+                expected = [value(y, x, c) for y in range(output_y, output_y + 3)
+                            for c in range(channels)]
+                assert seen[pe] == expected, (load, output_y, pe, seen[pe], expected)
