@@ -329,6 +329,18 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
             return [_const_w(v) for v in x] if isinstance(x, list) else const_wght
         dram.weights = _const_w(dram.weights)
         logger.info("OPENEYE_CONST_WGHTS: all weights set to %d", const_wght)
+    if os.environ.get("OPENEYE_ASYMMETRIC_KERNEL"):
+        # Distinct kernel rows/columns expose permutations that constant
+        # weights hide. Both the mapper and reference read this same DRAM.
+        for layer_number, params in enumerate(layer_parameters):
+            if "Conv" not in str(params.layer_name):
+                continue
+            for channel in dram.weights[layer_number]:
+                for kernel in channel:
+                    for y, row in enumerate(kernel):
+                        for x in range(len(row)):
+                            row[x] = 1 + x + len(row) * y
+        logger.info("OPENEYE_ASYMMETRIC_KERNEL: weight[y][x] = 1 + x + kernel_width*y")
     if os.environ.get("OPENEYE_RAMP_IACTS"):
         # Layer-0 activation k becomes k+1, so a PE's stored payloads name the
         # exact input positions it received. Constant operands can only show

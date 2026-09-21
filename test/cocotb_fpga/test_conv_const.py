@@ -83,7 +83,8 @@ NUM_GLB_WGHT  = 3
 
 def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
                     input_channels, request, ramp_iacts=False,
-                    psum_width=20, trans_words=8, bias_step=0):
+                    psum_width=20, trans_words=8, bias_step=0,
+                    input_height=INPUT_SIZE_Y, asymmetric_kernel=False):
     """Build and simulate one constant-operand conv configuration."""
     # OpenEyeParameters and parameters.vh read these from the environment at
     # generation time, so they have to be set before create_vh_file_from_envvars.
@@ -147,7 +148,7 @@ def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
             "KERNEL_SIZE_X":     str(KERNEL_SIZE_X),
             "KERNEL_SIZE_Y":     str(KERNEL_SIZE_Y),
             "INPUT_SIZE_X":      str(INPUT_SIZE_X),
-            "INPUT_SIZE_Y":      str(INPUT_SIZE_Y),
+            "INPUT_SIZE_Y":      str(input_height),
             "INPUT_CHANNELS":    str(input_channels),
             # Dense (non-sparse) data: zero-skipping would make the product
             # count depend on the sparsity pattern and defeat the whole point.
@@ -159,6 +160,7 @@ def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
             # reference is recomputed from the same DRAM, so it stays exact.
             "OPENEYE_CONST_IACTS": str(const_value),
             "OPENEYE_CONST_WGHTS": str(const_value),
+            "OPENEYE_ASYMMETRIC_KERNEL": "1" if asymmetric_kernel else "",
             "OPENEYE_RAMP_IACTS": "1" if ramp_iacts else "",
             "OPENEYE_BIAS_STEP": str(bias_step) if bias_step else "",
             # Fail a hang in minutes instead of running to the 15 ms sim
@@ -247,6 +249,33 @@ def test_conv_single_channel_writeback(num_glb_iact, request):
     _run_conv_const("Convolution_Stack", 8, 2,
                     num_glb_iact=num_glb_iact, input_channels=1,
                     request=request, ramp_iacts=True, bias_step=128)
+
+
+@pytest.mark.parametrize("input_channels", [1, 4])
+@pytest.mark.parametrize("num_glb_iact", [1, 3])
+def test_conv_tall_input(input_channels, num_glb_iact, request):
+    """Check every output row, including all four padded edges."""
+    _run_conv_const("Convolution_Single", 8, 2,
+                    num_glb_iact=num_glb_iact, input_channels=input_channels,
+                    request=request, input_height=3)
+
+
+@pytest.mark.parametrize("height", [3, 4])
+@pytest.mark.parametrize("num_glb_iact", [1, 3])
+def test_conv_tall_ramp(height, num_glb_iact, request):
+    """Distinguish row order with a ramp and weights varying in both axes."""
+    _run_conv_const("Convolution_Single", 8, 2,
+                    num_glb_iact=num_glb_iact, input_channels=1,
+                    request=request, input_height=height, ramp_iacts=True,
+                    asymmetric_kernel=True)
+
+
+def test_conv_tall_writeback(request):
+    """Check the full 2D feature map reused by the next convolution."""
+    _run_conv_const("Convolution_Stack", 8, 2,
+                    num_glb_iact=3, input_channels=1, request=request,
+                    input_height=3, ramp_iacts=True, asymmetric_kernel=True,
+                    bias_step=128)
 
 
 if __name__ == "__main__":
