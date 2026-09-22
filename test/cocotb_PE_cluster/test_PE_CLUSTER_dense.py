@@ -4,7 +4,6 @@ import pytest
 import os
 import sys
 from pathlib import Path
-import cocotb_test.simulator
 logger = logging.getLogger("cocotb")
 
 from open_eye import hdl_dir, test_dir
@@ -12,6 +11,7 @@ from open_eye import hdl_dir, test_dir
 # pe_cluster_test_utils sits next to this file, not on sys.path by default
 sys.path.extend([os.path.abspath(os.getcwd()), os.path.dirname(os.path.realpath(__file__))])
 import pe_cluster_test_utils as pctu
+from cluster_simulator import run_cluster_simulation
 
 # Clock configuration
 CLK_CYCLE = 10
@@ -40,12 +40,6 @@ def test_pe_cluster_dense(PARALLEL_MACS):
     target_dir = Path(__file__).parent / ".temp" / test_name
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # set compile-time parameters via env + generate parameters.vh
-    os.environ["PARALLEL_MACS"] = str(PARALLEL_MACS)
-    os.environ["SPARSITY_EN"] = "0"
-    from open_eye import vh_file_creator
-    vh_file_creator.create_vh_file_from_envvars(str(target_dir), str(hdl_dir) + "/", toplevel=toplevel)
-
     extra_env = {
         "CLOCK_LEN": str(CLK_CYCLE),
         "CLOCK_UNIT": CLK_CYCLE_UNIT,
@@ -64,7 +58,7 @@ def test_pe_cluster_dense(PARALLEL_MACS):
         "SPARSITY_EN": "0",
     }
 
-    results = cocotb_test.simulator.run(
+    results = run_cluster_simulation(
         python_search=[str(test_dir)],
         verilog_sources=verilog_sources,
         toplevel=toplevel,
@@ -72,8 +66,6 @@ def test_pe_cluster_dense(PARALLEL_MACS):
         sim_build=str(target_dir),
         testcase='start_test_pe',
         defines={"NO_TRACE": "TRUE"},
-        force_compile=True,
-        waves=True,
         simulator="icarus",
         extra_env=extra_env,
         parameters={"SPARSITY_EN": 0, "PARALLEL_MACS": PARALLEL_MACS}

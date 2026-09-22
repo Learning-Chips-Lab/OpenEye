@@ -19,13 +19,13 @@ Usage:
 import os
 import sys
 import pytest
-import cocotb_test.simulator
 
 directory = os.path.abspath(os.getcwd())
 sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
 tests_dir = os.path.abspath(os.path.dirname(__file__))
 
 import pe_cluster_test_utils as pctu
+from cluster_simulator import run_cluster_simulation
 import open_eye.vh_file_creator as vh_file_creator
 from open_eye import hdl_dir, test_dir
 
@@ -96,15 +96,7 @@ def test_pe_cluster_gemm_approach1(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, PE_
     target_dir = os.path.join(test_dir, ".temp", nodeid)
     os.makedirs(target_dir, exist_ok=True)
 
-    # PE.v `includes "parameters.vh" (PARALLEL_MACS/SPARSITY_EN) when
-    # USE_INTERNAL_PARAMS_PE isn't defined; generate it into sim_build so
-    # Icarus's cwd-relative include search finds it. create_vh_file reads
-    # TOPLEVEL from the environment (not the toplevel= kwarg below), so it
-    # must be set here to pick the PARALLEL_MACS/SPARSITY_EN-only flavor.
-    os.environ["TOPLEVEL"] = "PE_cluster"
-    vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel="PE_cluster")
-
-    cocotb_test.simulator.run(
+    run_cluster_simulation(
         python_search=[tests_dir],
         verilog_sources=pctu.get_verilog_sources(hdl_dir),
         toplevel="PE_cluster",
@@ -112,7 +104,6 @@ def test_pe_cluster_gemm_approach1(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, PE_
         sim_build=target_dir,
         testcase="start_test_gemm_approach1",
         defines=_pe_defines(PE_MODULE),
-        force_compile=True,
         simulator="icarus",
         extra_env={
             **_common_env,
@@ -141,15 +132,7 @@ def test_pe_cluster_gemm_approach2(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, PE_
     target_dir = os.path.join(test_dir, ".temp", nodeid)
     os.makedirs(target_dir, exist_ok=True)
 
-    # PE.v `includes "parameters.vh" (PARALLEL_MACS/SPARSITY_EN) when
-    # USE_INTERNAL_PARAMS_PE isn't defined; generate it into sim_build so
-    # Icarus's cwd-relative include search finds it. create_vh_file reads
-    # TOPLEVEL from the environment (not the toplevel= kwarg below), so it
-    # must be set here to pick the PARALLEL_MACS/SPARSITY_EN-only flavor.
-    os.environ["TOPLEVEL"] = "PE_cluster"
-    vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel="PE_cluster")
-
-    cocotb_test.simulator.run(
+    run_cluster_simulation(
         python_search=[tests_dir],
         verilog_sources=pctu.get_verilog_sources(hdl_dir),
         toplevel="PE_cluster",
@@ -157,7 +140,6 @@ def test_pe_cluster_gemm_approach2(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, PE_
         sim_build=target_dir,
         testcase="start_test_gemm_approach2",
         defines=_pe_defines(PE_MODULE),
-        force_compile=True,
         simulator="icarus",
         extra_env={
             **_common_env,
@@ -191,15 +173,7 @@ def test_pe_cluster_gemm_approach3(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, PE_
     target_dir = os.path.join(test_dir, ".temp", nodeid)
     os.makedirs(target_dir, exist_ok=True)
 
-    # PE.v `includes "parameters.vh" (PARALLEL_MACS/SPARSITY_EN) when
-    # USE_INTERNAL_PARAMS_PE isn't defined; generate it into sim_build so
-    # Icarus's cwd-relative include search finds it. create_vh_file reads
-    # TOPLEVEL from the environment (not the toplevel= kwarg below), so it
-    # must be set here to pick the PARALLEL_MACS/SPARSITY_EN-only flavor.
-    os.environ["TOPLEVEL"] = "PE_cluster"
-    vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel="PE_cluster")
-
-    cocotb_test.simulator.run(
+    run_cluster_simulation(
         python_search=[tests_dir],
         verilog_sources=pctu.get_verilog_sources(hdl_dir),
         toplevel="PE_cluster",
@@ -208,7 +182,6 @@ def test_pe_cluster_gemm_approach3(IACTSIZE_X, IACTSIZE_Y, WGHTSIZE_X, SEED, PE_
         testcase="start_test_gemm_approach3",
         parameters={"SYSTOLIC_GEMM_EN": 1, "PARALLEL_MACS": 1},
         defines=_pe_defines(PE_MODULE),
-        force_compile=True,
         simulator="icarus",
         extra_env={
             **_common_env,
