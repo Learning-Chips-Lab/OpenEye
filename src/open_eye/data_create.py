@@ -120,10 +120,34 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             output_size  = 10
             model.add(tf.keras.layers.Dense(units=output_size, use_bias = True))
             
-        case "Pooling":
+        case "AveragePooling":
             x_axis = inputsize_x
             y_axis = inputsize_y
 
+            model.add(tf.keras.layers.Conv2D(
+                filters, 
+                (3, 3), 
+                padding="same",
+                input_shape=(x_axis, y_axis, channels), 
+                strides=strides
+            ))
+
+            pool_x_axis = 2
+            pool_y_axis = 2
+            model.add(tf.keras.layers.AveragePooling2D(
+                pool_size=(pool_x_axis, pool_y_axis), 
+                strides=(pool_x_axis, pool_y_axis), 
+                padding="valid"
+            ))
+            model.add(tf.keras.layers.Flatten())
+            model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
+                      
+        case "MaxPooling":
+            print("MAXPOOLING!!!!!!!!!!!!")
+            print(strides)
+            x_axis = inputsize_x
+            y_axis = inputsize_y
+            print((x_axis, y_axis, channels))
             model.add(tf.keras.layers.Conv2D(
                 filters, 
                 (3, 3), 
@@ -139,7 +163,9 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
                 strides=(pool_x_axis, pool_y_axis), 
                 padding="valid"
             ))
-            x_axis = math.ceil(x_axis/pool_x_axis)
+            model.add(tf.keras.layers.Flatten())
+            model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
+            """x_axis = math.ceil(x_axis/pool_x_axis)
             y_axis = math.ceil(y_axis/pool_y_axis)
             model.add(tf.keras.layers.Conv2D(
                 filters, 
@@ -147,7 +173,7 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
                 padding="same",
                 input_shape=(x_axis, y_axis, channels), 
                 strides=strides
-            ))
+            ))"""
         case "MLP":
             inputsize_x = 6
             model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=32, use_bias = True))

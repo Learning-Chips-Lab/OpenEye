@@ -142,9 +142,10 @@ class DRAMContents(object):
                                 for j in range(layer_parameters[i].input_shape[3])])
             elif "Pooling" in str(layer_parameters[i].layer_name):
                 # Pooling layer input: 3D tensor [channels][height][width]
-                dram_fmap.append([[[0 for l in range(layer_parameters[i].input_shape[2])]
+                input_feature_map = [[[0 for l in range(layer_parameters[i].input_shape[2])]
                                 for k in range(layer_parameters[i].input_shape[1])]
-                                for j in range(layer_parameters[i].input_shape[3])])
+                                for j in range(layer_parameters[i].input_shape[3])]
+                dram_fmap.append(input_feature_map)
 
         # Add output feature map storage for the final layer
         for i in [len(layer_parameters)-1]:

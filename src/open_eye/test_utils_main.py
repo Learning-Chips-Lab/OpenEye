@@ -537,8 +537,8 @@ def collect_results(layer_number, layer_params, dram, serial):
                         temp = 0
                         for x in range(layer_params.input_shape[1]):
                             for y in range(layer_params.input_shape[2]):
-                                temp = temp + dram.fmap[layer_number][x][y]
-                        temp = temp//(layer_params.inut_shape[1]*layer_params.input_shape[2])
+                                    temp = temp + dram.fmap[layer_number][f][x][y]
+                        temp = temp//(layer_params.input_shape[1]*layer_params.input_shape[2])
                         calculated_results[f][j][i] = int(temp)
 
     return calculated_results
@@ -889,10 +889,18 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
                             pos = pos + (current_layer_params.iact_size_x*current_layer_params.iact_size_y*4*math.floor(f/4))
                             dram[pos] = ref_output[f][x][y]
     elif "Pooling" in str(current_layer_params.layer_name):
-        for f in range(len(ref_output)):    
-            for x in range(len(ref_output[f])):
-                for y in range(len(ref_output[f][x])):
-                    dram[f][x][y] = ref_output[f][x][y]
+        if "Dense" in str(next_layer_params.layer_name):
+            for f in range(len(ref_output)):
+                for x in range(len(ref_output[f])):
+                    for y in range(len(ref_output[f][x])):
+                        position = (f%4)+((f//4)*(4*len(ref_output[0])*len(ref_output[0][0])))
+                        position = position+((x%2)*4)+((x//2)*4*2)+y*len(ref_output[0]*4)
+                        dram[position] = ref_output[f][x][y]
+        else:
+            for f in range(len(ref_output)):    
+                for x in range(len(ref_output[f])):
+                    for y in range(len(ref_output[f][x])):
+                        dram[f][x][y] = ref_output[f][x][y]
     elif "Dense" in str(current_layer_params.layer_name):
         for f in range(len(ref_output)):  
             dram[f] = ref_output[f]

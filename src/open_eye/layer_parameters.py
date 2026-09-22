@@ -398,15 +398,20 @@ class LayerParameters(object):
         used_PEs_per_clm = self.used_PEs_Y/params.PEs_Y
         self.used_Y_cluster = math.ceil(used_PEs_per_clm)
         usable_pes = params.PEs_X*math.floor(params.Clusters/self.used_Y_cluster)
-        if (self.output_shape[1] >  usable_pes): # No
+        print(self.output_shape)
+        print(usable_pes)
+        if (math.ceil(self.output_shape[1]/params.PEs_X) >=  math.ceil(usable_pes/params.PEs_X)): # No
             self.iact_x_line_repetitions = math.ceil(self.output_shape[1]/usable_pes)
             self.y_lines_per_calculation = 1
             self.different_kernels_per_calculation = 1
+            print(self.different_kernels_per_calculation)
         else : # Yes
             self.iact_x_line_repetitions = 1
             # Calculate how many different kernels can be processed simultaneously
             # based on available PE resources divided by input width
             self.different_kernels_per_calculation = usable_pes//self.psum_size_x
+            print("HIER")
+            print(self.different_kernels_per_calculation)
             # Limit to at most ceil(output_channels/8) kernels
             self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.filters/4))
             # Calculate how many Y lines can be processed per computation
