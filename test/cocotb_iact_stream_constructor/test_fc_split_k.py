@@ -13,7 +13,8 @@ from open_eye import hdl_dir, test_dir
 
 @pytest.mark.parametrize('cluster_rows', [1, 2])
 @pytest.mark.parametrize('channels', [2, 6, 12])
-def test_fc_split_k(cluster_rows, channels):
+@pytest.mark.parametrize('gaps', [0, 1], ids=['continuous', 'gapped'])
+def test_fc_split_k(cluster_rows, channels, gaps):
     for row in range(cluster_rows):
         cocotb_test.simulator.run(
             simulator='icarus',
@@ -21,7 +22,8 @@ def test_fc_split_k(cluster_rows, channels):
                              ('iact_stream_constructor.v', 'RAM_SP.v', 'RAM_SP_generic.v')],
             toplevel='iact_stream_constructor', module='fc_split_k_tb',
             python_search=[os.path.dirname(__file__)],
-            sim_build=os.path.join(test_dir, '.temp', f'fc_split_k_{cluster_rows}_{channels}_{row}'),
+            sim_build=os.path.join(test_dir, '.temp', f'fc_split_k_{cluster_rows}_{channels}_{row}_{gaps}'),
             parameters={'CLUSTER_ROWS': cluster_rows, 'CLUSTER_ROW_ID': row, 'ADDRWIDTH': 6},
-            extra_env={'FC_ROWS': str(cluster_rows), 'FC_ROW': str(row), 'FC_CHANNELS': str(channels)},
+            extra_env={'FC_ROWS': str(cluster_rows), 'FC_ROW': str(row),
+                       'FC_CHANNELS': str(channels), 'FC_GAPS': str(gaps)},
         )

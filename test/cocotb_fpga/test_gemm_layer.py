@@ -62,6 +62,7 @@ def test_gemm_layer(
     DATAFLOW,
     request,
     PARALLEL_MACS,
+    CLUSTER_COLUMNS=2,
 ):
     # OpenEyeParameters and the parameters.vh generator read these at import
     # of the accelerator dimensions, so they must be set before
@@ -78,7 +79,7 @@ def test_gemm_layer(
     os.environ["BUFFER_WIDTH"]    = "12"
     os.environ["QUANT_AMOUNT"]    = "1024"
     os.environ["RAM_CELLS"]       = "32"
-    os.environ["CLUSTER_COLUMNS"] = "2"
+    os.environ["CLUSTER_COLUMNS"] = str(CLUSTER_COLUMNS)
 
     toplevel = "OpenEye_FPGA"
     module   = "OpenEye_FPGA_tb"
@@ -112,7 +113,7 @@ def test_gemm_layer(
         testcase="start_test_fpga",
         defines={"NO_TRACE": "TRUE", "USE_INTERNAL_PARAMS_PE": "TRUE"},
         force_compile=True,
-        waves=True,
+        waves=os.environ.get("OPENEYE_FPGA_WAVES") == "1",
         simulator="icarus",
         extra_env={
             "CLOCK_LEN":               str(clk_cycle),
@@ -143,6 +144,21 @@ def test_gemm_layer(
             "COCOTB_LOG_FILE_PATH": os.path.join(target_dir, "cocotb_sim.log"),
             "COCOTB_TRACE": "1",
         },
+    )
+
+
+@pytest.mark.parametrize("columns", [1, 2])
+@pytest.mark.parametrize("parallel_macs", [1, 2])
+def test_dense_ten_outputs(columns, parallel_macs, request, monkeypatch):
+    """Pin the one-column capture bug and retain two-column coverage."""
+    monkeypatch.setenv("OPENEYE_PROBE_FSM", "1")
+    monkeypatch.setenv("OPENEYE_FAIL_ON_STALL", "5000")
+    monkeypatch.setenv("OPENEYE_CHECK_FC_WRITES", "1")
+    test_gemm_layer(
+        INPUT_SIZE=32, OUTPUT_SIZE=10,
+        CLUSTER_ROWS=2, NUM_GLB_IACT=3, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3,
+        DATAFLOW="row_stationary", PARALLEL_MACS=parallel_macs,
+        CLUSTER_COLUMNS=columns, request=request,
     )
 
 

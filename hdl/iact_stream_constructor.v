@@ -133,7 +133,6 @@ module iact_stream_constructor #(
   reg [IACT_CHOOSE_BITS-1:0] fc_store_bank, fc_write_bank_q;
   reg [$clog2(CLUSTER_ROWS+1)-1:0] fc_store_row;
   reg [3:0] fc_store_pair;
-  reg [ADDRWIDTH-1:0] fc_store_addr;
   // Single-channel rows share the two subwords consumed by the PE pipeline.
   reg [ADDRWIDTH-1:0] single_write_column, single_write_row;
   reg single_write_half, single_write_half_q, single_read_half;
@@ -489,7 +488,6 @@ reg enable_write_to_storage;
         fc_write_bank_q               <= 0;
         fc_store_row                  <= 0;
         fc_store_pair                 <= 0;
-        fc_store_addr                 <= 0;
         fsm_cycle                     <= 0;
         enable_write_to_storage       <= 0;
         wr_addr_0                     <= 0;
@@ -561,11 +559,10 @@ reg enable_write_to_storage;
             fc_store_bank <= 0;
             fc_store_row <= 0;
             fc_store_pair <= 0;
-            fc_store_addr <= 0;
+            ram_wr_addr <= 0;
           end else if (fc_storage_valid_i) begin
             if (fc_store_row == CLUSTER_ROW_ID) begin
               ram_wr_en_q <= 1;
-              ram_wr_addr_q <= fc_store_addr;
               fc_write_bank_q <= fc_store_bank;
               for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
                 for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
@@ -577,7 +574,9 @@ reg enable_write_to_storage;
             fc_store_bank <= fc_store_bank + 1;
             if (fc_store_bank == PE_Y - 1) begin
               fc_store_bank <= 0;
-              if (fc_store_row == CLUSTER_ROW_ID) fc_store_addr <= fc_store_addr + 1;
+              // FC and convolution writes are mutually exclusive; share the
+              // address cursor and its existing output pipeline register.
+              if (fc_store_row == CLUSTER_ROW_ID) ram_wr_addr <= ram_wr_addr + 1;
               fc_store_pair <= fc_store_pair + 1;
               if (fc_store_pair == (iact_channels_per_pe_i[3:0] >> 1) - 1) begin
                 fc_store_pair <= 0;
@@ -740,8 +739,10 @@ reg enable_write_to_storage;
           fc_store_bank <= 0;
           fc_store_row <= 0;
           fc_store_pair <= 0;
-          fc_store_addr <= 0;
-          if (fully_connected_i) ram_wr_en_q <= 0;
+          if (fully_connected_i) begin
+            ram_wr_addr <= 0;
+            ram_wr_en_q <= 0;
+          end
         end
       end
     end
@@ -752,24 +753,30 @@ reg enable_write_to_storage;
       wire [BITS_PER_ROUTER-1:0]ram_data_o_w;
       wire [ADDRWIDTH-1:0] bank_addr = ram_wr_en_q ? ram_wr_addr_q :
           (ram_rd_addr + (fully_connected_i ? 0 : r_gen * channel_div_trans));
-      for (w_gen = 0; w_gen < WORDS_PER_TRANS; w_gen = w_gen + 1) begin : SUBWORD
-        // Independent subword writes let successive single-channel rows fill
-        // the low and high halves without reading and rewriting a RAM word.
-        RAM_SP #(
-            .DataWidth(IACT_DATA_DATA),
-            .AddrWidth(ADDRWIDTH),
-            .Pipelined(1)
-        ) iact_buffer_SP (
-            .clk_i   (clk_i),
-            .rd_en_i (ram_rd_en),
-            .wr_en_i (ram_wr_en_q & (!fully_connected_i | (fc_write_bank_q == r_gen)) &
-                      (!single_channel || (w_gen != 0) || !single_write_half_q)),
-            .addr_i  (bank_addr),
-            .data_i  ((single_channel && !single_write_half_q && (w_gen != 0)) ?
-                      {IACT_DATA_DATA{1'b0}} : ram_data_i_w[w_gen*IACT_DATA_DATA+:IACT_DATA_DATA]),
-            .data_o  (ram_data_o_w[w_gen*IACT_DATA_DATA+:IACT_DATA_DATA])
-        );
+      wire [WORDS_PER_TRANS-1:0] write_mask;
+      wire [BITS_PER_ROUTER-1:0] write_data;
+      for (w_gen = 0; w_gen < WORDS_PER_TRANS; w_gen = w_gen + 1) begin : WRITE_LANE
+        // Successive single-channel rows fill the low and high halves.
+        // A low-half write also clears the upper half for odd-height padding.
+        assign write_mask[w_gen] = !single_channel || (w_gen != 0) || !single_write_half_q;
+        assign write_data[w_gen*IACT_DATA_DATA+:IACT_DATA_DATA] =
+            (single_channel && !single_write_half_q && (w_gen != 0)) ?
+            {IACT_DATA_DATA{1'b0}} : ram_data_i_w[w_gen*IACT_DATA_DATA+:IACT_DATA_DATA];
       end
+      RAM_SP #(
+          .DataWidth(BITS_PER_ROUTER),
+          .AddrWidth(ADDRWIDTH),
+          .Pipelined(1),
+          .WriteMaskWidth(WORDS_PER_TRANS)
+      ) iact_buffer_SP (
+          .clk_i   (clk_i),
+          .rd_en_i (ram_rd_en),
+          .wr_en_i (ram_wr_en_q & (!fully_connected_i | (fc_write_bank_q == r_gen))),
+          .wr_mask_i(write_mask),
+          .addr_i  (bank_addr),
+          .data_i  (write_data),
+          .data_o  (ram_data_o_w)
+      );
     end
     for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin
       assign ram_data_o[r_gen * BITS_PER_ROUTER+:BITS_PER_ROUTER]=BUFFER[r_gen].ram_data_o_w;

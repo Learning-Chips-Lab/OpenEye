@@ -394,10 +394,18 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                     gtu.create_stream_file(stream[layer_repetition],layer_number,layer_repetition)
                     if (only_files == 0) :
                         logger.info("Send stream No. " + str(layer_number+1))
+                        fc_write_check = None
+                        if (os.environ.get("OPENEYE_CHECK_FC_WRITES") and
+                                "Dense" in str(layer_parameters[layer_number].layer_name)):
+                            fc_write_check = cocotb.start_soon(rtl_test_utils.check_fc_activation_writes(
+                                dut, openeye_parameter, layer_parameters[layer_number], dram.fmap[layer_number]))
                         await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters[layer_number], layer_repetition))
                         logger.info("Stream is sent.")
                         if (layer_number == max_layers - 1) :
                             await cocotb.start_soon(rtl_test_utils.await_enable_signal(ptp, dut))
+                            if fc_write_check is not None:
+                                assert fc_write_check.done(), "FC activation RAM writes incomplete"
+                                await fc_write_check
                             if("Depthwise" in str(layer_parameters[layer_number].layer_name)):
                                 await cocotb.start_soon(rtl_test_utils.compare_stream_Dw(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_number], openeye_parameter, layer_es, dram, log_level))
                             elif("Conv" in str(layer_parameters[layer_number].layer_name)):
@@ -412,16 +420,10 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                                 for f in range(len(calculated_results)):
                                     logger.info("dense f=%2d ref=%s dut=%s", f, calculated_results[f],
                                                 dram.fmap[1 + layer_number][f])
-                            # The Dense dma_stream_ref.txt layout does not match the FC
-                            # read-out (one psum per DMA word, columns interleaved), so
-                            # the line compare can only fail. compare_dram_with_ref below
-                            # checks every Dense output exactly, per filter.
-                            # Run both checks before asserting: the value-level compare
-                            # reports how many outputs differ, which the line compare of
-                            # the reference file cannot, and an early assert hid it.
+                            # Check both decoded values and the complete DMA stream.
                             dram_ok = tum.compare_dram_with_ref(layer_parameters[layer_number], calculated_results, dram.fmap[1 + layer_number])
                             file_ok = True
-                            if(logging.DEBUG >= log_level) and ("Dense" not in str(layer_parameters[layer_number].layer_name)):
+                            if(logging.DEBUG >= log_level):
                                 file_ok = gtu.check_results(openeye_parameter, 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
                                                             'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
                             assert dram_ok and file_ok, "result check failed: values %s, reference file %s" % (

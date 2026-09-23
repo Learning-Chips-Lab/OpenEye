@@ -24,7 +24,7 @@ import math
 import cocotb
 import numpy as np
 import open_eye.iact_stream_mapper as iact_stream_mapper
-from cocotb.triggers import FallingEdge, Timer
+from cocotb.triggers import FallingEdge, RisingEdge, Timer
 import open_eye.stream_dicts as strdic
 import random
 
@@ -2448,6 +2448,67 @@ def dump_psum_buffers(dut, oep, max_addr=None):
                             hi_half)
 
 
+async def check_fc_activation_writes(dut, params, layer, activations):
+    """Check the FPGA's actual converter RAM writes against the input vector.
+
+    FC input order is K tile, cluster row, pair, PE bank, pair slot. Derive
+    each expected source position independently from the observed RAM address.
+    """
+    channels = layer.used_iact_per_PE
+    banks = params.NUM_GLB_IACT
+    rows = params.Clusters_Y
+    mask = (1 << params.IACT_Bitwidth) - 1
+    writes_per_run = banks * channels // 2
+    expected_count = writes_per_run * layer.needed_wght_transmissions
+    converters = []
+    for column in range(params.Clusters_X):
+        for row in range(rows):
+            converter = dut.IACT_CONVERTER_X[column].IACT_CONVERTER_Y[row].iact_stream_constructor
+            converters.append((column, row, converter))
+    counts = {(column, row): 0 for column, row, _ in converters}
+    previous = {}
+    cycle = 0
+    while any(count < expected_count for count in counts.values()):
+        await RisingEdge(dut.clk_i)
+        cycle += 1
+        for column, row, converter in converters:
+            key = (column, row)
+            for bank in range(banks):
+                buffer = converter.BUFFER[bank]
+                if hasattr(buffer, "SUBWORD"):
+                    memories = [buffer.SUBWORD[slot].iact_buffer_SP for slot in range(2)]
+                    if not int(memories[0].wr_en_i.value):
+                        continue
+                    assert int(memories[1].wr_en_i.value), "FC partial pair write"
+                    address = int(memories[0].addr_i.value)
+                    assert address == int(memories[1].addr_i.value)
+                    values = [int(mem.data_i.value) & mask for mem in memories]
+                else:
+                    memory = buffer.iact_buffer_SP
+                    if not int(memory.wr_en_i.value):
+                        continue
+                    address = int(memory.addr_i.value)
+                    data = int(memory.data_i.value)
+                    values = [(data >> (slot * params.IACT_WOH_Bitwidth)) & mask for slot in range(2)]
+                index = counts[key]
+                assert index < expected_count, f"Extra FC write in {key}"
+                assert (bank, address) == (index % banks, index // banks), (
+                    f"FC write destination {key}: bank/address {(bank, address)}, word {index}")
+                tile, pair = divmod(address, channels // 2)
+                source = ((tile * rows + row) * banks * channels
+                          + pair * banks * 2 + bank * 2)
+                expected = [int(activations[i]) & mask if i < len(activations) else 0
+                            for i in (source, source + 1)]
+                assert values == expected, (
+                    f"FC activation write {key} bank={bank} addr={address}: "
+                    f"{values} != input[{source}:{source + 2}]={expected}")
+                if index % writes_per_run:
+                    assert cycle == previous[key] + 1, f"FC write bubble in {key}"
+                previous[key] = cycle
+                counts[key] += 1
+    logger.info("FC activation RAM writes checked: %s", counts)
+
+
 async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level):
     """ Await the output stream and compare it to the reference output.
 
@@ -2471,75 +2532,40 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         storage_file = open(filename, 'w')
 
 
-    offset_layer_repetition = (math.floor(layer_repetition/layer_parameters.iact_transmissions_pe) % layer_parameters.psum_transmissions_pe) * oep.Clusters_Y * oep.Clusters_X * layer_parameters.used_psum_per_PE
-    les.x = offset_layer_repetition
-
-    if ((layer_repetition % layer_parameters.iact_transmissions_pe) == (layer_parameters.iact_transmissions_pe - 1)) :cluster_order = []
-    for b in range(0,oep.Clusters_Y,layer_parameters.used_Y_cluster):
-        for a in range(layer_parameters.used_Y_cluster):
-            cluster_order.append(int(oep.Clusters_Y/layer_parameters.used_Y_cluster)*a+int(b/layer_parameters.used_Y_cluster))
-
-    matrix = [[i * 8 + j for j in range(8)] for i in range(8)]
-
-    f = 0
+    # FC reduces cluster rows into row 0 and emits one signed accumulator
+    # per DMA beat. Columns are interleaved within each buffer address.
+    columns = oep.Clusters_X
+    per_column = math.ceil(layer_parameters.used_psum_per_PE)
+    tile = ((layer_repetition // layer_parameters.iact_transmissions_pe)
+            % layer_parameters.psum_transmissions_pe)
+    offset = tile * columns * per_column
+    les.x = offset
+    expected_words = columns * per_column
+    assert layer_parameters.psum_output_words == expected_words, (
+        "Dense DMA output count disagrees with column/address layout")
+    beat = 0
     dut._log.info("Output Stream started")
-    dump_dma_words = [] if os.environ.get("DUMP_PSUM_BUFFERS") else None
-    cluster_offset = math.ceil(layer_parameters.used_psum_per_PE)
-    while (dut.enable_dma_o.value == 1):
-
-        if(logging.DEBUG >= login_level):
-            try:
-                txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(oep.PSUM_Trans_Bitwidth) + "\n")
-            except ValueError:
-                # data_dma_o can read X here (not just a transient edge
-                # case - some psum_pipeline.v configs leave portions of
-                # the output genuinely unwritten). The functional capture
-                # below already tolerates this via its own try/except;
-                # mirror that here instead of crashing the whole test on
-                # the first X sample.
-                txt_file.write(str(dut.data_dma_o.value) + "\n")
-        if(logging.DEBUG >= login_level):
-            storage_file.write("f: " + str(f) + "\n")
-        if dump_dma_words is not None:
-            # The Dense reader below takes only bits [DATA_PSUM_BITWIDTH-1:0]
-            # of each DMA word, while the conv reader takes DMA_BITWIDTH //
-            # DATA_PSUM_BITWIDTH psums per word. Capture the raw word so the
-            # high half can be inspected: if it is non-zero the Dense reader
-            # is silently discarding half of every transfer.
-            try:
-                dump_dma_words.append(int(dut.data_dma_o.value))
-            except ValueError:
-                dump_dma_words.append(None)
-        try:
-            dram.fmap[layer_number + 1][f] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH-1:0])
-            if (dram.fmap[layer_number + 1][f] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
-                dram.fmap[layer_number + 1][f] = dram.fmap[layer_number + 1][f] - 2**oep.DATA_PSUM_BITWIDTH
-        except:
-            pass
-        if (f < cluster_offset) :
-            f = f + cluster_offset
-        else :
-            f = f - cluster_offset + 1
+    while dut.enable_dma_o.value == 1:
+        assert beat < expected_words, "Dense DMA emitted too many words"
+        # Do not swallow unknown data or indexing errors: that hid missing
+        # outputs as zeros in the old two-column-only reader.
+        word = int(dut.data_dma_o.value)
+        f = offset + (beat % columns) * per_column + beat // columns
+        value = _signed(word & ((1 << oep.DATA_PSUM_BITWIDTH) - 1),
+                        oep.DATA_PSUM_BITWIDTH)
+        if f < len(dram.fmap[layer_number + 1]):
+            dram.fmap[layer_number + 1][f] = value
+        else:
+            assert value == 0, "Dense DMA padding output is nonzero"
+        if logging.DEBUG >= login_level:
+            txt_file.write(format(word, f"0{oep.DMA_BITWIDTH}b") + "\n")
+            storage_file.write(f"beat: {beat}, f: {f}\n")
+        if os.environ.get("DUMP_PSUM_BUFFERS"):
+            logger.info("Dense DMA beat=%d f=%d value=%d", beat, f, value)
+        beat += 1
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-
-    if dump_dma_words is not None:
-        # Careful with the two meanings of DATA_PSUM_BITWIDTH: the HDL
-        # parameter is the 32-bit *lane* the psum is packed into, while
-        # oep.DATA_PSUM_BITWIDTH is the 20-bit signed accumulator. So step
-        # across the word in lanes but sign-extend at the accumulator width,
-        # otherwise every negative psum prints as a large positive.
-        acc_bits = oep.DATA_PSUM_BITWIDTH
-        lane_bits = 32
-        lanes = oep.DMA_BITWIDTH // lane_bits
-        logger.info("captured %d DMA words on the Dense output stream",
-                    len(dump_dma_words))
-        for idx, word in enumerate(dump_dma_words):
-            if word is None:
-                logger.info("dma word %2d = X", idx)
-                continue
-            vals = [_signed((word >> (lane_bits * i)) & ((1 << acc_bits) - 1),
-                            acc_bits) for i in range(lanes)]
-            logger.info("dma word %2d = %s", idx, vals)
+    assert beat == expected_words, (
+        f"Dense DMA emitted {beat} words, expected {expected_words}")
 
     if os.environ.get("DUMP_PSUM_BUFFERS"):
         report_iact_handoff(oep)

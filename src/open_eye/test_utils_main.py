@@ -288,23 +288,23 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
         for layer_repetition in range(layer_params.needed_total_transmissions):
             output_order.append(return_dict[layer_repetition])
     elif "Dense" in str(layer_params.layer_name):
-        words_per_transmission = params.DMA_BITWIDTH//params.DATA_PSUM_BITWIDTH
-        layer_repetition = 0
-        file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
-        if(params.SERIAL):
-            for refresh in range(math.ceil(len(calculated_results))):
-                for x in range(words_per_transmission) :
-                    partial_result_a = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
-                    partial_result_b = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH)
-                    try:
-                        partial_result_b = gtu.to_twos_complement_string(calculated_results[refresh + x * layer_params.used_psum_per_PE],params.DATA_PSUM_BITWIDTH)
-                    except:
-                        partial_result_b = partial_result_b
-                    if (params.Clusters_X == 1):
-                        file_dma_ref.write(partial_result_b + "\n")
-                    else:
-                        file_dma_ref.write(partial_result_a + partial_result_b + "\n")
-            file_dma_ref.close()
+        if params.SERIAL:
+            # FC emits one accumulator per DMA beat, interleaving columns
+            # at each buffer address. Cluster rows contribute to the same sum.
+            per_column = math.ceil(layer_params.used_psum_per_PE)
+            mask = (1 << params.DATA_PSUM_BITWIDTH) - 1
+            for repetition in range(layer_params.needed_total_transmissions):
+                tile = ((repetition // layer_params.iact_transmissions_pe)
+                        % layer_params.psum_transmissions_pe)
+                offset = tile * params.Clusters_X * per_column
+                path = f'demo/layer_{layer_number}_{repetition}/dma_stream_ref.txt'
+                with gtu.open_or_create_file(path) as file_dma_ref:
+                    for address in range(per_column):
+                        for column in range(params.Clusters_X):
+                            index = offset + column * per_column + address
+                            value = calculated_results[index] if index < len(calculated_results) else 0
+                            file_dma_ref.write(format(int(value) & mask,
+                                                      f"0{params.DMA_BITWIDTH}b") + "\n")
         else:
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
             for layer_repetition in range(layer_params.needed_total_transmissions):
