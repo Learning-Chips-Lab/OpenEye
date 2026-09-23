@@ -18,6 +18,9 @@ def run_cluster_simulation(**kwargs):
     # compiled parameters through process-global environment variables.
     config = {name: int(parameters.get(name, env.get(name, default)))
               for name, default in (("PARALLEL_MACS", 2), ("SPARSITY_EN", 1))}
+    # Normalize explicit overrides and generated-header defaults so the dense
+    # focused runner and the main matrix can share the same compiled image.
+    kwargs["parameters"] = {**parameters, **config}
     env.update({name: str(value) for name, value in config.items()})
     kwargs["extra_env"] = env
     waves = os.environ.get("OPENEYE_CLUSTER_WAVES") == "1"

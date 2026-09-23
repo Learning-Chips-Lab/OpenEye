@@ -63,6 +63,8 @@ def test_build_reuse_and_invalidation(tmp_path, monkeypatch):
     assert second["extra_env"]["PARALLEL_MACS"] == "2"
     assert second["extra_env"]["SPARSITY_EN"] == "1"
     assert second["force_compile"] is False and second["waves"] is False
+    explicit = run("explicit", parameters={"PARALLEL_MACS": 2, "SPARSITY_EN": 1})
+    assert explicit["sim_build"] == first["sim_build"]
 
     header.write_text("// changed include without changing the top-level source\n")
     changed_header = run("header")

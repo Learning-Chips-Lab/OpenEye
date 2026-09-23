@@ -7,9 +7,10 @@
 
 Why this exists
 ---------------
-test_PE_CLUSTER.py has 32256 parametrisations, so the sparse failures are
+test_PE_CLUSTER.py's optional extended sweep has 32256 parametrisations, so the sparse failures are
 scattered through a matrix nobody runs in full and the *shape* of the fault is
-invisible. Holding shape and seed fixed and sweeping only SPARSE_WGHT turns the
+invisible. Its default is now a small smoke suite with pinned reproducers.
+Holding shape and seed fixed and sweeping only SPARSE_WGHT turns the
 same bug into a monotone curve, which is far more diagnostic than a list of
 failing ids:
 
