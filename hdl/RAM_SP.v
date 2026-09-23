@@ -81,7 +81,10 @@ module RAM_SP
 #(
     parameter AddrWidth = 16,
     parameter DataWidth = 32,
-    parameter Pipelined = 0
+    parameter Pipelined = 0,
+    // One mask bit per equal-sized subword. With the default value of 1,
+    // writes remain unmasked and wr_mask_i may be left unconnected.
+    parameter WriteMaskWidth = 1
     
 ) (
     input   wire                        clk_i,
@@ -101,7 +104,8 @@ module RAM_SP
     input   wire    [DataWidth-1:0]     data_i,
 
     // data output
-    output  wire    [DataWidth-1:0]     data_o
+    output  wire    [DataWidth-1:0]     data_o,
+    input   wire [WriteMaskWidth-1:0]   wr_mask_i
 );
 
     wire                    clk;
@@ -128,11 +132,13 @@ module RAM_SP
         RAM_SP_generic #(
             .AddrWidth          (AddrWidth),
             .DataWidth          (DataWidth),
-            .Pipelined          (Pipelined)
+            .Pipelined          (Pipelined),
+            .WriteMaskWidth     (WriteMaskWidth)
         ) impl (
             .clk                (clk),
             .cen                (cen),
             .rdwen              (rdwen),
+            .wm                 (wr_mask_i),
             .a                  (addr),
             .d                  (d),
             .q                  (q)

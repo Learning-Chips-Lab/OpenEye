@@ -34,8 +34,8 @@ Main open problem: convolution on the FPGA top level. Main workaround for GEMM-l
 - Use `-p no:cacheprovider -o log_cli=false -rfE` for quiet runs with a failure summary.
 - Wall times measured (OBSERVED): gemm_layer 12m46s, attention 7m03s, conv_const 12m30s, single_layers 58m08s, conv3x3 sample of 8 tests 47m12s, PE_cluster sample of 162 tests 3m55s.
 - Sim timeout in FPGA tests is 15 ms of sim time. A timed-out test costs 30 to 50 minutes wall.
-- `test/cocotb_PE_cluster/test_PE_CLUSTER.py` collects 32,256 tests. Never run it whole. Sample with `awk 'NR%200==1'` on the collected ids.
-- `test/cocotb_PE_cluster` pytest run without file arguments starts that 32k suite.
+- `test/cocotb_PE_cluster/test_PE_CLUSTER.py` now defaults to 32 smoke cases plus seven historical reproducers. `--cluster-regression=matrix` selects the 2,016-case seed-0 matrix plus six additional reproducers; `--cluster-regression=extended` restores all 32,256 cases.
+- `test/cocotb_PE_cluster` now collects 64 tests by default, including focused sparsity, dense, and GEMM tests. See `test/cocotb_PE_cluster/README.md` for build reuse and opt-in waveforms.
 - Constant-operand and ramp probes for value bugs (FROM NOTES): env vars `OPENEYE_CONST_IACTS`, `OPENEYE_CONST_WGHTS`, `OPENEYE_RAMP_IACTS` in `test/cocotb_fpga/OpenEye_FPGA_tb.py`. Vary the constant; one value cannot separate a data-independent DUT from a degenerate reference.
 
 ## 3. What works (OBSERVED)

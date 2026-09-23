@@ -69,16 +69,19 @@
 module RAM_SP_generic #(
     parameter AddrWidth = 12,
     parameter DataWidth = 8,
-    parameter Pipelined = 0
+    parameter Pipelined = 0,
+    parameter WriteMaskWidth = 1
 ) (
     input  wire                 clk,
     input  wire                 cen,
     input  wire                 rdwen,
     input  wire [AddrWidth-1:0] a,
     input  wire [DataWidth-1:0] d,
-    output reg  [DataWidth-1:0] q
+    output reg  [DataWidth-1:0] q,
+    input  wire [WriteMaskWidth-1:0] wm
 );
   localparam Depth = 2 ** AddrWidth;
+  localparam MaskWordWidth = DataWidth / WriteMaskWidth;
 
   reg [DataWidth-1:0] mem    [0:Depth-1];
   reg [DataWidth-1:0] memout;
@@ -91,11 +94,19 @@ module RAM_SP_generic #(
     end
   endgenerate
 
-  always @(posedge clk) begin
-    if (!cen && !rdwen) begin
-      mem[a] <= d;
+  // Keep a single memory array. The lanes share address and clock; only the
+  // write enables differ. Technology-specific implementations need matching
+  // write-mask support to map this to one physical memory macro.
+  genvar lane;
+  generate
+    for (lane = 0; lane < WriteMaskWidth; lane = lane + 1) begin : gen_write_lane
+      always @(posedge clk) begin
+        if (!cen && !rdwen && ((WriteMaskWidth == 1) || wm[lane])) begin
+          mem[a][lane*MaskWordWidth+:MaskWordWidth] <= d[lane*MaskWordWidth+:MaskWordWidth];
+        end
+      end
     end
-  end
+  endgenerate
 
   always @(posedge clk) begin
     if (!cen && rdwen) begin
