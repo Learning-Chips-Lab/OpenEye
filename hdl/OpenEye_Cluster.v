@@ -558,7 +558,7 @@ module OpenEye_Cluster #(
 
   genvar j;
   generate
-    if (CLUSTER_COLUMNS == 1) begin : gen_psum_direct_connect
+    if (CLUSTER_ROWS == 1) begin : gen_psum_direct_connect
       // Bypass of Router
       assign glb_cluster_psum_ready_r    = pe_router_psum_ready_out;
       assign pe_router_psum_data_i       = glb_cluster_psum_data_r;

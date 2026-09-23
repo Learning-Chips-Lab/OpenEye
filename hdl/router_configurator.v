@@ -172,6 +172,8 @@ module router_configurator #(
         end else begin
           if (needed_y_cls_reg_i == 1) begin
             psum_choose_i_reg_o <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
+          end else begin
+            psum_choose_i_reg_o <= {{(CLUSTER_COLUMNS * NUM_GLB_PSUM){1'b1}}, {((CLUSTER_ROWS - 1) * CLUSTER_COLUMNS * NUM_GLB_PSUM){1'b0}}};
           end
         end
       end

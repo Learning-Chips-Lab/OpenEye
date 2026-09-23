@@ -664,7 +664,7 @@ reg enable_write_to_storage;
                 end
               end
             end
-            if (CLUSTERS != 1) begin
+            if ((CLUSTER_ROWS != 1 & (CLUSTER_ROWS * PE_Y >= 2 * wght_size_x_i)) | CLUSTER_COLUMNS != 1) begin
               router_cycle <= router_cycle + 1;
               if (router_cycle == (channel_div_trans - 1)) begin
                 router_cycle <= 0;

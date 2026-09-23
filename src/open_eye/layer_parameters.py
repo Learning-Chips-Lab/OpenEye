@@ -532,7 +532,8 @@ class LayerParameters(object):
             amount_of_psum_per_cycle = min(params.Clusters_Y*params.Clusters_X*params.PEs_X,8)
             # === MASKING PHASE 1: Handle non-aligned output width ===
             # If output width doesn't evenly divide by PEs_X, some PEs will be unused
-            calculation_ress = math.floor((params.Clusters * params.PEs_X)/self.different_kernels_per_calculation)
+            available_clusters = params.Clusters_X*(math.ceil(params.Clusters_Y/self.used_Y_cluster))
+            calculation_ress = math.floor((available_clusters * params.PEs_X)/self.different_kernels_per_calculation)
             self.psum_add_up = (self.output_shape[1]) % calculation_ress
             self.psum_add_up = calculation_ress - self.psum_add_up
             self.psum_add_up = self.psum_add_up % calculation_ress
@@ -791,7 +792,6 @@ class LayerParameters(object):
                 # Delta: refreshes executed in this iteration
                 self.needed_refreshes_mx[layer_repetition][0] = self.needed_refreshes_mx[layer_repetition][2] - self.needed_refreshes_mx[layer_repetition][1]
 
-        self.needed_cycles = math.ceil(self.needed_refreshes_mx[0][0]/self.diff_iact_layer)*math.ceil(32/self.output_shape[1])
         self.needed_cycles = self.Used_refreshes
 
     def calculate_used_refreshes(self, params):
@@ -815,8 +815,8 @@ class LayerParameters(object):
             - Mode 2: Single X-cluster computation
             - Default: Full multi-cluster computation
         """
-        self.Used_refreshes = math.ceil(self.output_shape[2] * math.ceil(self.output_shape[1]/((params.Clusters//self.different_kernels_per_calculation)*params.PEs_X)))
-        self.Used_refreshes = math.ceil(self.used_Y_cluster * self.iact_transmissions_pe * self.Used_refreshes * math.ceil(math.ceil(self.filters/self.different_kernels_per_calculation)/self.used_psum_per_PE))
+        self.Used_refreshes = math.ceil(self.output_shape[2] * math.ceil(self.output_shape[1]/(((params.Clusters//self.used_Y_cluster)//self.different_kernels_per_calculation)*params.PEs_X)))
+        self.Used_refreshes = math.ceil(self.iact_transmissions_pe * self.Used_refreshes * math.ceil(math.ceil(self.filters/self.different_kernels_per_calculation)/self.used_psum_per_PE))
 
     def calculate_single_cluster_computation(self, params):
         """Determine if layer can use single-cluster optimization mode.
@@ -1025,16 +1025,14 @@ class LayerParameters(object):
         self.iact_read_limit_2 = self.needed_wght_cycles - 1
         self.iact_read_limit_3 = self.iact_x_line_repetitions - 1
         self.iact_read_limit_4 = math.ceil(self.iact_size_y/self.strideY) - 1
-        self.iact_read_inc_0 = int((self.iact_size_y + self.padding_y * 2) * self.needed_Iact_writes * self.channel_div_trans)
         self.iact_read_inc_0 = 1
         self.iact_read_inc_1 = self.channel_div_trans * self.needed_Iact_writes
         self.iact_read_inc_1 = self.iact_repetitions_per_write * params.NUM_GLB_IACT
         self.iact_read_inc_2 = (self.iact_size_y + self.padding_y * 2) * self.iact_read_inc_1
-        if (params.Clusters == 1):
+        if (math.floor(params.Clusters/2) == 1):
             self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM * self.strideX
         else:
             self.iact_read_inc_3 = self.channel_div_trans * self.needed_Iact_writes * params.NUM_GLB_IACT
-        #self.iact_read_inc_3 = 4
         self.iact_read_inc_4 = self.iact_read_inc_1*self.strideY
 
         if (self.used_channels == 1):
@@ -1195,9 +1193,8 @@ class LayerParameters(object):
 
 
         # Calculate partial sum storage requirements
-        self.psum_storage_cycles = self.diff_iact_layer * self.used_Y_cluster
-        if (self.choose_iact_storage_output):
-            self.psum_storage_cycles = self.diff_iact_layer
+        self.psum_storage_cycles = self.diff_iact_layer
+        self.psum_storage_cycles = self.diff_iact_layer
         temp1 = math.ceil(self.strideX * self.iact_size_x/((params.IACT_RAM_CELLS*8)//4))
         if ((self.iact_size_x/((params.IACT_RAM_CELLS*8)//4) >= 1) & (self.iact_x_line_repetitions >= 2)):
             temp2 = 2
@@ -1286,7 +1283,7 @@ class LayerParameters(object):
 
         # Cycles needed to produce all output rows
         self.output_cycles = math.ceil(self.calc_Y/self.strideY) * self.iact_x_line_repetitions/ self.different_kernels_per_calculation
-        self.psum_output_words = int((self.output_cycles * self.filters * params.Clusters * params.NUM_GLB_PSUM) / math.ceil(params.DMA_BITWIDTH/32))
+        self.psum_output_words = int((self.output_cycles * self.filters * (params.Clusters//self.used_Y_cluster) * params.NUM_GLB_PSUM) / math.ceil(params.DMA_BITWIDTH/32))
         self.psum_x_all_cluster = self.different_kernels_per_calculation * self.iact_x_add_up
         # === Phase 9: Finalize calculations ===
         self.calculate_transmission_cycles(params)

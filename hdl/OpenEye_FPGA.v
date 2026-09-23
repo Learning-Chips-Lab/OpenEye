@@ -924,7 +924,7 @@ reg [1023:0] fst_path;
         fsm_row <= fsm_row + needed_y_cls_reg;
         if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
           fsm_row        <= fsm_row_offset + 1;
-          fsm_row_offset <= fsm_row_offset + NUM_GLB_IACT;
+          fsm_row_offset <= fsm_row_offset + NUM_GLB_WGHT;
           if (fsm_row_offset == NUM_GLB_IACT * (needed_y_cls_reg - 1)) begin
             fsm_row        <= 0;
             fsm_row_offset <= 0;
@@ -1212,11 +1212,10 @@ end
                   wght_buffer_rd_addr <= wght_buffer_rd_addr_storage;
                 end
                 if (iact_router_counter == needed_y_cls_reg - 1) begin
-                  wght_buffer_rd_addr <= wght_buffer_rd_addr;
-                  wght_buffer_rd_addr_storage <= wght_buffer_rd_addr;
+                  wght_buffer_rd_addr         <= wght_buffer_rd_addr_storage;
                   if (iact_cycle_count == {{8 {1'd0}},needed_wght_cycles} - 1) begin
-                    wght_buffer_rd_addr_storage <= 0;
-                    wght_buffer_rd_addr         <= 0;
+                    wght_buffer_rd_addr <= wght_buffer_rd_addr;
+                    wght_buffer_rd_addr_storage <= wght_buffer_rd_addr;
                   end
                 end
               end
