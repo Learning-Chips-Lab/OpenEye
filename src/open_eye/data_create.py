@@ -132,8 +132,8 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
                 strides=strides
             ))
 
-            pool_x_axis = 2
-            pool_y_axis = 2
+            pool_x_axis = 4
+            pool_y_axis = 4
             model.add(tf.keras.layers.AveragePooling2D(
                 pool_size=(pool_x_axis, pool_y_axis), 
                 strides=(pool_x_axis, pool_y_axis), 
@@ -143,11 +143,8 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
                       
         case "MaxPooling":
-            print("MAXPOOLING!!!!!!!!!!!!")
-            print(strides)
             x_axis = inputsize_x
             y_axis = inputsize_y
-            print((x_axis, y_axis, channels))
             model.add(tf.keras.layers.Conv2D(
                 filters, 
                 (3, 3), 

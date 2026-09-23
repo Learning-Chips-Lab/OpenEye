@@ -398,20 +398,15 @@ class LayerParameters(object):
         used_PEs_per_clm = self.used_PEs_Y/params.PEs_Y
         self.used_Y_cluster = math.ceil(used_PEs_per_clm)
         usable_pes = params.PEs_X*math.floor(params.Clusters/self.used_Y_cluster)
-        print(self.output_shape)
-        print(usable_pes)
         if (math.ceil(self.output_shape[1]/params.PEs_X) >=  math.ceil(usable_pes/params.PEs_X)): # No
             self.iact_x_line_repetitions = math.ceil(self.output_shape[1]/usable_pes)
             self.y_lines_per_calculation = 1
             self.different_kernels_per_calculation = 1
-            print(self.different_kernels_per_calculation)
         else : # Yes
             self.iact_x_line_repetitions = 1
             # Calculate how many different kernels can be processed simultaneously
             # based on available PE resources divided by input width
             self.different_kernels_per_calculation = usable_pes//self.psum_size_x
-            print("HIER")
-            print(self.different_kernels_per_calculation)
             # Limit to at most ceil(output_channels/8) kernels
             self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.filters/4))
             # Calculate how many Y lines can be processed per computation
@@ -1753,7 +1748,11 @@ class LayerParameters(object):
         else:
             self.used_channels = 4
         self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
-        self.iact_converter_buffer_addr_max_cycles = math.ceil((((self.iact_size_y*self.diff_iact_layer))/(self.strideY*4)))
+        if (self.pooling_mode == 0):
+            self.iact_converter_buffer_addr_max_cycles = math.ceil((((self.iact_size_y*self.diff_iact_layer))/(self.strideY*4)))
+        else:
+            self.iact_converter_buffer_addr_max_cycles = math.ceil(self.diff_iact_layer/4)
+
         return
 
     def print_layer_parameters(self, debug_file):
