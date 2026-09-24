@@ -559,7 +559,8 @@ module OpenEye_Cluster #(
   genvar j;
   generate
     if (CLUSTER_ROWS == 1) begin : gen_psum_direct_connect
-      // Bypass of Router
+      // Bypass of Router. Psum routers chain vertically between cluster rows,
+      // so only a single-row array may skip them.
       assign glb_cluster_psum_ready_r    = pe_router_psum_ready_out;
       assign pe_router_psum_data_i       = glb_cluster_psum_data_r;
       assign pe_router_psum_enable_in    = glb_cluster_psum_enable_r;
