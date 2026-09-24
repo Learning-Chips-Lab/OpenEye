@@ -1268,10 +1268,6 @@ class LayerParameters(object):
             else:
                 self.iact_repetitions_per_write = (self.iact_x_line_repetitions-1) * less_temp + full_temp
             self.iact_buffer_words_per_write =  self.iact_repetitions_per_write * ((self.iact_size_y + self.kernel_size[1]) - self.strideY) * math.ceil(self.channels/4)
-            print(less_temp)
-            print(full_temp)
-            print(self.iact_repetitions_per_write)
-            print(self.iact_buffer_words_per_write)
 
         else:
             self.iact_buffer_words_per_write = self.needed_Iact_writes * self.channel_div_trans
