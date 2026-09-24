@@ -162,6 +162,20 @@ def test_dense_ten_outputs(columns, parallel_macs, request, monkeypatch):
     )
 
 
+@pytest.mark.parametrize("rows,columns", [(1, 1), (1, 2), (2, 1)])
+def test_dense_36_activations(rows, columns, request, monkeypatch):
+    """Check 36 input activations, including an actual one-cluster array."""
+    monkeypatch.setenv("OPENEYE_PROBE_FSM", "1")
+    monkeypatch.setenv("OPENEYE_FAIL_ON_STALL", "5000")
+    monkeypatch.setenv("OPENEYE_CHECK_FC_WRITES", "1")
+    test_gemm_layer(
+        INPUT_SIZE=36, OUTPUT_SIZE=10,
+        CLUSTER_ROWS=rows, NUM_GLB_IACT=3, NUM_GLB_PSUM=4, NUM_GLB_WGHT=3,
+        DATAFLOW="row_stationary", PARALLEL_MACS=2,
+        CLUSTER_COLUMNS=columns, request=request,
+    )
+
+
 @pytest.mark.parametrize("input_size", [31, 63])
 def test_gemm_split_k_padding(input_size, request):
     """Odd K, zero-padded tails and input sizes spanning multiple buffer words."""
