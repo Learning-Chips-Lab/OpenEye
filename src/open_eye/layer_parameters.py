@@ -1026,7 +1026,6 @@ class LayerParameters(object):
         self.iact_read_limit_3 = self.iact_x_line_repetitions - 1
         self.iact_read_limit_4 = math.ceil(self.iact_size_y/self.strideY) - 1
         self.iact_read_inc_0 = 1
-        self.iact_read_inc_1 = self.channel_div_trans * self.needed_Iact_writes
         self.iact_read_inc_1 = self.iact_repetitions_per_write * params.NUM_GLB_IACT
         self.iact_read_inc_2 = (self.iact_size_y + self.padding_y * 2) * self.iact_read_inc_1
         if (math.floor(params.Clusters/2) == 1):
@@ -1264,12 +1263,15 @@ class LayerParameters(object):
         if (self.buffer_cycles_for_x_iact == 1):
             full_temp = self.needed_Iact_writes * self.channel_div_trans
             less_temp = (self.needed_Iact_writes-self.kernel_size[0] + self.strideX) * self.channel_div_trans
-            if (self.kernel_size[0] <= (params.Clusters-1) * params.NUM_GLB_PSUM * self.strideX):
+            if (self.kernel_size[0] <= (math.ceil(params.Clusters/self.used_Y_cluster)-1) * (params.NUM_GLB_PSUM+1) * self.strideX):
                 self.iact_repetitions_per_write =  self.iact_x_line_repetitions * full_temp
-                self.iact_buffer_words_per_write =  self.iact_repetitions_per_write * ((self.iact_size_y + self.kernel_size[1]) - self.strideY) * math.ceil(self.channels/4)
             else:
                 self.iact_repetitions_per_write = (self.iact_x_line_repetitions-1) * less_temp + full_temp
-                self.iact_buffer_words_per_write =  self.iact_repetitions_per_write * ((self.iact_size_y + self.kernel_size[1]) - self.strideY) * math.ceil(self.channels/4)
+            self.iact_buffer_words_per_write =  self.iact_repetitions_per_write * ((self.iact_size_y + self.kernel_size[1]) - self.strideY) * math.ceil(self.channels/4)
+            print(less_temp)
+            print(full_temp)
+            print(self.iact_repetitions_per_write)
+            print(self.iact_buffer_words_per_write)
 
         else:
             self.iact_buffer_words_per_write = self.needed_Iact_writes * self.channel_div_trans

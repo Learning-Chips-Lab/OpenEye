@@ -473,6 +473,8 @@ module iact_stream_constructor #(
     end
 reg [11:0] iact_values_per_cluster_transmit;
 reg [10:0] x_pos_inc;
+wire [11:0] next_x_value_add;
+assign next_x_value_add = x_range_lower_bound + x_pos_inc;
 
 reg enable_write_to_storage;
     integer signed r, w;
@@ -641,7 +643,7 @@ reg enable_write_to_storage;
               if (fully_connected_i) begin
                 x_pos_inc <= CLUSTER_ROWS * iact_values_per_cluster_transmit;
               end else begin
-                x_pos_inc <= ((CLUSTERS * PE_X) * stride_x_i);
+                x_pos_inc <= (((CLUSTERS/2) * PE_X) * stride_x_i);
               end
               
               if (0 == (iacts_in_one_trans - 1)) begin
@@ -670,18 +672,24 @@ reg enable_write_to_storage;
               end
               if (router_cycle == 0) begin
                 enable_write_to_storage <= 0;
-                if ((x_pos_in_w_cycle >= x_range_lower_bound) & (x_pos_in_w_cycle < x_range_lower_bound + iact_values_per_cluster_transmit)) begin
-                  enable_write_to_storage <= 1;
+                if (x_pos_in_w_cycle >= x_range_lower_bound) begin
+                  if (x_pos_in_w_cycle < x_range_lower_bound + iact_values_per_cluster_transmit) begin
+                    enable_write_to_storage <= 1;
+                  end else begin
+                    if (next_x_value_add >= iact_x_add_up) begin
+                      x_range_lower_bound <= x_start;
+                    end else begin
+                      x_range_lower_bound <= next_x_value_add;
+                      if (x_pos_in_w_cycle == next_x_value_add) begin
+                        enable_write_to_storage <= 1;
+                      end
+                    end
+                  end
                 end
                 x_pos_in_w_cycle <= x_pos_in_w_cycle + 1;
                 if (x_pos_in_w_cycle == iact_x_add_up + wght_size_x - stride_x_i - 1) begin
-                  x_pos_in_w_cycle <= 0;
-                end
-              end
-              if (ram_wr_en & !enable_write_to_storage) begin
-                x_range_lower_bound <= x_start;
-                if (iact_x_add_up > x_range_lower_bound + x_pos_inc) begin
-                  x_range_lower_bound <= x_range_lower_bound + x_pos_inc;
+                  x_pos_in_w_cycle    <= 0;
+                  x_range_lower_bound <= x_start;
                 end
               end
             end else begin
