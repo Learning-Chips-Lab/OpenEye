@@ -13,9 +13,11 @@ from cocotb.triggers import Timer, FallingEdge, RisingEdge
 @cocotb.test()
 async def split_k_pairs(dut):
     rows, row, channels = (int(os.environ[key]) for key in ('FC_ROWS', 'FC_ROW', 'FC_CHANNELS'))
+    banks = int(os.environ['FC_BANKS'])
+    pe_rows = int(os.environ['FC_PE_ROWS'])
     gaps = int(os.environ.get('FC_GAPS', '1'))
     # Two K tiles exercise the read cursor; repeated loads exercise resetting it.
-    span = rows * 3 * channels
+    span = rows * pe_rows * channels
     for name in ('reset_cycle_i', 'params', 'enable_config', 'enable_store',
                  'enable_converter', 'fc_storage_valid_i', 'storage_i',
                  'needed_y_cls_i', 'needed_iact_channel_cycles_i', 'fc_size_i',
@@ -31,7 +33,7 @@ async def split_k_pairs(dut):
             getattr(dut, prefix + str(i)).value = 0
     dut.fully_connected_i.value = 1
     dut.iact_channels_per_pe_i.value = channels
-    dut.iact_ready_i.value = 7
+    dut.iact_ready_i.value = (1 << banks) - 1
     dut.rst_ni.value = 0
     cocotb.start_soon(Clock(dut.clk_i, 10, unit='ns').start())
 
@@ -54,7 +56,7 @@ async def split_k_pairs(dut):
         while True:
             await RisingEdge(dut.clk_i)
             cycle += 1
-            for bank in range(3):
+            for bank in range(banks):
                 buffer = dut.BUFFER[bank]
                 # Support the historical full-word RAM as well as subword RAMs.
                 if hasattr(buffer, 'SUBWORD'):
@@ -86,10 +88,15 @@ async def split_k_pairs(dut):
             # Source layout: K tile, cluster row, activation pair, PE bank.
             # Derive destinations from the flat source index, not DUT cursors.
             tile, within_tile = divmod(pos, span)
-            owner, within_row = divmod(within_tile, 3 * channels)
-            pair, within_pair = divmod(within_row, 6)
+            owner, within_row = divmod(within_tile, pe_rows * channels)
+            pair, within_pair = divmod(within_row, 2 * pe_rows)
+            pe_row = within_pair // 2
+            bank = pe_row % banks
+            rows_in_bank = (pe_rows + banks - 1 - bank) // banks
             if owner == row:
-                expected_writes.append((within_pair // 2, tile * (channels // 2) + pair,
+                expected_writes.append((bank,
+                                        tile * (channels // 2) * rows_in_bank +
+                                        pair * rows_in_bank + pe_row // banks,
                                         tuple(values[pos:pos + 2])))
             dut.storage_i.value = values[pos] | (values[pos + 1] << 8)
             dut.fc_storage_valid_i.value = 1
@@ -103,8 +110,8 @@ async def split_k_pairs(dut):
         assert [write[1:] for write in writes] == expected_writes
         if not gaps:
             # Consecutive words for this row must reach RAM every clock,
-            # even though they rotate across the three banks.
-            run_length = 3 * channels // 2
+            # even when several PE rows share a physical bank.
+            run_length = pe_rows * channels // 2
             for start in range(0, len(writes), run_length):
                 run = writes[start:start + run_length]
                 assert all(b[0] - a[0] == 1 for a, b in zip(run, run[1:]))
@@ -116,23 +123,27 @@ async def split_k_pairs(dut):
             for _ in range(3):
                 await tick()
                 assert int(dut.iact_enable_o.value) == 0
-            dut.iact_ready_i.value = 7
-            seen = [[] for _ in range(3)]
-            for _ in range(channels + 12):
+            dut.iact_ready_i.value = (1 << banks) - 1
+            seen = [[] for _ in range(pe_rows)]
+            for _ in range(channels * (pe_rows if banks < pe_rows else 1) + 24):
                 await tick()
                 enable = int(dut.iact_enable_o.value)
                 if not enable:
                     continue
-                data = int(dut.iact_data_o.value)
+                data = dut.iact_data_o.value
                 choose = int(dut.iact_choose_o.value)
-                for bank in range(3):
-                    assert (enable >> bank) & 1
-                    assert (choose >> (bank * 4 * 2)) & 3 == bank
-                    slot = len(seen[bank]) % 2
-                    seen[bank].append((data >> (bank * 24 + slot * 12)) & 255)
-            for bank in range(3):
-                base = tile * span + row * 3 * channels
-                expected = [values[base + pair * 6 + bank * 2 + slot]
+                choose_bits = banks.bit_length()
+                for pe_row in range(pe_rows):
+                    selected = (choose >> (pe_row * 4 * choose_bits)) & ((1 << choose_bits) - 1)
+                    if selected >= banks or not ((enable >> selected) & 1):
+                        continue
+                    slot = len(seen[pe_row]) % 2
+                    bank_data = int(data[(selected + 1) * 24 - 1:selected * 24])
+                    seen[pe_row].append((bank_data >> (slot * 12)) & 255)
+            for pe_row in range(pe_rows):
+                base = tile * span + row * pe_rows * channels
+                expected = [values[base + pair * 2 * pe_rows + pe_row * 2 + slot]
                             for pair in range(channels // 2) for slot in range(2)]
-                assert seen[bank] == expected, (load, tile, row, bank, seen[bank], expected)
+                assert seen[pe_row] == expected, (load, tile, row, pe_row,
+                                                 seen[pe_row], expected)
     monitor.cancel()

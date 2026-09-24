@@ -1492,9 +1492,9 @@ class LayerParameters(object):
             self.quantize[f][1] = 4
         self.fully_connected = 1
         # Global dataflow selection: with DATAFLOW="output_stationary" the
-        # dense layer runs with gemm_mode=1 so PE row j is hard-wired to iact
-        # GLB bank j (output-stationary GEMM datapath) instead of relying on
-        # the iact_choose pattern produced by the converter.
+        # dense layer runs with gemm_mode=1. When activation banks are shared
+        # between PE rows, the converter selects each row in turn; otherwise
+        # the GEMM datapath binds row j to activation bank j.
         if getattr(params, "DATAFLOW", "row_stationary") == "output_stationary":
             self.gemm_mode = 1
         self.output_cycles = 1

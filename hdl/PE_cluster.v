@@ -301,7 +301,9 @@ module PE_cluster #(
         wire                             iact_pass_ready_o_w;
         // Approach 2: in GEMM mode override iact_select so row j → GLB bank j
         wire [$clog2(NUM_GLB_IACT+1)-1:0] iact_sel_w;
-        assign iact_sel_w = gemm_mode_i
+        // With fewer activation GLBs than PE rows, the FC converter sends
+        // each row's K slice in turn and encodes the active row in choose.
+        assign iact_sel_w = (gemm_mode_i && NUM_GLB_IACT >= PE_ROWS)
             ? j[$clog2(NUM_GLB_IACT+1)-1:0]
             : iact_choose_i[(i+j*PE_COLUMNS+1)*$clog2(NUM_GLB_IACT+1)-1
                             :(i+j*PE_COLUMNS)*$clog2(NUM_GLB_IACT+1)];

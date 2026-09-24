@@ -390,8 +390,8 @@ reg [1023:0] fst_path;
   wire [15:0]                       iact_glb_writing_cycles;
   reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_x_cl;          // Current cluster column being processed during weight loading.
   reg [$clog2(CLUSTER_ROWS)-1:0] fsm_y_cl;             // Current cluster row being processed during weight loading.
-  reg [$clog2(NUM_GLB_IACT)-1:0] fsm_iact_r;           // Current iact GLB index during iact loading (unused after refactor but kept for compatibility).
-  reg [$clog2(NUM_GLB_WGHT)-1:0] fsm_wght_r;           // Current weight GLB index; increments each DMA word in GET_WGHT, wraps at NUM_GLB_WGHT.
+  reg [((NUM_GLB_IACT > 1) ? $clog2(NUM_GLB_IACT) : 1)-1:0] fsm_iact_r; // Current iact GLB index during iact loading.
+  reg [((NUM_GLB_WGHT > 1) ? $clog2(NUM_GLB_WGHT) : 1)-1:0] fsm_wght_r; // Current weight GLB index during GET_WGHT.
   reg [$clog2(NUM_GLB_PSUM)-1:0] fsm_psum_r;           // Current psum GLB index during psum output; used by PSUM FSM.
   reg [$clog2(NUM_GLB_PSUM)-1:0] fsm_psum_r_q;         // One-cycle delayed fsm_psum_r; compensates for the pipelined RAM read in PSUM_SEND_RESULTS.
   reg results_ready;                                   // Local flag (combinatorial inside always block): AND of all active psum_enable_o or psum_ready_o signals.
@@ -552,6 +552,14 @@ reg [1023:0] fst_path;
   reg iact_converter_en_enc_reg[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];        // Pulse: run one encode step (outputs one word to the iact GLB interface).
   wire [7:0] x_lines_reg;                                                       // Number of x-lines per iact pass (from dma_storage); forwarded to iact_stream_constructor.
   reg send_data_reg;                                                             // One-cycle pulse that triggers the data-flow process to begin streaming to OpenEye_Parallel.
+  // Shared FC activation banks deliver PE rows one after another. Hold the
+  // compute pulse until the last row has written its input SPad.
+  reg [15:0] fc_readout_elapsed;
+  reg fc_compute_pending;
+  // Each row takes `channels` data clocks plus four FSM/RAM turnaround
+  // clocks; the final four clocks cover launch and the PE SPad write stage.
+  wire [15:0] fc_readout_required =
+      (iact_channels_per_pe + 16'd4) * NUM_GLB_WGHT + 16'd4;
   wire store_in_psum;                                                            // When 1: keep psums in psum_buffer for further accumulation instead of sending them out (from dma_storage).
   wire iact_converter_ready_w[CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0];          // Per-converter ready signal; high when the converter has finished its current batch.
 
@@ -1132,6 +1140,8 @@ end
       wght_buffer_rd_addr         <= 0;
       wght_buffer_rd_addr_storage <= 0;
       compute_reg                 <= 0;
+      fc_readout_elapsed          <= 0;
+      fc_compute_pending          <= 0;
       wght_sendable               <= 0;
       flat_help_var_send           = 0;
       for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
@@ -1150,6 +1160,14 @@ end
         end
       end
       compute_reg <= 0;
+      if (send_data_reg && !sending_data)
+        fc_readout_elapsed <= 0;
+      else if (sending_data && fc_readout_elapsed < fc_readout_required)
+        fc_readout_elapsed <= fc_readout_elapsed + 1;
+      if (fc_compute_pending && fc_readout_elapsed >= fc_readout_required) begin
+        compute_reg <= 1;
+        fc_compute_pending <= 0;
+      end
       if (send_data_reg | sending_data) begin
         sending_data <= 1;
         // wghts_per_pe and the RAM address count packed words. One word
@@ -1192,7 +1210,11 @@ end
             wght_buffer_en_r  <= 0;
             wght_enable_i_reg <= 0;
             if (current_cycle == 0) begin
-              compute_reg <= 1;
+              if (fully_connected_layer && (NUM_GLB_IACT < NUM_GLB_WGHT) &&
+                  (fc_readout_elapsed < fc_readout_required))
+                fc_compute_pending <= 1;
+              else
+                compute_reg <= 1;
             end
           end
         end
@@ -1239,6 +1261,8 @@ end
         wght_buffer_en_r    <= 0;
         wght_buffer_rd_addr <= 0;
         compute_reg         <= 0;
+        fc_readout_elapsed  <= 0;
+        fc_compute_pending  <= 0;
         wght_sendable       <= 1;
         flat_help_var_send = 0;
         for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
@@ -1258,6 +1282,8 @@ end
         wght_buffer_rd_addr            <= 0;
         wght_buffer_rd_addr_storage    <= 0;
         compute_reg                    <= 0;
+        fc_readout_elapsed             <= 0;
+        fc_compute_pending             <= 0;
         wght_sendable                  <= 1;
         flat_help_var_send              = 0;
         for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
@@ -3239,7 +3265,8 @@ end
         .bano_cluster_mode_i          (bano_cluster_mode_reg),
         .af_cluster_mode_i            (af_cluster_mode_reg),
         .pooling_cluster_mode_i       ({NUM_GLB_PSUM{1'd0}}),
-        .kernel_per_pe_cluster_i      (kernel_per_pe_cluster_reg[$clog2(NUM_GLB_WGHT)-1:0]),
+        .kernel_per_pe_cluster_i      (kernel_per_pe_cluster_reg[
+                                       ((NUM_GLB_WGHT > 1) ? $clog2(NUM_GLB_WGHT) : 1)-1:0]),
         .iact_x_line_repetitions_i    (iact_x_line_repetitions[3:0]),
         .kernel_size_y_i              (kernel_size_y),
         .input_activations_i          (input_activations),

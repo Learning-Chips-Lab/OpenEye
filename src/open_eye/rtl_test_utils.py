@@ -2456,9 +2456,10 @@ async def check_fc_activation_writes(dut, params, layer, activations):
     """
     channels = layer.used_iact_per_PE
     banks = params.NUM_GLB_IACT
+    pe_rows = params.PEs_Y
     rows = params.Clusters_Y
     mask = (1 << params.IACT_Bitwidth) - 1
-    writes_per_run = banks * channels // 2
+    writes_per_run = pe_rows * channels // 2
     expected_count = writes_per_run * layer.needed_wght_transmissions
     converters = []
     for column in range(params.Clusters_X):
@@ -2492,11 +2493,16 @@ async def check_fc_activation_writes(dut, params, layer, activations):
                     values = [(data >> (slot * params.IACT_WOH_Bitwidth)) & mask for slot in range(2)]
                 index = counts[key]
                 assert index < expected_count, f"Extra FC write in {key}"
-                assert (bank, address) == (index % banks, index // banks), (
+                tile, within_tile = divmod(index, writes_per_run)
+                pair, virtual_row = divmod(within_tile, pe_rows)
+                expected_bank = virtual_row % banks
+                rows_in_bank = (pe_rows + banks - 1 - expected_bank) // banks
+                expected_addr = (tile * (channels // 2) * rows_in_bank
+                                 + pair * rows_in_bank + virtual_row // banks)
+                assert (bank, address) == (expected_bank, expected_addr), (
                     f"FC write destination {key}: bank/address {(bank, address)}, word {index}")
-                tile, pair = divmod(address, channels // 2)
-                source = ((tile * rows + row) * banks * channels
-                          + pair * banks * 2 + bank * 2)
+                source = ((tile * rows + row) * pe_rows * channels
+                          + pair * pe_rows * 2 + virtual_row * 2)
                 expected = [int(activations[i]) & mask if i < len(activations) else 0
                             for i in (source, source + 1)]
                 assert values == expected, (

@@ -205,7 +205,7 @@ module OpenEye_Parallel #(
     input      [                             NUM_GLB_PSUM-1:0] pooling_cluster_mode_i,
     input      [                                          3:0] delay_psum_glb_i,
     input      [                    $clog2(IACT_PER_PE+1)-1:0] input_activations_i,
-    input      [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i,
+    input      [          ((PE_ROWS > 1) ? $clog2(PE_ROWS) : 1)-1:0] kernel_per_pe_cluster_i,
     input      [                                          3:0] iact_x_line_repetitions_i,
     input      [                                          3:0] kernel_size_y_i,
     input      [                             CLUSTERS*PES-1:0] compute_mask_i,
@@ -276,7 +276,7 @@ module OpenEye_Parallel #(
   wire                                                 gemm_mode_i_w;
   wire [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i_w;
   wire [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i_w;
-  wire [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i_w;
+  wire [          ((PE_ROWS > 1) ? $clog2(PE_ROWS) : 1)-1:0] kernel_per_pe_cluster_i_w;
   wire [                             CLUSTERS*PES-1:0] compute_mask_i_w;
   reg  [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_reg;
   reg  [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_reg;
@@ -294,7 +294,7 @@ module OpenEye_Parallel #(
   reg  [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_channels_per_pe_i_reg;
   reg  [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i_reg;
   reg  [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i_reg;
-  reg  [                          $clog2(PE_ROWS)-1:0] kernel_per_pe_cluster_i_reg;
+  reg  [          ((PE_ROWS > 1) ? $clog2(PE_ROWS) : 1)-1:0] kernel_per_pe_cluster_i_reg;
   reg  [                                          3:0] iact_x_line_repetitions_reg;
   reg  [                             CLUSTERS*PES-1:0] compute_mask_i_reg;
   reg                                                  enable_stream_reg;
