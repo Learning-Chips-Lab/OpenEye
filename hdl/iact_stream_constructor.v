@@ -107,6 +107,7 @@ module iact_stream_constructor #(
     input      [                                  3-1:0] stride_y_i,
     input      [                                  4-1:0] y_lines_per_calc,
     input                                                fully_connected_i,
+    input      [                                   10:0] x_pos_inc,
     input      [                                   11:0] needed_iact_buffer_words_i,
     input      [                                  8-1:0] iact_words_per_compute,
     input      [                                    7:0] rd_loop_limit_0,
@@ -472,7 +473,6 @@ module iact_stream_constructor #(
       end
     end
 reg [11:0] iact_values_per_cluster_transmit;
-reg [10:0] x_pos_inc;
 wire [11:0] next_x_value_add;
 assign next_x_value_add = x_range_lower_bound + x_pos_inc;
 
@@ -527,7 +527,6 @@ reg enable_write_to_storage;
         rd_cycle_loop_cnt_3           <= 0;
         rd_cycle_loop_cnt_4           <= 0;
         iact_values_per_cluster_transmit <= 0;
-        x_pos_inc                        <= 0;
         for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
           for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
             mem_data_payload_reg[r][w]  <= 0;
@@ -639,13 +638,7 @@ reg enable_write_to_storage;
               wr_addr_2           <= 0;
               wr_cycle_loop_cnt_0 <= ~0;
               x_pos_in_w_cycle    <= 0;
-              x_range_lower_bound <= x_start;
-              if (fully_connected_i) begin
-                x_pos_inc <= CLUSTER_ROWS * iact_values_per_cluster_transmit;
-              end else begin
-                x_pos_inc <= (((CLUSTERS/2) * PE_X) * stride_x_i);
-              end
-              
+              x_range_lower_bound <= x_start;              
               if (0 == (iacts_in_one_trans - 1)) begin
                 router_cycle        <= 0;
                 iact_router_counter <= iact_router_counter + 1;
@@ -680,8 +673,10 @@ reg enable_write_to_storage;
                       x_range_lower_bound <= x_start;
                     end else begin
                       x_range_lower_bound <= next_x_value_add;
-                      if (x_pos_in_w_cycle == next_x_value_add) begin
-                        enable_write_to_storage <= 1;
+                      if (x_pos_in_w_cycle <= next_x_value_add + iact_values_per_cluster_transmit) begin
+                        if (x_pos_in_w_cycle >= next_x_value_add) begin
+                          enable_write_to_storage <= 1;
+                        end
                       end
                     end
                   end

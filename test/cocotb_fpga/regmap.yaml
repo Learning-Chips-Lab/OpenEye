@@ -61,6 +61,7 @@ registers:
   - {name: fsm_psum_limit, width: 17}
   - {name: cluster_per_conv_cycle, width: ceil(log2((int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS))+1))}
   - {name: iact_converter_max_cycles, width: 8}
+  - {name: iact_x_pos_inc, width: 12}
   - {name: iact_buffer_words_per_write, width: 12}
   - {name: iact_words_per_compute, width: 8}
   - {name: pooling_mode, width: 1}

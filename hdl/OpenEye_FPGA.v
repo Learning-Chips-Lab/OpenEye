@@ -582,6 +582,7 @@ reg [1023:0] fst_path;
   // -----------------------------------------------------------------------
   wire [7:0] iact_converter_max_cycles;             // Total y-lines to process including kernel overlap = iact_size_y + kernel_size - 1 (set in GET_WGHT).
   wire [11:0] iact_buffer_words_per_write;          // Words written per cycle into iact buffer per writing cycle
+  wire [11:0] iact_x_pos_inc;
   wire [7:0] iact_words_per_compute;
   wire [7:0] iact_converter_buffer_addr_max_cycles; // Maximum value of iact_converter_buffer_addr_cycles (from dma_storage).
   reg [7:0] iact_converter_cycles;                  // Current y-line counter [0..iact_converter_max_cycles-1]; drives the sliding window advancement.
@@ -836,7 +837,7 @@ reg [1023:0] fst_path;
   reg [7:0] iact_converter_c;      // Input channel index currently being configured.
   // additional register for fsm
   reg [$clog2(CLUSTER_ROWS+1)-1:0] fsm_row;        // Current CLUSTER_ROW target; steps by needed_y_cls_reg.
-  reg [$clog2(CLUSTER_ROWS+1)-1:0] fsm_row_offset; // Interleave offset; cycles 0..needed_y_cls_reg-1.
+  reg [$clog2(CLUSTER_ROWS*NUM_GLB_WGHT+1)-1:0] fsm_row_offset; // Interleave offset; cycles 0..needed_y_cls_reg-1.
   integer a, b, word, line;
   always @(posedge clk_i, negedge rst_n) begin
   if (!rst_n) begin
@@ -923,9 +924,9 @@ reg [1023:0] fst_path;
         end
         fsm_row <= fsm_row + needed_y_cls_reg;
         if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
-          fsm_row        <= fsm_row_offset + 1;
+          fsm_row        <= fsm_row + 1;
           fsm_row_offset <= fsm_row_offset + NUM_GLB_WGHT;
-          if (fsm_row_offset == NUM_GLB_IACT * (needed_y_cls_reg - 1)) begin
+          if (fsm_row_offset == NUM_GLB_WGHT * (needed_y_cls_reg - 1)) begin
             fsm_row        <= 0;
             fsm_row_offset <= 0;
           end
@@ -2148,7 +2149,6 @@ end
               end
             end
           end
-          //if (fsm_cycle == iact_buffer_words_per_write) begin
           if (fsm_cycle == iact_glb_writing_cycles) begin
             fsm_current_state     <= WAIT_CYCLE;
             fsm_cycle             <= 0;
@@ -2864,6 +2864,7 @@ end
             .stride_y_i                  (stride_y),
             .y_lines_per_calc            (y_lines_per_calc),
             .fully_connected_i           (fully_connected_layer),
+            .x_pos_inc                   (iact_x_pos_inc),
             .needed_iact_buffer_words_i  (iact_buffer_words_per_write),
             .iact_words_per_compute      (iact_words_per_compute),
             .rd_loop_limit_0             (iact_read_limit_0),
@@ -3046,6 +3047,7 @@ end
         .fsm_psum_limit(fsm_psum_limit),
         .cluster_per_conv_cycle(cluster_per_conv_cycle),
         .iact_converter_max_cycles(iact_converter_max_cycles),
+        .iact_x_pos_inc(iact_x_pos_inc),
         .iact_buffer_words_per_write(iact_buffer_words_per_write),
         .iact_words_per_compute(iact_words_per_compute),
         .pooling_mode(pooling_mode),

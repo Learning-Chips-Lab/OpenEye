@@ -200,6 +200,7 @@ class ConvMapper(LayerMapper):
         "fsm_psum_limit": layer_params.fsm_psum_limit,
         "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
         "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
+        "iact_x_pos_inc": layer_params.iact_x_pos_inc,
         "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
         "iact_words_per_compute": layer_params.iact_words_per_compute,
         "pooling_mode": 0,
