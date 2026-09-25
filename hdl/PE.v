@@ -767,6 +767,25 @@ module PE #(
   assign data_set       = iact_set & wght_set;
   assign mux_iact_c_i_w = mux_iact_ready;
 
+  // A compute trigger that arrives while the PE is still reading out the
+  // previous pass (WAIT_TO_SEND_PSUM / SEND_PSUM) used to be dropped, yet it
+  // still cleared the data pipelines, so the next pass's already loaded iacts
+  // were wiped and that pass never computed. Hold such a trigger until the FSM
+  // is back in IDLE and use the held pulse for both the FSM start condition
+  // and the pipeline clear.
+  reg  compute_pending;
+  wire pe_idle    = (current_state_computing == IDLE);
+  wire compute_pe = pe_idle & (compute_i | compute_pending);
+  always @(posedge clk_i, negedge rst_ni) begin
+    if (!rst_ni) begin
+      compute_pending <= 0;
+    end else if (pe_idle) begin
+      compute_pending <= 0;
+    end else if (compute_i) begin
+      compute_pending <= 1;
+    end
+  end
+
   // Unpack iact data SPad output: conditional based on SPARSITY_EN
   generate
     if (SPARSITY_EN == 1) begin : gen_sparse_iact_unpack
@@ -1104,7 +1123,7 @@ module PE #(
               psum_select             <= 1;
             end
             // Check if ready to start computation (data loaded, compute trigger, valid data)
-            if (data_set & compute_i & ((second_spad_words_iact != 0) & (second_spad_words_wght != 0))) begin
+            if (data_set & compute_pe & ((second_spad_words_iact != 0) & (second_spad_words_wght != 0))) begin
               // Initiate computation sequence
               current_state_computing <= LOADING_1;
               mux_iact_ready          <= 0;
@@ -1770,7 +1789,7 @@ module PE #(
               psum_select             <= 1;
             end
             // Start computation when both iact and wght data are loaded
-            if (data_set & compute_i & ((second_spad_words_iact != 0) & (second_spad_words_wght != 0))) begin
+            if (data_set & compute_pe & ((second_spad_words_iact != 0) & (second_spad_words_wght != 0))) begin
               current_state_computing <= LOADING_1;
               mux_iact_ready          <= 0;
               wght_ready_o            <= 0;
@@ -2183,7 +2202,7 @@ module PE #(
   ) wght_data_handler (
       .clk_i    (clk_i),
       .rst_ni   (rst_ni),
-      .compute_i(compute_i | enable_stream_i),
+      .compute_i(compute_pe | enable_stream_i),
 
       .data_i  (wght_data_i),
       .enable_i(wght_enable_i),
@@ -2217,7 +2236,7 @@ module PE #(
   ) iact_data_handler (
       .clk_i    (clk_i),
       .rst_ni   (rst_ni),
-      .compute_i(compute_i | enable_stream_i),
+      .compute_i(compute_pe | enable_stream_i),
 
       .data_i                    (mux_iact_a_o_w),
       .enable_i                  (mux_iact_b_o_w),

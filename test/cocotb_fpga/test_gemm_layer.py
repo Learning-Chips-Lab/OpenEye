@@ -216,13 +216,7 @@ def test_dense_unequal_k_tiles(activation_banks, request, monkeypatch):
         (1, 4, 48, 1, 1),
         (4, 1, 36, 1, 1),
         (1, 4, 48, 2, 2),
-        pytest.param(
-            4, 1, 36, 2, 2,
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="Two-cluster-row Dense produces wrong output across multiple K tiles with one PE row",
-            ),
-        ),
+        (4, 1, 36, 2, 2),
     ],
 )
 @pytest.mark.parametrize("dataflow", ["row_stationary", "output_stationary"])
@@ -244,13 +238,7 @@ def test_dense_unequal_pe_rows(
 
 
 @pytest.mark.parametrize("banks,input_size", [
-    pytest.param(
-        1, 36,
-        marks=pytest.mark.xfail(
-            strict=True,
-            reason="Two-cluster-row Dense produces wrong output across multiple K tiles with one PE row",
-        ),
-    ),
+    (1, 36),
     (4, 48),
 ])
 def test_dense_equal_banks_multirow(banks, input_size, request, monkeypatch):

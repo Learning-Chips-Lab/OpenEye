@@ -837,14 +837,15 @@ def compare_dram_with_ref_mp(f, ref_output, dram, return_dict):
         - Provides detailed error logging of mismatches
     """
     return_dict[f] = True
+    logged = 0
     for x in range(len(ref_output)):
         for y in range(len(ref_output[x])):
             if dram[x][y] != ref_output[x][y]:
-                logger.error(f'Difference found at f = {f}, x = {x}, y= {y}')
-                logger.error(f'ReferenceData: {str(ref_output[x][y])}')
-                logger.error(f'Output Stream: {str(dram[x][y])}')
+                if logged < 64:
+                    logger.error(f'Difference found at f = {f}, x = {x}, y= {y}: '
+                                 f'reference {ref_output[x][y]}, DUT {dram[x][y]}')
+                logged += 1
                 return_dict[f] = False
-                return
           
 def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params):
     """Fill DRAM with reference output data for testing.

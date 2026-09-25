@@ -394,8 +394,20 @@ async def trace_pe_iact(ptp, dut, oep, max_lines=200):
             return "?"
 
     lines = 0
+    last_state = None
     while lines < max_lines:
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        # State changes and compute triggers, so iact writes can be placed
+        # against the PE's own schedule (a load that lands while the PE is
+        # waiting to send psums is easy to lose).
+        cur_state = txt(pe.current_state_computing)
+        cur_key = (cur_state, txt(pe.psum_enable_i), txt(pe.compute_i), txt(pe.psum_ready_o))
+        if cur_key != last_state:
+            logger.info("pestate t=%s st=%s compute_i=%s psum_en_i=%s psum_rdy_i=%s psum_rdy_o=%s data_set=%s words_iact=%s words_wght=%s",
+                        cocotb.utils.get_sim_time("ns"), cur_state, txt(pe.compute_i),
+                        txt(pe.psum_enable_i), txt(pe.psum_ready_i), txt(pe.psum_ready_o), txt(pe.data_set),
+                        txt(pe.second_spad_words_iact), txt(pe.second_spad_words_wght))
+            last_state = cur_key
         en = txt(pe.iact_enable_i)
         if "1" not in en:
             continue
@@ -1818,8 +1830,9 @@ async def trace_psum_capture(ptp, dut, oep, max_lines=400):
             continue
         if state not in (2, 3):
             continue
-        logger.info("psumtrace t=%s st=%d cyc=%s addr=%s rd=%s data_i=%s en_i=%s en_o=%s wen=%s",
+        logger.info("psumtrace t=%s st=%d rr=%s rdy_o=%s rdy_i=%s cyc=%s addr=%s rd=%s data_i=%s en_i=%s en_o=%s wen=%s",
                     cocotb.utils.get_sim_time("ns"), state,
+                    str(pp.results_ready.value), str(pp.psum_ready_o_reg.value), str(pp.psum_ready_i_reg.value),
                     field(pp.fsm_psum_cycle, 0, 8),
                     field(pp.psum_buffer_addr, 0, aw),
                     field(pp.psum_buffer_data_r, 0, 32, 20),

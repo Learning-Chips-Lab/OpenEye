@@ -284,6 +284,17 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     for layer_number, layer in reversed(list(enumerate(model))):
         layer_parameters[max_layers - layer_number - 1] = lp.LayerParameters(layer_parameters, layer, openeye_parameter, layer_number, max_layers)
     layer_parameters = list(reversed(layer_parameters))
+    if os.environ.get("DUMP_LAYER_PARAMS"):
+        for n, lpar in enumerate(layer_parameters):
+            fields = sorted(k for k in vars(lpar) if k.startswith(("iact_read_", "iact_write_"))
+                            or k in ("iact_x_lines", "iact_x_line_repetitions", "iact_words_per_compute",
+                                     "needed_iact_buffer_words", "needed_Iact_writes", "channel_div_trans",
+                                     "used_channels", "diff_iact_layer", "needed_wght_cycles",
+                                     "iact_repetitions_per_write", "iact_converter_max_cycles",
+                                     "buffer_cycles_for_x_iact", "iact_converter_buffer_addr_max_cycles",
+                                     "lower_bound", "upper_bound", "used_Y_cluster", "y_lines_per_calculation",
+                                     "different_kernels_per_calculation", "padding_y", "padding_x", "strideY"))
+            logger.info("layerparams %d: %s", n, " ".join("%s=%s" % (k, getattr(lpar, k)) for k in fields))
     for n, lpar in enumerate(layer_parameters):
         logger.info("layer %d/%d %s: in=%sx%s ch=%s filters=%s send_values_out=%s "
                     "store_in_psum=%s transmissions=%s output_cycles=%s psum_output_words=%s "
