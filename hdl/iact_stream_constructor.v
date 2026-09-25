@@ -94,7 +94,6 @@ module iact_stream_constructor #(
     output reg [       (PES*$clog2(NUM_GLB_IACT+1))-1:0] iact_choose_o,
     input      [             $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                                  8-1:0] needed_iact_channel_cycles_i,
-    input      [                                 14-1:0] fc_size_i,
     input signed [                               12-1:0] iact_x_add_up,
     input signed [                                4-1:0] iact_channels_per_pe_i,
     input      [                                    1:0] channel_div_trans,
