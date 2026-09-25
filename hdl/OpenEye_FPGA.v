@@ -1231,14 +1231,17 @@ end
                 wght_sendable <= 0;
               end
               if (iact_channels_counter == iact_channel_max_cycles -1) begin
-                if (iact_channel_max_cycles != 1) begin
-                  wght_buffer_rd_addr <= wght_buffer_rd_addr_storage;
-                end
-                if (iact_router_counter == needed_y_cls_reg - 1) begin
-                  wght_buffer_rd_addr         <= wght_buffer_rd_addr_storage;
-                  if (iact_cycle_count == {{8 {1'd0}},needed_wght_cycles} - 1) begin
-                    wght_buffer_rd_addr <= wght_buffer_rd_addr;
-                    wght_buffer_rd_addr_storage <= wght_buffer_rd_addr;
+                //if (iact_channel_max_cycles != 1) begin
+                //  wght_buffer_rd_addr <= wght_buffer_rd_addr_storage;
+                //end
+                if (iact_cycle_count == {{8 {1'd0}},needed_wght_cycles} - 1) begin
+                  wght_buffer_rd_addr <= wght_buffer_rd_addr;
+                  wght_buffer_rd_addr_storage <= wght_buffer_rd_addr;
+                  //if (iact_router_counter == needed_y_cls_reg - 1) begin #Fix later, will be used at a later stage of kernel_size > PE_Y
+                  if (1 == 1) begin
+                    wght_buffer_rd_addr         <= wght_buffer_rd_addr_storage;
+                    wght_buffer_rd_addr         <= 0;
+                    wght_buffer_rd_addr_storage <= 0;
                   end
                 end
               end

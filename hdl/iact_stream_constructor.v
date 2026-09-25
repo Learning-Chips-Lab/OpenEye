@@ -624,22 +624,22 @@ reg enable_write_to_storage;
         end else begin
         case (fsm_current_state)
           FSM_INITIALIZE: begin
-            fsm_cycle              <= 0;
+            fsm_cycle               <= 0;
             enable_write_to_storage <= 0;
-            wr_addr_1              <= 0;
-            wr_addr_2              <= 0;
-            router_cycle           <= 0;
-            fsm_current_state      <= GET_PARAMETER;
-            fsm_row_offset         <= 0;
-            channels               <= 0;
-            pos                    <= 0;
-            change_state           <= 0;
-            ram_wr_en              <= 0;
-            ram_wr_en_q            <= 0;
-            ram_wr_addr            <= 0;
-            address_storage        <= -1;
-            iact_router_counter    <= 0;
-            kernel_y_counter       <= 0;
+            wr_addr_1               <= 0;
+            wr_addr_2               <= 0;
+            router_cycle            <= 0;
+            fsm_current_state       <= GET_PARAMETER;
+            fsm_row_offset          <= 0;
+            channels                <= 0;
+            pos                     <= 0;
+            change_state            <= 0;
+            ram_wr_en               <= 0;
+            ram_wr_en_q             <= 0;
+            ram_wr_addr             <= 0;
+            address_storage         <= -1;
+            iact_router_counter     <= 0;
+            kernel_y_counter        <= 0;
             needed_iact_router_cycles_reg <= 0;
             wght_size_x                   <= 0;
             wght_size_y                   <= 0;
@@ -774,9 +774,9 @@ reg enable_write_to_storage;
         wght_size_y                   <= wght_size_y_i;
         if (reset_cycle_i) begin
           fsm_current_state <= FSM_INITIALIZE;
-          fc_store_pe_row <= 0;
-          fc_store_row <= 0;
-          fc_store_pair <= 0;
+          fc_store_pe_row   <= 0;
+          fc_store_row      <= 0;
+          fc_store_pair     <= 0;
           if (fully_connected_i) begin
             ram_wr_addr <= 0;
             ram_wr_en_q <= 0;
