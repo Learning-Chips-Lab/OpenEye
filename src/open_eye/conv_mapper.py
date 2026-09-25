@@ -519,6 +519,7 @@ class ConvMapper(LayerMapper):
         router_cycle = 0          
         # Row-major cluster order (cr*CLUSTER_COLUMNS + cc), matching how
         # OpenEye_Parallel and psum_pipeline index router_mode_psum since 983fc95.
+        y_package_count = 0
         for cl_y in range(params.Clusters_Y):
             for cl_x in range(params.Clusters_X):
                 for router in range(params.Psum_Routers):
@@ -533,21 +534,26 @@ class ConvMapper(LayerMapper):
 
                     else:
                         if((cl_y % layer_params.used_Y_cluster) == 0):
-                            if(params.SERIAL):
-                                line = line + (5 << (params.Psum_Router_Bits * router_cycle))
-                            else:
-                                storage[cl_x][cl_y][router] = 5
+                            if (cl_x + router == 0):
+                                y_package_count = y_package_count + 1
+                            if (y_package_count <= layer_params.Y_Cluster_Packages):
+                                if(params.SERIAL):
+                                    line = line + (5 << (params.Psum_Router_Bits * router_cycle))
+                                else:
+                                    storage[cl_x][cl_y][router] = 5
                         else:
                             if(((cl_y + 1) %  layer_params.used_Y_cluster) == 0):
-                                if(params.SERIAL):
-                                    line = line + (3 << (params.Psum_Router_Bits * router_cycle))
-                                else:
-                                    storage[cl_x][cl_y][router] = 3
+                                if (y_package_count <= layer_params.Y_Cluster_Packages):
+                                    if(params.SERIAL):
+                                        line = line + (3 << (params.Psum_Router_Bits * router_cycle))
+                                    else:
+                                        storage[cl_x][cl_y][router] = 3
                             else:
-                                if(params.SERIAL):
-                                    line = line + (2 << (params.Psum_Router_Bits * router_cycle))
-                                else:
-                                    storage[cl_x][cl_y][router] = 2
+                                if (y_package_count <= layer_params.Y_Cluster_Packages):
+                                    if(params.SERIAL):
+                                        line = line + (2 << (params.Psum_Router_Bits * router_cycle))
+                                    else:
+                                        storage[cl_x][cl_y][router] = 2
                     router_cycle = router_cycle + 1
                     if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Psum_Router_Bits))):
                         router_cycle = 0

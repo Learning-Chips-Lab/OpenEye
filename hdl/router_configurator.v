@@ -146,6 +146,8 @@ module router_configurator #(
   localparam PSUM_CHOOSE_REP_2    = (CLUSTER_ROWS / 2) > 0 ? (CLUSTER_ROWS / 2) : 1;
   localparam PSUM_CHOOSE_REP_4    = (CLUSTER_ROWS / 4) > 0 ? (CLUSTER_ROWS / 4) : 1;
 
+  reg [$clog2(CLUSTER_ROWS+1)-1:0]psum_choose_cycle_counter;
+  reg [$clog2(CLUSTER_ROWS+1)-1:0]psum_choose_counter;
   always @(posedge clk_i, negedge rst_n) begin
     if (!rst_n) begin
       router_mode_iact_o                  <= 0;
@@ -156,6 +158,8 @@ module router_configurator #(
       first_cycle_o                       <= 1;
       psum_choose_i_reg_o                 <= 0;
       iact_channels_counter_psum_router_o <= 0;
+      psum_choose_cycle_counter            <= 0;
+      psum_choose_counter                  <= 1;
     end else begin
       if (compute_reg_i) begin
         if (fully_connected_layer_i) begin
@@ -168,16 +172,27 @@ module router_configurator #(
           // The previous CLUSTER_COLUMNS-replicated form picked the same last
           // row but laid the bits out column-major, so with a row-major index
           // it deselected half the array and pinned its accept-ready to 0.
-          psum_choose_i_reg_o <= {{(CLUSTER_COLUMNS * NUM_GLB_PSUM){1'b1}}, {((CLUSTER_ROWS - 1) * CLUSTER_COLUMNS * NUM_GLB_PSUM){1'b0}}};
+          psum_choose_i_reg_o <= {{PSUM_CHOOSE_ROW_BITS{1'b1}}, {((CLUSTER_ROWS - 1) * PSUM_CHOOSE_ROW_BITS){1'b0}}};
         end else begin
-          if (needed_y_cls_reg_i == 1) begin
-            psum_choose_i_reg_o <= (2 ** (CLUSTER_ROWS * CLUSTER_COLUMNS * NUM_GLB_PSUM) - 1);
-          end else begin
-            psum_choose_i_reg_o <= {{(CLUSTER_COLUMNS * NUM_GLB_PSUM){1'b1}}, {((CLUSTER_ROWS - 1) * CLUSTER_COLUMNS * NUM_GLB_PSUM){1'b0}}};
+          if (CLUSTERS!= 1) begin
+            psum_choose_cycle_counter <= 1;
+            psum_choose_counter       <= 1;
           end
         end
+        
       end
       if (CLUSTERS!= 1) begin
+        if ((psum_choose_cycle_counter != 0) & (psum_choose_cycle_counter != CLUSTER_ROWS + 1)) begin
+          psum_choose_cycle_counter <= psum_choose_cycle_counter + 1;
+          psum_choose_i_reg_o      <= psum_choose_i_reg_o >> PSUM_CHOOSE_ROW_BITS;
+          if (psum_choose_counter == needed_y_cls_reg_i) begin
+            psum_choose_counter                                                                    <= 1;
+            psum_choose_i_reg_o[CLUSTERS*NUM_GLB_PSUM-PSUM_CHOOSE_ROW_BITS+:PSUM_CHOOSE_ROW_BITS] <= {PSUM_CHOOSE_ROW_BITS{1'b1}};
+          end else begin
+            psum_choose_counter                                                                   <= psum_choose_counter + 1;
+            psum_choose_i_reg_o[CLUSTERS*NUM_GLB_PSUM-PSUM_CHOOSE_ROW_BITS+:PSUM_CHOOSE_ROW_BITS] <= {PSUM_CHOOSE_ROW_BITS{1'b0}};
+          end
+        end
         if (fsm_current_state_i == 4'd2) begin // GET_ROUTER_CONFIG
           storage_cycles_router_o  <= 0;
           first_cycle_o            <= 1;
@@ -345,6 +360,8 @@ module router_configurator #(
             end
           end
         end
+      end else begin
+        psum_choose_i_reg_o <= (2 ** (PSUM_CHOOSE_ROW_BITS) - 1);
       end
       if (reset_cycle_i) begin
         router_mode_iact_o              <= 0;

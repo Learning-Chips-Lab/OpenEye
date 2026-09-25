@@ -845,6 +845,7 @@ reg [1023:0] fst_path;
   reg [7:0] iact_converter_c;      // Input channel index currently being configured.
   // additional register for fsm
   reg [$clog2(CLUSTER_ROWS+1)-1:0] fsm_row;        // Current CLUSTER_ROW target; steps by needed_y_cls_reg.
+  reg [$clog2(CLUSTER_ROWS+1)-1:0] fsm_row_temp;   // Temporary next CLUSTER_ROW target.
   reg [$clog2(CLUSTER_ROWS*NUM_GLB_WGHT+1)-1:0] fsm_row_offset; // Interleave offset; cycles 0..needed_y_cls_reg-1.
   integer a, b, word, line;
   always @(posedge clk_i, negedge rst_n) begin
@@ -857,6 +858,7 @@ reg [1023:0] fst_path;
     iact_converter_y              <= 0;
     iact_converter_c              <= 0;
     fsm_row                       <= 0;
+    fsm_row_temp                  <= 0;
     fsm_row_offset                <= 0;
     for (a = 0; a < CLUSTER_COLUMNS; a=a+1) begin
       for (b = 0; b < CLUSTER_ROWS; b=b+1) begin
@@ -932,11 +934,13 @@ reg [1023:0] fst_path;
         end
         fsm_row <= fsm_row + needed_y_cls_reg;
         if (fsm_row + needed_y_cls_reg >= CLUSTER_ROWS) begin
-          fsm_row        <= fsm_row + 1;
+          fsm_row        <= fsm_row_temp + 1;
+          fsm_row_temp   <= fsm_row_temp + 1;
           fsm_row_offset <= fsm_row_offset + NUM_GLB_WGHT;
           if (fsm_row_offset == NUM_GLB_WGHT * (needed_y_cls_reg - 1)) begin
             fsm_row        <= 0;
             fsm_row_offset <= 0;
+            fsm_row_temp   <= 0;
           end
         end
         iact_converter_x <= iact_converter_x + (CLUSTER_COLUMNS * iact_x_per_cluster);
@@ -1238,11 +1242,8 @@ end
                   wght_buffer_rd_addr <= wght_buffer_rd_addr;
                   wght_buffer_rd_addr_storage <= wght_buffer_rd_addr;
                   //if (iact_router_counter == needed_y_cls_reg - 1) begin #Fix later, will be used at a later stage of kernel_size > PE_Y
-                  if (1 == 1) begin
-                    wght_buffer_rd_addr         <= wght_buffer_rd_addr_storage;
-                    wght_buffer_rd_addr         <= 0;
-                    wght_buffer_rd_addr_storage <= 0;
-                  end
+                  wght_buffer_rd_addr         <= 0;
+                  wght_buffer_rd_addr_storage <= 0;
                 end
               end
             end
@@ -3315,7 +3316,7 @@ end
           /*assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
                 iact_ready_o_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen];*/
           assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
-                (iact_ready_o_oep_w == (2**(CLUSTER_COLUMNS*CLUSTER_ROWS*NUM_GLB_IACT))-1);
+                iact_ready_o_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen];
           assign iact_enable_i_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen] =
                 IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_enable_w[g_gen];
           assign iact_data_i_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * TRANS_BITWIDTH_IACT +

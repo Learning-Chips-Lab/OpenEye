@@ -347,10 +347,10 @@ module iact_stream_constructor #(
               if (iact_ready_i != {((NUM_GLB_IACT)) {1'b1}}) begin
                 fsm_enc_cycle <= fsm_enc_cycle;
               end else begin
-                fsm_enc_current_state      <= ENCODE;
-                fsm_enc_cycle              <= 0;
+                fsm_enc_current_state     <= ENCODE;
+                fsm_enc_cycle             <= 0;
                 single_read_half          <= single_output_half;
-                current_iact_cycle_reg     <= ~0;
+                current_iact_cycle_reg    <= ~0;
                 // The window register is pre-decremented so its first advance
                 // lands on row 0. It used to start at ~0 with a +1 step; since
                 // 4cc9e07 it steps by NUM_GLB_IACT, and ~0 + NUM_GLB_IACT wraps

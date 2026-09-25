@@ -434,9 +434,8 @@ class LayerParameters(object):
         self.used_Y_cluster = math.ceil(self.used_PEs_Y/params.PEs_Y)
         # Distribute evenly across available Y clusters
         self.Y_Cluster_Packages = math.floor(params.Clusters_Y/self.used_Y_cluster)
+        self.used_Y_cluster = math.floor((params.Clusters_Y - (self.used_Y_cluster*self.Y_Cluster_Packages))/self.Y_Cluster_Packages) + self.used_Y_cluster
         self.available_X_Cluster_Packages = self.Y_Cluster_Packages * params.Clusters_X
-        # Round up to get final cluster count
-        self.used_Y_cluster = math.ceil(params.Clusters_Y/self.Y_Cluster_Packages)
 
     def calculate_total_computations(self):
         """Calculate the total number of output positions for the convolution operation.
@@ -534,7 +533,7 @@ class LayerParameters(object):
             amount_of_psum_per_cycle = min(params.Clusters_Y*params.Clusters_X*params.PEs_X,8)
             # === MASKING PHASE 1: Handle non-aligned output width ===
             # If output width doesn't evenly divide by PEs_X, some PEs will be unused
-            available_clusters = params.Clusters_X*(math.ceil(params.Clusters_Y/self.used_Y_cluster))
+            available_clusters = params.Clusters_X*self.Y_Cluster_Packages
             calculation_ress = math.floor((available_clusters * params.PEs_X)/self.different_kernels_per_calculation)
             self.psum_add_up = (self.output_shape[1]) % calculation_ress
             self.psum_add_up = calculation_ress - self.psum_add_up
@@ -1286,7 +1285,7 @@ class LayerParameters(object):
 
         # Cycles needed to produce all output rows
         self.output_cycles = math.ceil(self.calc_Y/self.strideY) * self.iact_x_line_repetitions/ self.different_kernels_per_calculation
-        self.psum_output_words = int((self.output_cycles * self.filters * (params.Clusters//self.used_Y_cluster) * params.NUM_GLB_PSUM) / math.ceil(params.DMA_BITWIDTH/32))
+        self.psum_output_words = int((self.output_cycles * self.filters * params.Clusters * params.NUM_GLB_PSUM) / math.ceil(params.DMA_BITWIDTH/32))
         self.psum_x_all_cluster = self.different_kernels_per_calculation * self.iact_x_add_up
         # === Phase 9: Finalize calculations ===
         self.calculate_transmission_cycles(params)

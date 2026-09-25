@@ -165,7 +165,6 @@ module psum_pipeline #(
   reg [7:0] psum_cycle_count;
   reg [7:0] psum_cycle_loop_cnt;
   wire [13:0] calc_filters_wght = filters * needed_wght_cycles;
-  wire [7:0] next_fsm_y_cl_psum = fsm_y_cl_psum + sending_cluster_rows;
   wire [6:0] current_shift;
   wire [8-1:0] quant_offset[QUANT_AMOUNT-1:0];
   wire [7-1:0] quant_exp[QUANT_AMOUNT-1:0];
@@ -470,7 +469,8 @@ module psum_pipeline #(
               end
             end
             if (fsm_psum_cycle > {{10{1'd0}},filters}) begin
-              psum_buffer_en_r    <= 0;
+              psum_enable_i_reg      <= 0;
+              psum_buffer_en_r       <= 0;
               fsm_psum_last_state    <= CALCULATE_PSUM;
               fsm_psum_current_state <= PSUM_GET_RESULTS;
               results_ready          <= 1;
@@ -531,7 +531,6 @@ module psum_pipeline #(
           if (fsm_psum_cycle == filters) begin
             fsm_psum_cycle         <= 0;
             psum_transmitted       <= 1;
-            psum_enable_i_reg      <= 0;
             if ((finished_cycles_psum == needed_cycles - 1)) begin
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
@@ -652,6 +651,7 @@ module psum_pipeline #(
         PSUM_SEND_RESULTS: begin
           if (ready_dma_i == 1) begin
             psum_cycle_loop_cnt_1 <= psum_cycle_loop_cnt_1 + 1;
+            psum_cycle_loop_cnt_2 <= psum_cycle_loop_cnt_2 + 1;
             if (((fsm_psum_cycle >= 1 + fully_connected_layer) & CLUSTER_COLUMNS == 1) |
                 (fsm_psum_cycle >= 1 & CLUSTER_COLUMNS != 1)) begin
               psum_cycle_loop_cnt_0     <= psum_cycle_loop_cnt_0 + 1;
@@ -663,11 +663,11 @@ module psum_pipeline #(
               psum_buffer_data_temp_reg <= psum_readout_src;
             end
             if (data_dma_o_counter != 0) begin
-              data_dma_o_counter <= data_dma_o_counter -1;
-              data_dma_o         <= data_dma_o_q1;
-              data_dma_o_q1      <= data_dma_o_q2;
-              data_dma_o_q2      <= 0;
-              fsm_psum_r_q       <= fsm_psum_r;
+              data_dma_o_counter        <= data_dma_o_counter -1;
+              data_dma_o                <= data_dma_o_q1;
+              data_dma_o_q1             <= data_dma_o_q2;
+              data_dma_o_q2             <= 0;
+              fsm_psum_r_q              <= fsm_psum_r;
               psum_buffer_data_temp_reg <= psum_buffer_data_temp_reg;
             end
             psum_buffer_en_r   <= 0;
@@ -676,7 +676,7 @@ module psum_pipeline #(
             data_dma_o_q2      <= data_dma_o_q1;
             data_dma_o_counter <= 0;
             fsm_psum_r         <= fsm_psum_r + PSUM_OUTPUT_WORDS;
-            if ((fsm_psum_r ==(NUM_GLB_PSUM - PSUM_OUTPUT_WORDS)) | fully_connected_layer) begin
+            if ((fsm_psum_r == (NUM_GLB_PSUM - PSUM_OUTPUT_WORDS)) | fully_connected_layer) begin
               fsm_psum_r    <= 0;
               fsm_x_cl_psum <= fsm_x_cl_psum + 1;
               if (fsm_x_cl_psum == CLUSTER_COLUMNS - 1) begin
@@ -691,9 +691,9 @@ module psum_pipeline #(
                 // cr=0 throughout CALCULATE_PSUM/PSUM_GET_RESULTS). So results
                 // live in row 0's bank, not CLUSTER_ROWS-1; keep fsm_y_cl_psum
                 // at 0 here (matching the write side) instead of sweeping.
-                fsm_y_cl_psum <= fully_connected_layer ? 0 : (fsm_y_cl_psum + needed_y_cls_reg);
-                if ((fsm_y_cl_psum >= CLUSTER_ROWS - needed_y_cls_reg) | fully_connected_layer) begin
-                  fsm_y_cl_psum       <= 0;
+                fsm_y_cl_psum <= fully_connected_layer ? 0 : (fsm_y_cl_psum + 1);
+                if ((fsm_y_cl_psum >= CLUSTER_ROWS - 1) | fully_connected_layer) begin
+                  fsm_y_cl_psum         <= 0;
                   psum_cycle_loop_cnt_1 <= 0;
                   for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                     for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin

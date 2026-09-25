@@ -573,7 +573,7 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
             kernel_counter = 0
             x_cor = les.x_start
             y_cor = les.y_start
-            for cl_y in range(params.Clusters_Y//layer_params.used_Y_cluster) :
+            for cl_y in range(params.Clusters_Y) :
                 for cl_x in range(params.Clusters_X) :
                     if (x_cor >= layer_params.psum_size_x+layer_params.add_up) :
                         if (kernel_counter < layer_params.different_kernels_per_calculation - 1) :
@@ -584,16 +584,19 @@ def calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref
                         temp_string = ""
                         for _ in range(words_per_transmission) :
                                 array.append((x_cor,y_cor,filter))
-                                if (kernel_counter < layer_params.different_kernels_per_calculation) :
-                                    if((x_cor < layer_params.psum_size_x) & (y_cor < layer_params.psum_size_y)) :
-                                        try:
-                                            temp_string =gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],params.DATA_PSUM_BITWIDTH) +  temp_string
-                                        except:
+                                if (cl_y%layer_params.used_Y_cluster == 0):
+                                    if (kernel_counter < layer_params.different_kernels_per_calculation) :
+                                        if((x_cor < layer_params.psum_size_x) & (y_cor < layer_params.psum_size_y)) :
+                                            try:
+                                                temp_string =gtu.to_twos_complement_string(calculated_results[filter][x_cor][y_cor],params.DATA_PSUM_BITWIDTH) +  temp_string
+                                            except:
+                                                temp_string = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH) + temp_string
+                                        else:
                                             temp_string = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH) + temp_string
-                                    else:
-                                        temp_string = gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH) + temp_string
 
-                                    x_cor = x_cor + 1
+                                        x_cor = x_cor + 1
+                                else:
+                                    temp_string =gtu.to_twos_complement_string(0,params.DATA_PSUM_BITWIDTH) +  temp_string
                         file_dma_ref.write(temp_string.zfill(params.DMA_BITWIDTH) + "\n")
             filter = filter + 1
         if ((filter >= layer_params.filters)) :
