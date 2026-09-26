@@ -273,6 +273,8 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         cocotb.start_soon(rtl_test_utils.trace_bias_load(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_CONVERTER"):
         cocotb.start_soon(rtl_test_utils.trace_converter(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_WB_EVENTS"):
+        cocotb.start_soon(rtl_test_utils.trace_wb_events(ptp, dut))
     if os.environ.get("TRACE_ALL_PE"):
         cocotb.start_soon(rtl_test_utils.trace_all_pe_states(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_PE_IACT"):
@@ -288,14 +290,17 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     layer_parameters = list(reversed(layer_parameters))
     if os.environ.get("DUMP_LAYER_PARAMS"):
         for n, lpar in enumerate(layer_parameters):
-            fields = sorted(k for k in vars(lpar) if k.startswith(("iact_read_", "iact_write_"))
+            fields = sorted(k for k in vars(lpar) if k.startswith(("iact_read_", "iact_write_", "psum_pagu_"))
                             or k in ("iact_x_lines", "iact_x_line_repetitions", "iact_words_per_compute",
                                      "needed_iact_buffer_words", "needed_Iact_writes", "channel_div_trans",
                                      "used_channels", "diff_iact_layer", "needed_wght_cycles",
                                      "iact_repetitions_per_write", "iact_converter_max_cycles",
                                      "buffer_cycles_for_x_iact", "iact_converter_buffer_addr_max_cycles",
                                      "lower_bound", "upper_bound", "used_Y_cluster", "y_lines_per_calculation",
-                                     "different_kernels_per_calculation", "padding_y", "padding_x", "strideY"))
+                                     "different_kernels_per_calculation", "padding_y", "padding_x", "strideY",
+                                     "used_X_cluster", "iact_x_add_up", "psum_size_y", "psum_size_x", "filters",
+                                     "fsm_psum_limit", "used_psum_per_PE", "iact_size_x", "iact_size_y",
+                                     "diff_iact_layer_next_layer", "psum_storage_cycles"))
             logger.info("layerparams %d: %s", n, " ".join("%s=%s" % (k, getattr(lpar, k)) for k in fields))
     for n, lpar in enumerate(layer_parameters):
         logger.info("layer %d/%d %s: in=%sx%s ch=%s filters=%s send_values_out=%s "

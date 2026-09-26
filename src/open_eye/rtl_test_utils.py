@@ -1192,6 +1192,19 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
     if errors_logged > 16:
         logger.error("... and %d further Iact storage mismatches.", errors_logged - 16)
 
+    if os.environ.get("DUMP_IACT_IMAGE"):
+        # Whole expected image next to the DUT contents, bytes low to high, plus
+        # two addresses past the expected image to show stray writes.
+        rows = (len(expected) + oep.IACT_RAM_CELLS - 1) // oep.IACT_RAM_CELLS + 2
+        for addr in range(rows):
+            for cell in range(oep.IACT_RAM_CELLS):
+                index = addr * oep.IACT_RAM_CELLS + cell
+                ref_word = expected[index] if index < len(expected) else None
+                dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[half_offset + addr])
+                def fmt(w):
+                    return "--------" if w is None else " ".join("%02x" % ((w >> (8 * i)) & 0xFF) for i in range(8))
+                logger.info("iactimg addr=%d cell=%d ref=[%s] dut=[%s]%s", addr, cell,
+                            fmt(ref_word), fmt(dut_word), "" if ref_word == dut_word else " <<")
     if error_found:
         _log_iact_value_comparison(dut, oep, expected, cells_per_group, half_offset)
         _log_iact_buffer_occupancy(dut, oep)
@@ -1856,6 +1869,42 @@ async def trace_conv_writeback(ptp, dut, max_lines=160):
                     words(pp.quantized_value_flat, 8),
                     [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))],
                     words(dut.iact_buffer_data_w, 64))
+        lines += 1
+
+
+async def trace_wb_events(ptp, dut, max_lines=300):
+    """Trace the interlayer write-back counters (opt-in: TRACE_WB_EVENTS).
+
+    One line per clock while RECEIVE_PSUMS_TO_IACT is active and either a RAM
+    write enable is set or the psum FSM is reading (SEND_PSUM_TO_IACT). Shows
+    the pixel counter, the transposition counter and the storage counter so a
+    write that fires at the wrong pixel count is visible.
+    """
+    pp = dut.psum_pipeline_inst
+
+    def value(signal):
+        try:
+            return int(signal.value)
+        except ValueError:
+            return "X"
+
+    lines = 0
+    last = None
+    while lines < max_lines:
+        await FallingEdge(dut.clk_i)
+        if value(dut.fsm_current_state) != 11:
+            continue
+        en = [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))]
+        key = (value(pp.fsm_psum_current_state), value(dut.iact_to_psum_x_pos_counter),
+               value(dut.iact_to_psum_storage_counter), value(dut.iact_to_psum_trans_counter), tuple(en))
+        if key == last:
+            continue
+        last = key
+        logger.info("wbtrace t=%s psum_st=%s psum_cyc=%s fsm_cyc=%s xpos=%s trans=%s stor=%s shifting=%s en_w=%s",
+                    cocotb.utils.get_sim_time("ns"), value(pp.fsm_psum_current_state),
+                    value(pp.fsm_psum_cycle), value(dut.fsm_cycle),
+                    value(dut.iact_to_psum_x_pos_counter), value(dut.iact_to_psum_trans_counter),
+                    value(dut.iact_to_psum_storage_counter), value(dut.iact_to_psum_start_shifting), en)
         lines += 1
 
 
