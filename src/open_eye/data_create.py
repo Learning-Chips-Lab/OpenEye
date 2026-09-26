@@ -80,6 +80,13 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             # "Convolution_Single" never reaches.
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, filters), strides = strides))
+        case "Conv_Pool_Conv":
+            # Conv, 2x2 max-pool, conv: the smallest net whose pooling output is
+            # written back into the iact buffer and read by a conv layer, as in
+            # the MNIST net, without its 28x28 input.
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
+            model.add(tf.keras.layers.MaxPooling2D(pool_size = (2, 2), strides=(2, 2), padding="valid"))
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(math.ceil(inputsize_x/2), math.ceil(inputsize_y/2), filters), strides = strides))
         case "Depthwise_Convolution":
             model.add(tf.keras.layers.DepthwiseConv2D((kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
         case "GEMM":
