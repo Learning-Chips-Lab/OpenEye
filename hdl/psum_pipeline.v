@@ -580,7 +580,10 @@ module psum_pipeline #(
                   end
                 end
               end
-              psum_ready_i_reg <= 0;
+              // Keep psum_ready_i_reg high between rounds. The delay cluster
+              // delays it by 22 cycles on its way to the PEs, so dropping it here
+              // leaves a stale "ready" in the chain when the next round starts
+              // 16 cycles later and results_ready fires before the PEs have run.
             end
           end
         end
