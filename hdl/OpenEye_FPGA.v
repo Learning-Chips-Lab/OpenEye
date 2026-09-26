@@ -2313,7 +2313,12 @@ end
               iact_to_psum_trans_counter  <= 1;
               iact_to_psum_shift_reg      <= iact_to_psum_mux_reg;
               iact_to_psum_start_shifting <= 1;
-              if (iact_to_psum_x_pos_counter >= iact_size_x - 1) begin
+              // A row is read as iact_x_add_up pixels (whole lanes of every used
+              // cluster); only the first iact_size_x are activations. Wrap the
+              // counter at the row period so the padding pixels are dropped by
+              // the (x_pos < iact_size_x) test above instead of being written as
+              // an extra word row.
+              if (iact_to_psum_x_pos_counter >= iact_x_add_up - 1) begin
                 iact_to_psum_x_pos_counter <= 0;
               end
             end            
