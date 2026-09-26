@@ -418,6 +418,68 @@ async def trace_pe_iact(ptp, dut, oep, max_lines=200):
         lines += 1
 
 
+async def trace_all_pe_states(ptp, dut, oep, max_lines=600):
+    """Per-change trace of every PE's FSM state and psum_ready_o (opt-in: TRACE_ALL_PE=t0,t1).
+
+    One line per cluster whenever any of its PEs changes state or ready flag,
+    restricted to sim time [t0, t1] ns. Each PE is printed as <state hex><ready>
+    in column-major order (col0 row0..2, col1 row0..2, ...). Shows which PE is
+    still computing when the psum collector decides all PEs are ready.
+    """
+    try:
+        t0, t1 = [float(v) for v in os.environ.get("TRACE_ALL_PE", "0,1e9").split(",")]
+    except ValueError:
+        t0, t1 = 0.0, 1e9
+    pes = {}
+    clusters = {}
+    for cx in range(oep.Clusters_X):
+        for cy in range(oep.Clusters_Y):
+            try:
+                base = dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster.pe_cluster
+                pes[(cx, cy)] = [base.gen_X[c].gen_Y[r].pe
+                                 for c in range(oep.PEs_X) for r in range(oep.PEs_Y)]
+                clusters[(cx, cy)] = dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
+            except Exception as exc:
+                logger.error("trace_all_pe_states: cluster (%d,%d) not reachable (%s)", cx, cy, type(exc).__name__)
+                return
+
+    def one(pe):
+        try:
+            st = int(pe.current_state_computing.value)
+        except ValueError:
+            return "x"
+        try:
+            rdy = str(pe.psum_ready_o.value)
+        except Exception:
+            rdy = "?"
+        return "%x%s" % (st, rdy)
+
+    last = {}
+    lines = 0
+    while lines < max_lines:
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        now = cocotb.utils.get_sim_time("ns")
+        if now < t0:
+            continue
+        if now > t1:
+            return
+        for key, lst in pes.items():
+            cl = clusters[key]
+            def bits(name):
+                try:
+                    return str(getattr(cl, name).value)
+                except Exception:
+                    return "?"
+            cur = " ".join(one(pe) for pe in lst) + " | pe_en_out=%s ext_en=%s rdy_in=%s dly_rdy=%s pe_rdy_out=%s top_rdy=%s" % (
+                bits("pe_router_psum_enable_out"), bits("ext_mem_psum_enable_o"),
+                bits("pe_router_psum_ready_in"), bits("delay_cluster_ready_out"),
+                bits("pe_router_psum_ready_out"), bits("ready_src_top_psum"))
+            if last.get(key) != cur:
+                last[key] = cur
+                logger.info("allpe t=%s c(%d,%d) %s", now, key[0], key[1], cur)
+                lines += 1
+
+
 async def trace_converter(ptp, dut, oep, max_lines=260):
     """Per-cycle trace of one iact converter (opt-in: TRACE_CONVERTER=cx,cy).
 
