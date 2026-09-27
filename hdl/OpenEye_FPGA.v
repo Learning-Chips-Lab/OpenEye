@@ -2520,8 +2520,13 @@ end
             iact_buffer_en_w[a] <= 0;
           end
           if (MAX_POOLING == 1) begin
+            // Only the first psum_size_x pushes of a pass are pooled pixels. The
+            // final pass keeps pushing until a whole RAM row is complete, and
+            // those pad pixels must be 0 (the layout the next layer expects),
+            // not the -128 the running-max buffer starts from.
             for (a = 0; a < 4; a = a + 1) begin
-              iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+((DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM)/2)+(8*a)+:8] <= pooling_buffer_old_q[a];
+              iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+((DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM)/2)+(8*a)+:8] <=
+                  (fsm_cycle < psum_size_x) ? pooling_buffer_old_q[a] : 8'd0;
             end
             iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+(DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM/2)-1:0] <= iact_buffer_data_w >> 32;
           end
