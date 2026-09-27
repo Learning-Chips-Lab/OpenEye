@@ -1943,13 +1943,19 @@ async def trace_ram_writes(ptp, dut, max_lines=200):
 
 
 async def trace_pooling(ptp, dut, max_lines=400):
-    """Trace the max-pooling FSM (opt-in: TRACE_POOLING).
+    """Trace the max-pooling FSM (opt-in: TRACE_POOLING=1 or TRACE_POOLING=t0,t1).
 
     One line per clock while fsm_current_state is MAXPOOLING_READ (12),
     MAXPOOLING_SEND (13) or MAXPOOLING_WAIT (14): counters, the RAM read word,
     the two comparator stages, the running max and the write bus. Unknown or
-    unreadable elements print as '?'.
+    unreadable elements print as '?'. A run with several pooling layers can
+    exhaust max_lines on the first one; pass t0,t1 (ns) to skip ahead to a
+    later occurrence instead of only lengthening max_lines.
     """
+    try:
+        t0, t1 = [float(v) for v in os.environ.get("TRACE_POOLING", "0,1e12").split(",")]
+    except ValueError:
+        t0, t1 = 0.0, 1e12
     def value(sig):
         try:
             return int(sig.value)
@@ -1987,6 +1993,11 @@ async def trace_pooling(ptp, dut, max_lines=400):
     in_pool = False
     while lines < max_lines:
         await FallingEdge(dut.clk_i)
+        now = cocotb.utils.get_sim_time("ns")
+        if now < t0:
+            continue
+        if now > t1:
+            return
         st = value(dut.fsm_current_state)
         if st not in (12, 13, 14):
             in_pool = False
@@ -1998,8 +2009,9 @@ async def trace_pooling(ptp, dut, max_lines=400):
                 logger.info("poolram addr=%d %s", addr, " | ".join(
                     ("--------" if w is None else " ".join("%02x" % ((w >> (8 * i)) & 0xFF) for i in range(8)))
                     for w in (_ram_word(dut.BUFFER_A[c].iact_layer_buffer.impl.mem[addr]) for c in range(4))))
+        rb = dut.ring_buffer_pipelined_inst
         logger.info("pooltrace t=%s st=%s cyc=%s cnv=%s fin=%s sel=%s sel2=%s addr0=%s rd=%s "
-                    "s1=%s s2=%s old=%s new=%s en_w=%s wbus=[%s]",
+                    "s1=%s s2=%s old=%s new=%s en_w=%s wr=%s rdp=%s rdy=%s spts=%s lim=%s wbus=[%s]",
                     cocotb.utils.get_sim_time("ns"), st, value(dut.fsm_cycle),
                     value(dut.iact_converter_cycles), value(dut.finished_cycles_iact),
                     value(dut.select_ram_counter), value(dut.select_ram_counter2),
@@ -2007,6 +2019,8 @@ async def trace_pooling(ptp, dut, max_lines=400):
                     arr("pooling_stage_1", 8), arr("pooling_stage_2", 4),
                     arr("pooling_buffer_old", 4), arr("pooling_buffer_new", 4),
                     [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))],
+                    value(rb.wr_ptr), value(rb.rd_ptr), value(dut.pooling_buffer_enable),
+                    value(dut.set_pointer_start), value(rb.limit_i),
                     bytes_w(dut.iact_buffer_data_w))
         lines += 1
 
