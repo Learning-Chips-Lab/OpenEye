@@ -2048,6 +2048,14 @@ end
               select_ram_counter2 <= 0;
               buffer_addr_temp_reg <= -1;
               iact_buffer_data_w   <= 0;
+              // pooling_buffer_enable above pulses every layer's GET_QUANTIZE
+              // (not just pooling ones), which drives the running-max ring
+              // buffer's ready_i and drifts its read/write pointers before
+              // this layer's own pooling pass ever starts. The single
+              // set_pointer_start reset in MAXPOOLING_SEND only fires when
+              // leaving a pooling layer, so it does not protect against that
+              // drift. Reset again right here, before the first real push.
+              set_pointer_start    <= 1;
             end
           end
         end
@@ -2418,6 +2426,9 @@ end
         // -------------------------------------------------------------------
         MAXPOOLING_READ: begin
           //Counting and setting inputs for reading values
+
+          // One-cycle pulse from GET_QUANTIZE above; clear it once seen.
+          set_pointer_start <= 0;
 
           //Ending Condition
           if ((iact_converter_cycles == (psum_size_x * 2) & (AVERAGE_POOLING == 0)) |
