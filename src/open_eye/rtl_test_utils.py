@@ -1900,11 +1900,114 @@ async def trace_wb_events(ptp, dut, max_lines=300):
         if key == last:
             continue
         last = key
-        logger.info("wbtrace t=%s psum_st=%s psum_cyc=%s fsm_cyc=%s xpos=%s trans=%s stor=%s shifting=%s en_w=%s",
-                    cocotb.utils.get_sim_time("ns"), value(pp.fsm_psum_current_state),
+        try:
+            addr0 = hex(int(dut.iact_buffer_addr_reg[0].value))
+        except Exception:
+            addr0 = "?"
+        logger.info("wbtrace addr0=%s t=%s psum_st=%s psum_cyc=%s fsm_cyc=%s xpos=%s trans=%s stor=%s shifting=%s en_w=%s",
+                    addr0, cocotb.utils.get_sim_time("ns"), value(pp.fsm_psum_current_state),
                     value(pp.fsm_psum_cycle), value(dut.fsm_cycle),
                     value(dut.iact_to_psum_x_pos_counter), value(dut.iact_to_psum_trans_counter),
                     value(dut.iact_to_psum_storage_counter), value(dut.iact_to_psum_start_shifting), en)
+        lines += 1
+
+
+async def trace_ram_writes(ptp, dut, max_lines=200):
+    """Log every clock in which any iact RAM write enable is set (opt-in: TRACE_RAM_WRITES).
+
+    Shows which main-FSM state performs each write to the activation buffer, the
+    cell-0 address it lands on, and the low word of the write bus, so a stray
+    write that clobbers an earlier layer's output can be attributed to a state.
+    """
+    def value(sig):
+        try:
+            return int(sig.value)
+        except Exception:
+            return "?"
+
+    lines = 0
+    while lines < max_lines:
+        await FallingEdge(dut.clk_i)
+        en = [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))]
+        if 1 not in en:
+            continue
+        try:
+            wdata = hex(int(str(dut.iact_buffer_data_w.value)[-64:], 2))
+        except Exception:
+            wdata = "?"
+        logger.info("ramwrite t=%s fsm=%s last=%s addr0=%s choose=%s en=%s wdata_cell0=%s",
+                    cocotb.utils.get_sim_time("ns"), value(dut.fsm_current_state),
+                    value(dut.fsm_last_state), value(dut.iact_buffer_addr_reg[0]),
+                    value(dut.choose_iact_buffer), en, wdata)
+        lines += 1
+
+
+async def trace_pooling(ptp, dut, max_lines=400):
+    """Trace the max-pooling FSM (opt-in: TRACE_POOLING).
+
+    One line per clock while fsm_current_state is MAXPOOLING_READ (12),
+    MAXPOOLING_SEND (13) or MAXPOOLING_WAIT (14): counters, the RAM read word,
+    the two comparator stages, the running max and the write bus. Unknown or
+    unreadable elements print as '?'.
+    """
+    def value(sig):
+        try:
+            return int(sig.value)
+        except Exception:
+            return "?"
+
+    def hexv(sig):
+        try:
+            t = str(sig.value)
+            return hex(int(t, 2)) if set(t) <= {"0", "1"} else t
+        except Exception:
+            return "?"
+
+    def bytes_w(sig):
+        # 32 bytes of the write bus, low to high, as hex pairs
+        try:
+            t = str(sig.value)
+            if not set(t) <= {"0", "1"}:
+                return "X..."
+            v = int(t, 2)
+            return " ".join("%02x" % ((v >> (8 * i)) & 0xFF) for i in range(len(t) // 8))
+        except Exception:
+            return "?"
+
+    def arr(name, n):
+        out = []
+        for i in range(n):
+            try:
+                out.append(value(getattr(dut, name)[i]))
+            except Exception:
+                out.append("?")
+        return out
+
+    lines = 0
+    in_pool = False
+    while lines < max_lines:
+        await FallingEdge(dut.clk_i)
+        st = value(dut.fsm_current_state)
+        if st not in (12, 13, 14):
+            in_pool = False
+            continue
+        if not in_pool:
+            in_pool = True
+            logger.info("poolstart t=%s", cocotb.utils.get_sim_time("ns"))
+            for addr in range(4):
+                logger.info("poolram addr=%d %s", addr, " | ".join(
+                    ("--------" if w is None else " ".join("%02x" % ((w >> (8 * i)) & 0xFF) for i in range(8)))
+                    for w in (_ram_word(dut.BUFFER_A[c].iact_layer_buffer.impl.mem[addr]) for c in range(4))))
+        logger.info("pooltrace t=%s st=%s cyc=%s cnv=%s fin=%s sel=%s sel2=%s addr0=%s rd=%s "
+                    "s1=%s s2=%s old=%s new=%s en_w=%s wbus=[%s]",
+                    cocotb.utils.get_sim_time("ns"), st, value(dut.fsm_cycle),
+                    value(dut.iact_converter_cycles), value(dut.finished_cycles_iact),
+                    value(dut.select_ram_counter), value(dut.select_ram_counter2),
+                    hexv(dut.iact_buffer_addr_reg[0]), hexv(dut.iact_buffer_data_r),
+                    arr("pooling_stage_1", 8), arr("pooling_stage_2", 4),
+                    arr("pooling_buffer_old", 4), arr("pooling_buffer_new", 4),
+                    [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))],
+                    bytes_w(dut.iact_buffer_data_w))
         lines += 1
 
 

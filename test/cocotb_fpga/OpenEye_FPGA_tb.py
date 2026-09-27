@@ -273,6 +273,10 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         cocotb.start_soon(rtl_test_utils.trace_bias_load(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_CONVERTER"):
         cocotb.start_soon(rtl_test_utils.trace_converter(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_RAM_WRITES"):
+        cocotb.start_soon(rtl_test_utils.trace_ram_writes(ptp, dut))
+    if os.environ.get("TRACE_POOLING"):
+        cocotb.start_soon(rtl_test_utils.trace_pooling(ptp, dut))
     if os.environ.get("TRACE_WB_EVENTS"):
         cocotb.start_soon(rtl_test_utils.trace_wb_events(ptp, dut))
     if os.environ.get("TRACE_ALL_PE"):
@@ -367,7 +371,8 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
             if isinstance(x, list):
                 return [_ramp(v, ctr) for v in x]
             ctr[0] += 1
-            return ctr[0]
+            # Wrap so large inputs stay inside int8; small inputs are unchanged.
+            return (ctr[0] - 1) % 100 + 1
         dram.fmap[0] = _ramp(dram.fmap[0])
         logger.info("OPENEYE_RAMP_IACTS: layer-0 input set to 1..N in flat order")
     if os.environ.get("OPENEYE_BIAS_STEP"):
