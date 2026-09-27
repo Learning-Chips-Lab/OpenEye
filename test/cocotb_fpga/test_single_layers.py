@@ -97,6 +97,9 @@ def test_single_conv_layer(
         sim_build=target_dir,
         testcase='start_test_fpga',
         defines={"NO_TRACE": "TRUE"},
+        # The RTL builds either max or average pooling (default: average). The
+        # MNIST net pools with MaxPooling2D, so select the max-pool hardware.
+        parameters={"MAX_POOLING": 1, "AVERAGE_POOLING": 0},
         force_compile=True,
         waves=True,
         simulator="icarus",
