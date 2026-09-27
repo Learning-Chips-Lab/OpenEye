@@ -277,6 +277,8 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         cocotb.start_soon(rtl_test_utils.trace_ram_writes(ptp, dut))
     if os.environ.get("TRACE_POOLING"):
         cocotb.start_soon(rtl_test_utils.trace_pooling(ptp, dut, max_lines=4000))
+    if os.environ.get("TRACE_PE_PASSES"):
+        cocotb.start_soon(rtl_test_utils.trace_pe_pass_counts(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_WB_EVENTS"):
         cocotb.start_soon(rtl_test_utils.trace_wb_events(ptp, dut))
     if os.environ.get("TRACE_ALL_PE"):

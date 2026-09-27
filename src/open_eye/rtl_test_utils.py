@@ -370,16 +370,20 @@ fsm_probe_samples = [0]
 fsm_state_trace = []
 
 
-async def trace_pe_iact(ptp, dut, oep, max_lines=200):
-    """Per-cycle iact trace at one PE (opt-in: TRACE_PE_IACT=cx,cy,col,row).
+async def trace_pe_iact(ptp, dut, oep, max_lines=2000):
+    """Per-cycle iact trace at one PE (opt-in: TRACE_PE_IACT=cx,cy,col,row[,t0,t1]).
 
     Logs every cycle any iact lane is valid at the PE: which lane the PE
     selects, lane valid/ready, the lane data, and whether the PE's iact data
     SPAD is written. Shows whether a selected PE sees the words at all and,
-    if so, why it does not store them.
+    if so, why it does not store them. An optional t0,t1 (ns) window skips
+    ahead past earlier, unrelated layers so max_lines lasts through the one
+    of interest.
     """
     try:
-        cx, cy, col, row = [int(v) for v in os.environ.get("TRACE_PE_IACT", "0,0,0,0").split(",")]
+        parts = [float(v) for v in os.environ.get("TRACE_PE_IACT", "0,0,0,0").split(",")]
+        cx, cy, col, row = (int(v) for v in parts[:4])
+        t0, t1 = (parts[4], parts[5]) if len(parts) >= 6 else (0.0, 1e12)
         pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
               .pe_cluster.gen_X[col].gen_Y[row].pe)
         sp = pe.iact_data_SPad
@@ -397,6 +401,11 @@ async def trace_pe_iact(ptp, dut, oep, max_lines=200):
     last_state = None
     while lines < max_lines:
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        now = cocotb.utils.get_sim_time("ns")
+        if now < t0:
+            continue
+        if now > t1:
+            return
         # State changes and compute triggers, so iact writes can be placed
         # against the PE's own schedule (a load that lands while the PE is
         # waiting to send psums is easy to lose).
@@ -1940,6 +1949,59 @@ async def trace_ram_writes(ptp, dut, max_lines=200):
                     value(dut.fsm_last_state), value(dut.iact_buffer_addr_reg[0]),
                     value(dut.choose_iact_buffer), en, wdata)
         lines += 1
+
+
+async def trace_pe_pass_counts(ptp, dut, oep, max_lines=200000):
+    """Count how many times each PE completes a compute pass (opt-in: TRACE_PE_PASSES=t0,t1).
+
+    A "pass" is one entry into SEND_PSUM (current_state_computing rising edge
+    into state 8). Watches every PE in every cluster for the given sim-time
+    window and prints the final per-PE tally at t1 (or when max_lines of
+    polling is exhausted). Unlike a state snapshot, this tells whether some
+    PE is missing an entire pass (e.g. one channel group's contribution)
+    rather than just lagging momentarily.
+    """
+    try:
+        t0, t1 = [float(v) for v in os.environ.get("TRACE_PE_PASSES", "0,1e9").split(",")]
+    except ValueError:
+        t0, t1 = 0.0, 1e9
+    pes = {}
+    for cx in range(oep.Clusters_X):
+        for cy in range(oep.Clusters_Y):
+            try:
+                base = dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster.pe_cluster
+                for c in range(oep.PEs_X):
+                    for r in range(oep.PEs_Y):
+                        pes[(cx, cy, c, r)] = base.gen_X[c].gen_Y[r].pe
+            except Exception as exc:
+                logger.error("trace_pe_pass_counts: cluster (%d,%d) not reachable (%s)", cx, cy, type(exc).__name__)
+                return
+
+    def state(pe):
+        try:
+            return int(pe.current_state_computing.value)
+        except ValueError:
+            return None
+
+    counts = {k: 0 for k in pes}
+    last = {k: None for k in pes}
+    lines = 0
+    while lines < max_lines:
+        await FallingEdge(dut.clk_i)
+        now = cocotb.utils.get_sim_time("ns")
+        if now < t0:
+            continue
+        if now > t1:
+            break
+        for key, pe in pes.items():
+            st = state(pe)
+            if st == 8 and last[key] != 8:
+                counts[key] += 1
+            last[key] = st
+        lines += 1
+    for key in sorted(counts):
+        cx, cy, c, r = key
+        logger.info("passcount c(%d,%d) col=%d row=%d passes=%d", cx, cy, c, r, counts[key])
 
 
 async def trace_pooling(ptp, dut, max_lines=400):
