@@ -335,9 +335,11 @@ class LayerParameters(object):
         self.psum_pagu_cs_limit_0 = 0
         self.psum_pagu_cs_limit_1 = 0
         self.psum_pagu_cs_limit_2 = 0
+        self.psum_pagu_cs_limit_3 = 0
         self.psum_pagu_cs_inc_0 = 0
         self.psum_pagu_cs_inc_1 = 0
         self.psum_pagu_cs_inc_2 = 0
+        self.psum_pagu_cs_inc_3 = 0
         self.psum_pagu_loop_limit_0 = 0
         self.psum_pagu_loop_limit_1 = 0
         self.psum_pagu_loop_limit_2 = 0
@@ -1055,15 +1057,16 @@ class LayerParameters(object):
         self.pagu_wght_limit = int((self.iact_x_add_up%params.NUM_GLB_PSUM)+self.iact_x_add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
 
         self.psum_pagu_cs_limit_0 = 4 - 1
-        self.psum_pagu_cs_limit_1 = math.ceil(self.used_X_cluster/self.different_kernels_per_calculation) - 1
-        self.psum_pagu_cs_limit_2 = 2 - 1
+        self.psum_pagu_cs_limit_1 = math.ceil(params.Clusters_X/self.different_kernels_per_calculation) - 1
+        self.psum_pagu_cs_limit_2 = math.ceil(self.Y_Cluster_Packages/self.different_kernels_per_calculation) - 1
+        self.psum_pagu_cs_limit_3 = 2 - 1
         if (self.different_kernels_per_calculation == 1):
             self.psum_pagu_cs_inc_0 = 0
         else:
             self.psum_pagu_cs_inc_0 = math.ceil(self.used_X_cluster/self.different_kernels_per_calculation)
         self.psum_pagu_cs_inc_1 = 1
-        self.psum_pagu_cs_inc_2 = 0
-
+        self.psum_pagu_cs_inc_2 = self.used_Y_cluster * params.Clusters_X
+        self.psum_pagu_cs_inc_3 = 0
         self.psum_pagu_loop_limit_0 = self.different_kernels_per_calculation - 1
         self.psum_pagu_addr_inc_0 = 0
 
@@ -1172,11 +1175,7 @@ class LayerParameters(object):
         # Partial sum delay for accumulation pipeline
         self.psum_delay = int(max([(math.ceil(self.used_psum_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
 
-        # Check if X-cluster usage is aligned
-        if(self.psum_size_x >= params.PEs_X*params.Clusters):
-            self.used_X_cluster = params.Clusters
-        else:
-            self.used_X_cluster = params.Clusters
+        self.used_X_cluster = params.Clusters_X * self.Y_Cluster_Packages
 
         # Calculate data field lengths for DMA
         self.iact_addr_len = 1

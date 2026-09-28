@@ -844,7 +844,7 @@ module psum_pipeline #(
           fsm_psum_cycle <= fsm_psum_cycle + 1;
           if (fsm_psum_cycle == fsm_psum_limit) begin
             fsm_psum_cycle              <= 0;
-            fsm_psum_last_state         <= PSUM_SEND_RESULTS;
+            fsm_psum_last_state         <= SEND_PSUM_TO_IACT;
             fsm_psum_current_state      <= PSUM_IDLE;
             fsm_psum_r                  <= 0;
             fsm_y_cl_psum               <= 0;

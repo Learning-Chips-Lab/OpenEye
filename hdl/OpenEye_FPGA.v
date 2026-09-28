@@ -757,12 +757,12 @@ reg [1023:0] fst_path;
             single_iteration  <= 1;
             single_iteration3 <= 1;
             if (iact_channels_counter == iact_channel_max_cycles -1) begin
-              if (iact_router_counter == needed_y_cls_reg - 1) begin
-                iact_cycle_count <= iact_cycle_count + 1;
-                if (iact_cycle_count == {{8 {1'd0}},needed_wght_cycles} - 1) begin
-                  iact_cycle_count <= 0;
-                end
+              //if (iact_router_counter == needed_y_cls_reg - 1) begin
+              iact_cycle_count <= iact_cycle_count + 1;
+              if (iact_cycle_count == {{8 {1'd0}},needed_wght_cycles} - 1) begin
+                iact_cycle_count <= 0;
               end
+              //end
             end
           end
         end else begin
@@ -781,12 +781,7 @@ reg [1023:0] fst_path;
         end
       end
       if ((RECEIVE_PSUMS_TO_IACT == fsm_current_state) | (fsm_current_state == WAIT_FOR_RESULTS)) begin
-        if (single_iteration) begin
-          single_iteration2 <= 1;
-        end
-        if (single_iteration == 0) begin
-          single_iteration2 <= 0;
-        end
+        single_iteration2 <= single_iteration;
       end
       if ((fsm_current_state == GET_PARAMETERS) |
         reset_cycle) begin

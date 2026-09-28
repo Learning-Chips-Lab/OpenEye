@@ -247,7 +247,7 @@ module router_configurator #(
           end
           router_mode_iact_storage_o <= router_mode_iact_o;
         end else begin
-          if (fsm_current_state_i == 4'd11 | fsm_current_state_i == 4'd12) begin // WAIT_FOR_RESULTS | RECEIVE_PSUMS_TO_IACT
+          if (fsm_current_state_i == 4'd12) begin // WAIT_FOR_RESULTS | RECEIVE_PSUMS_TO_IACT // Re-Enable at a later stage for iact and psum sharing
             if (single_iteration3_i) begin
               if (iact_channels_counter_i == iact_channel_max_cycles_i -1) begin
                 if (iact_router_counter_i == needed_y_cls_reg_i - 1) begin
