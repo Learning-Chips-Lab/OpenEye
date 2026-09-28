@@ -332,14 +332,8 @@ class LayerParameters(object):
         self.iact_write_inc_1 = 0
         self.iact_write_inc_2 = 0
         self.pagu_wght_limit = 0
-        self.psum_pagu_cs_limit_0 = 0
-        self.psum_pagu_cs_limit_1 = 0
-        self.psum_pagu_cs_limit_2 = 0
-        self.psum_pagu_cs_limit_3 = 0
-        self.psum_pagu_cs_inc_0 = 0
-        self.psum_pagu_cs_inc_1 = 0
-        self.psum_pagu_cs_inc_2 = 0
-        self.psum_pagu_cs_inc_3 = 0
+        self.psum_pagu_cs_limit = [0,0,0,0,0,0]
+        self.psum_pagu_cs_inc = [0,0,0,0,0,0]
         self.psum_pagu_loop_limit_0 = 0
         self.psum_pagu_loop_limit_1 = 0
         self.psum_pagu_loop_limit_2 = 0
@@ -1056,17 +1050,20 @@ class LayerParameters(object):
 
         self.pagu_wght_limit = int((self.iact_x_add_up%params.NUM_GLB_PSUM)+self.iact_x_add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
 
-        self.psum_pagu_cs_limit_0 = 4 - 1
-        self.psum_pagu_cs_limit_1 = math.ceil(params.Clusters_X/self.different_kernels_per_calculation) - 1
-        self.psum_pagu_cs_limit_2 = math.ceil(self.Y_Cluster_Packages/self.different_kernels_per_calculation) - 1
-        self.psum_pagu_cs_limit_3 = 2 - 1
+        self.psum_pagu_cs_limit[0] = 4 - 1
+        self.psum_pagu_cs_limit[1] = 1 - 1
+        self.psum_pagu_cs_limit[2] = math.ceil(self.Y_Cluster_Packages*params.Clusters_X/self.different_kernels_per_calculation) - 1
+        self.psum_pagu_cs_limit[3] = 2 - 1
         if (self.different_kernels_per_calculation == 1):
-            self.psum_pagu_cs_inc_0 = 0
+            self.psum_pagu_cs_inc[0] = 0
         else:
-            self.psum_pagu_cs_inc_0 = math.ceil(self.used_X_cluster/self.different_kernels_per_calculation)
-        self.psum_pagu_cs_inc_1 = 1
-        self.psum_pagu_cs_inc_2 = self.used_Y_cluster * params.Clusters_X
-        self.psum_pagu_cs_inc_3 = 0
+            self.psum_pagu_cs_inc[0] = math.ceil(self.used_X_cluster/self.different_kernels_per_calculation)
+        self.psum_pagu_cs_inc[1] = self.used_Y_cluster * params.Clusters_X
+        self.psum_pagu_cs_inc[2] = 1
+        self.psum_pagu_cs_inc[3] = 0
+
+        self.compact_and_pad_in_place(self.psum_pagu_cs_limit, self.psum_pagu_cs_inc)
+
         self.psum_pagu_loop_limit_0 = self.different_kernels_per_calculation - 1
         self.psum_pagu_addr_inc_0 = 0
 
@@ -1081,6 +1078,21 @@ class LayerParameters(object):
 
         self.psum_pagu_loop_limit_4 = math.ceil(self.filters/4) - 1
         self.psum_pagu_addr_inc_4 = math.ceil(4/self.different_kernels_per_calculation)
+
+    def compact_and_pad_in_place(self, primary_list: list, secondary_list: list) -> None:
+        write_idx = 0
+        n = len(primary_list)
+        
+        for read_idx in range(n):
+            if primary_list[read_idx] != 0:
+                primary_list[write_idx] = primary_list[read_idx]
+                secondary_list[write_idx] = secondary_list[read_idx]
+                write_idx += 1
+                
+        while write_idx < n:
+            primary_list[write_idx] = 0
+            secondary_list[write_idx] = 0
+            write_idx += 1
 
     def  calculate_transmission_cycles(self, params):
         self.iact_cycles_one_word_all_ram = math.ceil((params.IACT_RAM_CELLS*params.IACT_RAM_CELLS_WORD_BITWIDTH)/params.DMA_BITWIDTH)

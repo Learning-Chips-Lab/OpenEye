@@ -311,14 +311,14 @@ module psum_pipeline #(
       ready_dma_i_q2 <= ready_dma_i_q1;
       case (fsm_psum_current_state)
         PSUM_IDLE: begin
-          psum_buffer_en_w    <= 0;
-          psum_enable_i_reg   <= 0;
-          current_filter      <= 0;
+          psum_buffer_en_w      <= 0;
+          psum_enable_i_reg     <= 0;
+          current_filter        <= 0;
           psum_select_cnt_0     <= 0;
           psum_select_cnt_1     <= 0;
           psum_select_cnt_2     <= 0;
           psum_cycle_loop_cnt_0 <= 0;
-          psum_data_i_reg     <= 0;
+          psum_data_i_reg       <= 0;
           if (ready_dma_i == 1) begin
             enable_dma_o <= 0;
             last_data_o  <= 0;
@@ -636,6 +636,7 @@ module psum_pipeline #(
               psum_cycle_loop_cnt_2 <= 0;
               psum_cycle_loop_cnt_3 <= 0;
               psum_cycle_loop_cnt_4 <= 0;
+              psum_cluster_select   <= 0;
               psum_cluster_select_0 <= 0;
               psum_cluster_select_1 <= 0;
               psum_cluster_select_2 <= 0;

@@ -214,8 +214,8 @@ module OpenEye_FPGA #(
     parameter UNPACKED_TRACES_ENABLED = 1,
 
     //Pooling Features
-    parameter MAX_POOLING = 0,
-    parameter AVERAGE_POOLING = 1,
+    parameter MAX_POOLING = 1,
+    parameter AVERAGE_POOLING = 0,
 
     //Channels per word
     parameter CHANNELS_PER_WORD = 4,
