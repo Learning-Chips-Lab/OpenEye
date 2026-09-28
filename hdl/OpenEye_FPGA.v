@@ -2837,6 +2837,7 @@ end
             .wr_en_i(iact_buffer_en_w[j_gen]),
             .addr_i(iact_buffer_addr[j_gen]),
             .data_i(iact_buffer_data_w[j_gen*IACT_RAM_CELLS_WORD_BITWIDTH+:IACT_RAM_CELLS_WORD_BITWIDTH]),
+            .wr_mask_i(1'b0),
             .data_o(iact_buffer_data_r[j_gen*IACT_RAM_CELLS_WORD_BITWIDTH+:IACT_RAM_CELLS_WORD_BITWIDTH])
         );
     end
@@ -3000,6 +3001,7 @@ end
               // strides too doubles them for NUM_GLB_PSUM>1 and runs off the
               // end of the bus.
               .data_i (psum_buffer_data_w[i_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH]),
+              .wr_mask_i(1'b0),
               .data_o (psum_buffer_data_r[i_gen*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+j_gen*TRANS_BITWIDTH_PSUM*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen*PSUM_BUFFER_WIDTH+:PSUM_BUFFER_WIDTH])
           );
         end

@@ -106,7 +106,7 @@ module iact_stream_constructor #(
     input      [                                  3-1:0] stride_y_i,
     input      [                                  4-1:0] y_lines_per_calc,
     input                                                fully_connected_i,
-    input      [                                   10:0] x_pos_inc,
+    input      [                                   11:0] x_pos_inc,
     input      [                                   11:0] needed_iact_buffer_words_i,
     input      [                                  8-1:0] iact_words_per_compute,
     input      [                                    7:0] rd_loop_limit_0,

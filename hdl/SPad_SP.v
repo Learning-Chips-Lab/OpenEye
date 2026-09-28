@@ -104,6 +104,7 @@ module SPad_SP #(
       .wr_en_i(we_i),
       .addr_i (addr_i),
       .data_i (data_i),
+      .wr_mask_i(1'b0),
       .data_o (data_o)
   );
 
