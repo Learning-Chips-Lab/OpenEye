@@ -1640,6 +1640,9 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
         current_cycle = 0
         read_data = 1
         chance = 100
+        x_repetitions = layer_parameters.iact_x_line_repetitions
+        x_block_width = layer_parameters.iact_x_add_up // max(x_repetitions, 1)
+        x_block_base = 0
         while (dut.enable_dma_o.value == 1):
             if (read_data):
                 if(logging.DEBUG >= login_level):
@@ -1662,7 +1665,25 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                         except:
                             pass
                         x = x + 1
-                    if (current_cycle % math.ceil(oep.PEs_X/words) == math.ceil(oep.PEs_X/words) - 1):
+                    if x_repetitions > 1:
+                        # A row wider than one repetition is read out as
+                        # x_block_width-pixel blocks: every filter for
+                        # repetition 0, then every filter for repetition 1...
+                        # (the psum buffer address is filter + filters * repetition).
+                        if (x - x_block_base >= x_block_width):
+                            f = f + 1
+                            x = x_block_base
+                            if(f == layer_parameters.filters):
+                                f = 0
+                                x_block_base = x_block_base + x_block_width
+                                x = x_block_base
+                                if(x_block_base >= layer_parameters.iact_x_add_up):
+                                    x_block_base = 0
+                                    x = 0
+                                    y = y + 1
+                                    if(y >= layer_parameters.iact_size_y):
+                                        y = 0
+                    elif (current_cycle % math.ceil(oep.PEs_X/words) == math.ceil(oep.PEs_X/words) - 1):
                         if(x >= layer_parameters.iact_size_x):
                             x = 0
                             f = f + 1
