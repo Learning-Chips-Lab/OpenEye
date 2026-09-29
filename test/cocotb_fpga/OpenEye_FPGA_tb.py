@@ -277,6 +277,12 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         cocotb.start_soon(rtl_test_utils.trace_ram_writes(ptp, dut))
     if os.environ.get("TRACE_POOLING"):
         cocotb.start_soon(rtl_test_utils.trace_pooling(ptp, dut, max_lines=4000))
+    if os.environ.get("TRACE_PE_SPADS"):
+        cocotb.start_soon(rtl_test_utils.trace_pe_spads(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_PE_WADDR"):
+        cocotb.start_soon(rtl_test_utils.trace_pe_wght_addrs(ptp, dut, openeye_parameter))
+    if os.environ.get("TRACE_PE_WGHT"):
+        cocotb.start_soon(rtl_test_utils.trace_pe_wght_writes(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_PE_PASSES"):
         cocotb.start_soon(rtl_test_utils.trace_pe_pass_counts(ptp, dut, openeye_parameter))
     if os.environ.get("TRACE_WB_EVENTS"):
@@ -365,6 +371,18 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                         for x in range(len(row)):
                             row[x] = 1 + x + len(row) * y
         logger.info("OPENEYE_ASYMMETRIC_KERNEL: weight[y][x] = 1 + x + kernel_width*y")
+    if os.environ.get("OPENEYE_MIX_WEIGHTS"):
+        # weight[c][f] = 1 + c + 5*f for every tap: exposes channel or filter
+        # mix-ups that channel-independent kernels (ASYMMETRIC_KERNEL) hide.
+        for layer_number, params in enumerate(layer_parameters):
+            if "Conv" not in str(params.layer_name):
+                continue
+            for c, channel in enumerate(dram.weights[layer_number]):
+                for f, kernel in enumerate(channel):
+                    for row in kernel:
+                        for x in range(len(row)):
+                            row[x] = 1 + c + 5 * f
+        logger.info("OPENEYE_MIX_WEIGHTS: weight[c][f] = 1 + c + 5*f")
     if os.environ.get("OPENEYE_RAMP_IACTS"):
         # Layer-0 activation k becomes k+1, so a PE's stored payloads name the
         # exact input positions it received. Constant operands can only show
@@ -374,6 +392,9 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                 return [_ramp(v, ctr) for v in x]
             ctr[0] += 1
             # Wrap so large inputs stay inside int8; small inputs are unchanged.
+            if os.environ.get("OPENEYE_RAMP_MULT"):
+                # Deterministic pseudo-random activations, full-rank for fitting.
+                return ((ctr[0] - 1) * int(os.environ["OPENEYE_RAMP_MULT"])) % 61 + 1
             return (ctr[0] - 1) % 100 + 1
         dram.fmap[0] = _ramp(dram.fmap[0])
         logger.info("OPENEYE_RAMP_IACTS: layer-0 input set to 1..N in flat order")

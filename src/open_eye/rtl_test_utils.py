@@ -1972,6 +1972,201 @@ async def trace_ram_writes(ptp, dut, max_lines=200):
         lines += 1
 
 
+async def trace_pe_spads(ptp, dut, oep):
+    """Print operand SPAD contents of cluster (0,0) column 0 whenever they change.
+
+    Opt-in: TRACE_PE_SPADS=t0,t1[,col]. Shows the iact payloads and the weight
+    payloads (lane 0) each PE row actually holds, so a wrong row/channel
+    assignment is visible directly instead of being inferred from psums.
+    """
+    parts = [float(v) for v in os.environ.get("TRACE_PE_SPADS", "0,1e9").split(",")]
+    t0, t1 = parts[0], parts[1]
+    col = int(parts[2]) if len(parts) > 2 else 0
+    pes = []
+    try:
+        for row in range(oep.PEs_Y):
+            pes.append(dut.OpenEye_Parallel.gen_x[0].gen_y[0].OpenEye_Cluster
+                       .pe_cluster.gen_X[col].gen_Y[row].pe)
+    except Exception as exc:
+        logger.error("trace_pe_spads: PE not reachable (%s)", type(exc).__name__)
+        return
+
+    def payloads(mem, width, count):
+        out = []
+        for addr in range(count):
+            try:
+                w = int(mem[addr].value)
+            except ValueError:
+                out.append(None)
+                continue
+            except IndexError:
+                break
+            v = w & 0xFF
+            out.append(v - 256 if v & 0x80 else v)
+        return out
+
+    last = {}
+    while True:
+        await Timer(100, unit="ns")
+        now = cocotb.utils.get_sim_time("ns")
+        if now < t0:
+            continue
+        if now > t1:
+            return
+        for row, pe in enumerate(pes):
+            try:
+                iv = payloads(pe.iact_data_SPad.ram.impl.mem, 8, 24)
+                wv = payloads(pe.weight_data_SPad.ram.impl.mem, 8, 28)
+            except Exception:
+                continue
+            try:
+                wa = []
+                wmem = pe.gen_wght_addr_spad.weight_addr_SPad.ram.impl.mem
+                for a in range(20):
+                    try:
+                        wa.append(int(wmem[a].value))
+                    except ValueError:
+                        wa.append(None)
+            except Exception:
+                wa = None
+            try:
+                ia = []
+                for a in range(8):
+                    try:
+                        ia.append(int(pe.gen_iact_addr_spad.iact_addr_SPad.ram.impl.mem[a].value))
+                    except ValueError:
+                        ia.append(None)
+            except Exception:
+                ia = None
+            key = (tuple(iv), tuple(wv), tuple(wa or ()), tuple(ia or ()))
+            if last.get(row) != key:
+                last[row] = key
+                logger.info("spads t=%s row=%d iact=%s wght=%s waddr_spad=%s iaddr_spad=%s", now, row, iv, wv, wa, ia)
+
+
+async def trace_pe_wght_addrs(ptp, dut, oep):
+    """Per compute pass, the weight-data SPAD addresses one PE reads (opt-in: TRACE_PE_WADDR=cx,cy,col,row[,t0,t1]).
+
+    A pass is one stay in CALCULATING (state 6). Prints the iact payloads the
+    PE holds and the min/max/set of weight addresses read, so the order in
+    which passes consume the weight layout is visible.
+    """
+    parts = [float(v) for v in os.environ.get("TRACE_PE_WADDR", "0,0,0,1").split(",")]
+    cx, cy, col, row = (int(v) for v in parts[:4])
+    t0, t1 = (parts[4], parts[5]) if len(parts) >= 6 else (0.0, 1e12)
+    try:
+        pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
+              .pe_cluster.gen_X[col].gen_Y[row].pe)
+    except Exception as exc:
+        logger.error("trace_pe_wght_addrs: PE not reachable (%s)", type(exc).__name__)
+        return
+
+    def iact_payloads():
+        out = []
+        try:
+            mem = pe.iact_data_SPad.ram.impl.mem
+            for a in range(8):
+                try:
+                    out.append(int(mem[a].value) & 0xFF)
+                except ValueError:
+                    out.append(None)
+        except Exception:
+            pass
+        return out
+
+    in_calc = False
+    addrs = []
+    passno = 0
+    start = 0
+    snap = None
+    while True:
+        await FallingEdge(dut.clk_i)
+        now = cocotb.utils.get_sim_time("ns")
+        if now < t0:
+            continue
+        if now > t1:
+            return
+        try:
+            st = int(pe.current_state_computing.value)
+        except ValueError:
+            continue
+        if st == 6:
+            if not in_calc:
+                in_calc = True
+                addrs = []
+                start = now
+                snap = iact_payloads()
+            try:
+                if int(pe.wght_data_SPad_en_r.value):
+                    addrs.append(int(pe.wght_data_SPad_addr.value))
+            except (ValueError, AttributeError):
+                pass
+        elif in_calc:
+            in_calc = False
+            logger.info("waddr pass=%d t=%s iact=%s waddrs(min,max,n)=%s uniq=%s", passno, start, snap,
+                        (min(addrs), max(addrs), len(addrs)) if addrs else None,
+                        sorted(set(addrs))[:40])
+            passno += 1
+
+
+async def trace_pe_wght_writes(ptp, dut, oep):
+    """Log weight/iact SPAD writes and compute pulses of one PE (opt-in: TRACE_PE_WGHT=cx,cy,col,row[,t0,t1]).
+
+    Shows in which order weight blocks and iact blocks arrive at the PE
+    relative to compute_i, i.e. which weights each pass really sees.
+    """
+    parts = [float(v) for v in os.environ.get("TRACE_PE_WGHT", "0,0,0,1").split(",")]
+    cx, cy, col, row = (int(v) for v in parts[:4])
+    t0, t1 = (parts[4], parts[5]) if len(parts) >= 6 else (0.0, 1e12)
+    try:
+        pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
+              .pe_cluster.gen_X[col].gen_Y[row].pe)
+        ws = pe.weight_data_SPad
+        isp = pe.iact_data_SPad
+    except Exception as exc:
+        logger.error("trace_pe_wght_writes: PE not reachable (%s)", type(exc).__name__)
+        return
+
+    def val(sig):
+        try:
+            return int(sig.value)
+        except ValueError:
+            return None
+
+    try:
+        wa = getattr(pe, "gen_wght_addr_spad").weight_addr_SPad
+    except Exception as exc:
+        wa = None
+        logger.info("pw: weight addr SPad not reachable (%s)", type(exc).__name__)
+    lines = 0
+    while lines < 4000:
+        await FallingEdge(dut.clk_i)
+        now = cocotb.utils.get_sim_time("ns")
+        if now < t0:
+            continue
+        if now > t1:
+            return
+        if wa is not None and val(wa.we_i) == 1:
+            logger.info("pw t=%s WA addr=%s data=%s", now, val(wa.addr_i), val(wa.data_i))
+            lines += 1
+        if val(pe.wght_addr_SPad_en_r) == 1 and val(pe.current_state_computing) in (1, 2, 3, 4, 5):
+            logger.info("pw t=%s RA st=%s addr=%s data_r=%s", now, val(pe.current_state_computing),
+                        val(pe.wght_addr_SPad_addr), val(pe.wght_addr_SPad_data_r))
+            lines += 1
+        if val(pe.compute_i) == 1:
+            logger.info("pw t=%s compute_i state=%s", now, val(pe.current_state_computing))
+            lines += 1
+        if val(ws.we_i) == 1:
+            d = val(ws.data_i)
+            logger.info("pw t=%s W addr=%s pay0=%s", now, val(ws.addr_i), None if d is None else (d & 0xFF))
+            lines += 1
+        if val(isp.we_i) == 1:
+            d = val(isp.data_i)
+            logger.info("pw t=%s I addr=%s pay=%s oh=%s", now, val(isp.addr_i), None if d is None else (d & 0xFF),
+                        None if d is None else (d >> 8))
+            lines += 1
+
+
 async def trace_pe_pass_counts(ptp, dut, oep, max_lines=200000):
     """Count how many times each PE completes a compute pass (opt-in: TRACE_PE_PASSES=t0,t1).
 

@@ -479,7 +479,7 @@ module PE #(
     parameter integer IACT_ADDR_ADDR = 9,
 
     parameter integer WGHT_DATA_ADDR = 96,
-    parameter integer WGHT_ADDR_ADDR = 16,
+    parameter integer WGHT_ADDR_ADDR = 64,
 
     parameter integer PSUM_ADDR = 32,
 
