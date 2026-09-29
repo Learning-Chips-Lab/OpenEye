@@ -334,16 +334,8 @@ class LayerParameters(object):
         self.pagu_wght_limit = 0
         self.psum_pagu_cs_limit = [0,0,0,0,0,0]
         self.psum_pagu_cs_inc = [0,0,0,0,0,0]
-        self.psum_pagu_loop_limit_0 = 0
-        self.psum_pagu_loop_limit_1 = 0
-        self.psum_pagu_loop_limit_2 = 0
-        self.psum_pagu_loop_limit_3 = 0
-        self.psum_pagu_loop_limit_4 = 0
-        self.psum_pagu_addr_inc_0 = 0
-        self.psum_pagu_addr_inc_1 = 0
-        self.psum_pagu_addr_inc_2 = 0
-        self.psum_pagu_addr_inc_3 = 0
-        self.psum_pagu_addr_inc_4 = 0
+        self.psum_pagu_loop_limit = [0,0,0,0,0,0]
+        self.psum_pagu_addr_inc = [0,0,0,0,0,0]
 
         # === Layer Type Detection and Dispatch ===
         # Detect layer type from name and call appropriate initialization method
@@ -403,8 +395,13 @@ class LayerParameters(object):
             self.iact_x_line_repetitions = 1
             # Calculate how many different kernels can be processed simultaneously
             # based on available PE resources divided by input width
-            self.different_kernels_per_calculation = usable_pes//self.psum_size_x
+            self.different_kernels_per_calculation = usable_pes//(math.ceil(self.psum_size_x/params.NUM_GLB_PSUM)*params.NUM_GLB_PSUM)
             # Limit to at most ceil(output_channels/8) kernels
+            # remove lines if there is an advanced PAGU available
+            if (self.different_kernels_per_calculation == 3):
+                self.different_kernels_per_calculation = 2
+            if (self.different_kernels_per_calculation >= 4):
+                self.different_kernels_per_calculation = 4 * (self.different_kernels_per_calculation//4)
             self.different_kernels_per_calculation = min(self.different_kernels_per_calculation, math.ceil(self.filters/4))
             # Calculate how many Y lines can be processed per computation
             self.y_lines_per_calculation = math.floor(usable_pes/self.output_shape[1]/self.different_kernels_per_calculation)
@@ -1050,34 +1047,44 @@ class LayerParameters(object):
 
         self.pagu_wght_limit = int((self.iact_x_add_up%params.NUM_GLB_PSUM)+self.iact_x_add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
 
-        self.psum_pagu_cs_limit[0] = 4 - 1
-        self.psum_pagu_cs_limit[1] = 1 - 1
-        self.psum_pagu_cs_limit[2] = math.ceil(self.Y_Cluster_Packages*params.Clusters_X/self.different_kernels_per_calculation) - 1
-        self.psum_pagu_cs_limit[3] = 2 - 1
+        max_channels = min(self.different_kernels_per_calculation,4)
+        self.psum_pagu_cs_limit[0] = max_channels - 1
+        self.psum_pagu_cs_limit[1] = math.ceil(4/max_channels) - 1
+        self.psum_pagu_cs_limit[2] = 1 - 1
+        self.psum_pagu_cs_limit[3] = math.ceil(self.Y_Cluster_Packages*params.Clusters_X/self.different_kernels_per_calculation) - 1
+        self.psum_pagu_cs_limit[4] = self.iact_x_line_repetitions * self.psum_size_y - 1
+        self.psum_pagu_cs_limit[5] = math.floor(self.different_kernels_per_calculation/max_channels) - 1
         if (self.different_kernels_per_calculation == 1):
             self.psum_pagu_cs_inc[0] = 0
+            self.psum_pagu_cs_inc[1] = 0
         else:
             self.psum_pagu_cs_inc[0] = math.ceil(self.used_X_cluster/self.different_kernels_per_calculation)
-        self.psum_pagu_cs_inc[1] = self.used_Y_cluster * params.Clusters_X
-        self.psum_pagu_cs_inc[2] = 1
-        self.psum_pagu_cs_inc[3] = 0
+            self.psum_pagu_cs_inc[1] = 0
+        self.psum_pagu_cs_inc[2] = 0
+        self.psum_pagu_cs_inc[3] = 1
+        self.psum_pagu_cs_inc[4] = 0
+        self.psum_pagu_cs_inc[5] = max_channels*(self.used_Y_cluster*(math.floor(self.used_X_cluster/self.different_kernels_per_calculation)))
 
         self.compact_and_pad_in_place(self.psum_pagu_cs_limit, self.psum_pagu_cs_inc)
 
-        self.psum_pagu_loop_limit_0 = self.different_kernels_per_calculation - 1
-        self.psum_pagu_addr_inc_0 = 0
+        self.psum_pagu_loop_limit[0] = max_channels - 1
+        self.psum_pagu_addr_inc[0] = 0
 
-        self.psum_pagu_loop_limit_1 = math.ceil(4/self.different_kernels_per_calculation) - 1
-        self.psum_pagu_addr_inc_1 = 1
+        self.psum_pagu_loop_limit[1] = math.ceil(4/max_channels) - 1
+        self.psum_pagu_addr_inc[1] = 1
 
-        self.psum_pagu_loop_limit_2 =  math.ceil(self.used_X_cluster/self.different_kernels_per_calculation) - 1
-        self.psum_pagu_addr_inc_2 = 0
+        self.psum_pagu_loop_limit[2] =  math.ceil(self.used_X_cluster/self.different_kernels_per_calculation) - 1
+        self.psum_pagu_addr_inc[2] = 0
 
-        self.psum_pagu_loop_limit_3 = self.iact_x_line_repetitions * self.psum_size_y - 1
-        self.psum_pagu_addr_inc_3 = math.ceil(self.filters/self.different_kernels_per_calculation)
+        self.psum_pagu_loop_limit[3] = self.iact_x_line_repetitions * self.psum_size_y - 1
+        self.psum_pagu_addr_inc[3] = math.ceil(self.filters/self.different_kernels_per_calculation)
 
-        self.psum_pagu_loop_limit_4 = math.ceil(self.filters/4) - 1
-        self.psum_pagu_addr_inc_4 = math.ceil(4/self.different_kernels_per_calculation)
+        self.psum_pagu_loop_limit[4] = math.floor(self.different_kernels_per_calculation/max_channels) - 1
+        self.psum_pagu_addr_inc[4] = 0
+
+        self.psum_pagu_loop_limit[5] = math.ceil(self.filters/4) - 1
+        self.psum_pagu_addr_inc[5] = math.ceil(4/max_channels)
+        self.compact_and_pad_in_place(self.psum_pagu_loop_limit, self.psum_pagu_addr_inc)
 
     def compact_and_pad_in_place(self, primary_list: list, secondary_list: list) -> None:
         write_idx = 0
@@ -1563,16 +1570,16 @@ class LayerParameters(object):
         self.iact_write_inc_0 = 1
         self.iact_write_limit_1 = 255
         self.iact_write_inc_1 = 256
-        self.psum_pagu_loop_limit_0 = 255
-        self.psum_pagu_loop_limit_1 = 0
-        self.psum_pagu_loop_limit_2 = 0
-        self.psum_pagu_loop_limit_3 = 0
-        self.psum_pagu_loop_limit_4 = 0
-        self.psum_pagu_addr_inc_0 = 1
-        self.psum_pagu_addr_inc_1 = 0
-        self.psum_pagu_addr_inc_2 = 0
-        self.psum_pagu_addr_inc_3 = 0
-        self.psum_pagu_addr_inc_4 = 0
+        self.psum_pagu_loop_limit[0] = 255
+        self.psum_pagu_loop_limit[1] = 0
+        self.psum_pagu_loop_limit[2] = 0
+        self.psum_pagu_loop_limit[3] = 0
+        self.psum_pagu_loop_limit[4] = 0
+        self.psum_pagu_addr_inc[0] = 1
+        self.psum_pagu_addr_inc[1] = 0
+        self.psum_pagu_addr_inc[2] = 0
+        self.psum_pagu_addr_inc[3] = 0
+        self.psum_pagu_addr_inc[4] = 0
         self.iact_words_per_compute = math.ceil(params.NUM_GLB_WGHT*self.used_iact_per_PE) + 1
         self.used_Y_cluster = params.Clusters_Y
         self.used_X_cluster = 1

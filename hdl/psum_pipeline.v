@@ -75,9 +75,11 @@ module psum_pipeline #(
     input wire [  3:0] psum_cluster_limit_0,
     input wire [  3:0] psum_cluster_limit_1,
     input wire [  3:0] psum_cluster_limit_2,
+    input wire [  3:0] psum_cluster_limit_3,
     input wire [  3:0] psum_cluster_inc_0,
     input wire [  3:0] psum_cluster_inc_1,
     input wire [  3:0] psum_cluster_inc_2,
+    input wire [  3:0] psum_cluster_inc_3,
     input wire [8-1:0] psum_cycle_loop_limit_0,
     input wire [8-1:0] psum_cycle_loop_limit_1,
     input wire [8-1:0] psum_cycle_loop_limit_2,
@@ -130,6 +132,7 @@ module psum_pipeline #(
   reg [4:0] psum_select_cnt_0;
   reg [4:0] psum_select_cnt_1;
   reg [4:0] psum_select_cnt_2;
+  reg [4:0] psum_select_cnt_3;
   reg [15:0] psum_cycle_loop_cnt_0;
   reg [7:0] psum_cycle_loop_cnt_1;
   reg [7:0] psum_cycle_loop_cnt_2;
@@ -139,6 +142,7 @@ module psum_pipeline #(
   reg [3:0]  psum_cluster_select_0;
   reg [3:0]  psum_cluster_select_1;
   reg [3:0]  psum_cluster_select_2;
+  reg [3:0]  psum_cluster_select_3;
   reg [11:0] psum_cycle_addr_0;
   reg [11:0] psum_cycle_addr_1;
   reg [11:0] psum_cycle_addr_2;
@@ -212,9 +216,11 @@ module psum_pipeline #(
   wire [3:0] psum_cluster_select_0_next;
   wire [3:0] psum_cluster_select_1_next;
   wire [3:0] psum_cluster_select_2_next;
+  wire [3:0] psum_cluster_select_3_next;
   assign psum_cluster_select_0_next = psum_cluster_select_0 + psum_cluster_inc_0 >= CLUSTERS ? psum_cluster_select_0 + psum_cluster_inc_0 - CLUSTERS : psum_cluster_select_0 + psum_cluster_inc_0;
   assign psum_cluster_select_1_next = psum_cluster_select_1 + psum_cluster_inc_1 >= CLUSTERS ? psum_cluster_select_1 + psum_cluster_inc_1 - CLUSTERS : psum_cluster_select_1 + psum_cluster_inc_1;
   assign psum_cluster_select_2_next = psum_cluster_select_2 + psum_cluster_inc_2 >= CLUSTERS ? psum_cluster_select_2 + psum_cluster_inc_2 - CLUSTERS : psum_cluster_select_2 + psum_cluster_inc_2;
+  assign psum_cluster_select_3_next = psum_cluster_select_3 + psum_cluster_inc_3 >= CLUSTERS ? psum_cluster_select_3 + psum_cluster_inc_3 - CLUSTERS : psum_cluster_select_3 + psum_cluster_inc_3;
   wire [BUFFER_WIDTH-1:0] psum_cycle_addr_0_next;
   wire [BUFFER_WIDTH-1:0] psum_cycle_addr_1_next;
   wire [BUFFER_WIDTH-1:0] psum_cycle_addr_2_next;
@@ -281,6 +287,7 @@ module psum_pipeline #(
       psum_select_cnt_0           <= 0;
       psum_select_cnt_1           <= 0;
       psum_select_cnt_2           <= 0;
+      psum_select_cnt_3           <= 0;
       psum_cycle_loop_cnt_0       <= 0;
       psum_cycle_loop_cnt_1       <= 0;
       psum_cycle_loop_cnt_2       <= 0;
@@ -290,6 +297,7 @@ module psum_pipeline #(
       psum_cluster_select_0       <= 0;
       psum_cluster_select_1       <= 0;
       psum_cluster_select_2       <= 0;
+      psum_cluster_select_3       <= 0;
       psum_cycle_addr_0           <= 0;
       psum_cycle_addr_1           <= 0;
       psum_cycle_addr_2           <= 0;
@@ -317,6 +325,7 @@ module psum_pipeline #(
           psum_select_cnt_0     <= 0;
           psum_select_cnt_1     <= 0;
           psum_select_cnt_2     <= 0;
+          psum_select_cnt_3     <= 0;
           psum_cycle_loop_cnt_0 <= 0;
           psum_data_i_reg       <= 0;
           if (ready_dma_i == 1) begin
@@ -594,6 +603,7 @@ module psum_pipeline #(
           psum_select_cnt_0     <= 0;
           psum_select_cnt_1     <= 0;
           psum_select_cnt_2     <= 0;
+          psum_select_cnt_3     <= 0;
           psum_cycle_loop_cnt_0 <= 0;
           if (send_data_out) begin
             if (fsm_psum_cycle == 2) begin
@@ -631,6 +641,7 @@ module psum_pipeline #(
               psum_select_cnt_0     <= 0;
               psum_select_cnt_1     <= 0;
               psum_select_cnt_2     <= 0;
+              psum_select_cnt_3     <= 0;
               psum_cycle_loop_cnt_0 <= 0;
               psum_cycle_loop_cnt_1 <= 0;
               psum_cycle_loop_cnt_2 <= 0;
@@ -640,6 +651,7 @@ module psum_pipeline #(
               psum_cluster_select_0 <= 0;
               psum_cluster_select_1 <= 0;
               psum_cluster_select_2 <= 0;
+              psum_cluster_select_3 <= 0;
               psum_cycle_addr_0     <= 0;
               psum_cycle_addr_1     <= 0;
               psum_cycle_addr_2     <= 0;
@@ -783,10 +795,20 @@ module psum_pipeline #(
                   psum_select_cnt_2 <= psum_select_cnt_2 + 1;
                   if (psum_select_cnt_2 == psum_cluster_limit_2) begin
                     psum_select_cnt_2     <= 0;
-                    psum_cluster_select_0 <= 0;
-                    psum_cluster_select_1 <= 0;
-                    psum_cluster_select_2 <= 0;
-                    psum_cluster_select   <= 0;
+                    psum_cluster_select_0 <= psum_cluster_select_3_next;
+                    psum_cluster_select_1 <= psum_cluster_select_3_next;
+                    psum_cluster_select_2 <= psum_cluster_select_3_next;
+                    psum_cluster_select_3 <= psum_cluster_select_3_next;
+                    psum_cluster_select   <= psum_cluster_select_3_next;
+                    psum_select_cnt_3     <= psum_select_cnt_3 + 1;
+                    if (psum_select_cnt_3 == psum_cluster_limit_3) begin
+                      psum_select_cnt_3     <= 0;
+                      psum_cluster_select_0 <= 0;
+                      psum_cluster_select_1 <= 0;
+                      psum_cluster_select_2 <= 0;
+                      psum_cluster_select_3 <= 0;
+                      psum_cluster_select   <= 0;
+                    end
                   end
                 end
               end

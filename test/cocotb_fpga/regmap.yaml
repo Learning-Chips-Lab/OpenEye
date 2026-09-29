@@ -89,9 +89,11 @@ registers:
   - {name: psum_pagu_cs_limit_0, width: 4}
   - {name: psum_pagu_cs_limit_1, width: 4}
   - {name: psum_pagu_cs_limit_2, width: 4}
+  - {name: psum_pagu_cs_limit_3, width: 4}
   - {name: psum_pagu_cs_inc_0, width: 4}
   - {name: psum_pagu_cs_inc_1, width: 4}
   - {name: psum_pagu_cs_inc_2, width: 4}
+  - {name: psum_pagu_cs_inc_3, width: 4}
   - {name: psum_pagu_loop_limit_0, width: 8}
   - {name: psum_pagu_loop_limit_1, width: 8}
   - {name: psum_pagu_loop_limit_2, width: 8}
