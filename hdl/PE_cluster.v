@@ -179,7 +179,7 @@ module PE_cluster #(
     parameter  NUM_GLB_IACT           = 3,
     parameter  IACT_ADDR_WORDS        = 9,
     parameter  IACT_DATA_WORDS        = 16,
-    parameter  WGHT_ADDR_WORDS        = 16,
+    parameter  WGHT_ADDR_WORDS        = 64,
     parameter  WGHT_DATA_WORDS        = 192,
     parameter  PSUM_WORDS             = 32,
     parameter  PE_ROWS                = 3,
