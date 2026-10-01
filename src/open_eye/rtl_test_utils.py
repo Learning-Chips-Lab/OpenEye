@@ -2870,7 +2870,7 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
             % layer_parameters.psum_transmissions_pe)
     offset = tile * columns * per_column
     les.x = offset
-    expected_words = columns * per_column
+    expected_words = columns * per_column * layer_parameters.output_cycles
     assert layer_parameters.psum_output_words == expected_words, (
         "Dense DMA output count disagrees with column/address layout")
     beat = 0

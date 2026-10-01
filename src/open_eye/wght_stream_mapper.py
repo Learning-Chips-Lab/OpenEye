@@ -529,7 +529,6 @@ class WghtStreamMapper(object):
         data_per_trans = math.floor(params.WGHT_Trans_Bitwidth/params.WGHT_WOH_Bitwidth)
         line_counter = 0
         stream = []
-
         # Pack weights into transmission words
         for spad_data_trans in range(math.floor(params.Wghts_per_PE/data_per_trans)):
             temp_trans = 0
@@ -569,7 +568,6 @@ class WghtStreamMapper(object):
             # Stop when we've processed all used weights
             if (line_counter == math.ceil(layer_params.used_wght_per_PE/self.params.PARALLEL_MACS)):
                 break
-
         return stream
     
 class ConvWghtStreamMapper(WghtStreamMapper):
@@ -859,7 +857,6 @@ class DenseWghtStreamMapper(WghtStreamMapper):
             part = wght_stream[i : i + n]
             temp.extend(part[::-1])
         wght_stream = temp
-
         return wght_stream
 
     def write_wght_data_storage(self, cl_x, cl_y, router):
@@ -896,10 +893,10 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                 # Recalculate filter index with Y-cluster assignment
                 filters =  (position%needed_wghts_in_word) + \
                 cl_x * layer_params.used_psum_per_PE + \
-                (math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.psum_transmissions_pe) * params.Clusters_X * params.Clusters_Y * layer_params.used_psum_per_PE
+                (math.floor(layer_repetition/layer_params.diff_iact_layer) % layer_params.needed_psum_transmissions) * params.Clusters_X * layer_params.used_psum_per_PE
                 # Recalculate channel with Y-cluster assignment
                 #channel = math.floor((layer_repetition%layer_params.iact_transmissions_pe)*params.Wght_Routers*layer_params.used_iact_per_PE) + \
-                channel = math.floor(layer_repetition*(params.NUM_GLB_WGHT * params.Clusters_Y * layer_params.used_iact_per_PE)) + \
+                channel = math.floor((layer_repetition%layer_params.diff_iact_layer)*(params.NUM_GLB_WGHT * params.Clusters_Y * layer_params.used_iact_per_PE)) + \
                 (math.floor(position/needed_wghts_in_word)%iact_words_per_memory) + (math.floor(position/(needed_wghts_in_word*iact_words_per_memory))*(iact_words_per_memory*params.NUM_GLB_WGHT)) + \
                 (cl_y * params.NUM_GLB_WGHT * layer_params.used_iact_per_PE) + \
                 router * iact_words_per_memory

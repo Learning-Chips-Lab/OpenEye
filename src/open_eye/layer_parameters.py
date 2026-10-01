@@ -1514,7 +1514,6 @@ class LayerParameters(object):
         # the GEMM datapath binds row j to activation bank j.
         if getattr(params, "DATAFLOW", "row_stationary") == "output_stationary":
             self.gemm_mode = 1
-        self.output_cycles = 1
         self.y_lines_per_calculation = 1
         self.kernel_size = [0]
         self.used_iact_addr_per_PE = 15
@@ -1547,25 +1546,25 @@ class LayerParameters(object):
         
         temp = math.ceil(self.iact_size_x/(params.Clusters_Y*params.PEs_Y))
         temp = min(temp, 12)
-        temp = math.ceil(self.iact_size_x/(params.PEs_Y*temp))
-        self.needed_wght_transmissions = math.ceil(temp/params.Clusters_Y)
-        self.used_iact_per_PE = math.ceil(self.iact_size_x/(self.needed_wght_transmissions*params.Clusters_Y*params.PEs_Y))
+        temp = math.ceil(self.iact_size_x/(params.Clusters_Y*params.PEs_Y*temp))
+        self.used_iact_per_PE = math.ceil(self.iact_size_x/(temp*params.Clusters_Y*params.PEs_Y))
         # The FC converter distributes activation pairs. Round each PE's K
         # slice to an even length; padded positions have zero activations and
         # weights, so they do not change the result.
         self.used_iact_per_PE = max(2, self.used_iact_per_PE + (self.used_iact_per_PE % 2))
-        self.used_wght_per_PE = self.used_iact_per_PE * math.ceil(self.filters/params.Clusters_X/params.PARALLEL_MACS)*params.PARALLEL_MACS
-        self.diff_iact_layer = math.ceil(self.iact_size_x/(params.NUM_GLB_WGHT*self.used_iact_per_PE))
+        self.needed_psum_transmissions = math.ceil(self.filters/(16*params.Clusters_X))
+        self.diff_iact_layer = math.ceil(self.iact_size_x/(params.NUM_GLB_WGHT*self.used_iact_per_PE*params.Clusters_Y))
+        self.needed_wght_transmissions = self.diff_iact_layer * self.needed_psum_transmissions
+        self.output_cycles = self.needed_psum_transmissions
+        self.used_wght_per_PE = self.used_iact_per_PE * math.ceil(self.filters/params.Clusters_X/params.PARALLEL_MACS/self.needed_psum_transmissions)*params.PARALLEL_MACS
         self.used_psum_per_PE = math.ceil(self.used_wght_per_PE/self.used_iact_per_PE)
-        self.used_psum_per_PE = math.ceil(self.filters/params.Clusters_X)
         self.fsm_psum_limit = self.used_psum_per_PE + 3
         self.x_pos_inc = params.Clusters_Y * self.used_iact_per_PE * params.NUM_GLB_WGHT
         #self.needed_wght_transmissions = self.needed_wght_transmissions * 1
-        
-        self.iact_read_limit_0 = 255
+        self.iact_read_limit_0 = self.needed_Iact_writes * math.ceil(self.used_iact_per_PE / 2)
         self.iact_read_inc_0 = 1
-        self.iact_read_limit_1 = self.diff_iact_layer
-        self.iact_read_inc_2 = math.ceil(params.NUM_GLB_WGHT*self.used_iact_per_PE/2)
+        self.iact_read_limit_1 = self.diff_iact_layer - 1
+        self.iact_read_inc_2 = math.ceil(self.needed_Iact_writes*self.used_iact_per_PE/2)
         self.iact_write_limit_0 = 255
         self.iact_write_inc_0 = 1
         self.iact_write_limit_1 = 255
@@ -1580,7 +1579,7 @@ class LayerParameters(object):
         self.psum_pagu_addr_inc[2] = 0
         self.psum_pagu_addr_inc[3] = 0
         self.psum_pagu_addr_inc[4] = 0
-        self.iact_words_per_compute = math.ceil(params.NUM_GLB_WGHT*self.used_iact_per_PE) + 1
+        self.iact_words_per_compute = math.ceil(params.NUM_GLB_WGHT/params.NUM_GLB_IACT)*self.used_iact_per_PE + 1
         self.used_Y_cluster = params.Clusters_Y
         self.used_X_cluster = 1
         self.kernel_per_pe_cluster = 1
@@ -1599,19 +1598,17 @@ class LayerParameters(object):
                         if(x_pe != 0):
                             self.computing_mx[x_cluster][y_cluster][y_pe][x_pe] = 0
         
-        self.psum_transmissions_pe = math.ceil(1/16)
-        self.psum_transmissions_glb = 1
+        self.psum_transmissions_pe = 1
 
         self.iact_transmissions_pe = math.ceil(1/(self.used_iact_per_PE * params.PEs_Y))
         self.iact_transmissions_glb = 1
 
-        self.needed_psum_transmissions = self.psum_transmissions_pe * self.psum_transmissions_glb
         self.wght_transmissions_pe = 1
         self.wght_transmissions_glb = 1
         #self.needed_wght_transmissions = self.wght_transmissions_pe * self.wght_transmissions_glb
         self.needed_iact_transmissions = self.iact_transmissions_pe * self.iact_transmissions_glb
         self.Used_refreshes = self.iact_transmissions_pe * self.wght_transmissions_pe * self.psum_transmissions_pe
-
+        self.needed_cycles = self.Used_refreshes
         self.iact_data_len = math.ceil(self.used_iact_per_PE/(math.ceil(params.DMA_BITWIDTH/2)/params.IACT_WOH_Bitwidth))
         self.psum_delay = int(max([((self.used_wght_per_PE/2/self.used_iact_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))
         self.used_wght_addr_per_PE = (self.used_iact_per_PE) + 2
@@ -1621,13 +1618,10 @@ class LayerParameters(object):
         self.needed_total_transmissions = 1
         self.needed_refreshes_mx = [[1 for _ in range(3)] for _ in range(self.needed_total_transmissions)]
         for layer_repetition in range(self.needed_total_transmissions):
-            self.needed_refreshes_mx[layer_repetition][2] = math.floor(((math.floor(math.floor(layer_repetition/self.iact_transmissions_pe))+1)/ \
-                self.needed_total_transmissions) * self.Used_refreshes)
-            self.needed_refreshes_mx[layer_repetition][1] = math.floor((math.floor(math.floor(layer_repetition/self.iact_transmissions_pe))/ \
-                self.needed_total_transmissions) * self.Used_refreshes)
+            self.needed_refreshes_mx[layer_repetition][2] = self.diff_iact_layer * self.needed_psum_transmissions
+            self.needed_refreshes_mx[layer_repetition][1] = 0
             self.needed_refreshes_mx[layer_repetition][0] = self.needed_refreshes_mx[layer_repetition][2] - self.needed_refreshes_mx[layer_repetition][1]
-            self.needed_refreshes_mx[layer_repetition][0] = math.ceil(self.diff_iact_layer/params.Clusters_Y)
-        self.psum_storage_cycles = self.needed_wght_transmissions
+        self.psum_storage_cycles = self.diff_iact_layer
         if (params.Clusters_Y == 1):
             self.psum_delay = 5
         self.limit_increase = math.floor((params.NUM_GLB_WGHT*self.used_iact_per_PE)/8)
@@ -1639,8 +1633,8 @@ class LayerParameters(object):
         # Pad complete K tiles across all cluster rows. Each converter accepts
         # its own row's pairs, distributing them round-robin across PE banks.
         self.iact_size_c = (self.used_iact_per_PE * params.PEs_Y * params.Clusters_Y
-                            * self.needed_wght_transmissions)
-        self.iact_buffer_words_per_write = self.iact_size_c
+                            * self.diff_iact_layer)
+        self.iact_buffer_words_per_write = self.diff_iact_layer * math.ceil(self.used_iact_per_PE/2) * params.NUM_GLB_WGHT
         # CONVERT_IACT emits pairs from fsm_cycle=2 through this inclusive limit.
         self.iact_glb_writing_cycles = self.iact_size_c // 2 + 1
 
@@ -1680,6 +1674,7 @@ class LayerParameters(object):
         # half, dropping cluster column 1 and the upper buffer addresses.
         self.psum_output_words = int(self.output_cycles * self.used_psum_per_PE
                                      * params.Clusters_X * self.needed_wght_cycles)
+        self.iact_x_pos_inc = math.ceil(params.NUM_GLB_WGHT*self.used_iact_per_PE/2) * params.Clusters_Y
         logger.debug("Needed transmissions: " + str(self.needed_wght_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_psum_transmissions))
         logger.debug("Needed transmissions: " + str(self.needed_total_transmissions))

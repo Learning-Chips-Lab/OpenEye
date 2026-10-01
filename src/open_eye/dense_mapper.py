@@ -127,7 +127,7 @@ class DenseMapper(LayerMapper):
         # Uses pack_registers() utility from regmap_pack module
             from open_eye.generator import pack_registers
             words = pack_registers({
-            "wght_cycles_reg": layer_params.needed_refreshes_mx[layer_repetition][0],
+            "wght_cycles_reg": 1,
             "stride_x": layer_params.strideX,
             "stride_y": layer_params.strideY,
             "skipIact_reg": layer_params.skipIact,
@@ -138,7 +138,7 @@ class DenseMapper(LayerMapper):
             "kernel_size_x": 1,
             "kernel_size_y": 1,
             "x_lines_reg": layer_params.iact_x_lines,
-            "needed_wght_cycles": 1,
+            "needed_wght_cycles": layer_params.needed_wght_transmissions,
             "needed_cycles": layer_params.needed_refreshes_mx[layer_repetition][0],
             "trans_cycles_psum": layer_params.trans_cycles_psum,
             # GET_WGHT's exit condition (fsm_cycle == trans_cycles_wght - 1)

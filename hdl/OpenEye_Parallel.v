@@ -290,7 +290,7 @@ module OpenEye_Parallel #(
   reg                                                  raw_wght_i_reg;
   reg  [                                         19:0] needed_cycles_i_reg;
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i_reg;
-  reg  [                    $clog2(PSUM_PER_PE+1)-1:0] filters_i_reg;
+  reg  [                    $clog2(PSUM_PER_PE+1)-1:0] filters_reg;
   reg  [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_channels_per_pe_i_reg;
   reg  [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i_reg;
   reg  [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i_reg;
@@ -383,7 +383,7 @@ module OpenEye_Parallel #(
           // handshake PE.v's stream_data logic expects) rather than removed,
           // to avoid changing the cycle count consumers rely on elsewhere.
           enable_stream_reg      <= 1;
-          data_stream_reg        <= {{(12 - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_i_reg};
+          data_stream_reg        <= {{(12 - $clog2(PSUM_PER_PE + 1)) {1'd0}}, filters_reg};
           fsm_transmission_state <= IDLE_TRANSMI;
         end
         default: begin
@@ -413,7 +413,7 @@ module OpenEye_Parallel #(
       raw_wght_i_reg                 <= 0;
       needed_cycles_i_reg            <= 0;
       needed_y_cls_i_reg             <= 0;
-      filters_i_reg                  <= 0;
+      filters_reg                    <= 0;
       iact_channels_per_pe_i_reg     <= 0;
       bano_cluster_mode_i_reg        <= 0;
       af_cluster_mode_i_reg          <= 0;
@@ -435,7 +435,7 @@ module OpenEye_Parallel #(
       raw_wght_i_reg              <= raw_wght_i;
       needed_cycles_i_reg         <= {2'b00, needed_cycles_i};
       needed_y_cls_i_reg          <= needed_y_cls_i;
-      filters_i_reg               <= filters_i;
+      filters_reg                 <= filters_i;
       iact_channels_per_pe_i_reg  <= iact_channels_per_pe_i;
       bano_cluster_mode_i_reg     <= bano_cluster_mode_i;
       af_cluster_mode_i_reg       <= {NUM_GLB_PSUM{af_cluster_mode_i}};

@@ -420,7 +420,6 @@ class DensePsumStreamMapper(PsumStreamMapper):
 
         # Calculate number of bias values per PE block
         values = math.ceil(self.layer_params.used_psum_per_PE)
-
         # One word per filter index per cluster column, columns interleaved
         # (f0c0, f0c1, f1c0, ...): psum_pipeline's FC GET_BIAS branch writes
         # word k into cluster column k % CLUSTER_COLUMNS and advances the
@@ -428,12 +427,12 @@ class DensePsumStreamMapper(PsumStreamMapper):
         # split across the columns, so column c holds filters
         # c*values .. c*values+values-1. Sending only column 0's biases left
         # column 1 without any and half of each column's addresses unwritten.
-        for i in range(values):
-            for cl_x in range(self.params.Clusters_X):
-                bias_index = i + cl_x * values
-                bias = self.dram_bias[bias_index] if bias_index < len(self.dram_bias) else 0
-                psum_stream.append(gtu.to_twos_complement(bias, self.params.DATA_PSUM_BITWIDTH))
-
+        for repetition in range(self.layer_params.needed_psum_transmissions):
+            for i in range(values):
+                for cl_x in range(self.params.Clusters_X):
+                    bias_index = i + repetition * self.params.Clusters_X * self.layer_params.used_psum_per_PE + cl_x * self.layer_params.used_psum_per_PE
+                    bias = self.dram_bias[bias_index] if bias_index < len(self.dram_bias) else 0
+                    psum_stream.append(gtu.to_twos_complement(bias, self.params.DATA_PSUM_BITWIDTH))
         return psum_stream
 
     def write_psum_storage(self, cl_x, cl_y, router, cycle):

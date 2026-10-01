@@ -941,47 +941,46 @@ reg [1023:0] fst_path;
           end
         end
         iact_converter_x <= iact_converter_x + (CLUSTER_COLUMNS * iact_x_per_cluster);
-        if (((((iact_converter_x + (CLUSTER_COLUMNS * iact_x_per_cluster)) * iact_x_line_repetitions) >= iact_x_add_up * needed_y_cls_reg) | (fully_connected_layer))) begin
-          iact_converter_x <= 0;
-          if (((iact_converter_x + iact_x_per_cluster) >= iact_x_add_up) & (!fully_connected_layer) & (kernels_per_calc != 1) & (iact_x_per_cluster < iact_x_add_up)) begin
-            iact_converter_x <= iact_x_per_cluster;
-          end
-          fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
-          if (fsm_iact_params_kernel == kernels_per_calc - 1) begin
-            fsm_iact_params_kernel <= 0;
-            fsm_iact_params_y_line <= fsm_iact_params_y_line + 1;
-            if (fsm_iact_params_y_line == y_lines_per_calc - 1) begin
-              fsm_iact_params_y_line <= 0;
-              fsm_row_offset         <= 0;
-              if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
-                iact_converter_c <= iact_converter_c + 1;
-              end else begin
-                fsm_iact_params <= 0;
-              end
-              if (!fully_connected_layer) begin
+        if (fully_connected_layer) begin
+          iact_converter_x <= iact_converter_x + (NUM_GLB_WGHT * iact_channels_per_pe >> 1);
+        end else begin
+          if (((((iact_converter_x + (CLUSTER_COLUMNS * iact_x_per_cluster)) * iact_x_line_repetitions) >= iact_x_add_up * needed_y_cls_reg))) begin
+            iact_converter_x <= 0;
+            if (((iact_converter_x + iact_x_per_cluster) >= iact_x_add_up) & (kernels_per_calc != 1) & (iact_x_per_cluster < iact_x_add_up)) begin
+              iact_converter_x <= iact_x_per_cluster;
+            end
+            fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
+            if (fsm_iact_params_kernel == kernels_per_calc - 1) begin
+              fsm_iact_params_kernel <= 0;
+              fsm_iact_params_y_line <= fsm_iact_params_y_line + 1;
+              if (fsm_iact_params_y_line == y_lines_per_calc - 1) begin
+                fsm_iact_params_y_line <= 0;
+                fsm_row_offset         <= 0;
+                if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
+                  iact_converter_c <= iact_converter_c + 1;
+                end else begin
+                  fsm_iact_params <= 0;
+                end
                 if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
                   fsm_iact_params <= 0;
                 end
                 fsm_row <= 0;
                 if ((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state)) begin
-                   iact_converter_c <= iact_converter_c + iact_channels_per_pe;
+                  iact_converter_c <= iact_converter_c + iact_channels_per_pe;
                 end
               end
-            end
-            
-            if (!((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state))) begin
-               iact_converter_c <= iact_converter_c + iact_channels_per_pe;
-               if (fully_connected_layer) begin
-                iact_converter_c <= iact_converter_c + 1;
-               end
-            end
+              
+              if (!((GET_WGHT == fsm_current_state) | (GET_IACT == fsm_current_state))) begin
+                iact_converter_c <= iact_converter_c + iact_channels_per_pe;
+              end
 
-            // Channel Wrap-around
-            if (iact_converter_c + iact_channels_per_pe == iact_size_c) begin
-              iact_converter_c <= 0;
-              iact_converter_y <= iact_converter_y + 1;
-              if (iact_converter_y + 1 >= iact_size_y) begin
-                iact_converter_y <= 0;
+              // Channel Wrap-around
+              if (iact_converter_c + iact_channels_per_pe == iact_size_c) begin
+                iact_converter_c <= 0;
+                iact_converter_y <= iact_converter_y + 1;
+                if (iact_converter_y + 1 >= iact_size_y) begin
+                  iact_converter_y <= 0;
+                end
               end
             end
           end

@@ -299,12 +299,13 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                 offset = tile * params.Clusters_X * per_column
                 path = f'demo/layer_{layer_number}_{repetition}/dma_stream_ref.txt'
                 with gtu.open_or_create_file(path) as file_dma_ref:
-                    for address in range(per_column):
-                        for column in range(params.Clusters_X):
-                            index = offset + column * per_column + address
-                            value = calculated_results[index] if index < len(calculated_results) else 0
-                            file_dma_ref.write(format(int(value) & mask,
-                                                      f"0{params.DMA_BITWIDTH}b") + "\n")
+                    for psum_repetition in range(layer_params.needed_psum_transmissions):
+                        for address in range(per_column):
+                            for column in range(params.Clusters_X):
+                                index = offset + psum_repetition * per_column * params.Clusters_X + column * per_column + address
+                                value = calculated_results[index] if index < len(calculated_results) else 0
+                                file_dma_ref.write(format(int(value) & mask,
+                                                        f"0{params.DMA_BITWIDTH}b") + "\n")
         else:
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
             for layer_repetition in range(layer_params.needed_total_transmissions):
