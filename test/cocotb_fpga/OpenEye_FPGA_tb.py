@@ -442,6 +442,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                         logger.info("Send stream No. " + str(layer_number+1))
                         fc_write_check = None
                         if (os.environ.get("OPENEYE_CHECK_FC_WRITES") and
+                                not os.environ.get("OPENEYE_SKIP_FC_WRITE_CHECK") and
                                 "Dense" in str(layer_parameters[layer_number].layer_name)):
                             fc_write_check = cocotb.start_soon(rtl_test_utils.check_fc_activation_writes(
                                 dut, openeye_parameter, layer_parameters[layer_number], dram.fmap[layer_number]))
