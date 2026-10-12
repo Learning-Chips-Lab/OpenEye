@@ -61,7 +61,7 @@
 ///   BUFFER_WIDTH          - Width of the buffering datapath
 ///   QUANT_AMOUNT          - Quantization-related parameter count
 ///   DATA_PSUM_BITWIDTH    - Width of the partial-sum data path
-///   TRANS_WORDS           - Number of DMA transfer words
+///   TRANS_WORDS           - Number of words per transmissions from layer to layer
 ///   IS_TOPLEVEL           - Selects top-level behavior for this instance
 ///   SERIAL                - Enables serial execution mode
 ///   PARALLEL_MACS         - Number of parallel MAC units
