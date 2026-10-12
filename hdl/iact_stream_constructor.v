@@ -628,7 +628,7 @@ reg enable_write_to_storage;
                 router_cycle <= 0;
               end
               switching_cycle <= switching_cycle + 1;
-              if (switching_cycle == 3 - 1) begin
+              if (switching_cycle == (fully_connected_i ? PE_Y : 3) - 1) begin
                 switching_cycle <= 0;
                 router_cycle    <= 0;
               end
