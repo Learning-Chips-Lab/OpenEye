@@ -935,26 +935,26 @@ module OpenEye_Parallel #(
                               g_gen * ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM];
           end
           assign gen_x[cc_gen].gen_y[cr_gen].psum_choose_cluster_i_w[g_gen] = psum_choose_i[cc_gen * NUM_GLB_PSUM + cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM + g_gen];
-          if (cr_gen != CLUSTER_ROWS - 1) begin : gen_router_iact_bottom_connect
+          if (cr_gen != CLUSTER_ROWS - 1) begin : gen_router_psum_bottom_connect
             assign gen_x[cc_gen].gen_y[cr_gen + 1].data_src_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] =
           gen_x[cc_gen].gen_y[cr_gen].data_dst_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM];
             assign gen_x[cc_gen].gen_y[cr_gen + 1].enable_src_top_psum_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_bottom_psum_cluster_w[g_gen];
             assign gen_x[cc_gen].gen_y[cr_gen + 1].ready_dst_top_psum_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_bottom_psum_cluster_w[g_gen];
           end
 
-          if (cr_gen != 0) begin : gen_router_iact_top_connect
+          if (cr_gen != 0) begin : gen_router_psum_top_connect
             assign gen_x[cc_gen].gen_y[cr_gen - 1].data_src_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] = 
             gen_x[cc_gen].gen_y[cr_gen].data_dst_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM];
             assign gen_x[cc_gen].gen_y[cr_gen - 1].ready_dst_bottom_psum_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_top_psum_cluster_w[g_gen];
             assign gen_x[cc_gen].gen_y[cr_gen - 1].enable_src_bottom_psum_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_top_psum_cluster_w[g_gen];
           end
 
-          if (cr_gen == 0) begin : gen_router_iact_top_edge
+          if (cr_gen == 0) begin : gen_router_psum_top_edge
             assign gen_x[cc_gen].gen_y[cr_gen].data_src_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] = 0;
             assign gen_x[cc_gen].gen_y[cr_gen].enable_src_top_psum_cluster_w[g_gen] = 0;
             assign gen_x[cc_gen].gen_y[cr_gen].ready_dst_top_psum_cluster_w[g_gen]  = 0;
           end
-          if (cr_gen == CLUSTER_ROWS - 1) begin : gen_router_iact_bottom_edge
+          if (cr_gen == CLUSTER_ROWS - 1) begin : gen_router_psum_bottom_edge
             assign gen_x[cc_gen].gen_y[cr_gen].data_src_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] = 0;
             assign gen_x[cc_gen].gen_y[cr_gen].ready_dst_bottom_psum_cluster_w[g_gen]  = 0;
             assign gen_x[cc_gen].gen_y[cr_gen].enable_src_bottom_psum_cluster_w[g_gen] = 0;
