@@ -659,13 +659,13 @@ module PE #(
   // Word counters from data pipeline modules (indicating amount of valid data loaded)
   wire [                         3 : 0] first_spad_words_iact_S;// # of words in iact addr SPad, in Eyeriss-Paper referenced as S
   wire [                         4 : 0] second_spad_words_iact; // # of words in iact data SPad
-  wire [                         4 : 0] first_spad_words_wght;  // # of words in wght addr SPad
+  wire [ $clog2(WGHT_ADDR_ADDR+1)-1: 0] first_spad_words_wght;  // # of words in wght addr SPad
   wire [ WGHT_DATA_ADDR_BITWIDTH-1 : 0] second_spad_words_wght; // # of words in wght data SPad
 
   // Computation control and configuration registers
   // [SPARSITY_EN=1 only] Weight data validity flag (always true in dense mode)
   reg                                   values_valid;           // Flag: current values are valid (not zero)
-  wire [                         5 : 0] filters_reg_M0;            // Number of filters configured, in Eyeriss-Paper referenced as M0
+  wire [$clog2(WGHT_ADDR_ADDR+1)   : 0] filters_reg_M0;            // Number of filters configured, in Eyeriss-Paper referenced as M0
   wire [                         3 : 0] channel_reg_C0;            // Number of channels configured, in Eyeriss-Paper referenced as C0
   wire                                  psum_data_SPad_en_w_i [PARALLEL_MACS-1: 0];// Internal write enable
   wire                                  raw_wght_w;           // 1 = raw (uncompressed) weight stream: keep all-zero weight words
