@@ -235,7 +235,7 @@ def test_conv_channel_order(request):
 
 
 @pytest.mark.parametrize("num_glb_iact", [1, 3])
-@pytest.mark.parametrize("input_channels", [1, 4])
+@pytest.mark.parametrize("input_channels", [1, 2, 3, 4])
 def test_conv_input_mapping(input_channels, num_glb_iact, request):
     """Separate channel packing from activation-port routing without write-back."""
     _run_conv_const("Convolution_Single", 8, 2,
