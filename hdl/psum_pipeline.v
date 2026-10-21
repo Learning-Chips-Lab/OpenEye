@@ -271,7 +271,7 @@ module psum_pipeline #(
       storage_cycles              <= 0;
       psum_router_set_reg         <= 1;
       iact_channel_counter_reg    <= 0;
-      results_ready               <= 0;
+      results_ready               = 0;
       psum_cnt                    <= 0;
       start_new_cycle             <= 0;
       enable_dma_o                <= 0;
@@ -482,7 +482,7 @@ module psum_pipeline #(
               psum_buffer_en_r       <= 0;
               fsm_psum_last_state    <= CALCULATE_PSUM;
               fsm_psum_current_state <= PSUM_GET_RESULTS;
-              results_ready          <= 1;
+              results_ready          = 1;
               fsm_psum_cycle         <= 0;
               for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
                 for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
@@ -504,7 +504,7 @@ module psum_pipeline #(
           // The two exit branches below explicitly clear psum_enable_i_reg
           // once the burst is actually done; do not clear it every cycle
           // here or the compute core streams exactly one result then stops.
-          results_ready      <= 1;
+          results_ready      = 1;
           psum_ready_i_reg   <= psum_ready_i_reg;
           psum_buffer_data_w <= psum_data_o_w;
           for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
@@ -897,7 +897,7 @@ module psum_pipeline #(
         storage_cycles              <= 0;
         psum_router_set_reg         <= 1;
         iact_channel_counter_reg    <= 0;
-        results_ready               <= 0;
+        results_ready               = 0;
         psum_cnt                    <= 0;
         start_new_cycle             <= 0;
         enable_dma_o                <= 0;
