@@ -1,0 +1,14 @@
+# LibreLane flow outputs (runs/, logs, generated views)
+runs/
+*.log
+*.rpt
+
+# Simulation artifacts
+sim_build/
+
+# Python
+__pycache__/
+*.pyc
+
+# Generated RTL (regenerated via asic/scripts/gen.sh)
+rtl/generated/

@@ -1,0 +1,35 @@
+# Minimal bondpad master for IHP SG13G2 (70x70 um).
+#
+# The IHP open PDK references "bondpad_70x70" (PAD_BONDPAD_NAME in
+# libs.tech/librelane/sg13g2_io/config.tcl) but does not ship the master
+# ("TODO bondpads need to be part of the PDK"). This file provides it.
+#
+# OpenROAD's place_bondpad needs (a) CLASS COVER and (b) a determinable top
+# layer, so the master declares a single signal PIN with a full-size PORT on
+# TopMetal2 (top routing layer). The physical bondpad geometry ships in
+# bondpad_70x70.gds (loaded via EXTRA_GDS): solid 70x70 um on Metal3..TopMetal2.
+# Metal2 is omitted there because its MAXWIDTH (30 um) is below the 70 um
+# bondpad width. The pad macros' "pad" pin PORTs span Metal2..TopMetal2 at the
+# macro edge; the bondpad abuts them on the shared layers.
+#
+# Loaded via EXTRA_LEFS (OpenROAD placement) and EXTRA_GDS (GDS merge).
+# NOTE: OpenROAD 26Q4's LEF parser expects "END <macro_name>" to close a
+# MACRO (same convention as the IHP PDK LEF files), not "END MACRO".
+
+VERSION 5.7 ;
+
+MACRO bondpad_70x70
+    CLASS COVER ;
+    ORIGIN 0.000 0.000 ;
+    FOREIGN bondpad_70x70 0.000 0.000 ;
+    SIZE 70.000 BY 70.000 ;
+    SYMMETRY X Y R90 ;
+  PIN pad
+    DIRECTION INOUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER TopMetal2 ;
+        RECT 0.000 0.000 70.000 70.000 ;
+    END
+  END pad
+END bondpad_70x70
