@@ -123,11 +123,33 @@ module RAM_SP
 
     assign data_o = q;
 
-`ifdef OPENEYE_RAM_SPECIFIC
     generate
-        // specific SRAM Macros / blocks for synthesis or simulation can be included here
-        //`include "impl/OpenRAM/SP_OpenRAM_specific.vh"
-    else begin
+`ifdef OPENEYE_RAM_SPECIFIC
+        // Technology-specific SRAM macro implementation (IHP SG13G2,
+        // asic/rtl/sg13g2/sg13g2_ram_sp.v). Configurations matching the
+        // PDK SRAM macro grid are mapped to macros, everything else
+        // falls back to the generic RTL implementation below.
+        if ((AddrWidth == 10 && DataWidth == 64)  ||
+            (AddrWidth == 11 && DataWidth == 288) ||
+            (AddrWidth == 12 && DataWidth == 40)  ||
+            (AddrWidth == 10 && DataWidth == 72)) begin : g_specific
+            sg13g2_ram_sp #(
+                .AddrWidth      (AddrWidth),
+                .DataWidth      (DataWidth),
+                .Pipelined      (Pipelined),
+                .WriteMaskWidth (WriteMaskWidth)
+            ) impl (
+                .clk            (clk),
+                .cen            (cen),
+                .rdwen          (rdwen),
+                .wm             (wr_mask_i),
+                .a              (addr),
+                .d              (d),
+                .q              (q)
+            );
+        end else begin : g_generic
+`else
+        begin : g_generic
 `endif
         RAM_SP_generic #(
             .AddrWidth          (AddrWidth),
@@ -143,10 +165,8 @@ module RAM_SP
             .d                  (d),
             .q                  (q)
         );
-`ifdef OPENEYE_RAM_SPECIFIC
     end
     endgenerate
-`endif
 
     /// Implementation Notes:
     /// Memory Architecture:

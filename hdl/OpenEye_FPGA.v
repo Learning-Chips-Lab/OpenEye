@@ -116,6 +116,8 @@ module OpenEye_FPGA #(
       parameter BUFFER_WIDTH  = 10,
       parameter BUFFER_WIDTH_PSUM = 14,
       parameter BUFFER_WIDTH_WGHT = 12,
+      // iact_stream_constructor RAM depth (log2); 13 = historical default
+      parameter IACT_SC_ADDRWIDTH = 13,
       parameter QUANT_AMOUNT  = 32,
       parameter DATA_PSUM_BITWIDTH = 32,
       parameter CLUSTER_COLUMNS = 2,
@@ -2882,7 +2884,7 @@ end
             .DATA_IACT_OVERHEAD(DATA_IACT_OVERHEAD),
             .RAM_CELLS         (IACT_RAM_CELLS),
             .WORD_BITWIDTH     (TRANS_BITWIDTH_IACT * NUM_GLB_IACT),
-            .ADDRWIDTH         (13)
+            .ADDRWIDTH         (IACT_SC_ADDRWIDTH)
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
             .rst_ni                      (rst_n),

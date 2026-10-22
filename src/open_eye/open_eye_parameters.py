@@ -244,6 +244,14 @@ class OpenEyeParameters(object):
         except:
             self.STRIDE_ENABLED = 0          # AXI bus width for DMA transfers (64 bits)
 
+        # Address width (log2 depth) of the iact_stream_constructor RAM.
+        # 13 is the historical hard-coded default; the ASIC target uses a
+        # shallower RAM aligned to the sg13g2 SRAM macro grid.
+        try:
+            self.IACT_SC_ADDRWIDTH = int(os.getenv("IACT_SC_ADDRWIDTH"))
+        except:
+            self.IACT_SC_ADDRWIDTH = 13
+
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode
 
