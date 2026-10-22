@@ -1,0 +1,36 @@
+{
+    "meta": {
+        "flow": "Chip"
+    },
+    "DESIGN_NAME": "counter_top",
+    "VERILOG_FILES": "dir::counter.v",
+    "CLOCK_PORT": "clk_pad",
+    "CLOCK_PERIOD": 20,
+    "FP_SIZING": "absolute",
+    "DIE_AREA": [0, 0, 1120, 1120],
+    "LEFT_MARGIN_MULT": 667,
+    "RIGHT_MARGIN_MULT": 667,
+    "TOP_MARGIN_MULT": 85,
+    "BOTTOM_MARGIN_MULT": 85,
+    "PAD_SPACING_MULTIPLE": 80,
+    "EXTRA_VERILOG_MODELS": [
+        "/foss/designs/OpenEye/asic/rtl/sg13g2_io_blackbox.v"
+    ],
+    "EXTRA_LEFS": [
+        "/foss/designs/OpenEye/asic/rtl/bondpad_70x70.lef"
+    ],
+    "EXTRA_GDS": [
+        "/foss/designs/OpenEye/asic/rtl/bondpad_70x70.gds"
+    ],
+    "PDN_CORE_RING": true,
+    "PDN_CORE_RING_CONNECT_TO_PADS": true,
+    "PDN_MACRO_CONNECTIONS": [
+        ".* VPWR VGND vdd vss",
+        ".* VPWR VGND iovdd iovss"
+    ],
+    "RUN_IRDROP_REPORT": false,
+    "PAD_SOUTH": ["u_out0", "u_out1", "u_out2", "u_vdd1"],
+    "PAD_EAST": ["u_out3", "u_out4", "u_out5", "u_vdd2"],
+    "PAD_NORTH": ["u_out6", "u_out7", "u_vdd3", "u_vdd4"],
+    "PAD_WEST": ["u_clk", "u_rst", "u_vss1", "u_vss2"]
+}
