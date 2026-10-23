@@ -12,20 +12,52 @@ backend via LibreLane 3.x in the iic-osic-tools container, using the real
 
 ## Machine / environment
 
-- Work happens in the repo root (this directory). All heavy tools run inside
-  the Docker container **`iic-osic-tools_asic`** (headless worker):
-  - repo mounted at `/foss/designs/OpenEye` (same layout as here)
-  - PDK at `/foss/pdks/ihp-sg13g2`, tools at `/foss/tools` (yosys 0.70,
-    libreLane 3.1, iverilog, verilator 5.052, cocotb 2.1)
+Work happens on **est-srv02** (`est-srv02.med.fh-koeln.de`, AlmaLinux 10,
+user `utz`, ~256 GB RAM — the old WSL machine only had 24 GB and could not run
+synthesis + gate simulation in parallel).
+
+- Repo: `~/projekte/OpenEye` (branch `dev_asic_sg13g2`, origin = GitHub;
+  all local work is 6 commits ahead of `origin/main`, push still blocked).
+- iic-osic-tools source: `~/projekte/iic-osic-tools`
+- Docker: docker-ce installed (user is in group `docker`).
+- All heavy tools run inside the Docker container
+  **`iic-osic-tools_asic`** (headless worker):
+  - image: `hpretl/iic-osic-tools:latest` (PDK at `/foss/pdks/ihp-sg13g2`,
+    tools at `/foss/tools`: yosys 0.70, libreLane 3.1, iverilog,
+    verilator 5.052, cocotb 2.1)
+  - repo mounted at `/foss/designs/OpenEye`
+    (`-v $HOME/projekte:/foss/designs:rw`)
   - env: source `asic/scripts/env.sh` inside the container
     (`PDK_ROOT=/foss/pdks`, `PDK=ihp-sg13g2`, `STD_CELL_LIBRARY=sg13g2_stdcell`,
     `PAD_CELL_LIBRARY=sg13g2_io`)
-  - Python deps for generation are installed in the container
-    (tensorflow, torch-cpu, onnx, onnxruntime, cocotb_test)
-- A GUI container `iic-osic-tools_klayout` (WSLg) was used on the old machine
-  for KLayout; not needed for the next steps.
-- **This new server has ~256 GB RAM** — the old WSL machine (24 GB) could not
-  run gate-level simulation and synthesis in parallel.
+
+### Container setup on est-srv02 (TODO before the flow can run)
+
+1. Pull the image: `docker pull hpretl/iic-osic-tools:latest`
+2. Create the headless worker (est-srv02 uid is 1002; SELinux is enforcing →
+   `--security-opt label=disable`):
+   ```
+   docker run -d --name iic-osic-tools_asic \
+     --user 1002:1002 --security-opt label=disable \
+     -v $HOME/projekte:/foss/designs:rw \
+     hpretl/iic-osic-tools:latest sleep infinity
+   ```
+3. **Install the Python packages that the base image is missing** (they were
+   installed in the old machine's container layer, not in the image):
+   ```
+   docker exec iic-osic-tools_asic bash -lc "pip install \
+     tensorflow==2.21.0 \
+     torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu \
+     onnx==1.23.2 onnxruntime==1.31.0 cocotb-test==0.3.0"
+   ```
+   (base image already has: cocotb 2.1.0, cocotbext-ams, numpy 2.5.4,
+   torch-geometric 2.8.1)
+4. Sanity check inside the container:
+   ```
+   docker exec iic-osic-tools_asic bash -lc "cd /foss/designs/OpenEye && asic/scripts/gen.sh"
+   docker exec iic-osic-tools_asic bash -lc "cd /foss/designs/OpenEye && asic/scripts/regress.sh"
+   ```
+   Both must pass before any flow run.
 
 ## Current state (as of 2026-10-23)
 
@@ -120,14 +152,17 @@ Caveats learned on the old machine:
   sg13g2_stdcell.v functional models are plain Verilog (no UDPs) →
   Verilator-compatible.
 
-## Next steps (on the new server)
+## Next steps (on est-srv02)
 
-1. **Restore**: repo from the git bundle (see below) or push (needs GitHub
-   write access, see "Blocked"), start/recreate the `iic-osic-tools_asic`
-   container with the same mounts, verify env with
-   `asic/scripts/container.sh` if present, else manual.
+1. **Set up the container** — see "Container setup on est-srv02" above
+   (pull image, create `iic-osic-tools_asic`, pip packages).
 2. **Sanity**: run both RTL regressions (commands above) — must PASS.
 3. **Answer the loop question — gate-sim the p2_9 netlist**:
+   The p2_9 netlist itself was NOT transferred (it lived in `asic/runs/`,
+   which is gitignored). Either copy `asic/runs/openeye_p2_9/` (~2.3 GB)
+   over from the old machine, or re-run synthesis first
+   (`asic/scripts/run_openeye.sh p2_10` — it fails at step 8 again, which is
+   expected, and leaves a fresh netlist).
    - Preferred: Verilator gate sim of `asic/sim/gatesim`
      (`verilator --binary -j 16 --top-module OpenEye_Asic_gatesim_top
      -Wno-fatal <wrapper> <netlist> <stdcell> <RM FUNCTIONAL models> <io>`),
