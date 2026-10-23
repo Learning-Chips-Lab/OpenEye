@@ -82,10 +82,10 @@ module sg13g2_ram_sp #(
         (DataWidth == 40  && AddrWidth == 12) ? 2 :
         (DataWidth == 72  && AddrWidth == 10) ? 3 : -1;
 
-    wire [63:0] dout_w64;
-    wire [31:0] dout_w32;
-    wire [15:0] dout_w16;
-    wire [ 7:0] dout_w8;
+    wire [63:0] dout_w64_0, dout_w64_1, dout_w64_2, dout_w64_3;
+    wire [31:0] dout_w32_0;
+    wire [15:0] dout_w16_0, dout_w16_1;
+    wire [ 7:0] dout_w8_0;
 
     generate
         case (CFG)
@@ -94,12 +94,12 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_1024x64_c2_bm_bist u_mac (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d), .A_DLY(1'b1),
-                    .A_DOUT(dout_w64), .A_BM(bm),
+                    .A_DOUT(dout_w64_0), .A_BM(bm),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(10'b0), .A_BIST_DIN(64'b0), .A_BIST_BM(64'b0)
                 );
-                assign dout = dout_w64;
+                assign dout = dout_w64_0;
             end
 
             // (288, 11): wght buffer = 4 x 64 + 1 x 32
@@ -107,7 +107,7 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_2048x64_c2_bm_bist u_mac0 (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d[287:224]), .A_DLY(1'b1),
-                    .A_DOUT(dout_w64), .A_BM(bm[287:224]),
+                    .A_DOUT(dout_w64_0), .A_BM(bm[287:224]),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(11'b0), .A_BIST_DIN(64'b0), .A_BIST_BM(64'b0)
@@ -115,7 +115,7 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_2048x64_c2_bm_bist u_mac1 (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d[223:160]), .A_DLY(1'b1),
-                    .A_DOUT(dout_w64), .A_BM(bm[223:160]),
+                    .A_DOUT(dout_w64_1), .A_BM(bm[223:160]),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(11'b0), .A_BIST_DIN(64'b0), .A_BIST_BM(64'b0)
@@ -123,7 +123,7 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_2048x64_c2_bm_bist u_mac2 (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d[159:96]), .A_DLY(1'b1),
-                    .A_DOUT(dout_w64), .A_BM(bm[159:96]),
+                    .A_DOUT(dout_w64_2), .A_BM(bm[159:96]),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(11'b0), .A_BIST_DIN(64'b0), .A_BIST_BM(64'b0)
@@ -131,7 +131,7 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_2048x64_c2_bm_bist u_mac3 (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d[95:32]), .A_DLY(1'b1),
-                    .A_DOUT(dout_w64), .A_BM(bm[95:32]),
+                    .A_DOUT(dout_w64_3), .A_BM(bm[95:32]),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(11'b0), .A_BIST_DIN(64'b0), .A_BIST_BM(64'b0)
@@ -139,12 +139,12 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_2048x32_c2_bm_bist u_mac4 (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d[31:0]), .A_DLY(1'b1),
-                    .A_DOUT(dout_w32), .A_BM(bm[31:0]),
+                    .A_DOUT(dout_w32_0), .A_BM(bm[31:0]),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(11'b0), .A_BIST_DIN(32'b0), .A_BIST_BM(32'b0)
                 );
-                assign dout = {dout_w64, dout_w64, dout_w64, dout_w64, dout_w32};
+                assign dout = {dout_w64_0, dout_w64_1, dout_w64_2, dout_w64_3, dout_w32_0};
             end
 
             // (40, 12): psum buffer = 2 x 16 + 1 x 8
@@ -152,7 +152,7 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_4096x16_c3_bm_bist u_mac0 (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d[39:24]), .A_DLY(1'b1),
-                    .A_DOUT(dout_w16), .A_BM(bm[39:24]),
+                    .A_DOUT(dout_w16_0), .A_BM(bm[39:24]),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(12'b0), .A_BIST_DIN(16'b0), .A_BIST_BM(16'b0)
@@ -160,7 +160,7 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_4096x16_c3_bm_bist u_mac1 (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d[23:8]), .A_DLY(1'b1),
-                    .A_DOUT(dout_w16), .A_BM(bm[23:8]),
+                    .A_DOUT(dout_w16_1), .A_BM(bm[23:8]),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(12'b0), .A_BIST_DIN(16'b0), .A_BIST_BM(16'b0)
@@ -168,12 +168,12 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_4096x8_c3_bm_bist u_mac2 (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d[7:0]), .A_DLY(1'b1),
-                    .A_DOUT(dout_w8), .A_BM(bm[7:0]),
+                    .A_DOUT(dout_w8_0), .A_BM(bm[7:0]),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(12'b0), .A_BIST_DIN(8'b0), .A_BIST_BM(8'b0)
                 );
-                assign dout = {dout_w16, dout_w16, dout_w8};
+                assign dout = {dout_w16_0, dout_w16_1, dout_w8_0};
             end
 
             // (72, 10): iact_stream_constructor = 1 x 64 + 1 x 8
@@ -181,7 +181,7 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_1024x64_c2_bm_bist u_mac0 (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d[71:8]), .A_DLY(1'b1),
-                    .A_DOUT(dout_w64), .A_BM(bm[71:8]),
+                    .A_DOUT(dout_w64_0), .A_BM(bm[71:8]),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(10'b0), .A_BIST_DIN(64'b0), .A_BIST_BM(64'b0)
@@ -189,12 +189,12 @@ module sg13g2_ram_sp #(
                 RM_IHPSG13_1P_1024x8_c2_bm_bist u_mac1 (
                     .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
                     .A_ADDR(a), .A_DIN(d[7:0]), .A_DLY(1'b1),
-                    .A_DOUT(dout_w8), .A_BM(bm[7:0]),
+                    .A_DOUT(dout_w8_0), .A_BM(bm[7:0]),
                     .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
                     .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
                     .A_BIST_ADDR(10'b0), .A_BIST_DIN(8'b0), .A_BIST_BM(8'b0)
                 );
-                assign dout = {dout_w64, dout_w8};
+                assign dout = {dout_w64_0, dout_w8_0};
             end
 
             default: begin : g_err

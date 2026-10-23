@@ -9,12 +9,12 @@
 ///
 /// ASIC chip top for IHP SG13G2: OpenEye_FPGA compute core plus an explicit
 /// sg13g2_io pad ring (Caravel-style, placed by OpenROAD.PadRing via the
-/// PAD_SOUTH/EAST/NORTH/WEST LibreLane config lists).
+/// PAD_SOUTH/EAST/NORTH/WEST LibreLane config lists, see pad_order.json).
 ///
 /// GENERATED FILE -- do not edit by hand. Regenerate with:
 ///   python3 asic/scripts/gen_top.py
 ///
-/// Pad map (135 signal pads, all non-inverting, 3.3V-tolerant IO):
+/// Pad map (143 pads = 135 signal + 8 power, non-inverting, 3.3V-tolerant IO):
 ///   inputs  (69): clk, rst_n (active low),
 ///                 data_dma_i[63:0], enable_dma_i, ready_dma_i
 ///   outputs (66): data_dma_o[63:0], ready_dma_o, enable_dma_o, last_data_o
@@ -66,6 +66,34 @@ module OpenEye_Asic (
         .data_dma_o   (data_dma_o),
         .enable_dma_o (enable_dma_o),
         .last_data_o  (last_data_o)
+    );
+
+    // ------------------------------------------------------------------
+    // power pads (4 x Vdd, 4 x Vss, one pair per side)
+    // ------------------------------------------------------------------
+    sg13g2_IOPadVdd u_vdd0 (
+        .vdd(VPWR), .vss(VGND), .iovdd(VPWR), .iovss(VGND)
+    );
+    sg13g2_IOPadVss u_vss0 (
+        .vdd(VPWR), .vss(VGND), .iovdd(VPWR), .iovss(VGND)
+    );
+    sg13g2_IOPadVdd u_vdd1 (
+        .vdd(VPWR), .vss(VGND), .iovdd(VPWR), .iovss(VGND)
+    );
+    sg13g2_IOPadVss u_vss1 (
+        .vdd(VPWR), .vss(VGND), .iovdd(VPWR), .iovss(VGND)
+    );
+    sg13g2_IOPadVdd u_vdd2 (
+        .vdd(VPWR), .vss(VGND), .iovdd(VPWR), .iovss(VGND)
+    );
+    sg13g2_IOPadVss u_vss2 (
+        .vdd(VPWR), .vss(VGND), .iovdd(VPWR), .iovss(VGND)
+    );
+    sg13g2_IOPadVdd u_vdd3 (
+        .vdd(VPWR), .vss(VGND), .iovdd(VPWR), .iovss(VGND)
+    );
+    sg13g2_IOPadVss u_vss3 (
+        .vdd(VPWR), .vss(VGND), .iovdd(VPWR), .iovss(VGND)
     );
 
     // ------------------------------------------------------------------

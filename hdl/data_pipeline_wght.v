@@ -602,7 +602,7 @@ module data_pipeline_wght #(
           end
         end
 
-        temp_acc_overhead <= temp_acc_overhead + $bits(temp_acc_overhead)'(overhead_w);
+        temp_acc_overhead <= temp_acc_overhead + overhead_w;
         overhead_pos      <= overhead_pos + PARALLEL_MACS;
 
         // Wrap address_temp_2 and cycle_counter at SECOND_SPAD depth.
@@ -625,7 +625,7 @@ module data_pipeline_wght #(
         // Idle: seed data_storage_1 to -filters_w so the next data burst
         // sees the correct threshold from the very first word.
         data_storage_1     <= -filters_w;
-        overhead_pos       <= $bits(overhead_pos)'(filters_w);
+        overhead_pos       <= filters_w;
       end
 
       // -----------------------------------------------------------------------

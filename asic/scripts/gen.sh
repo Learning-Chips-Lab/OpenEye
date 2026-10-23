@@ -28,5 +28,16 @@ export HDL_PATH="${REPO}/hdl"
 export TOPLEVEL=OpenEye_FPGA
 python -m open_eye.vh_file_creator
 
+# Stage copies into hdl/ so the Verilog `include"s resolve relative to the
+# including files for both iverilog and Yosys (all staged files are
+# gitignored: *.vh, dma_storage.v).
+cp "${OUT}/parameters_FPGA.vh" \
+   "${OUT}/parameters_PE_cluster.vh" \
+   "${OUT}/parameters_PE.vh" \
+   "${OUT}/regmap_params.vh" \
+   "${REPO}/hdl/"
+cp "${OUT}/dma_storage.v" "${REPO}/hdl/"
+echo "[OK] Staged generated files into hdl/"
+
 echo "[OK] Generated files:"
 ls -la "${OUT}"

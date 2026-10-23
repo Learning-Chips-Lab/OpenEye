@@ -686,10 +686,14 @@ reg enable_write_to_storage;
       end
     end
 
+    // Per-GLB RAM data wires at module scope: the write side is assigned
+    // from a sibling generate loop via plain array indexing (hierarchical
+    // references into generate scopes are not resolvable by Yosys).
+    wire [BITS_PER_ROUTER-1:0] ram_data_i_w_arr [0:NUM_GLB_IACT-1];
+    wire [BITS_PER_ROUTER-1:0] ram_data_o_w_arr [0:NUM_GLB_IACT-1];
+
     genvar r_gen, w_gen, b_gen;
     for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin : BUFFER
-      wire [BITS_PER_ROUTER-1:0]ram_data_i_w;
-      wire [BITS_PER_ROUTER-1:0]ram_data_o_w;
       wire [ADDRWIDTH-1:0] bank_addr = ram_wr_en_q ? ram_wr_addr :
           (ram_rd_addr + (fully_connected_i ? 0 : r_gen * channel_div_trans));
       wire [WORDS_PER_TRANS-1:0] write_mask;
@@ -698,9 +702,9 @@ reg enable_write_to_storage;
         // Successive single-channel rows fill the low and high halves.
         // A low-half write also clears the upper half for odd-height padding.
         assign write_mask[w_gen] = !single_channel || (w_gen != 0) || !single_write_half_q;
-        assign write_data[w_gen*IACT_DATA_DATA+:IACT_DATA_DATA] =
+          assign write_data[w_gen*IACT_DATA_DATA+:IACT_DATA_DATA] =
             (single_channel && !single_write_half_q && (w_gen != 0)) ?
-            {IACT_DATA_DATA{1'b0}} : ram_data_i_w[w_gen*IACT_DATA_DATA+:IACT_DATA_DATA];
+            {IACT_DATA_DATA{1'b0}} : ram_data_i_w_arr[r_gen][w_gen*IACT_DATA_DATA+:IACT_DATA_DATA];
       end
       RAM_SP #(
           .DataWidth(BITS_PER_ROUTER),
@@ -714,15 +718,15 @@ reg enable_write_to_storage;
           .wr_mask_i(write_mask),
           .addr_i  (bank_addr),
           .data_i  (write_data),
-          .data_o  (ram_data_o_w)
+          .data_o  (ram_data_o_w_arr[r_gen])
       );
     end
     for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin
-      assign ram_data_o[r_gen * BITS_PER_ROUTER+:BITS_PER_ROUTER]=BUFFER[r_gen].ram_data_o_w;
+      assign ram_data_o[r_gen * BITS_PER_ROUTER+:BITS_PER_ROUTER]=ram_data_o_w_arr[r_gen];
       for (w_gen = 0; w_gen < WORDS_PER_TRANS; w_gen = w_gen + 1) begin
-        assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA +:DATA_IACT_BITWIDTH]                      = mem_data_payload_reg[r_gen][w_gen];
+        assign ram_data_i_w_arr[r_gen][w_gen * IACT_DATA_DATA +:DATA_IACT_BITWIDTH]                      = mem_data_payload_reg[r_gen][w_gen];
         if (SPARSITY_EN == 1) begin
-          assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA + DATA_IACT_BITWIDTH +:DATA_IACT_OVERHEAD] = mem_data_overhead_reg[r_gen][w_gen];
+          assign ram_data_i_w_arr[r_gen][w_gen * IACT_DATA_DATA + DATA_IACT_BITWIDTH +:DATA_IACT_OVERHEAD] = mem_data_overhead_reg[r_gen][w_gen];
         end
       end
     end

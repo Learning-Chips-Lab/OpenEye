@@ -1,0 +1,360 @@
+{
+    "meta": {
+        "flow": "Chip"
+    },
+    "DESIGN_NAME": "OpenEye_Asic",
+    "VERILOG_FILES": [
+        "/foss/designs/OpenEye/asic/rtl/sg13g2/OpenEye_Asic.v",
+        "/foss/designs/OpenEye/asic/rtl/sg13g2/sg13g2_ram_sp.v",
+        "/foss/designs/OpenEye/asic/rtl/sg13g2_io_blackbox.v",
+        "/foss/designs/OpenEye/hdl/GLB_cluster.v",
+        "/foss/designs/OpenEye/hdl/OpenEye_Cluster.v",
+        "/foss/designs/OpenEye/hdl/OpenEye_FPGA.v",
+        "/foss/designs/OpenEye/hdl/OpenEye_Parallel.v",
+        "/foss/designs/OpenEye/hdl/PE.v",
+        "/foss/designs/OpenEye/hdl/PE_cluster.v",
+        "/foss/designs/OpenEye/hdl/RAM_DP.v",
+        "/foss/designs/OpenEye/hdl/RAM_DP_RW.v",
+        "/foss/designs/OpenEye/hdl/RAM_DP_RW_generic.v",
+        "/foss/designs/OpenEye/hdl/RAM_DP_generic.v",
+        "/foss/designs/OpenEye/hdl/RAM_SP.v",
+        "/foss/designs/OpenEye/hdl/RAM_SP_generic.v",
+        "/foss/designs/OpenEye/hdl/RST_SYNC.v",
+        "/foss/designs/OpenEye/hdl/SPad_DP.v",
+        "/foss/designs/OpenEye/hdl/SPad_DP_RW.v",
+        "/foss/designs/OpenEye/hdl/SPad_SP.v",
+        "/foss/designs/OpenEye/hdl/adder.v",
+        "/foss/designs/OpenEye/hdl/adder_tree.v",
+        "/foss/designs/OpenEye/hdl/data_pipeline.v",
+        "/foss/designs/OpenEye/hdl/data_pipeline_iact.v",
+        "/foss/designs/OpenEye/hdl/data_pipeline_wght.v",
+        "/foss/designs/OpenEye/hdl/delay_cluster.v",
+        "/foss/designs/OpenEye/hdl/demux2.v",
+        "/foss/designs/OpenEye/hdl/dma_storage.v",
+        "/foss/designs/OpenEye/hdl/dsp_unit.v",
+        "/foss/designs/OpenEye/hdl/iact_stream_constructor.v",
+        "/foss/designs/OpenEye/hdl/multiplier.v",
+        "/foss/designs/OpenEye/hdl/mux2.v",
+        "/foss/designs/OpenEye/hdl/mux_iact.v",
+        "/foss/designs/OpenEye/hdl/psum_pipeline.v",
+        "/foss/designs/OpenEye/hdl/quantization_unit.v",
+        "/foss/designs/OpenEye/hdl/ring_buffer_pipelined.v",
+        "/foss/designs/OpenEye/hdl/router_configurator.v",
+        "/foss/designs/OpenEye/hdl/router_iact.v",
+        "/foss/designs/OpenEye/hdl/router_psum.v",
+        "/foss/designs/OpenEye/hdl/router_wght.v",
+        "/foss/designs/OpenEye/hdl/varlenFIFO.v"
+    ],
+    "VERILOG_DEFINES": [
+        "USE_INTERNAL_PARAMS_PE",
+        "USE_INTERNAL_PARAMS_PE_cluster",
+        "OPENEYE_RAM_SPECIFIC",
+        "NO_TRACE"
+    ],
+    "CLOCK_PORT": "clk_pad",
+    "CLOCK_PERIOD": 10,
+    "FP_SIZING": "absolute",
+    "DIE_AREA": [
+        0,
+        0,
+        10500,
+        10500
+    ],
+    "LEFT_MARGIN_MULT": 667,
+    "RIGHT_MARGIN_MULT": 667,
+    "TOP_MARGIN_MULT": 85,
+    "BOTTOM_MARGIN_MULT": 85,
+    "PAD_SPACING_MULTIPLE": 80,
+    "CELL_LIBS": {
+        "*_typ_1p20V_25C": [
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib.gz",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_io/lib/sg13g2_io_typ_1p2V_3p3V_25C.lib.gz",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_typ_1p20V_25C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x8_c2_bm_bist_typ_1p20V_25C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_typ_1p20V_25C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x32_c2_bm_bist_typ_1p20V_25C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x16_c3_bm_bist_typ_1p20V_25C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x8_c3_bm_bist_typ_1p20V_25C.lib"
+        ],
+        "*_fast_1p32V_m40C": [
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_fast_1p32V_m40C.lib.gz",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_io/lib/sg13g2_io_fast_1p32V_3p6V_m40C.lib.gz",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_fast_1p32V_m55C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x8_c2_bm_bist_fast_1p32V_m55C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_fast_1p32V_m55C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x32_c2_bm_bist_fast_1p32V_m55C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x16_c3_bm_bist_fast_1p32V_m55C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x8_c3_bm_bist_fast_1p32V_m55C.lib"
+        ],
+        "*_slow_1p08V_125C": [
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_slow_1p08V_125C.lib.gz",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_io/lib/sg13g2_io_slow_1p08V_3p0V_125C.lib.gz",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_slow_1p08V_125C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x8_c2_bm_bist_slow_1p08V_125C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_slow_1p08V_125C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x32_c2_bm_bist_slow_1p08V_125C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x16_c3_bm_bist_slow_1p08V_125C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x8_c3_bm_bist_slow_1p08V_125C.lib"
+        ]
+    },
+    "MACROS": {
+        "RM_IHPSG13_1P_1024x64_c2_bm_bist": {
+            "gds": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_1024x64_c2_bm_bist.gds",
+            "lef": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_1024x64_c2_bm_bist.lef",
+            "lib": {
+                "*_typ_1p20V_25C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_typ_1p20V_25C.lib"
+                ],
+                "*_fast_1p32V_m40C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_fast_1p32V_m55C.lib"
+                ],
+                "*_slow_1p08V_125C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_slow_1p08V_125C.lib"
+                ]
+            }
+        },
+        "RM_IHPSG13_1P_1024x8_c2_bm_bist": {
+            "gds": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_1024x8_c2_bm_bist.gds",
+            "lef": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_1024x8_c2_bm_bist.lef",
+            "lib": {
+                "*_typ_1p20V_25C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x8_c2_bm_bist_typ_1p20V_25C.lib"
+                ],
+                "*_fast_1p32V_m40C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x8_c2_bm_bist_fast_1p32V_m55C.lib"
+                ],
+                "*_slow_1p08V_125C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x8_c2_bm_bist_slow_1p08V_125C.lib"
+                ]
+            }
+        },
+        "RM_IHPSG13_1P_2048x64_c2_bm_bist": {
+            "gds": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_2048x64_c2_bm_bist.gds",
+            "lef": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_2048x64_c2_bm_bist.lef",
+            "lib": {
+                "*_typ_1p20V_25C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_typ_1p20V_25C.lib"
+                ],
+                "*_fast_1p32V_m40C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_fast_1p32V_m55C.lib"
+                ],
+                "*_slow_1p08V_125C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_slow_1p08V_125C.lib"
+                ]
+            }
+        },
+        "RM_IHPSG13_1P_2048x32_c2_bm_bist": {
+            "gds": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_2048x32_c2_bm_bist.gds",
+            "lef": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_2048x32_c2_bm_bist.lef",
+            "lib": {
+                "*_typ_1p20V_25C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x32_c2_bm_bist_typ_1p20V_25C.lib"
+                ],
+                "*_fast_1p32V_m40C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x32_c2_bm_bist_fast_1p32V_m55C.lib"
+                ],
+                "*_slow_1p08V_125C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x32_c2_bm_bist_slow_1p08V_125C.lib"
+                ]
+            }
+        },
+        "RM_IHPSG13_1P_4096x16_c3_bm_bist": {
+            "gds": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_4096x16_c3_bm_bist.gds",
+            "lef": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_4096x16_c3_bm_bist.lef",
+            "lib": {
+                "*_typ_1p20V_25C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x16_c3_bm_bist_typ_1p20V_25C.lib"
+                ],
+                "*_fast_1p32V_m40C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x16_c3_bm_bist_fast_1p32V_m55C.lib"
+                ],
+                "*_slow_1p08V_125C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x16_c3_bm_bist_slow_1p08V_125C.lib"
+                ]
+            }
+        },
+        "RM_IHPSG13_1P_4096x8_c3_bm_bist": {
+            "gds": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_4096x8_c3_bm_bist.gds",
+            "lef": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_4096x8_c3_bm_bist.lef",
+            "lib": {
+                "*_typ_1p20V_25C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x8_c3_bm_bist_typ_1p20V_25C.lib"
+                ],
+                "*_fast_1p32V_m40C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x8_c3_bm_bist_fast_1p32V_m55C.lib"
+                ],
+                "*_slow_1p08V_125C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_4096x8_c3_bm_bist_slow_1p08V_125C.lib"
+                ]
+            }
+        }
+    },
+    "EXTRA_VERILOG_MODELS": [
+        "/foss/designs/OpenEye/asic/rtl/sg13g2_io_blackbox.v",
+        "/foss/designs/OpenEye/asic/rtl/sg13g2/sg13g2_sram_blackbox.v"
+    ],
+    "EXTRA_LEFS": [
+        "/foss/designs/OpenEye/asic/rtl/bondpad_70x70.lef"
+    ],
+    "EXTRA_GDS": [
+        "/foss/designs/OpenEye/asic/rtl/bondpad_70x70.gds"
+    ],
+    "PDN_CORE_RING": true,
+    "PDN_CORE_RING_CONNECT_TO_PADS": true,
+    "PDN_MACRO_CONNECTIONS": [
+        ".* VPWR VGND vdd vss",
+        ".* VPWR VGND iovdd iovss"
+    ],
+    "RUN_IRDROP_REPORT": false,
+    "PAD_SOUTH": [
+        "u_vdd1",
+        "u_vss1",
+        "u_dma_i_in32",
+        "u_dma_i_in33",
+        "u_dma_i_in34",
+        "u_dma_i_in35",
+        "u_dma_i_in36",
+        "u_dma_i_in37",
+        "u_dma_i_in38",
+        "u_dma_i_in39",
+        "u_dma_i_in40",
+        "u_dma_i_in41",
+        "u_dma_i_in42",
+        "u_dma_i_in43",
+        "u_dma_i_in44",
+        "u_dma_i_in45",
+        "u_dma_i_in46",
+        "u_dma_i_in47",
+        "u_dma_i_in48",
+        "u_dma_i_in49",
+        "u_dma_i_in50",
+        "u_dma_i_in51",
+        "u_dma_i_in52",
+        "u_dma_i_in53",
+        "u_dma_i_in54",
+        "u_dma_i_in55",
+        "u_dma_i_in56",
+        "u_dma_i_in57",
+        "u_dma_i_in58",
+        "u_dma_i_in59",
+        "u_dma_i_in60",
+        "u_dma_i_in61",
+        "u_dma_i_in62",
+        "u_dma_i_in63",
+        "u_eni_in",
+        "u_rdyi_in"
+    ],
+    "PAD_EAST": [
+        "u_vdd3",
+        "u_vss3",
+        "u_dma_o_out32",
+        "u_dma_o_out33",
+        "u_dma_o_out34",
+        "u_dma_o_out35",
+        "u_dma_o_out36",
+        "u_dma_o_out37",
+        "u_dma_o_out38",
+        "u_dma_o_out39",
+        "u_dma_o_out40",
+        "u_dma_o_out41",
+        "u_dma_o_out42",
+        "u_dma_o_out43",
+        "u_dma_o_out44",
+        "u_dma_o_out45",
+        "u_dma_o_out46",
+        "u_dma_o_out47",
+        "u_dma_o_out48",
+        "u_dma_o_out49",
+        "u_dma_o_out50",
+        "u_dma_o_out51",
+        "u_dma_o_out52",
+        "u_dma_o_out53",
+        "u_dma_o_out54",
+        "u_dma_o_out55",
+        "u_dma_o_out56",
+        "u_dma_o_out57",
+        "u_dma_o_out58",
+        "u_dma_o_out59",
+        "u_dma_o_out60",
+        "u_dma_o_out61",
+        "u_dma_o_out62",
+        "u_dma_o_out63",
+        "u_last_out"
+    ],
+    "PAD_NORTH": [
+        "u_vdd2",
+        "u_vss2",
+        "u_dma_o_out0",
+        "u_dma_o_out1",
+        "u_dma_o_out2",
+        "u_dma_o_out3",
+        "u_dma_o_out4",
+        "u_dma_o_out5",
+        "u_dma_o_out6",
+        "u_dma_o_out7",
+        "u_dma_o_out8",
+        "u_dma_o_out9",
+        "u_dma_o_out10",
+        "u_dma_o_out11",
+        "u_dma_o_out12",
+        "u_dma_o_out13",
+        "u_dma_o_out14",
+        "u_dma_o_out15",
+        "u_dma_o_out16",
+        "u_dma_o_out17",
+        "u_dma_o_out18",
+        "u_dma_o_out19",
+        "u_dma_o_out20",
+        "u_dma_o_out21",
+        "u_dma_o_out22",
+        "u_dma_o_out23",
+        "u_dma_o_out24",
+        "u_dma_o_out25",
+        "u_dma_o_out26",
+        "u_dma_o_out27",
+        "u_dma_o_out28",
+        "u_dma_o_out29",
+        "u_dma_o_out30",
+        "u_dma_o_out31",
+        "u_eno_out",
+        "u_rdyo_out"
+    ],
+    "PAD_WEST": [
+        "u_vdd0",
+        "u_vss0",
+        "u_dma_i_in0",
+        "u_dma_i_in1",
+        "u_dma_i_in2",
+        "u_dma_i_in3",
+        "u_dma_i_in4",
+        "u_dma_i_in5",
+        "u_dma_i_in6",
+        "u_dma_i_in7",
+        "u_dma_i_in8",
+        "u_dma_i_in9",
+        "u_dma_i_in10",
+        "u_dma_i_in11",
+        "u_dma_i_in12",
+        "u_dma_i_in13",
+        "u_dma_i_in14",
+        "u_dma_i_in15",
+        "u_dma_i_in16",
+        "u_dma_i_in17",
+        "u_dma_i_in18",
+        "u_dma_i_in19",
+        "u_dma_i_in20",
+        "u_dma_i_in21",
+        "u_dma_i_in22",
+        "u_dma_i_in23",
+        "u_dma_i_in24",
+        "u_dma_i_in25",
+        "u_dma_i_in26",
+        "u_dma_i_in27",
+        "u_dma_i_in28",
+        "u_dma_i_in29",
+        "u_dma_i_in30",
+        "u_dma_i_in31",
+        "u_clk_in",
+        "u_rstn_in"
+    ]
+}

@@ -543,6 +543,67 @@ module OpenEye_Parallel #(
   ///Wires
   ///#######################
 
+
+  // Per-cluster interconnect wires, hoisted to module scope so the
+  // cross-cluster wiring can reference them without hierarchical
+  // paths into the gen_x/gen_y generate scopes (which Yosys cannot
+  // resolve; iverilog/Verilator can).
+    wire [                             PES-1:0] compute_cluster_i_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_dst_bottom_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_dst_bottom_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_dst_side_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] data_dst_side_wght_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_dst_top_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_dst_top_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_src_bottom_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_src_bottom_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_src_side_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] data_src_side_wght_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_src_top_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_src_top_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] enable_dst_bottom_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] enable_dst_bottom_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] enable_dst_side_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_WGHT-1:0] enable_dst_side_wght_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] enable_dst_top_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] enable_dst_top_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] enable_src_bottom_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] enable_src_bottom_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] enable_src_side_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_WGHT-1:0] enable_src_side_wght_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] enable_src_top_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] enable_src_top_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [ IACT_MEM_ADDR_BITS*NUM_GLB_IACT-1:0] iact_addr_i_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [      $clog2(NUM_GLB_IACT+1)*PES-1:0] iact_choose_cluster_i_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] iact_data_i_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] iact_enable_i_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] iact_ready_o_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [ PSUM_MEM_ADDR_BITS*NUM_GLB_PSUM-1:0] psum_addr_i_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] psum_choose_cluster_i_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] psum_data_i_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] psum_data_o_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] psum_enable_i_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] psum_enable_o_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] psum_ready_i_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] psum_ready_o_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] ready_dst_bottom_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] ready_dst_bottom_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] ready_dst_side_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_WGHT-1:0] ready_dst_side_wght_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] ready_dst_top_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] ready_dst_top_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] ready_src_bottom_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] ready_src_bottom_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] ready_src_side_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_WGHT-1:0] ready_src_side_wght_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] ready_src_top_iact_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_PSUM-1:0] ready_src_top_psum_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [  ROUTER_MODES_IACT*NUM_GLB_IACT-1:0] router_mode_iact_i_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [  ROUTER_MODES_PSUM*NUM_GLB_PSUM-1:0] router_mode_psum_i_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_WGHT-1:0] router_mode_wght_i_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] wght_data_i_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_WGHT-1:0] wght_enable_i_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_WGHT-1:0] wght_ready_o_cluster_w [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
   genvar clusters_y;
   genvar clusters_x;
   generate
@@ -553,97 +614,97 @@ module OpenEye_Parallel #(
         ////////////////////////////////
         ///Selection
         //////////////////////////////////
-        wire [      $clog2(NUM_GLB_IACT+1)*PES-1:0] iact_choose_cluster_i_w;
-        wire [                    NUM_GLB_PSUM-1:0] psum_choose_cluster_i_w;
-        wire [                             PES-1:0] compute_cluster_i_w;
+
+
+
 
         ///Router Modes
         //////////////////////////////////
-        wire [  ROUTER_MODES_IACT*NUM_GLB_IACT-1:0] router_mode_iact_i_w;
-        wire [                    NUM_GLB_WGHT-1:0] router_mode_wght_i_w;
-        wire [  ROUTER_MODES_PSUM*NUM_GLB_PSUM-1:0] router_mode_psum_i_w;
+
+
+
 
         ///IACT Connection
         //////////////////////////////////
         ///Connect above
-        wire [                    NUM_GLB_IACT-1:0] enable_src_top_iact_cluster_w;
-        wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_src_top_iact_cluster_w;
-        wire [                    NUM_GLB_IACT-1:0] ready_src_top_iact_cluster_w;
 
-        wire [                    NUM_GLB_IACT-1:0] enable_dst_top_iact_cluster_w;
-        wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_dst_top_iact_cluster_w;
-        wire [                    NUM_GLB_IACT-1:0] ready_dst_top_iact_cluster_w;
+
+
+
+
+
+
 
         ///Connect other side
-        wire [                    NUM_GLB_IACT-1:0] enable_src_side_iact_cluster_w;
-        wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_src_side_iact_cluster_w;
-        wire [                    NUM_GLB_IACT-1:0] ready_src_side_iact_cluster_w;
 
-        wire [                    NUM_GLB_IACT-1:0] enable_dst_side_iact_cluster_w;
-        wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_dst_side_iact_cluster_w;
-        wire [                    NUM_GLB_IACT-1:0] ready_dst_side_iact_cluster_w;
+
+
+
+
+
+
 
         ///Connect below
-        wire [                    NUM_GLB_IACT-1:0] enable_src_bottom_iact_cluster_w;
-        wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_src_bottom_iact_cluster_w;
-        wire [                    NUM_GLB_IACT-1:0] ready_src_bottom_iact_cluster_w;
 
-        wire [                    NUM_GLB_IACT-1:0] enable_dst_bottom_iact_cluster_w;
-        wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] data_dst_bottom_iact_cluster_w;
-        wire [                    NUM_GLB_IACT-1:0] ready_dst_bottom_iact_cluster_w;
+
+
+
+
+
+
 
         ///Memory
-        wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] iact_data_i_cluster_w;
-        wire [ IACT_MEM_ADDR_BITS*NUM_GLB_IACT-1:0] iact_addr_i_cluster_w;
-        wire [                    NUM_GLB_IACT-1:0] iact_enable_i_cluster_w;
-        wire [                    NUM_GLB_IACT-1:0] iact_ready_o_cluster_w;
+
+
+
+
 
         ///WGHT Connection
         //////////////////////////////////
         ///Connect other side
-        wire [                    NUM_GLB_WGHT-1:0] enable_src_side_wght_cluster_w;
-        wire [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] data_src_side_wght_cluster_w;
-        wire [                    NUM_GLB_WGHT-1:0] ready_src_side_wght_cluster_w;
 
-        wire [                    NUM_GLB_WGHT-1:0] enable_dst_side_wght_cluster_w;
-        wire [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] data_dst_side_wght_cluster_w;
-        wire [                    NUM_GLB_WGHT-1:0] ready_dst_side_wght_cluster_w;
+
+
+
+
+
+
 
         ///Memory
-        wire [TRANS_BITWIDTH_WGHT*NUM_GLB_WGHT-1:0] wght_data_i_cluster_w;
-        wire [                    NUM_GLB_WGHT-1:0] wght_enable_i_cluster_w;
-        wire [                    NUM_GLB_WGHT-1:0] wght_ready_o_cluster_w;
+
+
+
 
         ///PSUM Connection
         //////////////////////////////////
         ///Connect above
-        wire [                    NUM_GLB_PSUM-1:0] enable_src_top_psum_cluster_w;
-        wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_src_top_psum_cluster_w;
-        wire [                    NUM_GLB_PSUM-1:0] ready_src_top_psum_cluster_w;
 
-        wire [                    NUM_GLB_PSUM-1:0] enable_dst_top_psum_cluster_w;
-        wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_dst_top_psum_cluster_w;
-        wire [                    NUM_GLB_PSUM-1:0] ready_dst_top_psum_cluster_w;
+
+
+
+
+
+
 
         ///Connect below
-        wire [                    NUM_GLB_PSUM-1:0] enable_src_bottom_psum_cluster_w;
-        wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_src_bottom_psum_cluster_w;
-        wire [                    NUM_GLB_PSUM-1:0] ready_src_bottom_psum_cluster_w;
 
-        wire [                    NUM_GLB_PSUM-1:0] enable_dst_bottom_psum_cluster_w;
-        wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] data_dst_bottom_psum_cluster_w;
-        wire [                    NUM_GLB_PSUM-1:0] ready_dst_bottom_psum_cluster_w;
+
+
+
+
+
+
 
         ///Memory 1
-        wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] psum_data_i_cluster_w;
-        wire [ PSUM_MEM_ADDR_BITS*NUM_GLB_PSUM-1:0] psum_addr_i_cluster_w;
-        wire [                    NUM_GLB_PSUM-1:0] psum_enable_i_cluster_w;
-        wire [                    NUM_GLB_PSUM-1:0] psum_ready_o_cluster_w;
+
+
+
+
 
         ///Memory 2
-        wire [TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM-1:0] psum_data_o_cluster_w;
-        wire [                    NUM_GLB_PSUM-1:0] psum_enable_o_cluster_w;
-        wire [                    NUM_GLB_PSUM-1:0] psum_ready_i_cluster_w;
+
+
+
 
         OpenEye_Cluster #(
             .SERIAL            (SERIAL),
@@ -682,98 +743,98 @@ module OpenEye_Parallel #(
 
             ///Selection
             //////////////////////////////////
-            .iact_choose_i(iact_choose_cluster_i_w),
-            .psum_choose_i(psum_choose_cluster_i_w),
+            .iact_choose_i(iact_choose_cluster_i_w[clusters_x][clusters_y]),
+            .psum_choose_i(psum_choose_cluster_i_w[clusters_x][clusters_y]),
             .gemm_mode_i  (gemm_mode_reg),
-            .compute_i    (compute_cluster_i_w),
+            .compute_i    (compute_cluster_i_w[clusters_x][clusters_y]),
 
             ///Router Modes
             //////////////////////////////////
-            .router_mode_iact_i(router_mode_iact_i_w),
-            .router_mode_wght_i(router_mode_wght_i_w),
-            .router_mode_psum_i(router_mode_psum_i_w),
+            .router_mode_iact_i(router_mode_iact_i_w[clusters_x][clusters_y]),
+            .router_mode_wght_i(router_mode_wght_i_w[clusters_x][clusters_y]),
+            .router_mode_psum_i(router_mode_psum_i_w[clusters_x][clusters_y]),
 
             ///IACT Connection
             //////////////////////////////////
             //Connect above
-            .enable_src_top_iact(enable_src_top_iact_cluster_w),
-            .data_src_top_iact  (data_src_top_iact_cluster_w),
-            .ready_src_top_iact (ready_src_top_iact_cluster_w),
+            .enable_src_top_iact(enable_src_top_iact_cluster_w[clusters_x][clusters_y]),
+            .data_src_top_iact  (data_src_top_iact_cluster_w[clusters_x][clusters_y]),
+            .ready_src_top_iact (ready_src_top_iact_cluster_w[clusters_x][clusters_y]),
 
-            .enable_dst_top_iact(enable_dst_top_iact_cluster_w),
-            .data_dst_top_iact  (data_dst_top_iact_cluster_w),
-            .ready_dst_top_iact (ready_dst_top_iact_cluster_w),
+            .enable_dst_top_iact(enable_dst_top_iact_cluster_w[clusters_x][clusters_y]),
+            .data_dst_top_iact  (data_dst_top_iact_cluster_w[clusters_x][clusters_y]),
+            .ready_dst_top_iact (ready_dst_top_iact_cluster_w[clusters_x][clusters_y]),
 
             ///Connect other side
-            .enable_src_side_iact(enable_src_side_iact_cluster_w),
-            .data_src_side_iact  (data_src_side_iact_cluster_w),
-            .ready_src_side_iact (ready_src_side_iact_cluster_w),
+            .enable_src_side_iact(enable_src_side_iact_cluster_w[clusters_x][clusters_y]),
+            .data_src_side_iact  (data_src_side_iact_cluster_w[clusters_x][clusters_y]),
+            .ready_src_side_iact (ready_src_side_iact_cluster_w[clusters_x][clusters_y]),
 
-            .enable_dst_side_iact(enable_dst_side_iact_cluster_w),
-            .data_dst_side_iact  (data_dst_side_iact_cluster_w),
-            .ready_dst_side_iact (ready_dst_side_iact_cluster_w),
+            .enable_dst_side_iact(enable_dst_side_iact_cluster_w[clusters_x][clusters_y]),
+            .data_dst_side_iact  (data_dst_side_iact_cluster_w[clusters_x][clusters_y]),
+            .ready_dst_side_iact (ready_dst_side_iact_cluster_w[clusters_x][clusters_y]),
 
             ///Connect below
-            .enable_src_bottom_iact(enable_src_bottom_iact_cluster_w),
-            .data_src_bottom_iact  (data_src_bottom_iact_cluster_w),
-            .ready_src_bottom_iact (ready_src_bottom_iact_cluster_w),
+            .enable_src_bottom_iact(enable_src_bottom_iact_cluster_w[clusters_x][clusters_y]),
+            .data_src_bottom_iact  (data_src_bottom_iact_cluster_w[clusters_x][clusters_y]),
+            .ready_src_bottom_iact (ready_src_bottom_iact_cluster_w[clusters_x][clusters_y]),
 
-            .enable_dst_bottom_iact(enable_dst_bottom_iact_cluster_w),
-            .data_dst_bottom_iact  (data_dst_bottom_iact_cluster_w),
-            .ready_dst_bottom_iact (ready_dst_bottom_iact_cluster_w),
+            .enable_dst_bottom_iact(enable_dst_bottom_iact_cluster_w[clusters_x][clusters_y]),
+            .data_dst_bottom_iact  (data_dst_bottom_iact_cluster_w[clusters_x][clusters_y]),
+            .ready_dst_bottom_iact (ready_dst_bottom_iact_cluster_w[clusters_x][clusters_y]),
 
             ///Memory
-            .ext_mem_iact_data_i  (iact_data_i_cluster_w),
-            .ext_mem_iact_addr_i  (iact_addr_i_cluster_w),
-            .ext_mem_iact_enable_i(iact_enable_i_cluster_w),
-            .ext_mem_iact_ready_o (iact_ready_o_cluster_w),
+            .ext_mem_iact_data_i  (iact_data_i_cluster_w[clusters_x][clusters_y]),
+            .ext_mem_iact_addr_i  (iact_addr_i_cluster_w[clusters_x][clusters_y]),
+            .ext_mem_iact_enable_i(iact_enable_i_cluster_w[clusters_x][clusters_y]),
+            .ext_mem_iact_ready_o (iact_ready_o_cluster_w[clusters_x][clusters_y]),
 
             ///WGHT Connection
             //////////////////////////////////
             ///Connect other side
-            .enable_src_side_wght(enable_src_side_wght_cluster_w),
-            .data_src_side_wght  (data_src_side_wght_cluster_w),
-            .ready_src_side_wght (ready_src_side_wght_cluster_w),
+            .enable_src_side_wght(enable_src_side_wght_cluster_w[clusters_x][clusters_y]),
+            .data_src_side_wght  (data_src_side_wght_cluster_w[clusters_x][clusters_y]),
+            .ready_src_side_wght (ready_src_side_wght_cluster_w[clusters_x][clusters_y]),
 
-            .enable_dst_side_wght(enable_dst_side_wght_cluster_w),
-            .data_dst_side_wght  (data_dst_side_wght_cluster_w),
-            .ready_dst_side_wght (ready_dst_side_wght_cluster_w),
+            .enable_dst_side_wght(enable_dst_side_wght_cluster_w[clusters_x][clusters_y]),
+            .data_dst_side_wght  (data_dst_side_wght_cluster_w[clusters_x][clusters_y]),
+            .ready_dst_side_wght (ready_dst_side_wght_cluster_w[clusters_x][clusters_y]),
 
             ///Memory
-            .ext_mem_wght_data_i  (wght_data_i_cluster_w),
-            .ext_mem_wght_enable_i(wght_enable_i_cluster_w),
-            .ext_mem_wght_ready_o (wght_ready_o_cluster_w),
+            .ext_mem_wght_data_i  (wght_data_i_cluster_w[clusters_x][clusters_y]),
+            .ext_mem_wght_enable_i(wght_enable_i_cluster_w[clusters_x][clusters_y]),
+            .ext_mem_wght_ready_o (wght_ready_o_cluster_w[clusters_x][clusters_y]),
 
             ///PSUM Connection
             //////////////////////////////////
             ///Connect above
-            .enable_src_top_psum(enable_src_top_psum_cluster_w),
-            .data_src_top_psum  (data_src_top_psum_cluster_w),
-            .ready_src_top_psum (ready_src_top_psum_cluster_w),
+            .enable_src_top_psum(enable_src_top_psum_cluster_w[clusters_x][clusters_y]),
+            .data_src_top_psum  (data_src_top_psum_cluster_w[clusters_x][clusters_y]),
+            .ready_src_top_psum (ready_src_top_psum_cluster_w[clusters_x][clusters_y]),
 
-            .enable_dst_top_psum(enable_dst_top_psum_cluster_w),
-            .data_dst_top_psum  (data_dst_top_psum_cluster_w),
-            .ready_dst_top_psum (ready_dst_top_psum_cluster_w),
+            .enable_dst_top_psum(enable_dst_top_psum_cluster_w[clusters_x][clusters_y]),
+            .data_dst_top_psum  (data_dst_top_psum_cluster_w[clusters_x][clusters_y]),
+            .ready_dst_top_psum (ready_dst_top_psum_cluster_w[clusters_x][clusters_y]),
 
             ///Connect below
-            .enable_src_bottom_psum(enable_src_bottom_psum_cluster_w),
-            .data_src_bottom_psum  (data_src_bottom_psum_cluster_w),
-            .ready_src_bottom_psum (ready_src_bottom_psum_cluster_w),
+            .enable_src_bottom_psum(enable_src_bottom_psum_cluster_w[clusters_x][clusters_y]),
+            .data_src_bottom_psum  (data_src_bottom_psum_cluster_w[clusters_x][clusters_y]),
+            .ready_src_bottom_psum (ready_src_bottom_psum_cluster_w[clusters_x][clusters_y]),
 
-            .enable_dst_bottom_psum(enable_dst_bottom_psum_cluster_w),
-            .data_dst_bottom_psum  (data_dst_bottom_psum_cluster_w),
-            .ready_dst_bottom_psum (ready_dst_bottom_psum_cluster_w),
+            .enable_dst_bottom_psum(enable_dst_bottom_psum_cluster_w[clusters_x][clusters_y]),
+            .data_dst_bottom_psum  (data_dst_bottom_psum_cluster_w[clusters_x][clusters_y]),
+            .ready_dst_bottom_psum (ready_dst_bottom_psum_cluster_w[clusters_x][clusters_y]),
 
             ///Memory 1
-            .ext_mem_psum_data_i  (psum_data_i_cluster_w),
-            .ext_mem_psum_addr_i  (psum_addr_i_cluster_w),
-            .ext_mem_psum_enable_i(psum_enable_i_cluster_w),
-            .ext_mem_psum_ready_o (psum_ready_o_cluster_w),
+            .ext_mem_psum_data_i  (psum_data_i_cluster_w[clusters_x][clusters_y]),
+            .ext_mem_psum_addr_i  (psum_addr_i_cluster_w[clusters_x][clusters_y]),
+            .ext_mem_psum_enable_i(psum_enable_i_cluster_w[clusters_x][clusters_y]),
+            .ext_mem_psum_ready_o (psum_ready_o_cluster_w[clusters_x][clusters_y]),
 
             ///Memory 2
-            .ext_mem_psum_data_o  (psum_data_o_cluster_w),
-            .ext_mem_psum_enable_o(psum_enable_o_cluster_w),
-            .ext_mem_psum_ready_i (psum_ready_i_cluster_w),
+            .ext_mem_psum_data_o  (psum_data_o_cluster_w[clusters_x][clusters_y]),
+            .ext_mem_psum_enable_o(psum_enable_o_cluster_w[clusters_x][clusters_y]),
+            .ext_mem_psum_ready_i (psum_ready_i_cluster_w[clusters_x][clusters_y]),
 
             .bano_cluster_mode_i(bano_cluster_mode_reg),
             .af_cluster_mode_i  (af_cluster_mode_reg),
@@ -834,58 +895,58 @@ module OpenEye_Parallel #(
         ///IACT ASSIGNMENTS
         for (g_gen = 0; g_gen < NUM_GLB_IACT; g_gen = g_gen + 1) begin
           if (SERIAL) begin : gen_serial_router_mode_iact
-              assign gen_x[cc_gen].gen_y[cr_gen].router_mode_iact_i_w[g_gen*ROUTER_MODES_IACT+: ROUTER_MODES_IACT] =
+              assign router_mode_iact_i_w[cc_gen][cr_gen][g_gen*ROUTER_MODES_IACT+: ROUTER_MODES_IACT] =
             router_mode_iact_i[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
                               cr_gen * NUM_GLB_IACT * ROUTER_MODES_IACT +
                               g_gen * ROUTER_MODES_IACT +: ROUTER_MODES_IACT];
           end else begin : gen_parallel_router_mode_iact
-              assign gen_x[cc_gen].gen_y[cr_gen].router_mode_iact_i_w[g_gen*ROUTER_MODES_IACT+: ROUTER_MODES_IACT] =
+              assign router_mode_iact_i_w[cc_gen][cr_gen][g_gen*ROUTER_MODES_IACT+: ROUTER_MODES_IACT] =
             router_mode_iact_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * ROUTER_MODES_IACT +
                               cr_gen * NUM_GLB_IACT * ROUTER_MODES_IACT +
                               g_gen * ROUTER_MODES_IACT +: ROUTER_MODES_IACT];
           end
-          assign gen_x[cc_gen].gen_y[cr_gen].enable_src_side_iact_cluster_w[g_gen] = gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].enable_dst_side_iact_cluster_w[g_gen];
-          assign gen_x[cc_gen].gen_y[cr_gen].ready_dst_side_iact_cluster_w[g_gen]  = gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].ready_src_side_iact_cluster_w[g_gen];
-          assign gen_x[cc_gen].gen_y[cr_gen].data_src_side_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] 
-          = gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].data_dst_side_iact_cluster_w[g_gen * TRANS_BITWIDTH_IACT +: TRANS_BITWIDTH_IACT];
+          assign enable_src_side_iact_cluster_w[cc_gen][cr_gen][g_gen] = enable_dst_side_iact_cluster_w[(cc_gen + 1) % CLUSTER_COLUMNS][cr_gen][g_gen];
+          assign ready_dst_side_iact_cluster_w[cc_gen][cr_gen][g_gen]  = ready_src_side_iact_cluster_w[(cc_gen + 1) % CLUSTER_COLUMNS][cr_gen][g_gen];
+          assign data_src_side_iact_cluster_w[cc_gen][cr_gen][g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] 
+          = data_dst_side_iact_cluster_w[(cc_gen + 1) % CLUSTER_COLUMNS][cr_gen][g_gen * TRANS_BITWIDTH_IACT +: TRANS_BITWIDTH_IACT];
           if (cr_gen != CLUSTER_ROWS - 1) begin : gen_router_iact_bottom_connect
-              assign gen_x[cc_gen].gen_y[cr_gen + 1].data_src_top_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] = 
-            gen_x[cc_gen].gen_y[cr_gen].data_dst_bottom_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT];
-            assign gen_x[cc_gen].gen_y[cr_gen + 1].enable_src_top_iact_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_bottom_iact_cluster_w[g_gen];
-            assign gen_x[cc_gen].gen_y[cr_gen + 1].ready_dst_top_iact_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_bottom_iact_cluster_w[g_gen];
+              assign data_src_top_iact_cluster_w[cc_gen][cr_gen + 1][g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] = 
+            data_dst_bottom_iact_cluster_w[cc_gen][cr_gen][g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT];
+            assign enable_src_top_iact_cluster_w[cc_gen][cr_gen + 1][g_gen] = enable_dst_bottom_iact_cluster_w[cc_gen][cr_gen][g_gen];
+            assign ready_dst_top_iact_cluster_w[cc_gen][cr_gen + 1][g_gen]  = ready_src_bottom_iact_cluster_w[cc_gen][cr_gen][g_gen];
           end
 
           if (cr_gen != 0) begin : gen_router_iact_top_connect
-            assign gen_x[cc_gen].gen_y[cr_gen - 1].data_src_bottom_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] = 
-            gen_x[cc_gen].gen_y[cr_gen].data_dst_top_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT];
-            assign gen_x[cc_gen].gen_y[cr_gen - 1].ready_dst_bottom_iact_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_top_iact_cluster_w[g_gen];
-            assign gen_x[cc_gen].gen_y[cr_gen - 1].enable_src_bottom_iact_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_top_iact_cluster_w[g_gen];
+            assign data_src_bottom_iact_cluster_w[cc_gen][cr_gen - 1][g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] = 
+            data_dst_top_iact_cluster_w[cc_gen][cr_gen][g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT];
+            assign ready_dst_bottom_iact_cluster_w[cc_gen][cr_gen - 1][g_gen]  = ready_src_top_iact_cluster_w[cc_gen][cr_gen][g_gen];
+            assign enable_src_bottom_iact_cluster_w[cc_gen][cr_gen - 1][g_gen] = enable_dst_top_iact_cluster_w[cc_gen][cr_gen][g_gen];
           end
           if (cr_gen == 0) begin : gen_router_iact_top_edge
-            assign gen_x[cc_gen].gen_y[cr_gen].data_src_top_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] = 0;
-            assign gen_x[cc_gen].gen_y[cr_gen].enable_src_top_iact_cluster_w[g_gen] = 0;
-            assign gen_x[cc_gen].gen_y[cr_gen].ready_dst_top_iact_cluster_w[g_gen]  = 0;
+            assign data_src_top_iact_cluster_w[cc_gen][cr_gen][g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] = 0;
+            assign enable_src_top_iact_cluster_w[cc_gen][cr_gen][g_gen] = 0;
+            assign ready_dst_top_iact_cluster_w[cc_gen][cr_gen][g_gen]  = 0;
           end
           if (cr_gen == CLUSTER_ROWS - 1) begin : gen_router_iact_bottom_edge
-            assign gen_x[cc_gen].gen_y[cr_gen].data_src_bottom_iact_cluster_w[g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] = 0;
-            assign gen_x[cc_gen].gen_y[cr_gen].ready_dst_bottom_iact_cluster_w[g_gen]  = 0;
-            assign gen_x[cc_gen].gen_y[cr_gen].enable_src_bottom_iact_cluster_w[g_gen] = 0;
+            assign data_src_bottom_iact_cluster_w[cc_gen][cr_gen][g_gen*TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] = 0;
+            assign ready_dst_bottom_iact_cluster_w[cc_gen][cr_gen][g_gen]  = 0;
+            assign enable_src_bottom_iact_cluster_w[cc_gen][cr_gen][g_gen] = 0;
           end
 
-          assign gen_x[cc_gen].gen_y[cr_gen].iact_data_i_cluster_w[g_gen * TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] =
+          assign iact_data_i_cluster_w[cc_gen][cr_gen][g_gen * TRANS_BITWIDTH_IACT+: TRANS_BITWIDTH_IACT] =
                 iact_data_i_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * TRANS_BITWIDTH_IACT +
                                 cr_gen * NUM_GLB_IACT * TRANS_BITWIDTH_IACT + 
                                 g_gen * TRANS_BITWIDTH_IACT +: TRANS_BITWIDTH_IACT];
-          assign gen_x[cc_gen].gen_y[cr_gen].iact_addr_i_cluster_w[g_gen * IACT_MEM_ADDR_BITS +: IACT_MEM_ADDR_BITS]   =
+          assign iact_addr_i_cluster_w[cc_gen][cr_gen][g_gen * IACT_MEM_ADDR_BITS +: IACT_MEM_ADDR_BITS]   =
           mem_addr_iact[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * IACT_MEM_ADDR_BITS +
                         cr_gen * NUM_GLB_IACT * IACT_MEM_ADDR_BITS +
                         g_gen * IACT_MEM_ADDR_BITS +: IACT_MEM_ADDR_BITS];
-          assign gen_x[cc_gen].gen_y[cr_gen].iact_enable_i_cluster_w[g_gen] = iact_enable_i_w[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen];
-          assign iact_ready_o_w[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen] = gen_x[cc_gen].gen_y[cr_gen].iact_ready_o_cluster_w[g_gen];
+          assign iact_enable_i_cluster_w[cc_gen][cr_gen][g_gen] = iact_enable_i_w[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen];
+          assign iact_ready_o_w[cc_gen*NUM_GLB_IACT*CLUSTER_ROWS+cr_gen*NUM_GLB_IACT+g_gen] = iact_ready_o_cluster_w[cc_gen][cr_gen][g_gen];
         end
         for (pec_gen = 0; pec_gen < PE_COLUMNS; pec_gen = pec_gen + 1) begin
           for (per_gen = 0; per_gen < PE_ROWS; per_gen = per_gen + 1) begin
-              assign gen_x[cc_gen].gen_y[cr_gen].iact_choose_cluster_i_w[per_gen*PE_COLUMNS*$clog2(
+              assign iact_choose_cluster_i_w[cc_gen][cr_gen][per_gen*PE_COLUMNS*$clog2(
                   NUM_GLB_IACT+1
               )+pec_gen*$clog2(
                   NUM_GLB_IACT+1
@@ -898,86 +959,86 @@ module OpenEye_Parallel #(
               )+pec_gen*$clog2(
                   NUM_GLB_IACT+1
               )+: $clog2(NUM_GLB_IACT + 1)];
-            assign gen_x[cc_gen].gen_y[cr_gen].compute_cluster_i_w[pec_gen*PE_ROWS+per_gen] = compute_cluster_i_reg[cc_gen*CLUSTER_ROWS*PES+cr_gen*PES+pec_gen*PE_ROWS+per_gen];
+            assign compute_cluster_i_w[cc_gen][cr_gen][pec_gen*PE_ROWS+per_gen] = compute_cluster_i_reg[cc_gen*CLUSTER_ROWS*PES+cr_gen*PES+pec_gen*PE_ROWS+per_gen];
           end
         end
 
         ///WGHT ASSIGNMENTS
         for (g_gen = 0; g_gen < NUM_GLB_WGHT; g_gen = g_gen + 1) begin
-          assign gen_x[cc_gen].gen_y[cr_gen].router_mode_wght_i_w[g_gen*ROUTER_MODES_WGHT+: ROUTER_MODES_WGHT] =
+          assign router_mode_wght_i_w[cc_gen][cr_gen][g_gen*ROUTER_MODES_WGHT+: ROUTER_MODES_WGHT] =
                 router_mode_wght_reg[cc_gen * CLUSTER_ROWS * NUM_GLB_WGHT * ROUTER_MODES_WGHT +
                                     cr_gen * NUM_GLB_WGHT * ROUTER_MODES_WGHT + 
                                     g_gen * ROUTER_MODES_WGHT +: ROUTER_MODES_WGHT];
-          assign gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].enable_src_side_wght_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_side_wght_cluster_w[g_gen];
-          assign gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].ready_dst_side_wght_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_side_wght_cluster_w[g_gen];
+          assign enable_src_side_wght_cluster_w[(cc_gen + 1) % CLUSTER_COLUMNS][cr_gen][g_gen] = enable_dst_side_wght_cluster_w[cc_gen][cr_gen][g_gen];
+          assign ready_dst_side_wght_cluster_w[(cc_gen + 1) % CLUSTER_COLUMNS][cr_gen][g_gen]  = ready_src_side_wght_cluster_w[cc_gen][cr_gen][g_gen];
 
-          assign gen_x[(cc_gen + 1) % CLUSTER_COLUMNS].gen_y[cr_gen].data_src_side_wght_cluster_w[g_gen*TRANS_BITWIDTH_WGHT+: TRANS_BITWIDTH_WGHT] =
-          gen_x[cc_gen].gen_y[cr_gen].data_dst_side_wght_cluster_w[g_gen*TRANS_BITWIDTH_WGHT+: TRANS_BITWIDTH_WGHT];
-          assign gen_x[cc_gen].gen_y[cr_gen].wght_data_i_cluster_w[g_gen * TRANS_BITWIDTH_WGHT+: TRANS_BITWIDTH_WGHT] = 
+          assign data_src_side_wght_cluster_w[(cc_gen + 1) % CLUSTER_COLUMNS][cr_gen][g_gen*TRANS_BITWIDTH_WGHT+: TRANS_BITWIDTH_WGHT] =
+          data_dst_side_wght_cluster_w[cc_gen][cr_gen][g_gen*TRANS_BITWIDTH_WGHT+: TRANS_BITWIDTH_WGHT];
+          assign wght_data_i_cluster_w[cc_gen][cr_gen][g_gen * TRANS_BITWIDTH_WGHT+: TRANS_BITWIDTH_WGHT] = 
                   wght_data_i_w[cc_gen * CLUSTER_ROWS * NUM_GLB_WGHT * TRANS_BITWIDTH_WGHT +
                                   cr_gen * NUM_GLB_WGHT * TRANS_BITWIDTH_WGHT + 
                                   g_gen * TRANS_BITWIDTH_WGHT +:TRANS_BITWIDTH_WGHT];
-          assign gen_x[cc_gen].gen_y[cr_gen].wght_enable_i_cluster_w[g_gen] = wght_enable_i_w[cc_gen*NUM_GLB_WGHT*CLUSTER_ROWS+cr_gen*NUM_GLB_WGHT+g_gen];
-          assign wght_ready_o_reg[cc_gen*NUM_GLB_WGHT*CLUSTER_ROWS+cr_gen*NUM_GLB_WGHT+g_gen] = gen_x[cc_gen].gen_y[cr_gen].wght_ready_o_cluster_w[g_gen];
+          assign wght_enable_i_cluster_w[cc_gen][cr_gen][g_gen] = wght_enable_i_w[cc_gen*NUM_GLB_WGHT*CLUSTER_ROWS+cr_gen*NUM_GLB_WGHT+g_gen];
+          assign wght_ready_o_reg[cc_gen*NUM_GLB_WGHT*CLUSTER_ROWS+cr_gen*NUM_GLB_WGHT+g_gen] = wght_ready_o_cluster_w[cc_gen][cr_gen][g_gen];
         end
 
         ///PSUM ASSIGNMENTS
         for (g_gen = 0; g_gen < NUM_GLB_PSUM; g_gen = g_gen + 1) begin
           if (SERIAL) begin : gen_serial_router_mode_psum
-            assign gen_x[cc_gen].gen_y[cr_gen].router_mode_psum_i_w[g_gen*ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM] =
+            assign router_mode_psum_i_w[cc_gen][cr_gen][g_gen*ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM] =
             router_mode_psum_i[cc_gen * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                               cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                               g_gen * ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM];
           end else begin : gen_parallel_router_mode_psum
-            assign gen_x[cc_gen].gen_y[cr_gen].router_mode_psum_i_w[g_gen*ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM] =
+            assign router_mode_psum_i_w[cc_gen][cr_gen][g_gen*ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM] =
             router_mode_psum_reg[cc_gen * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                               cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                               g_gen * ROUTER_MODES_PSUM+: ROUTER_MODES_PSUM];
           end
-          assign gen_x[cc_gen].gen_y[cr_gen].psum_choose_cluster_i_w[g_gen] = psum_choose_i[cc_gen * NUM_GLB_PSUM + cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM + g_gen];
+          assign psum_choose_cluster_i_w[cc_gen][cr_gen][g_gen] = psum_choose_i[cc_gen * NUM_GLB_PSUM + cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM + g_gen];
           if (cr_gen != CLUSTER_ROWS - 1) begin : gen_router_psum_bottom_connect
-            assign gen_x[cc_gen].gen_y[cr_gen + 1].data_src_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] =
-          gen_x[cc_gen].gen_y[cr_gen].data_dst_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM];
-            assign gen_x[cc_gen].gen_y[cr_gen + 1].enable_src_top_psum_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_bottom_psum_cluster_w[g_gen];
-            assign gen_x[cc_gen].gen_y[cr_gen + 1].ready_dst_top_psum_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_bottom_psum_cluster_w[g_gen];
+            assign data_src_top_psum_cluster_w[cc_gen][cr_gen + 1][g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] =
+          data_dst_bottom_psum_cluster_w[cc_gen][cr_gen][g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM];
+            assign enable_src_top_psum_cluster_w[cc_gen][cr_gen + 1][g_gen] = enable_dst_bottom_psum_cluster_w[cc_gen][cr_gen][g_gen];
+            assign ready_dst_top_psum_cluster_w[cc_gen][cr_gen + 1][g_gen]  = ready_src_bottom_psum_cluster_w[cc_gen][cr_gen][g_gen];
           end
 
           if (cr_gen != 0) begin : gen_router_psum_top_connect
-            assign gen_x[cc_gen].gen_y[cr_gen - 1].data_src_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] = 
-            gen_x[cc_gen].gen_y[cr_gen].data_dst_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM];
-            assign gen_x[cc_gen].gen_y[cr_gen - 1].ready_dst_bottom_psum_cluster_w[g_gen]  = gen_x[cc_gen].gen_y[cr_gen].ready_src_top_psum_cluster_w[g_gen];
-            assign gen_x[cc_gen].gen_y[cr_gen - 1].enable_src_bottom_psum_cluster_w[g_gen] = gen_x[cc_gen].gen_y[cr_gen].enable_dst_top_psum_cluster_w[g_gen];
+            assign data_src_bottom_psum_cluster_w[cc_gen][cr_gen - 1][g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] = 
+            data_dst_top_psum_cluster_w[cc_gen][cr_gen][g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM];
+            assign ready_dst_bottom_psum_cluster_w[cc_gen][cr_gen - 1][g_gen]  = ready_src_top_psum_cluster_w[cc_gen][cr_gen][g_gen];
+            assign enable_src_bottom_psum_cluster_w[cc_gen][cr_gen - 1][g_gen] = enable_dst_top_psum_cluster_w[cc_gen][cr_gen][g_gen];
           end
 
           if (cr_gen == 0) begin : gen_router_psum_top_edge
-            assign gen_x[cc_gen].gen_y[cr_gen].data_src_top_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] = 0;
-            assign gen_x[cc_gen].gen_y[cr_gen].enable_src_top_psum_cluster_w[g_gen] = 0;
-            assign gen_x[cc_gen].gen_y[cr_gen].ready_dst_top_psum_cluster_w[g_gen]  = 0;
+            assign data_src_top_psum_cluster_w[cc_gen][cr_gen][g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] = 0;
+            assign enable_src_top_psum_cluster_w[cc_gen][cr_gen][g_gen] = 0;
+            assign ready_dst_top_psum_cluster_w[cc_gen][cr_gen][g_gen]  = 0;
           end
           if (cr_gen == CLUSTER_ROWS - 1) begin : gen_router_psum_bottom_edge
-            assign gen_x[cc_gen].gen_y[cr_gen].data_src_bottom_psum_cluster_w[g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] = 0;
-            assign gen_x[cc_gen].gen_y[cr_gen].ready_dst_bottom_psum_cluster_w[g_gen]  = 0;
-            assign gen_x[cc_gen].gen_y[cr_gen].enable_src_bottom_psum_cluster_w[g_gen] = 0;
+            assign data_src_bottom_psum_cluster_w[cc_gen][cr_gen][g_gen*TRANS_BITWIDTH_PSUM+: TRANS_BITWIDTH_PSUM] = 0;
+            assign ready_dst_bottom_psum_cluster_w[cc_gen][cr_gen][g_gen]  = 0;
+            assign enable_src_bottom_psum_cluster_w[cc_gen][cr_gen][g_gen] = 0;
           end
 
-          assign gen_x[cc_gen].gen_y[cr_gen].psum_data_i_cluster_w[g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM] = 
+          assign psum_data_i_cluster_w[cc_gen][cr_gen][g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM] = 
           psum_data_i_reg[cc_gen * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
                           cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
                           g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM];
           assign psum_data_o[cc_gen * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM +
                                  cr_gen * CLUSTER_COLUMNS * NUM_GLB_PSUM * TRANS_BITWIDTH_PSUM + 
                                  g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM]
-          = gen_x[cc_gen].gen_y[cr_gen].psum_data_o_cluster_w[g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM];
-          assign gen_x[cc_gen].gen_y[cr_gen].psum_addr_i_cluster_w[g_gen * PSUM_MEM_ADDR_BITS +:PSUM_MEM_ADDR_BITS] =
+          = psum_data_o_cluster_w[cc_gen][cr_gen][g_gen * TRANS_BITWIDTH_PSUM +: TRANS_BITWIDTH_PSUM];
+          assign psum_addr_i_cluster_w[cc_gen][cr_gen][g_gen * PSUM_MEM_ADDR_BITS +:PSUM_MEM_ADDR_BITS] =
           mem_addr_psum[cc_gen * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS +
                         cr_gen *CLUSTER_COLUMNS * NUM_GLB_PSUM * PSUM_MEM_ADDR_BITS +
                         g_gen * PSUM_MEM_ADDR_BITS +: PSUM_MEM_ADDR_BITS];
-          assign gen_x[cc_gen].gen_y[cr_gen].psum_enable_i_cluster_w[g_gen] = psum_enable_i_reg[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen];
+          assign psum_enable_i_cluster_w[cc_gen][cr_gen][g_gen] = psum_enable_i_reg[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen];
 
-          assign psum_ready_o_cluster_reg[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_ready_o_cluster_w[g_gen];
+          assign psum_ready_o_cluster_reg[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen] = psum_ready_o_cluster_w[cc_gen][cr_gen][g_gen];
 
-          assign psum_enable_o[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen] = gen_x[cc_gen].gen_y[cr_gen].psum_enable_o_cluster_w[g_gen];
-          assign gen_x[cc_gen].gen_y[cr_gen].psum_ready_i_cluster_w[g_gen] = psum_ready_i_reg[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen];
+          assign psum_enable_o[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen] = psum_enable_o_cluster_w[cc_gen][cr_gen][g_gen];
+          assign psum_ready_i_cluster_w[cc_gen][cr_gen][g_gen] = psum_ready_i_reg[cc_gen*NUM_GLB_PSUM+cr_gen*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_gen];
         end
       end
     end

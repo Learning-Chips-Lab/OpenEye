@@ -1,49 +1,79 @@
 `timescale 1ns / 1ps
-// Unit test: RAM_SP_generic vs sg13g2_ram_sp (cfg 72x1024, WM=6).
-// Identical stimulus on both; q must match every cycle.
+// Unit test: RAM_SP_generic vs sg13g2_ram_sp for all four ASIC-target
+// configurations. Identical stimulus per config; q must match every cycle.
+//   cfg0:  64 x 1024 (WM=1)  BUFFER_A
+//   cfg1: 288 x 2048 (WM=1)  wght_buffer
+//   cfg2:  40 x 4096 (WM=1)  psum_buffer
+//   cfg3:  72 x 1024 (WM=6)  iact_stream_constructor
 module tb_ram_equiv;
 
-    localparam DW = 72, AW = 10, WM = 6, CYCLES = 200000;
+    localparam CYCLES = 200000;
 
     reg clk = 0;
     always #5 clk = ~clk;
 
-    reg         rd, wr;
-    reg  [AW-1:0]  a;
-    reg  [DW-1:0]  d;
-    reg  [WM-1:0]  wm;
-
-    wire [DW-1:0] q_gen, q_mac;
-
-    RAM_SP_generic #(
-        .AddrWidth(AW), .DataWidth(DW), .Pipelined(1), .WriteMaskWidth(WM)
-    ) u_gen (
-        .clk(clk), .cen(!(rd | wr)), .rdwen(!wr), .a(a), .d(d), .q(q_gen), .wm(wm)
-    );
-
-    sg13g2_ram_sp #(
-        .AddrWidth(AW), .DataWidth(DW), .Pipelined(1), .WriteMaskWidth(WM)
-    ) u_mac (
-        .clk(clk), .cen(!(rd | wr)), .rdwen(!wr), .a(a), .d(d), .q(q_mac), .wm(wm)
-    );
-
     // 16-bit LFSR PRNG
     reg [15:0] lfsr = 16'hACE1;
     always @(posedge clk) lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
+
+    // stimulus registers (independent per config)
+    reg  [9:0]  a0;  reg [63:0] d0;
+    reg  [10:0] a1;  reg [287:0] d1;
+    reg  [11:0] a2;  reg [39:0] d2;
+    reg  [9:0]  a3;  reg [71:0] d3;  reg [5:0] wm3;
+    reg rd0, wr0, rd1, wr1, rd2, wr2, rd3, wr3;
+
+    wire [63:0]  q0_gen, q0_mac;
+    wire [287:0] q1_gen, q1_mac;
+    wire [39:0]  q2_gen, q2_mac;
+    wire [71:0]  q3_gen, q3_mac;
+
+    RAM_SP_generic #(.AddrWidth(10), .DataWidth(64),  .Pipelined(1), .WriteMaskWidth(1)) u_gen0
+        (.clk(clk), .cen(!(rd0|wr0)), .rdwen(!wr0), .a(a0), .d(d0), .q(q0_gen), .wm(1'b1));
+    sg13g2_ram_sp  #(.AddrWidth(10), .DataWidth(64),  .Pipelined(1), .WriteMaskWidth(1)) u_mac0
+        (.clk(clk), .cen(!(rd0|wr0)), .rdwen(!wr0), .a(a0), .d(d0), .q(q0_mac), .wm(1'b1));
+
+    RAM_SP_generic #(.AddrWidth(11), .DataWidth(288), .Pipelined(1), .WriteMaskWidth(1)) u_gen1
+        (.clk(clk), .cen(!(rd1|wr1)), .rdwen(!wr1), .a(a1), .d(d1), .q(q1_gen), .wm(1'b1));
+    sg13g2_ram_sp  #(.AddrWidth(11), .DataWidth(288), .Pipelined(1), .WriteMaskWidth(1)) u_mac1
+        (.clk(clk), .cen(!(rd1|wr1)), .rdwen(!wr1), .a(a1), .d(d1), .q(q1_mac), .wm(1'b1));
+
+    RAM_SP_generic #(.AddrWidth(12), .DataWidth(40),  .Pipelined(1), .WriteMaskWidth(1)) u_gen2
+        (.clk(clk), .cen(!(rd2|wr2)), .rdwen(!wr2), .a(a2), .d(d2), .q(q2_gen), .wm(1'b1));
+    sg13g2_ram_sp  #(.AddrWidth(12), .DataWidth(40),  .Pipelined(1), .WriteMaskWidth(1)) u_mac2
+        (.clk(clk), .cen(!(rd2|wr2)), .rdwen(!wr2), .a(a2), .d(d2), .q(q2_mac), .wm(1'b1));
+
+    RAM_SP_generic #(.AddrWidth(10), .DataWidth(72),  .Pipelined(1), .WriteMaskWidth(6)) u_gen3
+        (.clk(clk), .cen(!(rd3|wr3)), .rdwen(!wr3), .a(a3), .d(d3), .q(q3_gen), .wm(wm3));
+    sg13g2_ram_sp  #(.AddrWidth(10), .DataWidth(72),  .Pipelined(1), .WriteMaskWidth(6)) u_mac3
+        (.clk(clk), .cen(!(rd3|wr3)), .rdwen(!wr3), .a(a3), .d(d3), .q(q3_mac), .wm(wm3));
 
     integer i;
     integer mismatches;
     initial mismatches = 0;
 
     initial begin
-        rd = 0; wr = 0; a = 0; d = 0; wm = 0;
+        rd0=0; wr0=0; a0=0; d0=0;
+        rd1=0; wr1=0; a1=0; d1=0;
+        rd2=0; wr2=0; a2=0; d2=0;
+        rd3=0; wr3=0; a3=0; d3=0; wm3=0;
         repeat (5) @(posedge clk);
         for (i = 0; i < CYCLES; i = i + 1) begin
             @(posedge clk);
             #1;
             case (lfsr[1:0])
-                2'b00, 2'b01: begin wr = 1; rd = 0; a = lfsr[12:3]; d = {lfsr, d}; wm = lfsr[15:10]; end
-                default:       begin wr = 0; rd = 1; a = lfsr[AW+2:3]; end
+                2'b00, 2'b01: begin
+                    wr0=1; rd0=0; a0=lfsr[12:3];  d0={lfsr,d0};
+                    wr1=1; rd1=0; a1=lfsr[13:3];  d1={lfsr,d1};
+                    wr2=1; rd2=0; a2=lfsr[14:3];  d2={lfsr,d2};
+                    wr3=1; rd3=0; a3=lfsr[12:3];  d3={lfsr,d3}; wm3=lfsr[15:10];
+                end
+                default: begin
+                    wr0=0; rd0=1; a0=lfsr[12:3];
+                    wr1=0; rd1=1; a1=lfsr[13:3];
+                    wr2=0; rd2=1; a2=lfsr[14:3];
+                    wr3=0; rd3=1; a3=lfsr[12:3];
+                end
             endcase
         end
         repeat (10) @(posedge clk);
@@ -51,9 +81,13 @@ module tb_ram_equiv;
 
     always @(posedge clk) begin
         if (mismatches < 20) begin
-            if (q_gen !== q_mac) begin
+            if (q0_gen !== q0_mac || q1_gen !== q1_mac ||
+                q2_gen !== q2_mac || q3_gen !== q3_mac) begin
                 mismatches = mismatches + 1;
-                $display("MISMATCH @%0t cycle q_gen=%b q_mac=%b", $time, q_gen, q_mac);
+                if (q0_gen !== q0_mac) $display("MISMATCH cfg0 @%0t gen=%b mac=%b", $time, q0_gen, q0_mac);
+                if (q1_gen !== q1_mac) $display("MISMATCH cfg1 @%0t gen=%b mac=%b", $time, q1_gen, q1_mac);
+                if (q2_gen !== q2_mac) $display("MISMATCH cfg2 @%0t gen=%b mac=%b", $time, q2_gen, q2_mac);
+                if (q3_gen !== q3_mac) $display("MISMATCH cfg3 @%0t gen=%b mac=%b", $time, q3_gen, q3_mac);
                 if (mismatches >= 20) begin
                     $display("FAIL: too many mismatches");
                     $finish;
@@ -65,18 +99,17 @@ module tb_ram_equiv;
     initial begin
         fork
             begin : watchdog
-                #(5000000);
+                #(20000000);
                 $display("FAIL: watchdog timeout");
                 $finish;
             end
             begin
                 wait (i >= CYCLES);
                 #100;
-                if (mismatches == 0) begin
-                    $display("PASS: %0d cycles, q_gen == q_mac always", CYCLES);
-                end else begin
-                    $display("FAIL: %0d mismatches", mismatches);
-                end
+                if (mismatches == 0)
+                    $display("PASS: %0d cycles, all 4 configs q_gen == q_mac always", CYCLES);
+                else
+                    $display("FAIL: %0d mismatch cycles", mismatches);
                 $finish;
             end
         join

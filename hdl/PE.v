@@ -823,11 +823,18 @@ module PE #(
   // Weight address generation:
   // SPARSITY_EN=1: use vector or compute from iact overhead (for zero-skipping)
   // SPARSITY_EN=0: weight addr SPad unused; wght_data_SPad_addr driven by dense FSM
-  
+
+  // Driven by the gen_sparse_fsm always block (declared here so the
+  // cross-wiring below can reference them without a hierarchical path
+  // into a generate scope, which Yosys cannot resolve).
+  reg                                   wght_addr_use_vec;     // Mux select: use vector addr or computed
+  reg  [   WGHT_ADDR_ADDR_BITWIDTH-1:0] wght_addr_vec;         // Vector-based weight address
+  reg                                   wght_data_use_vec;     // Mux select: use vector data or computed
+
   generate
     if (SPARSITY_EN == 1) begin : gen_sparse_wght_addr
-      assign wght_addr_SPad_addr = gen_sparse_fsm.wght_addr_use_vec ? gen_sparse_fsm.wght_addr_vec : (iact_data_spad_oh == 0 ? 0 : (iact_data_spad_oh - 1));
-      assign wght_data_SPad_addr = gen_sparse_fsm.wght_data_use_vec ? wght_data_vec : wght_addr_SPad_data_r;
+      assign wght_addr_SPad_addr = wght_addr_use_vec ? wght_addr_vec : (iact_data_spad_oh == 0 ? 0 : (iact_data_spad_oh - 1));
+      assign wght_data_SPad_addr = wght_data_use_vec ? wght_data_vec : wght_addr_SPad_data_r;
     end else begin : gen_dense_wght_addr
       assign wght_addr_SPad_addr = {WGHT_ADDR_ADDR_BITWIDTH{1'b0}}; // Unused in dense mode
       assign wght_data_SPad_addr = wght_data_vec;                    // Directly driven by dense FSM
@@ -978,9 +985,8 @@ module PE #(
     reg                                   next_iact;             // Flag to advance to next input activation
     reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_current;     // Current iact address being processed
     reg  [          IACT_ADDR_DATA-1 : 0] iact_addr_count;       // Counter for iact addresses processed
-    reg                                   wght_addr_use_vec;     // Mux select: use vector addr or computed
-    reg  [   WGHT_ADDR_ADDR_BITWIDTH-1:0] wght_addr_vec;         // Vector-based weight address
-    reg                                   wght_data_use_vec;     // Mux select: use vector data or computed
+    // wght_addr_use_vec / wght_addr_vec / wght_data_use_vec are declared
+    // at module scope (see the declaration before gen_sparse_wght_addr)
     reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_start;       // Start address for weight data range
     reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_end;         // End address for weight data range
     reg  [   WGHT_DATA_ADDR_BITWIDTH-1:0] wght_data_end_pre;     // Pre-computed end for next range
@@ -1317,7 +1323,7 @@ module PE #(
             // Rationale: Set defaults for all SPad enables and control flags
             iact_addr_SPad_en_r   <= 0;            // Disable iact address reads
             iact_data_SPad_en_r   <= !mux_iact_ready; // Enable iact data when ready
-            wght_addr_SPad_en_r   <= $bits(wght_addr_SPad_en_r)'(SPARSITY_EN);  // Enable weight address reads only in sparse mode
+            wght_addr_SPad_en_r   <= SPARSITY_EN;  // Enable weight address reads only in sparse mode
             for (mac_i = 0; mac_i < PARALLEL_MACS; mac_i=mac_i+1) begin
               psum_data_SPad_en_r[mac_i] <= computing;    // Read psum when computing
               psum_data_SPad_en_w[mac_i] <= 0;            // Disable psum writes (default)

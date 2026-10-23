@@ -2866,12 +2866,17 @@ end
     //   iact_size_x/y_i         - feature map dimensions.
     //   fully_connected_i       - selects FC vs conv addressing mode.
     // -------------------------------------------------------------------
+    // Per-converter wire arrays, declared at top level so the
+    // Iact Converter -> OpenEye_Parallel cross-wiring below can reference
+    // them without hierarchical paths into generate scopes (which Yosys
+    // cannot resolve; iverilog/Verilator/Vivado can).
+    wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] iact_data_w_arr  [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [      $clog2(NUM_GLB_IACT+1)*PES-1:0] iact_choose_w_arr[0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] iact_ready_w_arr [0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+    wire [                    NUM_GLB_IACT-1:0] iact_enable_w_arr[0:CLUSTER_COLUMNS-1][0:CLUSTER_ROWS-1];
+
     for (i_gen = 0; i_gen < CLUSTER_COLUMNS; i_gen=i_gen+1) begin : IACT_CONVERTER_X
       for (j_gen = 0; j_gen < CLUSTER_ROWS; j_gen=j_gen+1) begin : IACT_CONVERTER_Y
-        wire [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] iact_data_w;
-        wire [      $clog2(NUM_GLB_IACT+1)*PES-1:0] iact_choose_w;
-        wire [                    NUM_GLB_IACT-1:0] iact_ready_w;
-        wire [                    NUM_GLB_IACT-1:0] iact_enable_w;
         iact_stream_constructor #(
             .CLUSTER_COLUMNS   (CLUSTER_COLUMNS),
             .CLUSTER_ROWS      (CLUSTER_ROWS),
@@ -2896,10 +2901,10 @@ end
             .enable_store                (iact_converter_en_store_reg[i_gen][j_gen]),
             .enable_converter            (iact_converter_en_enc_reg[i_gen][j_gen]),
             .ready_o                     (iact_converter_ready_w[i_gen][j_gen]),
-            .iact_ready_i                (iact_ready_w),
-            .iact_data_o                 (iact_data_w),
-            .iact_enable_o               (iact_enable_w),
-            .iact_choose_o               (iact_choose_w),
+            .iact_ready_i                (iact_ready_w_arr[i_gen][j_gen]),
+            .iact_data_o                 (iact_data_w_arr[i_gen][j_gen]),
+            .iact_enable_o               (iact_enable_w_arr[i_gen][j_gen]),
+            .iact_choose_o               (iact_choose_w_arr[i_gen][j_gen]),
             .needed_y_cls_i              (needed_y_cls_reg),
             .needed_iact_channel_cycles_i(iact_channel_max_cycles),
             .iact_x_add_up               (iact_x_add_up),
@@ -3337,25 +3342,25 @@ end
     for (cc_gen = 0; cc_gen < CLUSTER_COLUMNS; cc_gen = cc_gen + 1) begin
       for (cr_gen = 0; cr_gen < CLUSTER_ROWS; cr_gen = cr_gen + 1) begin
         for (g_gen = 0; g_gen < NUM_GLB_IACT; g_gen = g_gen + 1) begin
-          /*assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
+          /*assign iact_ready_w_arr[cc_gen][cr_gen][g_gen] =
                 iact_ready_o_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen];*/
-          assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
+          assign iact_ready_w_arr[cc_gen][cr_gen][g_gen] =
                 (iact_ready_o_oep_w == (2**(CLUSTER_COLUMNS*CLUSTER_ROWS*NUM_GLB_IACT))-1);
           // TODO DenLeb: per-cluster ready below breaks input height > 1 (test_conv_tall_input), please check
-          //assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
+          //assign iact_ready_w_arr[cc_gen][cr_gen][g_gen] =
           //      iact_ready_o_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen];
           assign iact_enable_i_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen] =
-                IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_enable_w[g_gen];
+                iact_enable_w_arr[cc_gen][cr_gen][g_gen];
           assign iact_data_i_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT * TRANS_BITWIDTH_IACT +
                                   cr_gen * NUM_GLB_IACT * TRANS_BITWIDTH_IACT +
                                   g_gen * TRANS_BITWIDTH_IACT +:TRANS_BITWIDTH_IACT] =
-                IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_data_w[g_gen * TRANS_BITWIDTH_IACT+:TRANS_BITWIDTH_IACT];
+                iact_data_w_arr[cc_gen][cr_gen][g_gen * TRANS_BITWIDTH_IACT+:TRANS_BITWIDTH_IACT];
         end
         localparam IACT_CHOOSE_DATAWIDTH = $clog2(NUM_GLB_IACT + 1);
         for (pe_gen = 0; pe_gen < PES; pe_gen = pe_gen + 1) begin
           assign  iact_choose_i_oep_w[cc_gen * CLUSTER_ROWS * PES * IACT_CHOOSE_DATAWIDTH +
                                   cr_gen * PES * IACT_CHOOSE_DATAWIDTH + pe_gen * IACT_CHOOSE_DATAWIDTH +:IACT_CHOOSE_DATAWIDTH] =
-                IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_choose_w[pe_gen * IACT_CHOOSE_DATAWIDTH +:IACT_CHOOSE_DATAWIDTH];
+                iact_choose_w_arr[cc_gen][cr_gen][pe_gen * IACT_CHOOSE_DATAWIDTH +:IACT_CHOOSE_DATAWIDTH];
         end
       end
     end

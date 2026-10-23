@@ -166,6 +166,18 @@ module GLB_cluster #(
   wire [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_1;
   reg  [NUM_GLB_PSUM-1:0] router_cluster_psum_enable_o_delay_2;
 
+
+  // Per-GLB RAM wires hoisted to module scope (Yosys cannot
+  // resolve hierarchical paths into generate scopes).
+  wire [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_in_w [0:NUM_GLB_IACT-1];
+  wire [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_out_w [0:NUM_GLB_IACT-1];
+  wire [ IACT_MEM_ADDR_BITS-1:0] iact_glb_addr_in_w [0:NUM_GLB_IACT-1];
+  wire iact_glb_we_in_w [0:NUM_GLB_IACT-1];
+  wire [DATA_PSUM_BITWIDTH-1:0] psum_glb_data_in_w [0:NUM_GLB_PSUM-1];
+  wire [DATA_PSUM_BITWIDTH-1:0] psum_glb_data_out_w [0:NUM_GLB_PSUM-1];
+  wire [ PSUM_MEM_ADDR_BITS-1:0] psum_glb_addr_in_w [0:NUM_GLB_PSUM-1];
+  wire psum_glb_re_in_w [0:NUM_GLB_PSUM-1];
+  wire psum_glb_we_in_w [0:NUM_GLB_PSUM-1];
   genvar glb_counter, bit_counter;
   generate
     ///IACT GLB Storages
@@ -175,10 +187,10 @@ module GLB_cluster #(
         glb_counter = glb_counter + 1
     ) begin : gen_iact
 
-      wire [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_in_w;
-      wire [TRANS_BITWIDTH_IACT-1:0] iact_glb_data_out_w;
-      wire [ IACT_MEM_ADDR_BITS-1:0] iact_glb_addr_in_w;
-      wire                           iact_glb_we_in_w;
+
+
+
+
 
       RAM_SP #(
           .DataWidth(TRANS_BITWIDTH_IACT),
@@ -186,11 +198,11 @@ module GLB_cluster #(
           .Pipelined(1)
       ) iact_glb (
           .clk_i  (clk_i),
-          .rd_en_i(iact_glb_we_in_w & !data_write_enable_iact_i),
-          .wr_en_i(iact_glb_we_in_w & data_write_enable_iact_i),
-          .addr_i (iact_glb_addr_in_w),
-          .data_i (iact_glb_data_in_w),
-          .data_o (iact_glb_data_out_w)
+          .rd_en_i(iact_glb_we_in_w[glb_counter] & !data_write_enable_iact_i),
+          .wr_en_i(iact_glb_we_in_w[glb_counter] & data_write_enable_iact_i),
+          .addr_i (iact_glb_addr_in_w[glb_counter]),
+          .data_i (iact_glb_data_in_w[glb_counter]),
+          .data_o (iact_glb_data_out_w[glb_counter])
       );
     end
     ///PSUM GLB Storages
@@ -200,11 +212,11 @@ module GLB_cluster #(
         glb_counter = glb_counter + 1
     ) begin : gen_psum
 
-      wire [DATA_PSUM_BITWIDTH-1:0] psum_glb_data_in_w;
-      wire [DATA_PSUM_BITWIDTH-1:0] psum_glb_data_out_w;
-      wire [ PSUM_MEM_ADDR_BITS-1:0] psum_glb_addr_in_w;
-      wire                           psum_glb_re_in_w;
-      wire                           psum_glb_we_in_w;
+
+
+
+
+
 
       RAM_SP #(
           .DataWidth(DATA_PSUM_BITWIDTH),
@@ -212,11 +224,11 @@ module GLB_cluster #(
           .Pipelined(1)
       ) psum_glb (
           .clk_i  (clk_i),
-          .rd_en_i(psum_glb_re_in_w),
-          .wr_en_i(psum_glb_we_in_w),
-          .addr_i (psum_glb_addr_in_w),
-          .data_i (psum_glb_data_in_w),
-          .data_o (psum_glb_data_out_w)
+          .rd_en_i(psum_glb_re_in_w[glb_counter]),
+          .wr_en_i(psum_glb_we_in_w[glb_counter]),
+          .addr_i (psum_glb_addr_in_w[glb_counter]),
+          .data_i (psum_glb_data_in_w[glb_counter]),
+          .data_o (psum_glb_data_out_w[glb_counter])
       );
     end
   endgenerate
@@ -241,14 +253,14 @@ module GLB_cluster #(
         glb_counter = glb_counter + 1
     ) begin
       assign router_cluster_iact_enable_o[glb_counter] = router_cluster_iact_enable_o_delay_2[glb_counter];
-      assign gen_iact[glb_counter].iact_glb_we_in_w = ext_mem_iact_enable_i[glb_counter];
+      assign iact_glb_we_in_w[glb_counter] = ext_mem_iact_enable_i[glb_counter];
       assign router_cluster_iact_enable_o_delay_1[glb_counter] = ext_mem_iact_enable_i[glb_counter] & (!data_write_enable_iact_i);
       for (bit_counter = 0; bit_counter < IACT_MEM_ADDR_BITS; bit_counter = bit_counter + 1) begin
-        assign gen_iact[glb_counter].iact_glb_addr_in_w[bit_counter] = ext_mem_iact_addr_i[IACT_MEM_ADDR_BITS*glb_counter+bit_counter];
+        assign iact_glb_addr_in_w[glb_counter][bit_counter] = ext_mem_iact_addr_i[IACT_MEM_ADDR_BITS*glb_counter+bit_counter];
       end
       for (bit_counter = 0; bit_counter < DATA_IACT_BITWIDTH; bit_counter = bit_counter + 1) begin
-        assign gen_iact[glb_counter].iact_glb_data_in_w[bit_counter] = ext_mem_iact_data_i[DATA_IACT_BITWIDTH*glb_counter+bit_counter];
-        assign router_cluster_iact_data_o[DATA_IACT_BITWIDTH*glb_counter+bit_counter] = gen_iact[glb_counter].iact_glb_data_out_w[bit_counter];
+        assign iact_glb_data_in_w[glb_counter][bit_counter] = ext_mem_iact_data_i[DATA_IACT_BITWIDTH*glb_counter+bit_counter];
+        assign router_cluster_iact_data_o[DATA_IACT_BITWIDTH*glb_counter+bit_counter] = iact_glb_data_out_w[glb_counter][bit_counter];
       end
     end
 
@@ -258,17 +270,17 @@ module GLB_cluster #(
         glb_counter < NUM_GLB_PSUM - (NUM_GLB_PSUM * SERIAL);
         glb_counter = glb_counter + 1
     ) begin
-      assign gen_psum[glb_counter].psum_glb_re_in_w = (ext_mem_psum_enable_i[glb_counter] & !data_write_enable_i);
-      assign gen_psum[glb_counter].psum_glb_we_in_w = (ext_mem_psum_enable_i[glb_counter] & data_write_enable_i) | (router_cluster_psum_enable_i[glb_counter] & (!data_write_enable_i));
+      assign psum_glb_re_in_w[glb_counter] = (ext_mem_psum_enable_i[glb_counter] & !data_write_enable_i);
+      assign psum_glb_we_in_w[glb_counter] = (ext_mem_psum_enable_i[glb_counter] & data_write_enable_i) | (router_cluster_psum_enable_i[glb_counter] & (!data_write_enable_i));
       assign router_cluster_psum_enable_o[glb_counter] = router_cluster_psum_enable_o_delay_2[glb_counter];
       assign router_cluster_psum_enable_o_delay_1[glb_counter] = ext_mem_psum_enable_i[glb_counter] & (!data_write_enable_i);
       for (bit_counter = 0; bit_counter < PSUM_MEM_ADDR_BITS; bit_counter = bit_counter + 1) begin
-        assign gen_psum[glb_counter].psum_glb_addr_in_w[bit_counter] = ext_mem_psum_addr_i[PSUM_MEM_ADDR_BITS*glb_counter+bit_counter];
+        assign psum_glb_addr_in_w[glb_counter][bit_counter] = ext_mem_psum_addr_i[PSUM_MEM_ADDR_BITS*glb_counter+bit_counter];
       end
       for (bit_counter = 0; bit_counter < DATA_PSUM_BITWIDTH; bit_counter = bit_counter + 1) begin
-        assign ext_mem_psum_data_o[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] = gen_psum[glb_counter].psum_glb_data_out_w[bit_counter];
-        assign router_cluster_psum_data_o[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] = gen_psum[glb_counter].psum_glb_data_out_w[bit_counter];
-        assign gen_psum[glb_counter].psum_glb_data_in_w[bit_counter] = ext_mem_psum_data_i[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] | router_cluster_psum_data_i[DATA_PSUM_BITWIDTH*glb_counter+bit_counter];
+        assign ext_mem_psum_data_o[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] = psum_glb_data_out_w[glb_counter][bit_counter];
+        assign router_cluster_psum_data_o[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] = psum_glb_data_out_w[glb_counter][bit_counter];
+        assign psum_glb_data_in_w[glb_counter][bit_counter] = ext_mem_psum_data_i[DATA_PSUM_BITWIDTH*glb_counter+bit_counter] | router_cluster_psum_data_i[DATA_PSUM_BITWIDTH*glb_counter+bit_counter];
       end
     end
     assign ext_mem_psum_enable_o = router_cluster_psum_enable_i;

@@ -397,7 +397,7 @@ module data_pipeline_iact #(
         end
 
         // Wrap cycle_counter at SECOND_SPAD_DATA_CYCLE so it stays in range.
-        if (cycle_counter == $bits(cycle_counter)'(SECOND_SPAD_DATA_CYCLE - 1)) begin
+        if (cycle_counter == (SECOND_SPAD_DATA_CYCLE - 1)) begin
           cycle_counter <= 0;
         end
 
@@ -551,11 +551,11 @@ module data_pipeline_iact #(
           if (uneven_counter == iact_x_line_repetitions_i - 1) begin
             // Wrap: toggle the storage flag; next line starts at the opposite sub-word.
             uneven_ending_storage <= 1 - uneven_ending_storage;
-            cycle_counter <= $bits(cycle_counter)'(1) - $bits(cycle_counter)'(uneven_ending_storage);
+            cycle_counter <= 1 - uneven_ending_storage;
             uneven_ending         <= 1 - uneven_ending_storage;
           end else begin
             // No wrap: continue with the current storage value.
-            cycle_counter <= $bits(cycle_counter)'(uneven_ending_storage);
+            cycle_counter <= uneven_ending_storage;
             uneven_ending <= uneven_ending_storage;
           end
         end

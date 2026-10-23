@@ -282,23 +282,40 @@ module PE_cluster #(
       assign rst_nw = rst_ni;
     end
 
+  // Interconnect wires hoisted to module scope (Yosys cannot
+  // resolve hierarchical paths into generate scopes).
+  wire [DATA_IACT_BITWIDTH-1:0] iact_pass_data_i_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire [DATA_IACT_BITWIDTH-1:0] iact_pass_data_o_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire iact_pass_enable_i_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire iact_pass_enable_o_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire iact_pass_ready_i_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire iact_pass_ready_o_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire [         NUM_GLB_IACT-1:0] iact_ready_o_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire [TRANS_BITWIDTH_PSUM-1 : 0] psum_data_i_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire [TRANS_BITWIDTH_PSUM-1 : 0] psum_data_o_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire psum_enable_i_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire psum_enable_o_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire psum_ready_i_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire psum_ready_o_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+  wire wght_ready_o_w [0:PE_COLUMNS-1][0:PE_ROWS-1];
+
     for (i = 0; i < PE_COLUMNS; i = i + 1) begin : gen_X
       for (j = 0; j < PE_ROWS; j = j + 1) begin : gen_Y
-        wire [TRANS_BITWIDTH_PSUM-1 : 0] psum_data_i_w;
-        wire                             psum_enable_i_w;
-        wire                             psum_ready_i_w;
-        wire [TRANS_BITWIDTH_PSUM-1 : 0] psum_data_o_w;
-        wire                             psum_enable_o_w;
-        wire                             psum_ready_o_w;
-        wire [         NUM_GLB_IACT-1:0] iact_ready_o_w;
-        wire                             wght_ready_o_w;
+
+
+
+
+
+
+
+
         // Approach 3: horizontal iact pass-through wires within each row
-        wire [DATA_IACT_BITWIDTH-1:0]    iact_pass_data_i_w;
-        wire                             iact_pass_enable_i_w;
-        wire                             iact_pass_ready_i_w;
-        wire [DATA_IACT_BITWIDTH-1:0]    iact_pass_data_o_w;
-        wire                             iact_pass_enable_o_w;
-        wire                             iact_pass_ready_o_w;
+
+
+
+
+
+
         // Approach 2: in GEMM mode override iact_select so row j → GLB bank j
         wire [$clog2(NUM_GLB_IACT+1)-1:0] iact_sel_w;
         // With fewer activation GLBs than PE rows, the FC converter sends
@@ -333,27 +350,27 @@ module PE_cluster #(
 
             .iact_data_i  (pe_iact_data),
             .iact_enable_i(pe_iact_enable),
-            .iact_ready_o (iact_ready_o_w),
+            .iact_ready_o (iact_ready_o_w[i][j]),
 
             .wght_data_i  (pe_wght_data[(j+1)*TRANS_BITWIDTH_WGHT-1:j*TRANS_BITWIDTH_WGHT]),
             .wght_enable_i(pe_wght_enable[j]),
-            .wght_ready_o (wght_ready_o_w),
+            .wght_ready_o (wght_ready_o_w[i][j]),
 
-            .psum_data_i    (psum_data_i_w),
-            .psum_enable_i  (psum_enable_i_w),
-            .psum_ready_o   (psum_ready_o_w),
-            .psum_data_o    (psum_data_o_w),
-            .psum_enable_o  (psum_enable_o_w),
-            .psum_ready_i   (psum_ready_i_w),
+            .psum_data_i    (psum_data_i_w[i][j]),
+            .psum_enable_i  (psum_enable_i_w[i][j]),
+            .psum_ready_o   (psum_ready_o_w[i][j]),
+            .psum_data_o    (psum_data_o_w[i][j]),
+            .psum_enable_o  (psum_enable_o_w[i][j]),
+            .psum_ready_i   (psum_ready_i_w[i][j]),
             .enable_stream_i(enable_stream_i),
             .data_stream_i  (data_stream_i),
             // Approach 3 systolic pass-through
-            .iact_pass_data_i  (iact_pass_data_i_w),
-            .iact_pass_enable_i(iact_pass_enable_i_w),
-            .iact_pass_ready_o (iact_pass_ready_o_w),
-            .iact_pass_data_o  (iact_pass_data_o_w),
-            .iact_pass_enable_o(iact_pass_enable_o_w),
-            .iact_pass_ready_i (iact_pass_ready_i_w)
+            .iact_pass_data_i  (iact_pass_data_i_w[i][j]),
+            .iact_pass_enable_i(iact_pass_enable_i_w[i][j]),
+            .iact_pass_ready_o (iact_pass_ready_o_w[i][j]),
+            .iact_pass_data_o  (iact_pass_data_o_w[i][j]),
+            .iact_pass_enable_o(iact_pass_enable_o_w[i][j]),
+            .iact_pass_ready_i (iact_pass_ready_i_w[i][j])
         );
       end
     end
@@ -370,21 +387,21 @@ module PE_cluster #(
           // This ensures all PEs in a row multiply with the same iact value
           // simultaneously, which is required for correct GEMM operation when
           // weights are shared across columns.
-          assign gen_X[i].gen_Y[j].iact_pass_data_i_w   = iact_pass_data_i[(j+1)*DATA_IACT_BITWIDTH-1:j*DATA_IACT_BITWIDTH];
-          assign gen_X[i].gen_Y[j].iact_pass_enable_i_w = iact_pass_enable_i[j];
-          assign gen_X[i].gen_Y[j].iact_pass_ready_i_w  = iact_pass_ready_i[j];
+          assign iact_pass_data_i_w[i][j]   = iact_pass_data_i[(j+1)*DATA_IACT_BITWIDTH-1:j*DATA_IACT_BITWIDTH];
+          assign iact_pass_enable_i_w[i][j] = iact_pass_enable_i[j];
+          assign iact_pass_ready_i_w[i][j]  = iact_pass_ready_i[j];
           if (i == 0) begin : gen_pass_first_col
-            assign iact_pass_ready_o[j] = gen_X[i].gen_Y[j].iact_pass_ready_o_w;
+            assign iact_pass_ready_o[j] = iact_pass_ready_o_w[i][j];
           end
           if (i == PE_COLUMNS - 1) begin : gen_pass_last_col
-            assign iact_pass_data_o[(j+1)*DATA_IACT_BITWIDTH-1:j*DATA_IACT_BITWIDTH] = gen_X[i].gen_Y[j].iact_pass_data_o_w;
-            assign iact_pass_enable_o[j] = gen_X[i].gen_Y[j].iact_pass_enable_o_w;
+            assign iact_pass_data_o[(j+1)*DATA_IACT_BITWIDTH-1:j*DATA_IACT_BITWIDTH] = iact_pass_data_o_w[i][j];
+            assign iact_pass_enable_o[j] = iact_pass_enable_o_w[i][j];
           end
         end else begin : gen_no_systolic
           // Tie off pass-through wires when SYSTOLIC_GEMM_EN=0
-          assign gen_X[i].gen_Y[j].iact_pass_data_i_w   = {DATA_IACT_BITWIDTH{1'b0}};
-          assign gen_X[i].gen_Y[j].iact_pass_enable_i_w = 1'b0;
-          assign gen_X[i].gen_Y[j].iact_pass_ready_i_w  = 1'b0;
+          assign iact_pass_data_i_w[i][j]   = {DATA_IACT_BITWIDTH{1'b0}};
+          assign iact_pass_enable_i_w[i][j] = 1'b0;
+          assign iact_pass_ready_i_w[i][j]  = 1'b0;
         end
       end
     end
@@ -396,41 +413,43 @@ module PE_cluster #(
     end
 
     // MUX and DEMUX for PSUM Signals
+  // PSUM mux/demux interface wires hoisted to module scope (Yosys cannot
+  // resolve hierarchical paths into generate scopes).
+  wire [TRANS_BITWIDTH_PSUM-1:0] psum_data_mux_out_w   [0:PE_COLUMNS-1];
+  wire                          psum_enable_mux_out_w  [0:PE_COLUMNS-1];
+  wire                          psum_ready_demux_in_w  [0:PE_COLUMNS-1];
     // MUX PSUM DATA
     genvar k;
     for (k = 0; k < PE_COLUMNS; k = k + 1) begin : psum_data_mux
-      wire [TRANS_BITWIDTH_PSUM-1 : 0] out_w;
       mux2 #(
           .DATA_WIDTH(TRANS_BITWIDTH_PSUM)
       ) psum_mux (
           .a_in (pe_router_psum_data_i[(k+1)*TRANS_BITWIDTH_PSUM-1:k*TRANS_BITWIDTH_PSUM]),
           .b_in (pe_psum_data_i[(k+1)*TRANS_BITWIDTH_PSUM-1:k*TRANS_BITWIDTH_PSUM]),
           .sel_i(psum_choose_i[k]),
-          .y_o  (out_w)
+          .y_o  (psum_data_mux_out_w[k])
       );
     end
     /// MUX PSUM ENABLE
     for (k = 0; k < PE_COLUMNS; k = k + 1) begin : psum_enable_mux
-      wire out_w;
       mux2 #(
           .DATA_WIDTH(1)
       ) psum_mux (
           .a_in (pe_router_psum_enable_i[k]),
           .b_in (pe_psum_enable_i[k]),
           .sel_i(psum_choose_i[k]),
-          .y_o  (out_w)
+          .y_o  (psum_enable_mux_out_w[k])
       );
     end
     /// DEMUX PSUM READY
     for (k = 0; k < PE_COLUMNS; k = k + 1) begin : psum_ready_demux
-      wire in_w;
       demux2 #(
           .DATA_WIDTH(1)
       ) psum_demux (
           .a_out(pe_router_psum_ready_o[k]),
           .b_out(pe_psum_ready_o[k]),
           .sel_i(psum_choose_i[k]),
-          .i    (in_w)
+          .i    (psum_ready_demux_in_w[k])
       );
     end
 
@@ -439,37 +458,37 @@ module PE_cluster #(
       for (j = 0; j < PE_ROWS; j = j + 1) begin
 
         for (g = 0; g < NUM_GLB_IACT; g = g + 1) begin
-          assign iact_ready_temp[i+j*PE_COLUMNS+PES*g] = gen_X[i].gen_Y[j].iact_ready_o_w[g];
+          assign iact_ready_temp[i+j*PE_COLUMNS+PES*g] = iact_ready_o_w[i][j][g];
         end
 
-        assign wght_ready_temp[i+PE_COLUMNS*j] = gen_X[i].gen_Y[j].wght_ready_o_w;
+        assign wght_ready_temp[i+PE_COLUMNS*j] = wght_ready_o_w[i][j];
 
         if (j == 0) begin : gen_first_row
           if (PE_ROWS != 1) begin : gen_single_row
-            assign gen_X[i].gen_Y[j+1].psum_ready_i_w = gen_X[i].gen_Y[j].psum_ready_o_w;
+            assign psum_ready_i_w[i][j+1] = psum_ready_o_w[i][j];
           end else begin : gen_multi_row
-            assign psum_ready_demux[i].in_w = gen_X[i].gen_Y[j].psum_ready_o_w;
-            assign gen_X[i].gen_Y[j].psum_enable_i_w = psum_enable_mux[i].out_w;
-            assign gen_X[i].gen_Y[j].psum_data_i_w = psum_data_mux[i].out_w;
+            assign psum_ready_demux_in_w[i] = psum_ready_o_w[i][j];
+            assign psum_enable_i_w[i][j] = psum_enable_mux_out_w[i];
+            assign psum_data_i_w[i][j] = psum_data_mux_out_w[i];
           end
 
-          assign gen_X[i].gen_Y[j].psum_ready_i_w = ((TOP_CLUSTER == 1) ? pe_router_psum_ready_i[j] : pe_router_psum_ready_i[j] | psum_ready_reg[j]);
-          assign pe_psum_enable_o[i] = gen_X[i].gen_Y[j].psum_enable_o_w;
-          assign pe_psum_data_o[(i+1)*TRANS_BITWIDTH_PSUM-1:i*TRANS_BITWIDTH_PSUM]= gen_X[i].gen_Y[j].psum_data_o_w;
-          assign pe_router_psum_enable_o[i] = gen_X[i].gen_Y[j].psum_enable_o_w;
-          assign pe_router_psum_data_o[(i+1)*TRANS_BITWIDTH_PSUM-1:i*TRANS_BITWIDTH_PSUM] = gen_X[i].gen_Y[j].psum_data_o_w;
+          assign psum_ready_i_w[i][j] = ((TOP_CLUSTER == 1) ? pe_router_psum_ready_i[j] : pe_router_psum_ready_i[j] | psum_ready_reg[j]);
+          assign pe_psum_enable_o[i] = psum_enable_o_w[i][j];
+          assign pe_psum_data_o[(i+1)*TRANS_BITWIDTH_PSUM-1:i*TRANS_BITWIDTH_PSUM]= psum_data_o_w[i][j];
+          assign pe_router_psum_enable_o[i] = psum_enable_o_w[i][j];
+          assign pe_router_psum_data_o[(i+1)*TRANS_BITWIDTH_PSUM-1:i*TRANS_BITWIDTH_PSUM] = psum_data_o_w[i][j];
         end else begin : gen_not_first_row
           if (j == PE_ROWS - 1) begin : gen_last_row
-            assign psum_ready_demux[i].in_w = gen_X[i].gen_Y[j].psum_ready_o_w;
-            assign gen_X[i].gen_Y[j-1].psum_enable_i_w = gen_X[i].gen_Y[j].psum_enable_o_w;
-            assign gen_X[i].gen_Y[j-1].psum_data_i_w = gen_X[i].gen_Y[j].psum_data_o_w;
+            assign psum_ready_demux_in_w[i] = psum_ready_o_w[i][j];
+            assign psum_enable_i_w[i][j-1] = psum_enable_o_w[i][j];
+            assign psum_data_i_w[i][j-1] = psum_data_o_w[i][j];
 
-            assign gen_X[i].gen_Y[j].psum_enable_i_w = psum_enable_mux[i].out_w;
-            assign gen_X[i].gen_Y[j].psum_data_i_w = psum_data_mux[i].out_w;
+            assign psum_enable_i_w[i][j] = psum_enable_mux_out_w[i];
+            assign psum_data_i_w[i][j] = psum_data_mux_out_w[i];
           end else begin : gen_not_last_row
-            assign gen_X[i].gen_Y[j+1].psum_ready_i_w  = gen_X[i].gen_Y[j].psum_ready_o_w;
-            assign gen_X[i].gen_Y[j-1].psum_enable_i_w = gen_X[i].gen_Y[j].psum_enable_o_w;
-            assign gen_X[i].gen_Y[j-1].psum_data_i_w   = gen_X[i].gen_Y[j].psum_data_o_w;
+            assign psum_ready_i_w[i][j+1]  = psum_ready_o_w[i][j];
+            assign psum_enable_i_w[i][j-1] = psum_enable_o_w[i][j];
+            assign psum_data_i_w[i][j-1]   = psum_data_o_w[i][j];
           end
         end
       end

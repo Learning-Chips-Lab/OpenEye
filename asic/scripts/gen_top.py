@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
-"""Generate asic/rtl/sg13g2/OpenEye_Asic.v (chip top with pad ring).
+"""Generate asic/rtl/sg13g2/OpenEye_Asic.v (chip top with pad ring) and
+asic/rtl/sg13g2/pad_order.json (LibreLane PAD_* config lists).
 
 Each pad gets a unique leaf instance name: the LibreLane PAD_SOUTH/EAST/
 NORTH/WEST config lists reference pads by leaf name, so generate-loop
 instances with repeated names cannot be used.
 
+Pad layout (143 pads = 135 signal + 8 power, one vdd/vss pair per side):
+    west  (36): clk, rst_n, data_dma_i[0:31]
+    south (36): data_dma_i[32:63], enable_dma_i, ready_dma_i
+    north (36): data_dma_o[0:31], enable_dma_o, ready_dma_o
+    east  (35): data_dma_o[32:63], last_data_o
+
 Run:  python3 asic/scripts/gen_top.py
 """
+import json
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
-OUT = REPO / "asic" / "rtl" / "sg13g2" / "OpenEye_Asic.v"
+OUT_V = REPO / "asic" / "rtl" / "sg13g2" / "OpenEye_Asic.v"
+OUT_JSON = REPO / "asic" / "rtl" / "sg13g2" / "pad_order.json"
 
 HEADER = """\
 // This file is part of the OpenEye project.
@@ -24,12 +33,12 @@ HEADER = """\
 ///
 /// ASIC chip top for IHP SG13G2: OpenEye_FPGA compute core plus an explicit
 /// sg13g2_io pad ring (Caravel-style, placed by OpenROAD.PadRing via the
-/// PAD_SOUTH/EAST/NORTH/WEST LibreLane config lists).
+/// PAD_SOUTH/EAST/NORTH/WEST LibreLane config lists, see pad_order.json).
 ///
 /// GENERATED FILE -- do not edit by hand. Regenerate with:
 ///   python3 asic/scripts/gen_top.py
 ///
-/// Pad map (135 signal pads, all non-inverting, 3.3V-tolerant IO):
+/// Pad map (143 pads = 135 signal + 8 power, non-inverting, 3.3V-tolerant IO):
 ///   inputs  (69): clk, rst_n (active low),
 ///                 data_dma_i[63:0], enable_dma_i, ready_dma_i
 ///   outputs (66): data_dma_o[63:0], ready_dma_o, enable_dma_o, last_data_o
@@ -39,6 +48,22 @@ HEADER = """\
 ///   vdd/vss     = VPWR/VGND (1.2V core)
 ///   iovdd/iovss = tied to the core rails here
 """
+
+# side -> list of pad instance names (power pads interleaved at the ends)
+PAD_ORDER = {
+    "WEST":  ["u_vdd0", "u_vss0"]
+             + [f"u_dma_i_in{i}" for i in range(0, 32)]
+             + ["u_clk_in", "u_rstn_in"],
+    "SOUTH":  ["u_vdd1", "u_vss1"]
+             + [f"u_dma_i_in{i}" for i in range(32, 64)]
+             + ["u_eni_in", "u_rdyi_in"],
+    "NORTH": ["u_vdd2", "u_vss2"]
+             + [f"u_dma_o_out{i}" for i in range(0, 32)]
+             + ["u_eno_out", "u_rdyo_out"],
+    "EAST":  ["u_vdd3", "u_vss3"]
+             + [f"u_dma_o_out{i}" for i in range(32, 64)]
+             + ["u_last_out"],
+}
 
 
 def pad_in(name: str, pad_sig: str, core_sig: str) -> str:
@@ -59,10 +84,24 @@ def pad_out(name: str, pad_sig: str, core_sig: str) -> str:
     )
 
 
+def pad_vdd(name: str) -> str:
+    return (
+        f"    sg13g2_IOPadVdd {name} (\n"
+        f"        .vdd(VPWR), .vss(VGND), .iovdd(VPWR), .iovss(VGND)\n"
+        f"    );\n"
+    )
+
+
+def pad_vss(name: str) -> str:
+    return (
+        f"    sg13g2_IOPadVss {name} (\n"
+        f"        .vdd(VPWR), .vss(VGND), .iovdd(VPWR), .iovss(VGND)\n"
+        f"    );\n"
+    )
+
+
 def main() -> None:
-    lines: list[str] = []
-    lines.append(HEADER)
-    lines.append("""
+    lines = [HEADER, """
 module OpenEye_Asic (
     input  wire        clk_pad,
     input  wire        rst_n_pad,
@@ -108,6 +147,15 @@ module OpenEye_Asic (
     );
 
     // ------------------------------------------------------------------
+    // power pads (4 x Vdd, 4 x Vss, one pair per side)
+    // ------------------------------------------------------------------
+"""]
+    for i in range(4):
+        lines.append(pad_vdd(f"u_vdd{i}"))
+        lines.append(pad_vss(f"u_vss{i}"))
+
+    lines.append("""
+    // ------------------------------------------------------------------
     // input pads
     // ------------------------------------------------------------------
 """)
@@ -131,9 +179,17 @@ module OpenEye_Asic (
 
     lines.append("endmodule\n")
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text("".join(lines))
-    print(f"[OK] wrote {OUT} (135 pads)")
+    OUT_V.parent.mkdir(parents=True, exist_ok=True)
+    OUT_V.write_text("".join(lines))
+
+    n = sum(len(v) for v in PAD_ORDER.values())
+    names = {nm for v in PAD_ORDER.values() for nm in v}
+    assert len(names) == n, "duplicate pad names"
+    OUT_JSON.write_text(json.dumps(
+        {k: PAD_ORDER[k] for k in ("SOUTH", "EAST", "NORTH", "WEST")},
+        indent=2) + "\n")
+    print(f"[OK] wrote {OUT_V} ({n} pads)")
+    print(f"[OK] wrote {OUT_JSON}")
 
 
 if __name__ == "__main__":
