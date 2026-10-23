@@ -204,7 +204,6 @@ module iact_stream_constructor #(
     reg [7:0] rd_cycle_loop_cnt_1;
     reg [7:0] rd_cycle_loop_cnt_2;
     reg [7:0] rd_cycle_loop_cnt_3;
-    reg [7:0] rd_cycle_loop_cnt_4;
     reg [ 8-1:0] x_pos_in_w_cycle;
     reg [ 8-1:0] channel_trans_cycle;
   wire [12-1:0] rd_addr_inc_0_next;
@@ -254,6 +253,10 @@ module iact_stream_constructor #(
         rd_addr_2                  <= 0;
         rd_addr_3                  <= 0;
         rd_addr_4                  <= 0;
+        rd_cycle_loop_cnt_0        <= 0;
+        rd_cycle_loop_cnt_1        <= 0;
+        rd_cycle_loop_cnt_2        <= 0;
+        rd_cycle_loop_cnt_3        <= 0;
       end else begin
         case (fsm_enc_current_state)
           IDLE: begin
@@ -472,11 +475,6 @@ reg enable_write_to_storage;
         wr_cycle_loop_cnt_0           <= 0;
         wr_cycle_loop_cnt_1           <= 0;
         wr_cycle_loop_cnt_2           <= 0;
-        rd_cycle_loop_cnt_0           <= 0;
-        rd_cycle_loop_cnt_1           <= 0;
-        rd_cycle_loop_cnt_2           <= 0;
-        rd_cycle_loop_cnt_3           <= 0;
-        rd_cycle_loop_cnt_4           <= 0;
         iact_values_per_cluster_transmit <= 0;
         router_cycle                     <= 0;
         switching_cycle                  <= 0;
