@@ -7,9 +7,13 @@ gen_top.py) and fills in the SRAM macro views from the PDK.
 Run:  python3 asic/scripts/gen_config.py
 """
 import json
+import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
+# macro_placement is a sibling script in asic/scripts (not a package)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from macro_placement import merge_into_macros  # noqa: E402
 # The flow runs inside the iic-osic-tools container, where the repo is
 # mounted at /foss/designs (see asic/scripts/env.sh) -- all config paths
 # must be container paths.
@@ -83,6 +87,12 @@ def main() -> None:
             },
         }
 
+    # Fixed R0 positions for the 33 SRAM instances. LibreLane's
+    # Odb.ManualMacroPlacement only acts on MACROS.<cell>.instances and the
+    # flow never places macros on its own -> without this, GeneratePDN dies
+    # with [PDN-0235] Design has unplaced macros (happened in p2_11).
+    merge_into_macros(macros)
+
     # CELL_LIBS replaces the PDK dict entirely -> stdcell + io + SRAMs
     cell_libs = {}
     for corner in CORNERS:
@@ -145,8 +155,10 @@ def main() -> None:
     }
 
     OUT.write_text(json.dumps(config, indent=4) + "\n")
+    n_inst = sum(len(v.get("instances", {})) for v in macros.values())
     print(f"[OK] wrote {OUT} "
-          f"({sum(len(v) for v in pad_order.values())} pads, {len(macros)} macro types)")
+          f"({sum(len(v) for v in pad_order.values())} pads, {len(macros)} "
+          f"macro types, {n_inst} placed macro instances)")
 
 
 if __name__ == "__main__":
