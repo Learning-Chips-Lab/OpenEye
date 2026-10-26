@@ -216,6 +216,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Custom ignores for OpenEye project
+asic/sim/gatesim/sim_build*/
 *.vcd
 .ipynb_checkpoints
 model.png
@@ -234,6 +235,11 @@ cmds.f
 openeye_env/*
 env/*
 *.ys
+# the for-loop evidence scripts are small and part of the reproducible evidence
+# (repo convention ignores *.ys; negate it for that directory only)
+!asic/sim/gatesim/forloop_tests/*.ys
+# the VPI probe verdict files are evidence (repo convention ignores *.txt)
+!asic/sim/gatesim/vpi_probes/*.txt
 *.json
 !requirements.txt
 netlist.v

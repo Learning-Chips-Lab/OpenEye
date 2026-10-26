@@ -35,7 +35,16 @@ asic/
 │   ├── regress_macros.sh     cocotb regression (sg13g2 SRAM macros)
 │   ├── hoist_parallel_wires.py / hoist_hier_wires.py  (one-shot Yosys-compat transforms)
 ├── sim/
-│   └── tb_ram_equiv.v        unit test: sg13g2_ram_sp vs RAM_SP_generic
+│   ├── tb_ram_equiv.v        unit test: sg13g2_ram_sp vs RAM_SP_generic
+│   ├── gatesim/              gate-level sim of the synthesized netlist
+│   │   ├── OpenEye_Asic_gatesim_top.v  wrapper: pad ports -> FPGA signals
+│   │   ├── Makefile                iverilog + cocotb (slow fallback)
+│   │   ├── run_verilator.sh        Verilator + cocotb VPI (fast, preferred)
+│   │   ├── sg13g2_primitives_vlt.v Verilator stand-ins for the 17 stdcell
+│   │   │                           UDP primitives (no UDP support)
+│   │   ├── gatesim_probe_tb.v      standalone liveness probe
+│   │   ├── forloop_tests/          yosys for-loop unrolling evidence
+│   │   └── vpi_probes/             VPI exposure decision probes (P15b/P15c)
 ├── smoke/counter/            smoke design (RTL + LibreLane config + SDC)
 └── runs/                     (gitignored) flow + regression logs
 ```
@@ -47,9 +56,11 @@ asic/
 - PDK: `ihp-sg13g2` in-container at `/foss/pdks` (PDK commit `a49358cc`),
   30 SRAM macro variants (1P/2P), `sg13g2_io` pad library (22 cells),
   3 timing corners (typ 1.2 V/25 °C, fast 1.32 V/−40 °C, slow 1.08 V/125 °C)
-- Worker container: `iic-osic-tools_asic` (headless, uid 1000),
-  mounts `/home/utz/projekte` → `/foss/designs`
-  (repo therefore at `/foss/designs/OpenEye`)
+- Worker container: `iic-osic-tools_asic` (headless; uid 1002 on
+  est-srv02, 1000 on the old machine), mounts `~/projekte` →
+  `/foss/designs` (repo therefore at `/foss/designs/OpenEye`).
+  Container setup + est-srv02 gotchas: see `QWEN.md`
+  ("Container setup on est-srv02").
 
 ### Usage
 
@@ -226,3 +237,102 @@ re-verified):
   `EXTRA_VERILOG_MODELS` (PDK functional models stay for simulation).
 - `asic/scripts/yosys_check.sh`-style parse check
   (`read_verilog -sv -noautowire` + `hierarchy -check`) passes.
+
+### For loops in clocked blocks and the step-8 "64 check errors" (2026-10-23)
+
+Runs p2_8/p2_9/p2_10 all died at step 8 `Checker.YosysSynthChecks` with
+128/64/64 check errors. Root cause, established experimentally
+(full write-up: `sim/gatesim/forloop_tests/README.md`, minimal tests
+tb1–tb14, real-design checks `runs/flowchk.log`):
+
+- Yosys 0.70 `proc` **does unroll** constant-bounded `for` loops inside
+  clocked blocks — all 244 of them (9 files). Loop bodies come out with
+  constant indices; the loops are NOT a synthesis hazard by themselves.
+- The module-scope `integer` loop counters remain as **dead "zombie" FFs**
+  (self-referential next state, zero external fanout). The flow's own `opt`
+  passes (`opt_dff`/`opt_clean`) remove all of them — verified: the
+  p2_10 netlist contains **no** loop-counter FFs.
+- The check errors appear when **several always blocks drive the same
+  counter variable** (in `OpenEye_FPGA.v`: `a`/`b` shared by 4 blocks,
+  ~93 loops each). `write_verilog` emits the merged FF as several `always`
+  blocks → 32 bits × 2 vars = 64 "multiple conflicting drivers" warnings in
+  `pre_synth_chk.rpt` → step 8 counts them (`ERROR_ON_SYNTH_CHECKS`
+  defaults to true) and quits — although the netlist itself is clean.
+- Fix pattern (commit `c6125c5` for `iact_stream_constructor.v`, and for
+  `OpenEye_FPGA.v`): **one loop variable per always block**
+  (`a`→`a1..a4`, `b`→`b1..b4`). Netlist-identical, checker-clean.
+
+### Gate-level verification of the synthesized netlist
+
+Functional proof that the unrolled netlist matches the RTL: the same
+cocotb test as the RTL regression (`OpenEye_FPGA_tb`, `start_test_fpga`)
+runs against `OpenEye_Asic.nl.v` from any synthesis run, through the thin
+wrapper `sim/gatesim/OpenEye_Asic_gatesim_top.v` (pad ports → FPGA signal
+names, 9 ports total).
+
+- **`sim/gatesim/Makefile`** — iverilog path (slow: ~200 ns/min on the old
+  machine; the PDK models' specify blocks make every gate a delay).
+- **`sim/gatesim/run_verilator.sh <netlist>`** — Verilator path (fast).
+  Usage (container):
+  ```
+  cd /foss/designs/OpenEye/asic/sim/gatesim
+  ./run_verilator.sh <run>/06-yosys-synthesis/OpenEye_Asic.nl.v
+  ```
+
+  Verilator-specific infrastructure (all hit in practice, details in the
+  script header):
+
+  - **No UDP support**: the PDK stdcell models instantiate 17 `ihp_*` UDP
+    primitives; `sg13g2_primitives_vlt.v` provides behavioral stand-ins
+    with identical port lists (semantics transcribed from the PDK UDP
+    tables; the 6 in-use types were differential-tested against the real
+    UDPs in iverilog, 4000 randomized cycles).
+  - **Unnamed instances**: the PDK stdcell file instantiates the
+    primitives without instance names (legal per LRM, iverilog accepts,
+    Verilator rejects). The script generates a named copy
+    (`ihp_xxx u_prim_N (`) into the build dir at build time; the iverilog
+    path still uses the PDK original.
+  - **VPI exposure: marks + `--flatten`** (both REQUIRED, root-caused
+    2026-10-25; probes in `vpi_probes/`). Without any `public_on` marks
+    Verilator 5.052 generates no VPI var table at all (cocotb init
+    fataled with "Can not find root handle", 2026-10-25 build), so the
+    wrapper's 9 ports carry the marks (in `OpenEye_Asic_gatesim_top.v`).
+    The marks alone are not sufficient: without `--flatten` the wrapper
+    survives as its own class while `$root` holds a mirror copy of the 9
+    ports that is re-synced onto the wrapper on every clock edge,
+    clobbering cocotb's writes (outputs read 0x0). `--flatten` inlines
+    everything into one `$root` class; the top module's scope view then
+    binds its var table to `$root` storage, so the cocotb root handle
+    (`COCOTB_TOPLEVEL=OpenEye_Asic_gatesim_top`) exposes the live port
+    variables.
+    - **File order is functional** (build 6 root cause, 2026-10-25, probes
+      in `vpi_probes/`): Verilator 5.052 auto-marks a module `modPublic`
+      iff its definition is parsed AFTER the `--top-module` definition
+      (command-line file order, then in-file order). Public inlined cells
+      keep per-instance hierarchical var names and therefore materialize a
+      per-instance VPI scope; non-public cells merge their vars into
+      top-level `__Vcellout__` members (no scope). The script lists ALL
+      cell files (netlist, primitives, stdcell, RM, io) BEFORE the wrapper
+      → expected scope table: 2 rows (TOP + wrapper), ~9-20 var entries
+      (the wrapper's public_on ports + its local nets). Reversed order =
+      ~2.1M public instances → 3.19M scopes / ~360 GB codegen (build 6,
+      killed 2026-10-25).
+    - **Specify blocks are stripped** from the generated stdcell copy by
+      `asic/scripts/pdk_specify_strip.py` (84 blocks → 57
+      `assign delayed_X = X;` aliases): Verilator is 2-state and ignores
+      specify contents, so the `delayed_*` wires of the 16 FF/latch cells
+      would fold to 0 and break every sequential cell; all PDK specify
+      delays are 0.0, so the aliasing is exact.
+    Do NOT use `--public`/`--public-flat-rw` instead: `--public-flat-rw`
+    exposes every internal signal of the flat netlist and exploded codegen
+    to 653 GB of C++ (2026-10-23 build, killed).
+  - **Build with `-cc --exe`**, not `--binary`: cocotb's
+    `verilator.cpp` provides `main()`; `--binary` generates a second one
+    (link error `duplicate symbol: main`). Compile with low `make -j`
+    (`MAKE_JOBS`, default 4): the generated translation units are huge.
+  - **cocotb 2.1 runtime env**: `COCOTB_TEST_MODULES` /
+    `COCOTB_TOPLEVEL` / `COCOTB_TEST_FILTER`, `GPI_USERS`
+    (libpython + pygpi entry point) and `PYGPI_PYTHON_BIN` (all derived
+    via `python3 -m cocotb_tools.config`), `COCOTB_TRUST_INERTIAL_WRITES=1`
+    — the old `MODULE`/`TOPLEVEL`/`TESTCASE` names are not honored by the
+    cocotb 2.1 Verilator runtime.

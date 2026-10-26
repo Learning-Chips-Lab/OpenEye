@@ -1,0 +1,26 @@
+# P15c run output (probe scale: 1000 cells, --flatten + marks + FF + one initial #0 -> VM_TIMING=1 = the REAL build corner)
+
+## structural report
+VM_TIMING: 1
+non-root classes: 0
+table entries: 19
+TOP__bigtop member (mirror instance): 0
+
+## scope table + table bindings (mprobe_p15c/Vtop__Syms__Slow.cpp)
+extern const VlScopeTableEntry Vtop__Syms__VpiScopeTable[] = {
+    {offsetof(Vtop__Syms, __Vscopep_TOP), "TOP", "TOP", "<null>", 0, VerilatedScope::SCOPE_OTHER},
+    {offsetof(Vtop__Syms, __Vscopep_bigtop), "bigtop", "bigtop", "bigtop", -9, VerilatedScope::SCOPE_MODULE},
+};
+    __Vscopep_TOP->varsInsertFromTable(Vtop___024root__VpiVarTable0, 9, &(TOP));
+    __Vscopep_bigtop->varsInsertFromTable(Vtop___024root__VpiVarTable1, 10, &(TOP));
+
+## ico_sequent guard (mirror copy re-sync):
+    if (__VicoExecute) {
+            if ((1ULL & vlSelfRef.__VicoTriggered[0U])) {
+
+## cocotb verdict (same p15b_tb)
+    21.00ns INFO     cocotb.bigtop                      after write (no edge): data_dma_o=0x123 (expect [9:1]=0x122)
+    31.00ns INFO     cocotb.bigtop                      after edge: data_dma_o=0x123 (expect [9:1]=0x122, [0]=1)
+    31.00ns INFO     cocotb.bigtop                      P15B_OK
+                                                        ** p15b_tb.p15b_test              PASS          31.00           0.00      44325.60  **
+                                                        ** TESTS=1 PASS=1 FAIL=0 SKIP=0                 31.00           0.00      28338.35  **

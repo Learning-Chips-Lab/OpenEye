@@ -17,10 +17,19 @@ NETLIST ?= $(REPO)/asic/runs/openeye_p2_9/design/runs/p2_9/06-yosys-synthesis/Op
 
 SRAM_DIR = $(OPENEYE_PDK)/libs.ref/sg13g2_sram/verilog
 
+# stdcell source: PDK original by default (iverilog handles the specify
+# blocks and UDP primitives natively). Pass STDC_VLT=sim_build_vlt/sg13g2_stdcell_vlt.v
+# to use the generated copy with renamed instances + stripped specify
+# blocks (asic/scripts/pdk_specify_strip.py) — functionally identical
+# (all PDK specify delays are 0.0) and much faster in Icarus, which
+# otherwise schedules a delay event per gate per transition (~200 ns/min
+# on the old machine).
+STDC_VLT ?= $(OPENEYE_PDK)/libs.ref/sg13g2_stdcell/verilog/sg13g2_stdcell.v
+
 VERILOG_SOURCES += $(PWD)/OpenEye_Asic_gatesim_top.v
 VERILOG_SOURCES += $(SRAM_DIR)/RM_IHPSG13_1P_core_behavioral_bm_bist.v
 VERILOG_SOURCES += $(NETLIST)
-VERILOG_SOURCES += $(OPENEYE_PDK)/libs.ref/sg13g2_stdcell/verilog/sg13g2_stdcell.v
+VERILOG_SOURCES += $(STDC_VLT)
 VERILOG_SOURCES += $(OPENEYE_PDK)/libs.ref/sg13g2_stdcell/verilog/sg13g2_udp.v
 VERILOG_SOURCES += $(SRAM_DIR)/RM_IHPSG13_1P_1024x64_c2_bm_bist.v
 VERILOG_SOURCES += $(SRAM_DIR)/RM_IHPSG13_1P_1024x8_c2_bm_bist.v

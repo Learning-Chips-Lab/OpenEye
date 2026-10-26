@@ -1,0 +1,58 @@
+# Replicate the flow: original RTL -> proc -> check -> opt -> check -> write
+# then re-read the written netlist and check what a fresh parse+check sees.
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/asic/rtl/sg13g2/OpenEye_Asic.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/asic/rtl/sg13g2/sg13g2_ram_sp.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/asic/rtl/sg13g2_io_blackbox.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/GLB_cluster.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/OpenEye_Cluster.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/OpenEye_FPGA.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/OpenEye_Parallel.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/PE.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/PE_cluster.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/RAM_DP.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/RAM_DP_RW.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/RAM_DP_RW_generic.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/RAM_DP_generic.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/RAM_SP.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/RAM_SP_generic.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/RST_SYNC.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/SPad_DP.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/SPad_DP_RW.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/SPad_SP.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/adder.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/adder_tree.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/data_pipeline.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/data_pipeline_iact.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/data_pipeline_wght.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/delay_cluster.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/demux2.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/dma_storage.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/dsp_unit.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/iact_stream_constructor.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/multiplier.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/mux2.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/mux_iact.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/psum_pipeline.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/quantization_unit.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/ring_buffer_pipelined.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/router_configurator.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/router_iact.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/router_psum.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/router_wght.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/hdl/varlenFIFO.v
+read_verilog -sv -noautowire -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster -DOPENEYE_RAM_SPECIFIC -DNO_TRACE /foss/designs/OpenEye/asic/rtl/sg13g2/sg13g2_sram_blackbox.v
+hierarchy -top OpenEye_Asic -check
+proc
+check
+opt_expr
+opt_merge
+opt_dff
+opt_clean
+opt_muxtree
+opt_reduce
+opt_expr
+opt_merge
+opt_dff
+opt_clean
+check
+write_verilog -noattr /foss/designs/OpenEye/asic/runs/flowchk_after_proc_opt.v

@@ -31,35 +31,135 @@ synthesis + gate simulation in parallel).
     (`PDK_ROOT=/foss/pdks`, `PDK=ihp-sg13g2`, `STD_CELL_LIBRARY=sg13g2_stdcell`,
     `PAD_CELL_LIBRARY=sg13g2_io`)
 
-### Container setup on est-srv02 (TODO before the flow can run)
+### Container setup on est-srv02 (DONE 2026-10-23, verified)
 
-1. Pull the image: `docker pull hpretl/iic-osic-tools:latest`
+1. Pull the image: `docker pull hpretl/iic-osic-tools:latest` (image was
+   already loaded on est-srv02).
 2. Create the headless worker (est-srv02 uid is 1002; SELinux is enforcing →
-   `--security-opt label=disable`):
+   `--security-opt label=disable`). **The image entrypoint is
+   `/dockerstartup/scripts/ui_startup.sh` and requires `-s` as its FIRST
+   argument** — a bare `sleep infinity` command makes it abort with
+   "Unexpected option". Working invocation (same pattern as
+   `asic/scripts/container.sh`):
    ```
    docker run -d --name iic-osic-tools_asic \
      --user 1002:1002 --security-opt label=disable \
      -v $HOME/projekte:/foss/designs:rw \
-     hpretl/iic-osic-tools:latest sleep infinity
+     hpretl/iic-osic-tools:latest -s /bin/bash -c "sleep infinity"
    ```
 3. **Install the Python packages that the base image is missing** (they were
-   installed in the old machine's container layer, not in the image):
+   installed in the old machine's container layer, not in the image). Split
+   into two pip calls — a single call with `--index-url` in the middle would
+   point the *whole* install at the PyTorch index (tensorflow et al. are not
+   there):
    ```
-   docker exec iic-osic-tools_asic bash -lc "pip install \
-     tensorflow==2.21.0 \
-     torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu \
-     onnx==1.23.2 onnxruntime==1.31.0 cocotb-test==0.3.0"
+   docker exec iic-osic-tools_asic bash -lc \
+     "pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu"
+   docker exec iic-osic-tools_asic bash -lc \
+     "pip install tensorflow==2.21.0 onnx==1.23.2 onnxruntime==1.31.0 cocotb-test==0.3.0"
    ```
    (base image already has: cocotb 2.1.0, cocotbext-ams, numpy 2.5.4,
    torch-geometric 2.8.1)
 4. Sanity check inside the container:
    ```
-   docker exec iic-osic-tools_asic bash -lc "cd /foss/designs/OpenEye && asic/scripts/gen.sh"
+   docker exec iic-osic-tools_asic bash -lc "cd /foss/designs/OpenEye && PYTHONPATH=src asic/scripts/gen.sh"
    docker exec iic-osic-tools_asic bash -lc "cd /foss/designs/OpenEye && asic/scripts/regress.sh"
+   docker exec iic-osic-tools_asic bash -lc "cd /foss/designs/OpenEye && asic/scripts/regress_macros.sh"
    ```
-   Both must pass before any flow run.
+   **All three pass on est-srv02** (logs: `asic/runs/regress_generic.log`,
+   `asic/runs/regress_macros.log`). Both regressions must stay green before
+   any flow run.
 
-## Current state (as of 2026-10-23)
+est-srv02 host gotchas (learned 2026-10-23):
+- `utz` IS in the `docker` group (`/etc/group`), but existing shell sessions
+  don't see it until re-login → run docker via `sg docker -c "docker ..."`
+  until the session is renewed.
+- `run_openeye.sh` / `watchdog.sh` must be launched **on the host** (they
+  call `docker exec`; there is no docker inside the container — the
+  `docker exec -d … watchdog.sh` pattern only works with docker-in-docker).
+  Host launch: `sg docker -c "cd ~/projekte/OpenEye && setsid nohup asic/scripts/watchdog.sh p2_10 > asic/runs/watchdog_p2_10.log 2>&1 < /dev/null &"`
+- `asic/sim/gatesim/run_verilator.sh <netlist>` — Verilator gate-sim build
+  (cocotb VPI, `--timing` is mandatory for the Python-driven clock).
+  **Flag pitfalls (all hit in practice, see script header):**
+  - **VPI exposure needs BOTH `/*verilator public_on*/` marks AND
+    `--flatten`** (build 5 hit the first half; the second half was
+    root-caused 2026-10-25, probes in `asic/sim/gatesim/vpi_probes/`).
+    Verilator 5.052 generates a VPI var table only when at least one
+    public variable exists — without any, the trivial wrapper is inlined
+    into `$root` and cocotb fataled with "Can not find root handle"
+    (build 5). The marks on the wrapper's 9 ports
+    (`OpenEye_Asic_gatesim_top.v`) are therefore REQUIRED. The marks
+    alone are NOT sufficient: without `--flatten` the wrapper survives as
+    its own class while `$root` holds a mirror copy of the 9 ports that
+    is re-synced onto the wrapper on EVERY clock edge (ico_sequent),
+    clobbering cocotb's writes (symptom: outputs read 0x0). With
+    `--flatten` everything is one `$root` class and the top module's
+    scope view binds its var table directly to `$root` storage, so the
+    cocotb root handle (`COCOTB_TOPLEVEL=OpenEye_Asic_gatesim_top`)
+    exposes the LIVE port variables — the mirror copies (`*_DOT__*`) are
+    synced only once at the first iteration and then form the driven
+    path. Verified end-to-end at probe scale in the exact real-build
+    corner (flatten + marks + VM_TIMING=1 + Python-driven clock, P15c):
+    combinational write propagation without a clock edge AND the FF path
+    via posedge/NBA.
+    - **File order is functional (build 6 root cause, probes P18c–P18m):**
+      with `--flatten`, every inlined cell gets a candidate VPI scope; it
+      materializes only if the cell's module is `modPublic`, because only
+      public inlined cells keep per-instance hierarchical var names
+      (`top.inst.var`) — non-public cells merge their vars into top-level
+      `__Vcellout__` members. Verilator 5.052 auto-marks a module public
+      iff its definition is parsed **AFTER** the `--top-module` definition
+      (command-line file order, then in-file order; 14 probe runs, source
+      setter not located in the 5.052 tree). `run_verilator.sh` therefore
+      lists ALL cell files (netlist, primitives, stdcell, RM, io) BEFORE
+      the wrapper. Reversed order = every one of the ~2.1M instances
+      public → 3.19M per-instance scopes / ~360 GB codegen (build 6,
+      killed). Correct order → 2 scopes (TOP + wrapper), ~9-20 var-table
+      entries (the wrapper's public_on ports + its local nets), verified
+      on the full 84-module stdcell file (P18m + sanity compile).
+  - NO `--public`/`--public-flat-rw`: exposes every internal signal of
+    every module and exploded codegen to **653 GB of C++ / 700 GB written**
+    for this flat netlist (build of 2026-10-23/24, killed at the PCH
+    compile stage).
+  - Build with `-cc --exe` + explicit `make -f Vtop.mk`, NOT `--binary`:
+    cocotb's `verilator.cpp` provides `main`; `--binary` generates a
+    second one → `duplicate symbol: main` at link.
+  - cocotb 2.1 runtime env: `COCOTB_TEST_MODULES`/`COCOTB_TOPLEVEL`/
+    `COCOTB_TEST_FILTER`, `GPI_USERS=<libpython>;<pygpi entry point>`
+    (both from `python3 -m cocotb_tools.config`), `PYGPI_PYTHON_BIN`,
+    `COCOTB_TRUST_INERTIAL_WRITES=1`. The old `MODULE`/`TOPLEVEL`/
+    `TESTCASE` names are NOT honored by the cocotb 2.1 Verilator runtime.
+  - `make` parallelism low (`-j 4`, `MAKE_JOBS`): the generated Vtop
+    translation units are huge; high `-j` risks OOM.
+   - The script's codegen-size guard must use GNU `du -sm`, not BSD
+     `du -sg`: the container has GNU coreutils, and with `set -e` the
+     failed `du -sg` command substitution ABORTS THE WHOLE SCRIPT. This
+     actually happened on 2026-10-25: codegen finished fine (2516 MB in
+     2222 files), but `make` never ran; recovered with
+     `asic/runs/finish_gatesim_make.sh` (make + cocotb run continuation).
+  `sg13g2_udp.v` is NOT compiled (Verilator has no UDP support): the PDK
+  standard-cell models instantiate 17 `ihp_*` UDP primitives internally,
+  replaced by the behavioral stand-ins in
+  `asic/sim/gatesim/sg13g2_primitives_vlt.v` (same port lists, semantics
+  transcribed from the UDP tables). `sg13g2_IOPadAnalog` has a circular
+  `assign` that Verilator rejects, but it is unreachable from
+  `OpenEye_Asic_gatesim_top` with `--top-module`, so the full
+  `sg13g2_io.v` file is fine. The PDK stdcell models instantiate those
+  primitives **without instance names** (legal per LRM, iverilog accepts
+  it, but Verilator only allows unnamed instances for gate-level
+  primitives): `run_verilator.sh` therefore compiles a generated copy of
+  `sg13g2_stdcell.v` in which the 24 `ihp_* (` lines are rewritten to
+  `ihp_* u_prim_N (` (the iverilog Makefile path still uses the PDK
+  original and is unaffected). The same generated copy additionally has
+  its 84 specify blocks stripped and 57 `assign delayed_X = X;` aliases
+  added by `asic/scripts/pdk_specify_strip.py`: Verilator is 2-state and
+  ignores specify contents, so the `delayed_*` wires driven only by the
+  timing blocks of the 16 FF/latch cells would fold to 0 and break every
+  sequential cell. All PDK specify delays are 0.0, hence the aliasing is
+  exact. The io models are compiled as-is (their specify blocks carry no
+  `delayed_*` data; Verilator just ignores them).
+
+## Current state (as of 2026-10-26)
 
 ### Done and verified
 
@@ -87,17 +187,64 @@ synthesis + gate simulation in parallel).
 ### In progress — the open problem (TOP PRIORITY)
 
 Flow run `p2_9` (config: `asic/rtl/sg13g2/openeye.json`, die 10.5 mm) got
-through yosys synthesis (55.3 mm² netlist, 2.2 M cells, netlist at
-`asic/runs/openeye_p2_9/design/runs/p2_9/06-yosys-synthesis/OpenEye_Asic.nl.v`)
-but failed at step 8 `Checker.YosysSynthChecks` with **64 check errors**.
+through yosys synthesis (55.3 mm² netlist, 2.2 M cells) but failed at
+step 8 `Checker.YosysSynthChecks` with **64 check errors**.
 
-**Root cause: yosys 0.70 `read_verilog` does NOT unroll constant-bounded
-`for` loops inside clocked (`always @(posedge …)`) processes.** Instead it
-models the loop variable as a free-running FF that saturates at the bound —
-so after C cycles the loop body never executes again. The netlist is
-therefore **very likely functionally different from simulation**.
+**Root cause (re-verified 2026-10-23 on est-srv02 — supersedes the earlier
+hypothesis below it): the loops ARE unrolled. The 64 errors are a checker
+artifact on dead loop-counter FFs, and the netlist is expected to be
+functionally identical to the RTL.**
 
-Key facts (all experimentally verified):
+yosys 0.70 `proc` unrolls all 244 constant-bounded `for` loops in clocked
+blocks (verified with minimal tests tb1–tb14 and on the real design): the
+loop bodies come out with constant indices. What remains after `proc`:
+
+- The loop-counter variables (module-scope `integer`) stay as FFs with
+  self-referential next-state logic ("zombie counters") and **zero
+  external fanout** — verified for all 15 of them in the post-`proc`
+  netlist (`asic/runs/loopchk_after_proc.v`): `a, b, word, cc, cc_fc,
+  cc_psum, cr, cr_psum, g, g_psum, pec, per, r, w, pipe_idx`.
+- In `hdl/OpenEye_FPGA.v`, `a` and `b` are shared by **4 always blocks**
+  (~lines 850/1037/1135/1547, 9/10/15/59 loops each). `write_verilog`
+  emits such a merged FF as several `always` blocks driving one register
+  → exactly **64 "multiple conflicting drivers" warnings** (32 bits × 2
+  vars) in `pre_synth_chk.rpt`. The synthesis step counts them via
+  `_parse_yosys_check`, and step 8 `Checker.YosysSynthChecks`
+  (`ERROR_ON_SYNTH_CHECKS` defaults to true) aborts the flow — even though
+  the netlist itself is fine.
+- The flow's own `opt` passes remove every zombie counter: running the
+  flow's pass sequence (`proc; check; opt_expr; opt_merge; opt_dff;
+  opt_clean; opt_muxtree; opt_reduce; …`) on the real design leaves
+  **zero** loop-counter FFs and **zero** check errors in the netlist
+  (`asic/runs/flowchk.log`, `asic/runs/flowchk_after_proc_opt.v`).
+
+**Resolved (2026-10-25/26), all gates green:**
+
+1. **Gate-sim of the p2_10 netlist: PASS** (Verilator, build 7,
+   2026-10-25 10:09→18:34, log `asic/runs/gatesim_p2_10c.log`):
+   `OpenEye_FPGA_tb.start_test_fpga passed`, TESTS=1 PASS=1 FAIL=0 at
+   10210 ns, 4.6 s sim time. Structural check of the generated code
+   confirms the file-order fix holds at netlist scale (VpiScopeTable:
+   exactly 2 rows — TOP + wrapper; `Vtop__Syms__Slow.cpp` 5 KB).
+   A parallel Icarus run of the same netlist+test hung in the compute
+   phase (14 h frozen at 4190 ns, 99.6% CPU, killed 2026-10-26):
+   iverilog is not a viable full-netlist path for this design.
+2. **Rename applied** (2026-10-26 05:14):
+   `python3 asic/scripts/rename_loops_fpga.py --apply` → 210 lines in
+   `hdl/OpenEye_FPGA.v` (`a`→`a1..a4`, `b`→`b1..b4`, 6 always blocks,
+   one declaration line). Each FF now single-driven. **Both RTL
+   regressions PASS post-rename** (05:13, `asic/runs/regress_after_rename.log`).
+3. **Post-rename yosys recheck: PASS** (2026-10-26 05:23,
+   `loopchk_after_proc.ys`, `proc; check` on the full RTL): **0**
+   "multiple conflicting drivers" (pre-rename: 64), no ERROR lines,
+   `write_verilog` clean (log `asic/runs/loopchk_after_rename3.log`,
+   output `asic/runs/loopchk_after_proc.v`).
+   Run with `yosys -p "$(cat …)"` — NOT `-c` (see pitfall below).
+4. Alternative (documented workaround, not preferred):
+   `ERROR_ON_SYNTH_CHECKS=false` in `openeye.json`.
+
+~~Key facts (all experimentally verified):~~ *(superseded — kept for the
+record)*
 
 - The 64 errors = loop variables `a` and `b` (32-bit integers) in
   `hdl/OpenEye_FPGA.v`, shared by 4 always blocks → "multiple conflicting
@@ -121,78 +268,91 @@ Key facts (all experimentally verified):
 - Block-scope `integer` declarations inside for loops are rejected by
   yosys's read_verilog ("Left hand side of 1st expression of procedural
   for-loop is not a register!").
-- **Gate-level simulation of the p2_9 netlist was set up but inconclusive**
-  (old machine too slow, see below). Whether the netlist is actually
-  functionally broken is the first question to answer on the new server.
 
-### Gate-level simulation harness (built, not yet conclusive)
+### Gate-level simulation harness (built, p2_10 netlist validated: PASS)
 
 `asic/sim/gatesim/` contains:
+- `run_verilator.sh` — Verilator gate-sim build + run (preferred path;
+  flag pitfalls documented above).
 - `OpenEye_Asic_gatesim_top.v` — thin wrapper mapping the pad-level ports of
   the synthesized top back to the `OpenEye_FPGA` signal names, so the
   existing cocotb testbench (`test/cocotb_fpga/OpenEye_FPGA_tb.py`,
-  `start_test_fpga`) runs unchanged.
-- `Makefile` — cocotb Makefile for iverilog: netlist + `sg13g2_stdcell.v`
-  (functional models; the UDP file is not needed functionally) + 6 RM
-  FUNCTIONAL models + `sg13g2_io.v`. Exports the ASIC-target env vars.
-  Usage (container):
+  `start_test_fpga`) runs unchanged. Carries the 9 `/*verilator
+  public_on*/` port marks (REQUIRED, see the VPI pitfall entry above).
+- `sg13g2_primitives_vlt.v` — behavioral stand-ins for the 17 `ihp_*`
+  UDP primitives (Verilator has no UDP support; semantics transcribed
+  from the UDP tables).
+- `Makefile` — cocotb Makefile for iverilog (slow fallback): netlist +
+  `sg13g2_stdcell.v` (functional models; the UDP file is not needed
+  functionally) + 6 RM FUNCTIONAL models + `sg13g2_io.v`. Exports the
+  ASIC-target env vars. NOTE: `NETLIST` defaults to the p2_9 netlist —
+  pass the p2_10 path explicitly. Usage (container):
   ```
   cd /foss/designs/OpenEye/asic/sim/gatesim && make run NETLIST=<...>/OpenEye_Asic.nl.v
   ```
 - `gatesim_probe_tb.v` — standalone liveness probe (reset + ready handshake).
+- `forloop_tests/` — minimal yosys tests + real-design evidence settling
+  the for-loop question (see above).
+- `vpi_probes/` — the Verilator VPI exposure decision probes (P15b/P15c)
+  with scope-table/codegen excerpts; evidence for the
+  marks+`--flatten` requirement.
 
-Caveats learned on the old machine:
-- iverilog elaboration of the 554 MB netlist peaks at **~17.6 GB RAM** and
-  simulation runs at only ~200–250 ns/min (UDP/timing-heavy stdcell models) —
-  a full test (~10 µs sim) takes hours. The run got stuck at the
-  "Stream is sent" milestone (4190 ns) after >90 min without a verdict.
-- Verilator 5.052 flags: `-j 8` (space!), no `-Wno-LINT` (use
-  `-Wno-fatal`); compile was not completed before the switch. With 256 GB
-  RAM, a Verilator `--binary` gate sim is the preferred route (much faster).
-  sg13g2_stdcell.v functional models are plain Verilog (no UDPs) →
-  Verilator-compatible.
+Caveats learned (final):
+- iverilog on the full netlist: elaboration peaks at **~17.6 GB RAM**,
+  and the cocotb run **hung in the compute phase** — log flat at
+  4190 ns ("Stream is sent") for 14 h at 99.6% CPU (killed 2026-10-26,
+  log `asic/runs/gatesim_iverilog_p2_10.log`). Flat log tail + growing
+  vvp TIME column = stuck, not slow. Verilator runs the same 10210 ns
+  in 4.6 s — it is the only viable full-netlist path.
+- Verilator 5.052: build 7 economics: codegen+link ~8.4 h total
+  (cvt effectively single-threaded: `Walltime 31744 s (cvt=31016 s)`
+  on 32 threads), sim 4.6 s. The verified flag set (incl. why NOT
+  `--binary`, why NOT `--public*`, why file order matters, why the
+  specify-strip is needed) is documented above at the
+  `run_verilator.sh` entry.
 
-## Next steps (on est-srv02)
+## Next steps (on est-srv02, post-reboot 2026-10-26)
 
-1. **Set up the container** — see "Container setup on est-srv02" above
-   (pull image, create `iic-osic-tools_asic`, pip packages).
-2. **Sanity**: run both RTL regressions (commands above) — must PASS.
-3. **Answer the loop question — gate-sim the p2_9 netlist**:
-   The p2_9 netlist itself was NOT transferred (it lived in `asic/runs/`,
-   which is gitignored). Either copy `asic/runs/openeye_p2_9/` (~2.3 GB)
-   over from the old machine, or re-run synthesis first
-   (`asic/scripts/run_openeye.sh p2_10` — it fails at step 8 again, which is
-   expected, and leaves a fresh netlist).
-   - Preferred: Verilator gate sim of `asic/sim/gatesim`
-     (`verilator --binary -j 16 --top-module OpenEye_Asic_gatesim_top
-     -Wno-fatal <wrapper> <netlist> <stdcell> <RM FUNCTIONAL models> <io>`),
-     then drive it with a small standalone TB or cocotb (SIM=verilator).
-     Alternatively re-run the iverilog `make run` (now RAM is not an issue,
-     but it is slow — budget hours).
-   - **If the netlist PASSES the functional test**: the loop conflicts were
-     resolved benignly. Then either (a) fix the multi-driven loop variables
-     properly (rename per always-block / restructure the 4 loops in
-     OpenEye_FPGA.v) so the checker passes, or (b) set
-     `ERROR_ON_SYNTH_CHECKS=false` in `openeye.json` (documented workaround)
-     and re-run the flow from synthesis onward (`asic/scripts/run_openeye.sh
-     p2_10` under `asic/scripts/watchdog.sh p2_10`).
-   - **If it FAILS**: the 244 clocked-block for loops must be made
-     yosys-compatible. Two viable strategies:
-     - restructure each loop: compute the next-state vector in a
-       combinational `always @(*)` (blocking assignments — yosys unrolls
-       those correctly), then one NBA in the clocked block. Default the
-       next-state vector to the current register value to preserve hold
-       semantics; keep textual order of multiple loops.
-     - or a preprocessor that unrolls constant-bounded loops with the known
-       parameter values from `asic/target.sh` / generated
-       `parameters_*.vh`, producing an ASIC-only copy of the affected files
-       (keep `hdl/` untouched for the FPGA flow).
-     - After the fix: RTL regressions must still pass, yosys
-       `read_verilog … ; hierarchy -top OpenEye_Asic -check; proc; check`
-       must be clean (script pattern in `asic/README.md`), then re-run flow.
-4. **Re-run the flow** (`p2_10`) under the watchdog; monitor synthesis →
-   floorplan (SRAM macro placement must fit the ~9.86 mm core) → P&R →
-   STA (10 ns) → DRC/LVS (expect the 3 documented PDK-gap failures).
+All pre-flow gates are green: RTL regressions PASS (post-rename,
+05:13), p2_10 netlist gate-sim PASS (10-25, Verilator), rename applied
+and verified, commit made. Remaining:
+
+1. **Launch the full flow as p2_11** (server reboot happened 2026-10-26
+   early morning; everything below is post-reboot):
+   ```
+   cd /home/utz/projekte/OpenEye
+   setsid nohup sg docker -c 'docker exec iic-osic-tools_asic bash -lc \
+     "cd /foss/designs/OpenEye && asic/scripts/watchdog.sh p2_11"' \
+     > asic/runs/watchdog_p2_11.log 2>&1 < /dev/null &
+   ```
+   (If the container is down after the reboot: `sg docker -c 'docker start iic-osic-tools_asic'`
+   first. The watchdog restarts unexpected crashes up to 3× on its own.)
+2. **Self-monitoring (user requirement, 2026-10-26)**: check at regular
+   intervals (every ~30–60 min):
+   - `asic/runs/openeye_p2_11/flow.log` (step progress; flat tail for
+     >1 h on a long step like place-and-route = suspicious),
+   - `asic/runs/watchdog_p2_11.log` (restart count; budget 3),
+   - container liveness (`ps aux` inside: step processes present).
+   If a run is dead beyond the watchdog budget or stalled, re-launch
+   manually with a **new run name** (p2_12, …) using the command above.
+3. Loopchk recheck already done (PASS, see "Resolved" above); if the
+   log was lost in the reboot, rerun is one command (~6 s):
+   `yosys -p "$(cat asic/sim/gatesim/forloop_tests/loopchk_after_proc.ys)"`
+   in the container (NOT `-c` — see pitfall).
+4. **Expected outcome**: synthesis (2 h, now clean at step 8) → floorplan
+   (SRAM macro placement must fit the ~9.86 mm core) → P&R → STA (10 ns)
+   → DRC/LVS (expect the 3 documented PDK-gap failures).
+5. **Scratch cleanup** (host + container, after p2_11 has started
+   cleanly):
+   - host `/home/utz/projekte/`: `nametest.pl`, `verify_stdcell.sh`,
+     `stdcell_vlt_test.v`, `nametest.err`, `t_udp.v`, `t_udp.vvp`,
+     `tb_prim.v`, `tb_prim.vvp`, `prim_vlt_renamed.v`, `vpi_micro/`
+     (decide), `vlt_sample.sh` (decide);
+   - host `/tmp/opencode/`: `verilator-5.052/`, `V3Const.cpp`,
+     `vlt5052.tar.gz`, `renametest/`, `loopchk_run.sh` (keep until
+     recheck verified);
+   - container `asic/sim/gatesim/sim_build/` (2 GB iverilog, hung run)
+     — keep `sim_build_vlt/` as the verified Verilator build.
 
 ## Key commands
 
@@ -211,11 +371,32 @@ override inherited environment.
 
 ## Pitfalls (learned the hard way)
 
-- yosys loop semantics — see above. Any new `for` loop with side effects in a
-  clocked block in `hdl/` breaks synthesis.
-- Two `always` blocks must never drive the same reg (even "only in reset") —
-  yosys flags it and resolves it arbitrarily (commit `c6125c5` fixed the
-  last known case).
+- yosys loop semantics (re-verified 2026-10-23): constant-bounded `for`
+  loops in clocked blocks are **unrolled** by `proc`; the counter variable
+  remains as a dead FF that the flow's `opt` passes remove. Loops are NOT
+  a synthesis hazard by themselves (minimal tests:
+  `asic/sim/gatesim/forloop_tests/`).
+- Two `always` blocks must never drive the same reg (even "only in reset"
+  or "only as loop counter") — yosys merges them into one FF and
+  `write_verilog` emits several `always` blocks for it → "multiple
+  conflicting drivers" check errors that fail step 8. This is the actual
+  cause of the p2_8/p2_9/p2_10 failures (commit `c6125c5` + the
+  `a`/`b` rename in this commit fix all known cases).
+- **yosys `-c` is broken in this container's yosys 0.70 build** (2026-10-26):
+  `yosys -c script.ys` dies with `ERROR: TCL interpreter returned an
+  error: invalid command name "read_verilog"` (both the
+  `/foss/tools/bin/yosys` wrapper and the bare `/foss/tools/yosys/bin/yosys`;
+  `-p` works fine, the LibreLane flow is unaffected — it uses pyosys `-y`).
+  Always run command scripts as `yosys -p "$(cat script.ys)"` (container
+  paths). The wrapper additionally force-injects `-m ghdl -m slang` on
+  every non-`-h` call.
+- iverilog vvp can hang at ~100% CPU in event storms without sim time
+  advancing (full p2_10 netlist: 14 h frozen at 4190 ns, killed
+  2026-10-26). Flat log tail + growing vvp TIME column = stuck, not slow;
+  kill it and use Verilator (4.6 s for the same 10210 ns).
+- `pgrep -f "pattern"` self-matches its own wrapper shell (e.g. the
+  `bash -c` that runs the pgrep) — use bracket patterns (`[y]osys -c`)
+  and verify hits with `ps -p <pid>`.
 - LibreLane 3.1: `meta` in the JSON has no `name` field; config paths must be
   **container paths** (`/foss/...`); `DIE_AREA=[0,0,10500,10500]`;
   SRAM liberty files cannot be read by yosys in non-`-lib` mode → the blackboxes
@@ -243,16 +424,20 @@ override inherited environment.
 
 ## Git state
 
-Branch `dev_asic_sg13g2`, commits (newest first):
+Branch `dev_asic_sg13g2`, commits (newest first) as of 2026-10-26:
 ```
+8562ade QWEN.md: document est-srv02 setup and missing container packages
+0b4a157 Add gate-level simulation harness and handoff notes (QWEN.md)
 c6125c5 Fix multi-driven rd_cycle_loop_cnt_* in iact_stream_constructor (yosys check)
 d65c16b Make the ASIC target Yosys-synthesisable; add Phase-2 flow scaffolding
 56b65ec Add ASIC target RTL for IHP SG13G2 (Phase 1: 2x2 target, SRAM macros, chip top)
 3f9f18d Add missing counter.json smoke config (root .gitignore excludes *.json)
 ed66784 Add ASIC backend setup for IHP SG13G2 (Phase 0: LibreLane Chip-flow smoke test)
 ```
-`asic/runs/` (flow outputs, logs, netlists) is **not committed** — the p2_9
-netlist referenced above only exists on the old machine. If it is needed,
-copy `asic/runs/openeye_p2_9/` over or re-run synthesis on the new server.
-Generated files (`hdl/*.vh`, `hdl/dma_storage.v`) are gitignored and must be
-regenerated with `asic/scripts/gen.sh` after cloning.
++ the gate-sim harness / loop-rename commit (2026-10-26).
+7+1 commits ahead of `origin/main`; **push blocked** (see above).
+`asic/runs/` (flow outputs, logs, netlists) is gitignored — all evidence
+(gatesim logs, loopchk outputs, regression logs, the p2_10 netlist)
+exists only on est-srv02.
+Generated files (`hdl/*.vh`, `hdl/dma_storage.v`) are gitignored and must
+be regenerated with `asic/scripts/gen.sh` after cloning.
