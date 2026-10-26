@@ -20,7 +20,7 @@ async def convolution_window(dut):
     choose_bits = ports.bit_length()
     for name in ("reset_cycle_i", "params", "enable_config", "enable_store",
                  "enable_converter", "fc_storage_valid_i", "storage_i",
-                 "needed_y_cls_i", "needed_iact_channel_cycles_i", "fc_size_i",
+                 "needed_y_cls_i", "needed_iact_channel_cycles_i",
                  "x_lines_i", "needed_wght_cycles_i", "y_lines_per_calc",
                  "fully_connected_i", "padding_x", "padding_y"):
         getattr(dut, name).value = 0

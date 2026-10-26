@@ -106,7 +106,7 @@ def test_mobilnet(LAYER_NUMBER):
     input_size = input_size_array[LAYER_NUMBER]
     input_channels = input_channel_array[LAYER_NUMBER]
 
-    verilog_sources = ptu.get_verilog_sources(hdl_dir, 0)
+    verilog_sources = ptu.get_verilog_sources(hdl_dir)
 
     target_dir = os.path.join(tests_dir, 'simulation/layer_' + str(LAYER_NUMBER)) 
     results = cocotb_test.simulator.run(

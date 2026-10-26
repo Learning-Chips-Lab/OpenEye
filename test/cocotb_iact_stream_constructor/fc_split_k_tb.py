@@ -20,7 +20,7 @@ async def split_k_pairs(dut):
     span = rows * pe_rows * channels
     for name in ('reset_cycle_i', 'params', 'enable_config', 'enable_store',
                  'enable_converter', 'fc_storage_valid_i', 'storage_i',
-                 'needed_y_cls_i', 'needed_iact_channel_cycles_i', 'fc_size_i',
+                 'needed_y_cls_i', 'needed_iact_channel_cycles_i',
                  'iact_x_add_up', 'channel_div_trans', 'x_lines_i',
                  'needed_wght_cycles_i', 'needed_iact_router_cycles_i',
                  'wght_size_x_i', 'wght_size_y_i', 'stride_x_i', 'stride_y_i',

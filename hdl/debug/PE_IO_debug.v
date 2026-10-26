@@ -38,7 +38,6 @@ module PE_IO_debug #(
     parameter integer PSUM_ADDR = 32,
 
     parameter integer TRANS_BITWIDTH_IACT = 24,
-    parameter integer TRANS_BITWIDTH_WGHT = 24,
 
     parameter integer NUM_GLB_IACT = 3,
 
@@ -73,7 +72,7 @@ module PE_IO_debug #(
     input      [TRANS_BITWIDTH_IACT*NUM_GLB_IACT-1:0] iact_data_i,
     input      [                    NUM_GLB_IACT-1:0] iact_enable_i,
     output     [                    NUM_GLB_IACT-1:0] iact_ready_o,
-    input      [             TRANS_BITWIDTH_WGHT-1:0] wght_data_i,
+    input      [                  WGHT_DATA_DATA-1:0] wght_data_i,
     input                                             wght_enable_i,
     output                                            wght_ready_o,
     input      [             TRANS_BITWIDTH_PSUM-1:0] psum_data_i,
@@ -221,7 +220,6 @@ module PE_IO_debug #(
     .WGHT_ADDR_ADDR(WGHT_ADDR_ADDR),
     .PSUM_ADDR(PSUM_ADDR),
     .TRANS_BITWIDTH_IACT(TRANS_BITWIDTH_IACT),
-    .TRANS_BITWIDTH_WGHT(TRANS_BITWIDTH_WGHT),
     .NUM_GLB_IACT(NUM_GLB_IACT)
   ) pe_inst (
     .clk_i(clk_i),
