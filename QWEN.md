@@ -394,8 +394,9 @@ Decision rules:
   metrics (utilization, timing at 10 ns, WNS/TNS per corner) and report.
 - Any NEW error class → analyze, fix in `gen_config.py`/env (config is
   regenerated every run), relaunch with the next run name.
-- Scratch cleanup (host `/home/utz/projekte/`): `vpi_micro/` (3.9 GB) is
-  the one remaining "decide" item — ask the user.
+- Scratch cleanup (host `/home/utz/projekte/`): done 2026-10-26, incl.
+  `vpi_micro/` (3.9 GB, deleted per user decision — the verified VPI probe
+  evidence lives in `asic/sim/gatesim/vpi_probes/`, committed).
 - Update this file's "Current state" + "Git state" with the outcome.
 
 ### 3. Re-launch chain (reference)
