@@ -269,6 +269,51 @@ record)*
   yosys's read_verilog ("Left hand side of 1st expression of procedural
   for-loop is not a register!").
 
+### p2_11 result + fix, p2_12 running (2026-10-26)
+
+`p2_11` (launched 05:47, ran ~5.4 h):
+
+- **Step 8 `Checker.YosysSynthChecks` PASSED** (`error__count: 0`, was 64 in
+  p2_9/p2_10 — the rename fixed it). Netlist 2,196,211 inst, 55.29 mm²,
+  synthesis 58:41 min.
+- Flow progressed through floorplan/padring/setpowerconnections/cutrows/
+  tapendcap/addpdnobstructions (steps 9–21) and **died at step 22
+  `OpenROAD.GeneratePDN`:
+  `[PDN-0235] Design has unplaced macros`**. All 33 RM SRAM instances were
+  unplaced: the flow's `Odb.ManualMacroPlacement` (step 18) is a SKIP step
+  when `MACROS.<cell>.instances` is absent (it was — `openeye.json` never
+  carried instance data), and OpenROAD never places macros on its own.
+- **Fix (commit `3d6c242`)**:
+  - `asic/scripts/macro_placement.py` — deterministic R0 placement of the
+    33 instances in 3 bottom rows of the core (y=325: 5× wght
+    2048x64/2048x32; y=970: 24× psum 4096x16/4096x8; y=1610: 4× BUFFER_A
+    1024x64), snapped to the 5 µm grid, asserted in-core/no-overlap.
+    Names verified 1:1 against the p2_11 padring DEF (ground truth:
+    `asic/runs/macro_instances_p2_11.txt`).
+  - `gen_config.py` now calls `merge_into_macros()` (openeye.json is
+    regenerated every run, so the fix lives in the generator).
+  - **End-to-end verified**: `placers.py manual-macro-placement` on the
+    p2_11 padring ODB → "Successfully placed 33 instances", readback:
+    33/33 `FIRM` at exactly the designed coordinates.
+- **Second root cause found while verifying** (would have killed p2_12 at
+  step 15/16): the container's default `openroad`
+  (`/foss/tools/bin/openroad`, 26Q4-407) **does not accept `-python`** —
+  LibreLane 3.1's Odbpy steps all use it and print usage + exit 1.
+  p2_11 had only worked because a transient `$DESIGNS/.designinit` PATH
+  override (sourced by the container login profile) pointed at the
+  `-python`-capable build; the file vanished mid-run (06:52, mtime evidence)
+  after the librelane process had already captured its 05:47 environment.
+  `env.sh` now pins `_LLN_OVERRIDE_OPENROAD=/foss/tools/openroad-librelane/
+  bin/openroad` (26Q1-1024, LibreLane's documented override) for ALL
+  openroad steps. The `sta` binary stays at the 26Q4 build (pure TCL, fine).
+
+`p2_12` launched **12:09:58** via the watchdog (host side), monitor running
+(`asic/runs/monitor_p2_12.sh`, 5-min snapshots → `monitor_p2_12.log`).
+Expected: steps 1–21 replay (~5 h), then step 22 `GeneratePDN` must pass
+(macros now FIRM-placed). Beyond that: global/detailed placement → CTS →
+routing → fill → multi-corner STA (10 ns) → DRC/LVS, where the 3 documented
+PDK-gap failures are EXPECTED (see "Blocked / open threads").
+
 ### Gate-level simulation harness (built, p2_10 netlist validated: PASS)
 
 `asic/sim/gatesim/` contains:
@@ -311,86 +356,57 @@ Caveats learned (final):
   specify-strip is needed) is documented above at the
   `run_verilator.sh` entry.
 
-## Next steps (re-entry plan — server was rebooted 2026-10-26 morning)
+## Next steps (as of 2026-10-26 ~12:10)
 
-All pre-flow gates are green: RTL regressions PASS (post-rename, 05:13),
-p2_10 netlist gate-sim PASS (10-25, Verilator), rename applied and
-verified, committed (`f7a4c05` + this re-entry commit). The one job: **run the full flow as
-p2_11 and self-monitor it** (user requirement 2026-10-26).
+p2_12 is running (launched 12:09:58 via the watchdog, host side). The job
+now is: **self-monitor p2_12** (user requirement 2026-10-26) and analyze —
+not blindly re-run — on any failure.
 
-### 1. Post-reboot sanity (~2 min)
+### 1. Self-monitoring (USER REQUIREMENT — do it proactively, ~every 30 min)
 
-```
-docker ps                                  # utz is in the docker group — no sg needed
-docker start iic-osic-tools_asic           # if the container is down after reboot
-df -h / && free -g                         # was: 441G / 228G free (no issue)
-cd /home/utz/projekte/OpenEye && git log --oneline -2   # → this re-entry commit + f7a4c05 (harness)
-```
-
-### 2. Launch the full flow as p2_11 (HOST side, detached)
-
-```
-cd /home/utz/projekte/OpenEye
-setsid nohup asic/scripts/watchdog.sh p2_11 > asic/runs/watchdog_p2_11.log 2>&1 < /dev/null &
-```
-
-`watchdog.sh` runs on the HOST (it calls `run_openeye.sh`, which does
-`docker exec` itself — do NOT wrap it in `docker exec`/`sg docker`);
-it restarts unexpected crashes (OOM/SIGKILL/traceback) up to 3× on its
-own (logs: `asic/runs/watchdog_p2_11.log` +
-`asic/runs/openeye_p2_11_launcher.log`). Progress:
-`tail -f asic/runs/openeye_p2_11/flow.log`, step dirs under
-`asic/runs/openeye_p2_11/design/runs/p2_11/`.
-Expected: synthesis ~1–2 h — **step 8 (Checker) must pass clean now**
-(it was the kill point of p2_9/p2_10), then floorplan/P&R/STA/DRC/LVS
-(many hours total).
-
-### 3. Self-monitoring (USER REQUIREMENT 2026-10-26 — do it proactively)
-
-Check at regular intervals (~every 30–60 min) WITHOUT being asked:
-
-- `tail asic/runs/openeye_p2_11/flow.log` — step progress visible?
-- `tail asic/runs/watchdog_p2_11.log` — restart count (budget 3)?
+- `tail asic/runs/openeye_p2_12/flow.log` — step progress visible?
+- `tail -20 asic/runs/monitor_p2_12.log` — background monitor (5-min
+  snapshots; flags STALL / RESTART / WD-EXITED / DEAD / DONE).
+- `tail asic/runs/watchdog_p2_12.log` — restart count (budget 3).
 - `docker exec iic-osic-tools_asic bash -lc 'ps aux --sort=-pcpu | head -8'`
   — the current step process alive and burning CPU?
 
 Decision rules:
-- **Stall** (flow.log flat > 1 h on a long step like place-and-route,
-  step process dead or 0% CPU) or **dead beyond the watchdog budget** →
-  re-launch manually with a **NEW run name**:
-  `setsid nohup asic/scripts/watchdog.sh p2_12 > asic/runs/watchdog_p2_12.log 2>&1 < /dev/null &`
+- **Stall** (flow.log flat > 1 h on a long step, step process dead or
+  0% CPU) or **dead beyond the watchdog budget** → re-launch with a
+  **NEW run name** (p2_13):
+  `setsid nohup asic/scripts/watchdog.sh p2_13 > asic/runs/watchdog_p2_13.log 2>&1 < /dev/null &`
   (never reuse the run name; the old dir stays as evidence).
-- **Design-level checker failure** (flow stops controllably at a Checker
-  step, no crash) → do NOT blindly re-run: analyze
-  `asic/runs/openeye_p2_11/flow.log` + the step's reports dir first.
+- **Design-level checker failure** (flow stops controllably, no crash) →
+  do NOT blindly re-run: analyze `asic/runs/openeye_p2_12/flow.log` + the
+  failing step's dir (log, reports, COMMANDS file) first.
+- Watch for the **first Odbpy step with real work** (step 15
+  checkmacroantennaproperties / step 18 manualmacroplacement — both were
+  SKIPPED in p2_11): step 18 must print "Successfully placed 33
+  instances" (verified offline on the p2_11 ODB already).
+- **Expected milestone ~16:30–17:30**: step 22 `GeneratePDN` must pass
+  (PDN-0235 was the p2_11 kill point).
 
-### 4. Optional re-verification (only if logs were lost in the reboot)
+### 2. After the flow finishes (or dies)
 
-Loopchk recheck already PASSED (0 conflicting drivers, see "Resolved"):
-`docker exec iic-osic-tools_asic bash -lc 'cd /foss/designs/OpenEye && yosys -p "$(cat asic/sim/gatesim/forloop_tests/loopchk_after_proc.ys)"'`
-(one line; `$(cat)` must expand INSIDE the container — single-quoted.
-NOT `-c`, see pitfall. ~6 s.)
+- If DRC/LVS fails ONLY with the documented PDK gaps (bondpad LVS, PSM-0069
+  pad vdd, sealring offset) → that is the expected outcome; collect
+  metrics (utilization, timing at 10 ns, WNS/TNS per corner) and report.
+- Any NEW error class → analyze, fix in `gen_config.py`/env (config is
+  regenerated every run), relaunch with the next run name.
+- Scratch cleanup (host `/home/utz/projekte/`): `vpi_micro/` (3.9 GB) is
+  the one remaining "decide" item — ask the user.
+- Update this file's "Current state" + "Git state" with the outcome.
 
-### 5. Expected outcome + scratch cleanup
+### 3. Re-launch chain (reference)
 
-- Outcome: synthesis (clean) → floorplan (SRAM macro placement must fit
-  the ~9.86 mm core) → P&R → STA (10 ns) → DRC/LVS. The 3 documented
-  PDK-gap failures at DRC/LVS are EXPECTED, not alarms (see
-  "Blocked / open threads").
-- Keep the p2_10 netlist (`asic/runs/openeye_p2_10/…/OpenEye_Asic.nl.v`,
-  580 MB) until the p2_11 synthesis step has produced its own; then
-  optional cleanup.
-- Scratch cleanup AFTER p2_11 has started cleanly:
-  - host `/home/utz/projekte/`: `nametest.pl`, `verify_stdcell.sh`,
-    `stdcell_vlt_test.v`, `nametest.err`, `t_udp.v`, `t_udp.vvp`,
-    `tb_prim.v`, `tb_prim.vvp`, `prim_vlt_renamed.v`, `vpi_micro/`
-    (decide), `vlt_sample.sh` (decide);
-  - host `/tmp/opencode/`: `verilator-5.052/`, `V3Const.cpp`,
-    `vlt5052.tar.gz`, `renametest/`, `loopchk_run.sh`,
-    `pending_after_build.md` (this plan is now fully in QWEN.md — the
-    /tmp copy is a duplicate and can go);
-  - container `asic/sim/gatesim/sim_build/` (2 GB iverilog, hung run) →
-    delete; keep `sim_build_vlt/` (the verified Verilator build).
+`watchdog.sh p2_NN` (HOST, detached) → `run_openeye.sh p2_NN` →
+staging (container `gen.sh` + host `gen_top.py` + `gen_config.py`) →
+`docker exec iic-osic-tools_asic bash -lc "cd …/openeye_p2_NN/design &&
+source asic/scripts/env.sh && librelane openeye.json --overwrite
+--run-tag p2_NN"`. All pre-flow gates are green (RTL regressions post-
+rename, p2_10 netlist gate-sim PASS, loopchk 0 conflicts, synthesis
+checker 0 errors in p2_11).
 
 ## Key commands
 
@@ -439,6 +455,24 @@ override inherited environment.
   **container paths** (`/foss/...`); `DIE_AREA=[0,0,10500,10500]`;
   SRAM liberty files cannot be read by yosys in non-`-lib` mode → the blackboxes
   in `asic/rtl/sg13g2/sg13g2_sram_blackbox.v` are mandatory (EXTRA_VERILOG_MODELS).
+- **LibreLane 3.1 never places macros by itself**: `Odb.ManualMacroPlacement`
+  only acts on `MACROS.<cell>.instances` (unescaped ODB names +
+  `{"location": [x, y], "orientation": "R0"}`; unknown instance keys are
+  rejected, missing names hard-fail the step). Without it, the flow dies at
+  `OpenROAD.GeneratePDN` with `[PDN-0235] Design has unplaced macros`
+  (p2_11). The instances come from `asic/scripts/macro_placement.py` via
+  `gen_config.py`.
+- **Two OpenROAD builds in the container**: `/foss/tools/bin/openroad`
+  (26Q4-407, NO `-python` flag) and `/foss/tools/bin/openroad-librelane`
+  (26Q1-1024, has `-python`, required by all Odbpy steps). `env.sh` pins
+  `_LLN_OVERRIDE_OPENROAD` to the librelane build. Do NOT rely on
+  `$DESIGNS/.designinit` (a login-profile hook that vanished mid-p2_11 and
+  silently changed which binary the flow used — the librelane process keeps
+  its launch-time env, so steps can run on a different build than a fresh
+  shell sees). Symptom of the mismatch: openroad prints its usage and exits
+  1 even though the argv is identical to a known-good step.
+- `/tmp/opencode/` (host) is NOT visible inside the container — write
+  container outputs to container paths (`/tmp/...` inside the container).
 - Make variable name collisions: never name a Makefile variable `RM` (clobbers
   the built-in remove command) or reuse env-set names like `PDK`/`PDK_ROOT`.
 - WSL/old machine: only one yosys synthesis at a time on <32 GB RAM.
@@ -462,8 +496,11 @@ override inherited environment.
 
 ## Git state
 
-Branch `dev_asic_sg13g2`, commits (newest first) as of 2026-10-26:
+Branch `dev_asic_sg13g2`, commits (newest first) as of 2026-10-26 ~12:15:
 ```
+3d6c242 Fix PDN-0235: place the 33 SRAM macros; pin -python-capable openroad
+665c5c9 QWEN.md: make the re-entry plan self-contained for the post-reboot session
+f7a4c05 Split shared loop counters in OpenEye_FPGA; add Verilator gate-sim harness
 8562ade QWEN.md: document est-srv02 setup and missing container packages
 0b4a157 Add gate-level simulation harness and handoff notes (QWEN.md)
 c6125c5 Fix multi-driven rd_cycle_loop_cnt_* in iact_stream_constructor (yosys check)
@@ -472,8 +509,7 @@ d65c16b Make the ASIC target Yosys-synthesisable; add Phase-2 flow scaffolding
 3f9f18d Add missing counter.json smoke config (root .gitignore excludes *.json)
 ed66784 Add ASIC backend setup for IHP SG13G2 (Phase 0: LibreLane Chip-flow smoke test)
 ```
-+ the gate-sim harness / loop-rename commit (2026-10-26).
-7+1 commits ahead of `origin/main`; **push blocked** (see above).
+10 commits ahead of `origin/main`; **push blocked** (see above).
 `asic/runs/` (flow outputs, logs, netlists) is gitignored — all evidence
 (gatesim logs, loopchk outputs, regression logs, the p2_10 netlist)
 exists only on est-srv02.
