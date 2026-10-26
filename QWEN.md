@@ -311,48 +311,86 @@ Caveats learned (final):
   specify-strip is needed) is documented above at the
   `run_verilator.sh` entry.
 
-## Next steps (on est-srv02, post-reboot 2026-10-26)
+## Next steps (re-entry plan — server was rebooted 2026-10-26 morning)
 
-All pre-flow gates are green: RTL regressions PASS (post-rename,
-05:13), p2_10 netlist gate-sim PASS (10-25, Verilator), rename applied
-and verified, commit made. Remaining:
+All pre-flow gates are green: RTL regressions PASS (post-rename, 05:13),
+p2_10 netlist gate-sim PASS (10-25, Verilator), rename applied and
+verified, committed (`f7a4c05` + this re-entry commit). The one job: **run the full flow as
+p2_11 and self-monitor it** (user requirement 2026-10-26).
 
-1. **Launch the full flow as p2_11** (server reboot happened 2026-10-26
-   early morning; everything below is post-reboot):
-   ```
-   cd /home/utz/projekte/OpenEye
-   setsid nohup sg docker -c 'docker exec iic-osic-tools_asic bash -lc \
-     "cd /foss/designs/OpenEye && asic/scripts/watchdog.sh p2_11"' \
-     > asic/runs/watchdog_p2_11.log 2>&1 < /dev/null &
-   ```
-   (If the container is down after the reboot: `sg docker -c 'docker start iic-osic-tools_asic'`
-   first. The watchdog restarts unexpected crashes up to 3× on its own.)
-2. **Self-monitoring (user requirement, 2026-10-26)**: check at regular
-   intervals (every ~30–60 min):
-   - `asic/runs/openeye_p2_11/flow.log` (step progress; flat tail for
-     >1 h on a long step like place-and-route = suspicious),
-   - `asic/runs/watchdog_p2_11.log` (restart count; budget 3),
-   - container liveness (`ps aux` inside: step processes present).
-   If a run is dead beyond the watchdog budget or stalled, re-launch
-   manually with a **new run name** (p2_12, …) using the command above.
-3. Loopchk recheck already done (PASS, see "Resolved" above); if the
-   log was lost in the reboot, rerun is one command (~6 s):
-   `yosys -p "$(cat asic/sim/gatesim/forloop_tests/loopchk_after_proc.ys)"`
-   in the container (NOT `-c` — see pitfall).
-4. **Expected outcome**: synthesis (2 h, now clean at step 8) → floorplan
-   (SRAM macro placement must fit the ~9.86 mm core) → P&R → STA (10 ns)
-   → DRC/LVS (expect the 3 documented PDK-gap failures).
-5. **Scratch cleanup** (host + container, after p2_11 has started
-   cleanly):
-   - host `/home/utz/projekte/`: `nametest.pl`, `verify_stdcell.sh`,
-     `stdcell_vlt_test.v`, `nametest.err`, `t_udp.v`, `t_udp.vvp`,
-     `tb_prim.v`, `tb_prim.vvp`, `prim_vlt_renamed.v`, `vpi_micro/`
-     (decide), `vlt_sample.sh` (decide);
-   - host `/tmp/opencode/`: `verilator-5.052/`, `V3Const.cpp`,
-     `vlt5052.tar.gz`, `renametest/`, `loopchk_run.sh` (keep until
-     recheck verified);
-   - container `asic/sim/gatesim/sim_build/` (2 GB iverilog, hung run)
-     — keep `sim_build_vlt/` as the verified Verilator build.
+### 1. Post-reboot sanity (~2 min)
+
+```
+docker ps                                  # utz is in the docker group — no sg needed
+docker start iic-osic-tools_asic           # if the container is down after reboot
+df -h / && free -g                         # was: 441G / 228G free (no issue)
+cd /home/utz/projekte/OpenEye && git log --oneline -2   # → this re-entry commit + f7a4c05 (harness)
+```
+
+### 2. Launch the full flow as p2_11 (HOST side, detached)
+
+```
+cd /home/utz/projekte/OpenEye
+setsid nohup asic/scripts/watchdog.sh p2_11 > asic/runs/watchdog_p2_11.log 2>&1 < /dev/null &
+```
+
+`watchdog.sh` runs on the HOST (it calls `run_openeye.sh`, which does
+`docker exec` itself — do NOT wrap it in `docker exec`/`sg docker`);
+it restarts unexpected crashes (OOM/SIGKILL/traceback) up to 3× on its
+own (logs: `asic/runs/watchdog_p2_11.log` +
+`asic/runs/openeye_p2_11_launcher.log`). Progress:
+`tail -f asic/runs/openeye_p2_11/flow.log`, step dirs under
+`asic/runs/openeye_p2_11/design/runs/p2_11/`.
+Expected: synthesis ~1–2 h — **step 8 (Checker) must pass clean now**
+(it was the kill point of p2_9/p2_10), then floorplan/P&R/STA/DRC/LVS
+(many hours total).
+
+### 3. Self-monitoring (USER REQUIREMENT 2026-10-26 — do it proactively)
+
+Check at regular intervals (~every 30–60 min) WITHOUT being asked:
+
+- `tail asic/runs/openeye_p2_11/flow.log` — step progress visible?
+- `tail asic/runs/watchdog_p2_11.log` — restart count (budget 3)?
+- `docker exec iic-osic-tools_asic bash -lc 'ps aux --sort=-pcpu | head -8'`
+  — the current step process alive and burning CPU?
+
+Decision rules:
+- **Stall** (flow.log flat > 1 h on a long step like place-and-route,
+  step process dead or 0% CPU) or **dead beyond the watchdog budget** →
+  re-launch manually with a **NEW run name**:
+  `setsid nohup asic/scripts/watchdog.sh p2_12 > asic/runs/watchdog_p2_12.log 2>&1 < /dev/null &`
+  (never reuse the run name; the old dir stays as evidence).
+- **Design-level checker failure** (flow stops controllably at a Checker
+  step, no crash) → do NOT blindly re-run: analyze
+  `asic/runs/openeye_p2_11/flow.log` + the step's reports dir first.
+
+### 4. Optional re-verification (only if logs were lost in the reboot)
+
+Loopchk recheck already PASSED (0 conflicting drivers, see "Resolved"):
+`docker exec iic-osic-tools_asic bash -lc 'cd /foss/designs/OpenEye && yosys -p "$(cat asic/sim/gatesim/forloop_tests/loopchk_after_proc.ys)"'`
+(one line; `$(cat)` must expand INSIDE the container — single-quoted.
+NOT `-c`, see pitfall. ~6 s.)
+
+### 5. Expected outcome + scratch cleanup
+
+- Outcome: synthesis (clean) → floorplan (SRAM macro placement must fit
+  the ~9.86 mm core) → P&R → STA (10 ns) → DRC/LVS. The 3 documented
+  PDK-gap failures at DRC/LVS are EXPECTED, not alarms (see
+  "Blocked / open threads").
+- Keep the p2_10 netlist (`asic/runs/openeye_p2_10/…/OpenEye_Asic.nl.v`,
+  580 MB) until the p2_11 synthesis step has produced its own; then
+  optional cleanup.
+- Scratch cleanup AFTER p2_11 has started cleanly:
+  - host `/home/utz/projekte/`: `nametest.pl`, `verify_stdcell.sh`,
+    `stdcell_vlt_test.v`, `nametest.err`, `t_udp.v`, `t_udp.vvp`,
+    `tb_prim.v`, `tb_prim.vvp`, `prim_vlt_renamed.v`, `vpi_micro/`
+    (decide), `vlt_sample.sh` (decide);
+  - host `/tmp/opencode/`: `verilator-5.052/`, `V3Const.cpp`,
+    `vlt5052.tar.gz`, `renametest/`, `loopchk_run.sh`,
+    `pending_after_build.md` (this plan is now fully in QWEN.md — the
+    /tmp copy is a duplicate and can go);
+  - container `asic/sim/gatesim/sim_build/` (2 GB iverilog, hung run) →
+    delete; keep `sim_build_vlt/` (the verified Verilator build).
 
 ## Key commands
 
@@ -361,7 +399,7 @@ and verified, commit made. Remaining:
 | RTL regression (generic RAM) | `docker exec iic-osic-tools_asic bash -lc "cd /foss/designs/OpenEye && asic/scripts/regress.sh"` |
 | RTL regression (PDK SRAM macros) | `… asic/scripts/regress_macros.sh` |
 | Generate ASIC RTL (target 2×2) | `… bash -lc "cd /foss/designs/OpenEye && asic/scripts/gen.sh"` |
-| Run flow (new run name each time) | `docker exec -d iic-osic-tools_asic bash -lc "cd /foss/designs/OpenEye && setsid nohup asic/scripts/watchdog.sh p2_10 > asic/runs/watchdog_p2_10.log 2>&1 < /dev/null &"` |
+| Run flow (new run name each time) | HOST side: `setsid nohup asic/scripts/watchdog.sh p2_11 > asic/runs/watchdog_p2_11.log 2>&1 < /dev/null &` (watchdog→run_openeye.sh does `docker exec` itself; do NOT wrap in docker exec) |
 | Flow progress | `tail asic/runs/openeye_p2_10/flow.log`; step dirs under `asic/runs/openeye_p2_10/design/runs/p2_10/` |
 | yosys parse/elaborate check | pattern in `asic/README.md` (`read_verilog -sv -noautowire …; hierarchy -top OpenEye_Asic -check`) — add `proc; check` to catch driver conflicts |
 
