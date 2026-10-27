@@ -159,7 +159,7 @@ est-srv02 host gotchas (learned 2026-10-23):
   exact. The io models are compiled as-is (their specify blocks carry no
   `delayed_*` data; Verilator just ignores them).
 
-## Current state (as of 2026-10-26)
+## Current state (as of 2026-10-27, evening)
 
 ### Done and verified
 
@@ -361,7 +361,54 @@ Timing fix options (after the run, needs a decision):
 1. RTL re-pipelining of the cross-cluster fabric data paths (proper fix).
 2. Clock relaxation (e.g. 15–20 ns) if the product allows.
 3. Placement/floorplan rework (grouping the clusters) — largest effort.
-Until then: let p2_12 finish for the full physical baseline.
+
+### p2_12 resizer decision + data-loss incident (2026-10-27 evening)
+
+User decision (evening 2026-10-27): cap resizer TNS repair at 1 % and
+re-run step 36. While executing it, the p2_12 run was destroyed:
+
+1. openroad (step 36, PID 20591) killed 19:13; LibreLane exited cleanly
+   19:14:11 (resizer in its HOLD phase, iter 491,980, THS -219.9, WHS
+   -4.064). Watchdog was disabled before the kill (no auto-restart).
+2. The resume attempt used `librelane openeye.json --overwrite --run-tag
+   p2_12 -F OpenROAD.ResizerTimingPostCTS` — **WRONG**: `--overwrite`
+   means "Overwrite run, if exists" and LibreLane implements it as
+   `shutil.rmtree(run_dir)` (`librelane/flows/flow.py`, `flow.start`).
+   The entire run dir (steps 1–35, ~30 h of synthesis/floorplan/PDN/
+   placement/CTS outputs) was deleted; the resume then failed with
+   `ResizerTimingPostCTS: missing required input 'odb'` and started a
+   NEW run numbering (step 36 became dir `01-…`).
+3. No reliable recovery: the ext4 blocks may still be on disk (would
+   need `debugfs` with root on /dev/sdd1), but LibreLane's run state
+   (state_out.json, per-step outputs, view lineage) was wiped with them,
+   so the flow cannot be re-attached. Even a perfect file-level recovery
+   would not give a resumable run.
+
+**Lessons (also in Pitfalls):** resume with the plain command
+`librelane openeye.json --run-tag <tag> [-F <StepId>]` — NO
+`--overwrite`. `run_openeye.sh` has been fixed accordingly (its old
+`--overwrite` would also have wiped the run on EVERY watchdog
+crash-restart). Corrected phase picture: the 11 h+ tail was the HOLD
+phase (not setup, which gives up on its own after ~2.7 h, RSZ-0062),
+so ALL FOUR resizer TNS knobs are capped at 1 % now (commit `92675e6`):
+`PL_RESIZER_{SETUP,HOLD}_REPAIR_TNS_PCT` (postCTS) +
+`GRT_RESIZER_{SETUP,HOLD}_REPAIR_TNS_PCT` (postGRT). The HoldViolations
+gate fails on WHS with or without caps — the caps only bound resizer run
+time (~2.7 h setup + ~8 h hold at step 36).
+
+**p2_13** relaunched 2026-10-27 ~19:25 via the watchdog (host side),
+fresh run name (naming rule: never reuse a run name), config otherwise
+identical (macros placed, openroad pin, 4 resizer caps). Monitor:
+`asic/runs/monitor_p2_13.sh` → `monitor_p2_13.log` (p2_12 monitor
+stopped). p2_12 evidence retained: `asic/runs/openeye_p2_12/flow.log`
+(3 GB — full resizer iteration table via tee; the archived step log
+`…log.uncapped_20261027_1914` was inside the wiped dir and is lost).
+
+ETA p2_13 (from ~19:25 on 10-27): steps 1–35 ~20 h (→ 10-28 ~15:30),
+step 36 resizer ~11 h capped (→ 10-29 ~03:00), GRT/DRT/RCX/STA/fill/
+GDS/DRC/LVS ~6–10 h, DRT the longest pole (→ 10-29 afternoon).
+Expected stop: step 77 HoldViolations (WHS ~-4.06, controllable) — or
+earlier on a NEW error class (then analyze, don't blindly re-run).
 
 ### Gate-level simulation harness (built, p2_10 netlist validated: PASS)
 
@@ -405,35 +452,37 @@ Caveats learned (final):
   specify-strip is needed) is documented above at the
   `run_verilator.sh` entry.
 
-## Next steps (as of 2026-10-26 ~12:10)
+## Next steps (as of 2026-10-27 evening)
 
-p2_12 is running (launched 12:09:58 via the watchdog, host side). The job
-now is: **self-monitor p2_12** (user requirement 2026-10-26) and analyze —
-not blindly re-run — on any failure.
+p2_13 is running (launched ~19:25 via the watchdog, host side; config:
+4 resizer TNS caps at 1 %, see "p2_12 resizer decision + data-loss
+incident"). The job now is: **self-monitor p2_13** (user requirement
+2026-10-26) and analyze — not blindly re-run — on any failure.
 
 ### 1. Self-monitoring (USER REQUIREMENT — do it proactively, ~every 30 min)
 
-- `tail asic/runs/openeye_p2_12/flow.log` — step progress visible?
-- `tail -20 asic/runs/monitor_p2_12.log` — background monitor (5-min
+- `tail asic/runs/openeye_p2_13/flow.log` — step progress visible?
+- `tail -20 asic/runs/monitor_p2_13.log` — background monitor (5-min
   snapshots; flags STALL / RESTART / WD-EXITED / DEAD / DONE).
-- `tail asic/runs/watchdog_p2_12.log` — restart count (budget 3).
+- `tail asic/runs/watchdog_p2_13.log` — restart count (budget 3).
 - `docker exec iic-osic-tools_asic bash -lc 'ps aux --sort=-pcpu | head -8'`
   — the current step process alive and burning CPU?
 
 Decision rules:
 - **Stall** (flow.log flat > 1 h on a long step, step process dead or
   0% CPU) or **dead beyond the watchdog budget** → re-launch with a
-  **NEW run name** (p2_13):
-  `setsid nohup asic/scripts/watchdog.sh p2_13 > asic/runs/watchdog_p2_13.log 2>&1 < /dev/null &`
+  **NEW run name** (p2_14):
+  `setsid nohup asic/scripts/watchdog.sh p2_14 > asic/runs/watchdog_p2_14.log 2>&1 < /dev/null &`
   (never reuse the run name; the old dir stays as evidence).
 - **Design-level checker failure** (flow stops controllably, no crash) →
-  do NOT blindly re-run: analyze `asic/runs/openeye_p2_12/flow.log` + the
+  do NOT blindly re-run: analyze `asic/runs/openeye_p2_13/flow.log` + the
   failing step's dir (log, reports, COMMANDS file) first.
-- Milestones 15/18 (macro antenna / placement: "Successfully placed 33
-  instances") and 22 (GeneratePDN) all PASSED in p2_12 (10-26 17:56).
-- Current milestone (10-27): step 36 resizer hold phase converging
-  (THS ~-350 and falling, WHS flat -4.06 — see "p2_12 timing situation").
-  Next: step 38 STAMidPNR (~17 min), 39 GlobalRouting (hours), 47
+- p2_13 replay milestones (all proven in p2_12 before the wipe): steps
+  1–21 (~5.5 h), 18 macro placement ("Successfully placed 33 instances"),
+  22 GeneratePDN (1 h 08, 0× PDN-0235, PSM-0069 expected), 34 CTS
+  (~4 h 07), 35 STAMidPNR-1 (~18 min, WNS setup -9.58 / hold -2.85
+  nom_typ pre-resizer), 36 resizer (~11 h, NOW CAPPED: setup ~2.7 h,
+  hold ~8 h), 38 STAMidPNR, 39 GlobalRouting (hours), 47
   DetailedRouting (longest pole, ~10–20 h), then fill/RCX/STA/GDS/XOR/
   DRC/LVS. Expected stop point: step 77 HoldViolations (controllable,
   all physical artifacts exist by then).
@@ -455,10 +504,10 @@ Decision rules:
 `watchdog.sh p2_NN` (HOST, detached) → `run_openeye.sh p2_NN` →
 staging (container `gen.sh` + host `gen_top.py` + `gen_config.py`) →
 `docker exec iic-osic-tools_asic bash -lc "cd …/openeye_p2_NN/design &&
-source asic/scripts/env.sh && librelane openeye.json --overwrite
---run-tag p2_NN"`. All pre-flow gates are green (RTL regressions post-
-rename, p2_10 netlist gate-sim PASS, loopchk 0 conflicts, synthesis
-checker 0 errors in p2_11).
+source asic/scripts/env.sh && librelane openeye.json --run-tag p2_NN"`
+— **no `--overwrite`** (it wipes the run dir; see Pitfalls). All pre-flow
+gates are green (RTL regressions post-rename, p2_10 netlist gate-sim
+PASS, loopchk 0 conflicts, synthesis checker 0 errors in p2_11).
 
 ## Key commands
 
@@ -523,6 +572,16 @@ override inherited environment.
   its launch-time env, so steps can run on a different build than a fresh
   shell sees). Symptom of the mismatch: openroad prints its usage and exits
   1 even though the argv is identical to a known-good step.
+- **`librelane --overwrite` WIPEs the run** (2026-10-27, cost: 30 h of
+  p2_12): the flag means "Overwrite run, if exists" → LibreLane does
+  `shutil.rmtree(run_dir)` (`librelane/flows/flow.py`, `flow.start`) and
+  starts a fresh run — step dirs are renumbered from `01-`. Resume or
+  relaunch with the PLAIN `librelane openeye.json --run-tag <tag>`
+  (optionally `[-F <StepId>]`): LibreLane loads the existing run dir,
+  `Step.load_finished` for each finished step dir, and the latest
+  `state_out.json` as initial state → resumes in place. `run_openeye.sh`
+  no longer passes `--overwrite` (before the fix, every watchdog
+  crash-restart would have wiped the run too).
 - `/tmp/opencode/` (host) is NOT visible inside the container — write
   container outputs to container paths (`/tmp/...` inside the container).
 - Make variable name collisions: never name a Makefile variable `RM` (clobbers
@@ -548,20 +607,16 @@ override inherited environment.
 
 ## Git state
 
-Branch `dev_asic_sg13g2`, commits (newest first) as of 2026-10-26 ~12:15:
+Branch `dev_asic_sg13g2`, commits (newest first) as of 2026-10-27 ~20:10:
 ```
+92675e6 gen_config: cap resizer HOLD TNS repair at 1% as well (4 knobs)
+f55a817 gen_config: cap resizer TNS repair at 1% (p2_12 resizer incident)
+ca4e74f QWEN.md: p2_12 timing analysis (2026-10-27) — 10 ns not closable by P&R
 3d6c242 Fix PDN-0235: place the 33 SRAM macros; pin -python-capable openroad
-665c5c9 QWEN.md: make the re-entry plan self-contained for the post-reboot session
-f7a4c05 Split shared loop counters in OpenEye_FPGA; add Verilator gate-sim harness
-8562ade QWEN.md: document est-srv02 setup and missing container packages
-0b4a157 Add gate-level simulation harness and handoff notes (QWEN.md)
-c6125c5 Fix multi-driven rd_cycle_loop_cnt_* in iact_stream_constructor (yosys check)
-d65c16b Make the ASIC target Yosys-synthesisable; add Phase-2 flow scaffolding
-56b65ec Add ASIC target RTL for IHP SG13G2 (Phase 1: 2x2 target, SRAM macros, chip top)
-3f9f18d Add missing counter.json smoke config (root .gitignore excludes *.json)
-ed66784 Add ASIC backend setup for IHP SG13G2 (Phase 0: LibreLane Chip-flow smoke test)
 ```
-10 commits ahead of `origin/main`; **push blocked** (see above).
+(plus the run_openeye.sh `--overwrite` fix, committed with the QWEN.md
+incident update)
+13+ commits ahead of `origin/main`; **push blocked** (see above).
 `asic/runs/` (flow outputs, logs, netlists) is gitignored — all evidence
 (gatesim logs, loopchk outputs, regression logs, the p2_10 netlist)
 exists only on est-srv02.

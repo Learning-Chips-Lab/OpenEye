@@ -33,10 +33,15 @@ cp "${ASIC_DIR}/rtl/sg13g2/openeye.json" "${WORKDIR_HOST}/design/"
 echo "[INFO] OpenEye ASIC run '${RUN_NAME}': ${WORKDIR_CTR}"
 echo "[INFO] Log: ${WORKDIR_HOST}/flow.log"
 
+# NO --overwrite: with it, LibreLane does shutil.rmtree() on the existing
+# run dir (p2_12 incident 2026-10-27: a capped-resizer resume wiped 30 h of
+# step outputs). Without it, an existing run resumes in place from the
+# latest state_out.json / finished steps -- which is also exactly what a
+# watchdog crash-restart must do.
 docker exec "${CONTAINER_NAME}" bash -lc "
   cd '${WORKDIR_CTR}/design' || exit 1
   source '${WORKDIR_CTR%/runs/openeye_${RUN_NAME}}/scripts/env.sh'
-  librelane openeye.json --overwrite --run-tag '${RUN_NAME}' 2>&1 | tee '${WORKDIR_CTR}/flow.log'
+  librelane openeye.json --run-tag '${RUN_NAME}' 2>&1 | tee '${WORKDIR_CTR}/flow.log'
 "
 
 if grep -qE "ERROR|Traceback" "${WORKDIR_HOST}/flow.log"; then
