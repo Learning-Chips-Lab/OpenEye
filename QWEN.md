@@ -314,6 +314,55 @@ Expected: steps 1–21 replay (~5 h), then step 22 `GeneratePDN` must pass
 routing → fill → multi-corner STA (10 ns) → DRC/LVS, where the 3 documented
 PDK-gap failures are EXPECTED (see "Blocked / open threads").
 
+### p2_12 timing situation (analyzed 2026-10-27 ~18:45) — DESIGN LEVEL
+
+Steps 1–35 done (synthesis → floorplan → PDN (33 macros placed) → GPL →
+DetPlace → CTS 03:36→07:44 → STAMidPNR-1 07:44→08:01). **Step 36
+`ResizerTimingPostCTS` in progress since 08:01** (classic.py index 37/80).
+Design: 2,196,211 instances, die 10.5×10.5 mm, core ~9.86 mm, util 56.9%.
+
+The resizer runs two phases (one `repair_timing` each):
+
+- **Setup phase (08:02→10:41, done)**: 270,709 violating endpoints at start.
+  WNS **-19.87 → -7.66**, TNS **-746,260 → -601,575** (sum over 3 corners;
+  nom_typ alone: WNS -9.58, TNS -88,584 per step-35 report). Only **324
+  endpoints fixed** (270,385 still violating) — 200 buffers, 730 upsizes.
+  Gave up: `[RSZ-0062] Unable to repair all setup violations`.
+- **Hold phase (10:41→, running)**: 501,294 endpoints with hold violations
+  at start. WHS **-4.63 → -4.06 (flat)**, THS **-27,166 → ~-350** (converging,
+  ~10 ns/min at 18:37, decelerating). **509k hold buffers inserted,
+  area +14.6%**. Ends when OpenROAD stops making progress.
+
+Why setup cannot be closed (evidence, step-35 reports):
+- Worst setup path (nom_typ, -9.58): FF `_2929373_` (PE cluster
+  gen_x[0].gen_y[0]) → **~15.6 ns of buffer/inverter chain on a
+  cross-chip net** (caps 0.19–0.79 pF) → ~30-stage a21o/a21oi/o21ai
+  carry chain (~2.8 ns) → FF `_2926539_`; data arrival 23.8 ns vs 10 ns
+  period. **Wire-dominated** — resizer upsizing/cloning can't help.
+- The violations are broad (270k endpoints), not one path: the PE fabric
+  data paths are systematically too long for 10 ns at this placement.
+- Worst HOLD endpoint: `data_dma_i_pad[N] → _29536(10+N)_/D` (-2.85
+  nom_typ): clock reaches these input-capture FFs **4.952 ns late** (deep
+  clock-tree leaf `clkbuf_leaf_38075`), while external input delay is only
+  2.0 ns → data arrival 2.327 vs required 5.173. Not fixable by data-side
+  buffers; it is a clock-latency-vs-input-delay mismatch (fix later: input
+  delay consistent with clock latency, or CTS skew target at IO regs).
+
+**Consequence:** the 10 ns target is NOT reachable by P&R on this netlist.
+The flow still completes physically (GDS/DRC/LVS baseline). Endgame
+(expected): steps 38–76 produce everything; step 77 `Checker.HoldViolations`
+(corner list `['*']` — HARD gate) will most likely FAIL on the remaining
+hold WNS → flow stops controllably there (watchdog will NOT restart —
+correct). Step 76 `Checker.SetupViolations` is a NO-OP by default
+(`SETUP_VIOLATION_CORNERS` unset → `['']` matches no corners). Skipped steps
+per config: 41/43/45 (GRT repairs, RUN_*=False), 59 (IR drop), 75 (EQY).
+
+Timing fix options (after the run, needs a decision):
+1. RTL re-pipelining of the cross-cluster fabric data paths (proper fix).
+2. Clock relaxation (e.g. 15–20 ns) if the product allows.
+3. Placement/floorplan rework (grouping the clusters) — largest effort.
+Until then: let p2_12 finish for the full physical baseline.
+
 ### Gate-level simulation harness (built, p2_10 netlist validated: PASS)
 
 `asic/sim/gatesim/` contains:
@@ -380,12 +429,14 @@ Decision rules:
 - **Design-level checker failure** (flow stops controllably, no crash) →
   do NOT blindly re-run: analyze `asic/runs/openeye_p2_12/flow.log` + the
   failing step's dir (log, reports, COMMANDS file) first.
-- Watch for the **first Odbpy step with real work** (step 15
-  checkmacroantennaproperties / step 18 manualmacroplacement — both were
-  SKIPPED in p2_11): step 18 must print "Successfully placed 33
-  instances" (verified offline on the p2_11 ODB already).
-- **Expected milestone ~16:30–17:30**: step 22 `GeneratePDN` must pass
-  (PDN-0235 was the p2_11 kill point).
+- Milestones 15/18 (macro antenna / placement: "Successfully placed 33
+  instances") and 22 (GeneratePDN) all PASSED in p2_12 (10-26 17:56).
+- Current milestone (10-27): step 36 resizer hold phase converging
+  (THS ~-350 and falling, WHS flat -4.06 — see "p2_12 timing situation").
+  Next: step 38 STAMidPNR (~17 min), 39 GlobalRouting (hours), 47
+  DetailedRouting (longest pole, ~10–20 h), then fill/RCX/STA/GDS/XOR/
+  DRC/LVS. Expected stop point: step 77 HoldViolations (controllable,
+  all physical artifacts exist by then).
 
 ### 2. After the flow finishes (or dies)
 
