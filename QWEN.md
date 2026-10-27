@@ -410,13 +410,13 @@ GDS/DRC/LVS ~6–10 h, DRT the longest pole (→ 10-29 afternoon).
 Expected stop: step 77 HoldViolations (WHS ~-4.06, controllable) — or
 earlier on a NEW error class (then analyze, don't blindly re-run).
 
-**50 MHz decision (user, ~20:10) — p2_13 killed, p2_14 launched.**
+**50 MHz decision (user, ~19:45) — p2_13 killed, p2_14 launched.**
 After the frequency analysis (50 MHz realistic on the current
 RTL/floorplan, 66 MHz borderline, 100 MHz needs PE-fabric
 re-pipelining — table in the chat of 2026-10-27), the user chose to
 build the first closed physical baseline at 50 MHz as soon as possible.
-p2_13 was killed ~20:25 (synthesis stage, ~45 min lost, partial run dir
-removed) and **p2_14** relaunched ~20:30 with (commit `cbf35ff`):
+p2_13 was killed ~19:50 (synthesis stage, ~25 min lost, partial run dir
+removed) and **p2_14** relaunched ~19:53 with (commit `cbf35ff`):
 - `CLOCK_PERIOD: 20` (50 MHz)
 - `IO_DELAY_CONSTRAINT: 32` — pad in/out delay = period × 32/100 =
   **6.4 ns** (default 20 would give 4.0 ns, still below the worst hold
@@ -431,9 +431,9 @@ at 20 ns, bounded by the 1 % cap. The SETUP phase, however, is nearly
 clean at 20 ns (pre-resizer WNS ≈ +0.4 nom / +3.5 slow) and finishes in
 minutes.
 
-ETA p2_14 (from ~20:30 on 10-27): steps 1–35 ~20 h (→ 10-28 ~16:30),
-step 36 resizer ~8 h (setup minutes + hold capped, → 10-29 ~00:30),
-GRT + antenna + postGRT resizer (capped) ~8 h (→ 10-29 ~08:30),
+ETA p2_14 (from ~19:55 on 10-27): steps 1–35 ~20 h (→ 10-28 ~16:00),
+step 36 resizer ~8 h (setup minutes + hold capped, → 10-29 ~00:00),
+GRT + antenna + postGRT resizer (capped) ~8 h (→ 10-29 ~08:00),
 **DetailedRouting 10–20 h = longest pole** → **50 MHz post-route STA
 numbers ~10-29 evening**, then fill/GDS/DRC/LVS → **GDS ~10-30
 morning**. Expected stop: none (hold gate 77 should pass with the 6.4 ns
@@ -486,7 +486,7 @@ Caveats learned (final):
 
 ## Next steps (as of 2026-10-27 evening)
 
-p2_14 is running (launched ~20:30 via the watchdog, host side; config:
+p2_14 is running (launched ~19:53 via the watchdog, host side; config:
 **50 MHz** — `CLOCK_PERIOD: 20`, `IO_DELAY_CONSTRAINT: 32` (6.4 ns pad
 delay), 4 resizer TNS caps at 1 %; see "p2_12 resizer decision +
 data-loss incident"). The job now is: **self-monitor p2_14** (user
