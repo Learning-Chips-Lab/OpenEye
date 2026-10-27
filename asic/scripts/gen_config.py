@@ -148,16 +148,23 @@ def main() -> None:
         # SRAM vddarray/vssarray pins have no PDK power net (gap, see README);
         # RUN_IRDROP_REPORT stays off until the pad-power gap is resolved.
         "RUN_IRDROP_REPORT": False,
-        # p2_12 resizer incident (2026-10-27): uncapped, repair_timing in
-        # ResizerTimingPostCTS ran 11 h+ with WNS frozen at -4.064 ns
-        # (structural, pre-route) while the TNS tail decayed from -746k to
-        # ~-200 ns at a decreasing rate -> days for the last fractions.
-        # 1 % cap = the knee of the measured curve (~345k iters / ~7.5 h);
-        # the remaining TNS is picked up by the post-GRT resizer on real RC.
-        # Hold stays uncapped (hold repair is fast; leftover hold violations
-        # are a silicon risk). postCTS and postGRT use different var names!
+        # p2_12 resizer incident (2026-10-27): step 36 ran 11 h+ with no stop
+        # condition. Phase structure (from the run logs): the SETUP phase
+        # gives up on its own after ~2.7 h (RSZ-0062; WNS -7.66 sum-of-
+        # corners / -9.58 nom_typ -- structural, wire-dominated, not
+        # closable by buffering), the HOLD phase is the long tail (THS
+        # -27,166 -> -220 in ~8.5 h at a decaying rate; WHS flat at -4.064 on
+        # the DMA input-capture regs _29536xx_/D -- a clock-latency vs
+        # input-delay mismatch, also not buffer-fixable). Uncapped, the hold
+        # tail grinds for days.
+        # 1 % TNS cap = the knee of the measured curve. All four resizer TNS
+        # knobs are capped (postCTS + postGRT x setup + hold): the caps bound
+        # run time only -- the HoldViolations gate fails on WHS with or
+        # without them. postCTS uses PL_RESIZER_*, postGRT GRT_RESIZER_*.
         "PL_RESIZER_SETUP_REPAIR_TNS_PCT": 1,
+        "PL_RESIZER_HOLD_REPAIR_TNS_PCT": 1,
         "GRT_RESIZER_SETUP_REPAIR_TNS_PCT": 1,
+        "GRT_RESIZER_HOLD_REPAIR_TNS_PCT": 1,
         "PAD_SOUTH": pad_order["SOUTH"],
         "PAD_EAST": pad_order["EAST"],
         "PAD_NORTH": pad_order["NORTH"],
