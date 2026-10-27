@@ -669,7 +669,7 @@ module psum_pipeline #(
             psum_cycle_loop_cnt_1 <= psum_cycle_loop_cnt_1 + 1;
             psum_cycle_loop_cnt_2 <= psum_cycle_loop_cnt_2 + 1;
             if (((fsm_psum_cycle >= 1 + fully_connected_layer) & CLUSTER_COLUMNS == 1) |
-                (fsm_psum_cycle >= 1 & CLUSTER_COLUMNS != 1)) begin
+                 (fsm_psum_cycle >= 1 & CLUSTER_COLUMNS != 1)) begin
               psum_cycle_loop_cnt_0     <= psum_cycle_loop_cnt_0 + 1;
               enable_dma_o              <= 1;
               data_dma_o                <= psum_dma_word;
@@ -768,6 +768,7 @@ module psum_pipeline #(
             end
           end
         end
+
         SEND_PSUM_TO_IACT: begin
           if (fsm_psum_cycle >= 3) begin
             if (CLUSTERS != 1) begin 
