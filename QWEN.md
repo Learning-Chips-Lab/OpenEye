@@ -410,6 +410,38 @@ GDS/DRC/LVS ~6–10 h, DRT the longest pole (→ 10-29 afternoon).
 Expected stop: step 77 HoldViolations (WHS ~-4.06, controllable) — or
 earlier on a NEW error class (then analyze, don't blindly re-run).
 
+**50 MHz decision (user, ~20:10) — p2_13 killed, p2_14 launched.**
+After the frequency analysis (50 MHz realistic on the current
+RTL/floorplan, 66 MHz borderline, 100 MHz needs PE-fabric
+re-pipelining — table in the chat of 2026-10-27), the user chose to
+build the first closed physical baseline at 50 MHz as soon as possible.
+p2_13 was killed ~20:25 (synthesis stage, ~45 min lost, partial run dir
+removed) and **p2_14** relaunched ~20:30 with (commit `cbf35ff`):
+- `CLOCK_PERIOD: 20` (50 MHz)
+- `IO_DELAY_CONSTRAINT: 32` — pad in/out delay = period × 32/100 =
+  **6.4 ns** (default 20 would give 4.0 ns, still below the worst hold
+  requirement 5.173 ns at the DMA input-capture regs; 6.4 ns covers it
+  with ~1.5 ns margin). Assumption: external synchronous driver at
+  50 MHz with ≤ 6 ns clock-to-pad — **verify against the board spec**.
+- unchanged otherwise: 33 macros placed, openroad pin, 4 resizer caps.
+
+Note: the internal hold problem (deep clock-tree skew, 501k endpoints
+pre-resizer) is period-independent — the hold phase does the same work
+at 20 ns, bounded by the 1 % cap. The SETUP phase, however, is nearly
+clean at 20 ns (pre-resizer WNS ≈ +0.4 nom / +3.5 slow) and finishes in
+minutes.
+
+ETA p2_14 (from ~20:30 on 10-27): steps 1–35 ~20 h (→ 10-28 ~16:30),
+step 36 resizer ~8 h (setup minutes + hold capped, → 10-29 ~00:30),
+GRT + antenna + postGRT resizer (capped) ~8 h (→ 10-29 ~08:30),
+**DetailedRouting 10–20 h = longest pole** → **50 MHz post-route STA
+numbers ~10-29 evening**, then fill/GDS/DRC/LVS → **GDS ~10-30
+morning**. Expected stop: none (hold gate 77 should pass with the 6.4 ns
+input delay + capped resizers); if the caps leave a few −0.x ns hold
+endpoints, step 77 fails controllably with all physical artifacts
+already existing — then decide: tighten the hold cap (0.1 %) for a
+finishing pass or accept.
+
 ### Gate-level simulation harness (built, p2_10 netlist validated: PASS)
 
 `asic/sim/gatesim/` contains:
@@ -454,38 +486,40 @@ Caveats learned (final):
 
 ## Next steps (as of 2026-10-27 evening)
 
-p2_13 is running (launched ~19:25 via the watchdog, host side; config:
-4 resizer TNS caps at 1 %, see "p2_12 resizer decision + data-loss
-incident"). The job now is: **self-monitor p2_13** (user requirement
-2026-10-26) and analyze — not blindly re-run — on any failure.
+p2_14 is running (launched ~20:30 via the watchdog, host side; config:
+**50 MHz** — `CLOCK_PERIOD: 20`, `IO_DELAY_CONSTRAINT: 32` (6.4 ns pad
+delay), 4 resizer TNS caps at 1 %; see "p2_12 resizer decision +
+data-loss incident"). The job now is: **self-monitor p2_14** (user
+requirement 2026-10-26) and analyze — not blindly re-run — on any failure.
 
 ### 1. Self-monitoring (USER REQUIREMENT — do it proactively, ~every 30 min)
 
-- `tail asic/runs/openeye_p2_13/flow.log` — step progress visible?
-- `tail -20 asic/runs/monitor_p2_13.log` — background monitor (5-min
+- `tail asic/runs/openeye_p2_14/flow.log` — step progress visible?
+- `tail -20 asic/runs/monitor_p2_14.log` — background monitor (5-min
   snapshots; flags STALL / RESTART / WD-EXITED / DEAD / DONE).
-- `tail asic/runs/watchdog_p2_13.log` — restart count (budget 3).
+- `tail asic/runs/watchdog_p2_14.log` — restart count (budget 3).
 - `docker exec iic-osic-tools_asic bash -lc 'ps aux --sort=-pcpu | head -8'`
   — the current step process alive and burning CPU?
 
 Decision rules:
 - **Stall** (flow.log flat > 1 h on a long step, step process dead or
   0% CPU) or **dead beyond the watchdog budget** → re-launch with a
-  **NEW run name** (p2_14):
-  `setsid nohup asic/scripts/watchdog.sh p2_14 > asic/runs/watchdog_p2_14.log 2>&1 < /dev/null &`
+  **NEW run name** (p2_15):
+  `setsid nohup asic/scripts/watchdog.sh p2_15 > asic/runs/watchdog_p2_15.log 2>&1 < /dev/null &`
   (never reuse the run name; the old dir stays as evidence).
 - **Design-level checker failure** (flow stops controllably, no crash) →
-  do NOT blindly re-run: analyze `asic/runs/openeye_p2_13/flow.log` + the
+  do NOT blindly re-run: analyze `asic/runs/openeye_p2_14/flow.log` + the
   failing step's dir (log, reports, COMMANDS file) first.
-- p2_13 replay milestones (all proven in p2_12 before the wipe): steps
-  1–21 (~5.5 h), 18 macro placement ("Successfully placed 33 instances"),
-  22 GeneratePDN (1 h 08, 0× PDN-0235, PSM-0069 expected), 34 CTS
-  (~4 h 07), 35 STAMidPNR-1 (~18 min, WNS setup -9.58 / hold -2.85
-  nom_typ pre-resizer), 36 resizer (~11 h, NOW CAPPED: setup ~2.7 h,
-  hold ~8 h), 38 STAMidPNR, 39 GlobalRouting (hours), 47
-  DetailedRouting (longest pole, ~10–20 h), then fill/RCX/STA/GDS/XOR/
-  DRC/LVS. Expected stop point: step 77 HoldViolations (controllable,
-  all physical artifacts exist by then).
+- p2_14 milestones (steps 1–35 replayed from p2_12 evidence): 18 macro
+  placement ("Successfully placed 33 instances"), 22 GeneratePDN (1 h 08,
+  0× PDN-0235, PSM-0069 expected), 34 CTS (~4 h 07), 35 STAMidPNR-1
+  (~18 min — at 20 ns expect WNS setup ≈ +0.4 nom_typ, hold ≈ -2.85
+  pre-resizer, internal), 36 resizer (~8 h: setup minutes, hold capped),
+  39 GlobalRouting (hours), 47 DetailedRouting (longest pole, 10–20 h),
+  then fill/RCX/STAPostPNR (**the 50 MHz numbers**, ~10-29 evening) →
+  GDS (~10-30 morning) → DRC/LVS. Expected flow stop: none, unless the
+  hold caps leave −0.x ns tails (then step 77 fails controllably — see
+  ETA note in the incident section).
 
 ### 2. After the flow finishes (or dies)
 
@@ -607,16 +641,16 @@ override inherited environment.
 
 ## Git state
 
-Branch `dev_asic_sg13g2`, commits (newest first) as of 2026-10-27 ~20:10:
+Branch `dev_asic_sg13g2`, commits (newest first) as of 2026-10-27 ~20:40:
 ```
+cbf35ff Config: 50 MHz variant — CLOCK_PERIOD 20 ns, IO_DELAY_CONSTRAINT 32
+f0e14fd QWEN.md: p2_12 --overwrite data-loss incident + p2_13 plan; drop --overwrite from run_openeye.sh
 92675e6 gen_config: cap resizer HOLD TNS repair at 1% as well (4 knobs)
 f55a817 gen_config: cap resizer TNS repair at 1% (p2_12 resizer incident)
 ca4e74f QWEN.md: p2_12 timing analysis (2026-10-27) — 10 ns not closable by P&R
 3d6c242 Fix PDN-0235: place the 33 SRAM macros; pin -python-capable openroad
 ```
-(plus the run_openeye.sh `--overwrite` fix, committed with the QWEN.md
-incident update)
-13+ commits ahead of `origin/main`; **push blocked** (see above).
+15+ commits ahead of `origin/main`; **push blocked** (see above).
 `asic/runs/` (flow outputs, logs, netlists) is gitignored — all evidence
 (gatesim logs, loopchk outputs, regression logs, the p2_10 netlist)
 exists only on est-srv02.
