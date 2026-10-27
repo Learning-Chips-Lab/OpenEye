@@ -117,7 +117,18 @@ def main() -> None:
             "NO_TRACE",
         ],
         "CLOCK_PORT": "clk_pad",
-        "CLOCK_PERIOD": 10,
+        # 2026-10-27 user decision: 50 MHz (20 ns) variant for the first
+        # closed physical baseline. 10 ns is not closable on this netlist
+        # (worst path ~19.6 ns nom_typ pre-resizer, wire-dominated
+        # PE-fabric cross-chip net; 270k violating endpoints). See QWEN.md.
+        "CLOCK_PERIOD": 20,
+        # base.sdc: pad in/out delay = period * IO_DELAY_CONSTRAINT / 100
+        # (default 20.0). At 20 ns the default would give 4.0 ns input
+        # delay -- below the worst hold requirement (5.173 ns, DMA
+        # input-capture regs, clock latency 4.95 ns). 32 -> 6.4 ns covers
+        # it with ~1.5 ns margin. Assumption: external synchronous driver
+        # at 50 MHz with <= 6 ns clock-to-pad -- verify against board spec.
+        "IO_DELAY_CONSTRAINT": 32,
         "FP_SIZING": "absolute",
         # 10.5 mm die: post-synthesis area is 35.4 mm^2 logic (70 % PE-pad
         # latches) + 11.1 mm^2 SRAM = 46.5 mm^2 cells; the core

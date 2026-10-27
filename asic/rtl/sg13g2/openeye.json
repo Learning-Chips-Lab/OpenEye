@@ -52,7 +52,8 @@
         "NO_TRACE"
     ],
     "CLOCK_PORT": "clk_pad",
-    "CLOCK_PERIOD": 10,
+    "CLOCK_PERIOD": 20,
+    "IO_DELAY_CONSTRAINT": 32,
     "FP_SIZING": "absolute",
     "DIE_AREA": [
         0,
