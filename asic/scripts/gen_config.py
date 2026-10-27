@@ -148,6 +148,16 @@ def main() -> None:
         # SRAM vddarray/vssarray pins have no PDK power net (gap, see README);
         # RUN_IRDROP_REPORT stays off until the pad-power gap is resolved.
         "RUN_IRDROP_REPORT": False,
+        # p2_12 resizer incident (2026-10-27): uncapped, repair_timing in
+        # ResizerTimingPostCTS ran 11 h+ with WNS frozen at -4.064 ns
+        # (structural, pre-route) while the TNS tail decayed from -746k to
+        # ~-200 ns at a decreasing rate -> days for the last fractions.
+        # 1 % cap = the knee of the measured curve (~345k iters / ~7.5 h);
+        # the remaining TNS is picked up by the post-GRT resizer on real RC.
+        # Hold stays uncapped (hold repair is fast; leftover hold violations
+        # are a silicon risk). postCTS and postGRT use different var names!
+        "PL_RESIZER_SETUP_REPAIR_TNS_PCT": 1,
+        "GRT_RESIZER_SETUP_REPAIR_TNS_PCT": 1,
         "PAD_SOUTH": pad_order["SOUTH"],
         "PAD_EAST": pad_order["EAST"],
         "PAD_NORTH": pad_order["NORTH"],

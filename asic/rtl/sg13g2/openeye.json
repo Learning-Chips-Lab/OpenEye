@@ -447,6 +447,8 @@
         ".* VPWR VGND iovdd iovss"
     ],
     "RUN_IRDROP_REPORT": false,
+    "PL_RESIZER_SETUP_REPAIR_TNS_PCT": 1,
+    "GRT_RESIZER_SETUP_REPAIR_TNS_PCT": 1,
     "PAD_SOUTH": [
         "u_vdd1",
         "u_vss1",
