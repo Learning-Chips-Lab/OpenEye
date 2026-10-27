@@ -204,7 +204,6 @@ class ConvMapper(LayerMapper):
         "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
         "iact_words_per_compute": layer_params.iact_words_per_compute,
         "pooling_mode": 0,
-        "used_wght_per_PE": layer_params.used_wght_per_PE,
         "overhang_discrepancy": layer_params.overhang_discrepancy,
         "psum_output_words": layer_params.psum_output_words,
         "iact_read_limit_0" : layer_params.iact_read_limit_0,

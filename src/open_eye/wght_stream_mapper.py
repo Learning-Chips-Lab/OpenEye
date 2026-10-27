@@ -561,7 +561,12 @@ class WghtStreamMapper(object):
             # shifts every following weight to a wrong SPad address (wrong
             # results or a hang in GET_WGHT). Dense mappers therefore
             # disable the skip (see DenseWghtStreamMapper).
-            if (temp_trans != 0) or not self.SKIP_ZERO_WORDS:
+            # With several weight transmissions the FPGA reads the weight
+            # buffer in fixed tiles of ceil(used_wght_per_PE/PARALLEL_MACS)
+            # words per transmission. A tile that lost its zero words would
+            # shift every later tile, so every transmission keeps its full
+            # length (the PE does not store all-zero words).
+            if (temp_trans != 0) or not self.SKIP_ZERO_WORDS or (layer_params.needed_wght_transmissions > 1):
                 stream.append(temp_trans)
 
             line_counter = line_counter + 1

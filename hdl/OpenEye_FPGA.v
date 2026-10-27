@@ -1205,7 +1205,7 @@ end
               wght_enable_i_reg <= {{CLUSTERS{{NUM_GLB_WGHT{1'b1}}}}};
             end
           end
-          if (fsm_sending_cycle > wghts_per_pe + 2) begin
+          if (fsm_sending_cycle > wghts_per_pe + 1) begin
             fsm_sending_cycle <= fsm_sending_cycle;
             wght_buffer_en_r  <= 0;
             wght_enable_i_reg <= 0;
