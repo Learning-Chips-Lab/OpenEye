@@ -131,16 +131,16 @@ def write_stream_layer_mp(params, layer_params, dram_layer_content, return_dict,
     Each layer type uses a specialized mapper class to generate appropriate
     test streams that match the hardware's expected data format and timing.
     """
-    if "Depthwise" in str(layer_params.layer_name):
+    if "depthwise" in str(layer_params.layer_name):
         LayerStreamGenerator = DWMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
-    elif "Conv" in str(layer_params.layer_name):
+    elif "conv" in str(layer_params.layer_name):
         LayerStreamGenerator = ConvMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
-    elif "Gemm" in str(layer_params.layer_name):
+    elif "gemm" in str(layer_params.layer_name):
         LayerStreamGenerator = GemmMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
-    elif "Dense" in str(layer_params.layer_name):
+    elif "dense" in str(layer_params.layer_name):
         # With the output-stationary dataflow selected globally, dense layers
         # are mapped through the GEMM mapper (gemm_mode=1) instead.
         if getattr(params, "DATAFLOW", "row_stationary") == "output_stationary":
@@ -148,7 +148,7 @@ def write_stream_layer_mp(params, layer_params, dram_layer_content, return_dict,
         else:
             LayerStreamGenerator = DenseMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
-    elif "Pooling" in str(layer_params.layer_name):
+    elif "pooling" in str(layer_params.layer_name):
         LayerStreamGenerator = PoolingMapper(params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts)
         LayerStreamGenerator.make_stream()
     return_dict[layer_repetition] = LayerStreamGenerator.get_stream()
@@ -193,7 +193,7 @@ def write_stream(params, layer_params, dram_layer_content, sparse_iacts, sparse_
 
 # Reference Generation
 
-def make_ref(params, layer_params, layer_number, dram, calculated_results):
+def make_ref(params, layer_params, layer_name, dram, calculated_results):
     """Generate reference data files for layer verification.
     
     This function creates a complete set of reference files needed to verify
@@ -203,7 +203,7 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
     Args:
         params: Global OpenEye configuration parameters
         layer_params: Layer-specific parameters and configuration
-        layer_number: Current layer index in the network
+        layer_name: Current layer index in the network
         dram: Memory object containing layer data
         calculated_results: Pre-calculated expected results
         
@@ -216,28 +216,28 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
     structure for test verification.
     """
     # Write weight files
-    write_weight_file(layer_params, layer_number, dram)
+    write_weight_file(layer_params, layer_name, dram)
     logger.info("All weight-files written")
 
     # Write input activation files
-    write_iact_file(layer_params, layer_number, dram)
+    write_iact_file(layer_params, layer_name, dram)
     logger.info("All iact-files written")
 
     logger.info("All results calculated")
 
     # Write partial sum (output) files
-    write_psum_file(layer_params, layer_number, dram, calculated_results)
+    write_psum_file(layer_params, layer_name, dram, calculated_results)
     logger.info("All psum-files written")
     
     dma_line = 0
     
     output_order = []
     words_per_transmission = params.DMA_BITWIDTH//params.DATA_PSUM_BITWIDTH
-    if "Depthwise" in str(layer_params.layer_name):
+    if "depthwise" in str(layer_params.layer_name):
         if(params.SERIAL):
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
             for layer_repetition in range(layer_params.needed_total_transmissions):
-                file_dma_ref[layer_repetition] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
+                file_dma_ref[layer_repetition] = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
                 for refresh in range(math.floor((math.floor((layer_repetition%layer_params.iact_transmissions_pe))/layer_params.needed_total_transmissions) * layer_params.Used_refreshes),
                                     math.floor(((math.floor((layer_repetition%layer_params.iact_transmissions_pe))+1)/layer_params.needed_total_transmissions) * layer_params.Used_refreshes)):
                     for cl_y in range(params.Clusters_Y):
@@ -267,11 +267,11 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
             run_jobs_bounded(
                 lambda layer_repetition: mp.Process(
                     target = calculate_dw_output_stream_mp,
-                    args = (layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict)),
+                    args = (layer_repetition, layer_name, params, layer_params, cluster_order, calculated_results, return_dict)),
                 layer_params.needed_total_transmissions)
             for layer_repetition in range(layer_params.needed_total_transmissions):
                 output_order.append(return_dict[layer_repetition])
-    elif "Conv" in str(layer_params.layer_name):
+    elif "conv" in str(layer_params.layer_name):
         cluster_order = []
         for a in range(layer_params.used_Y_cluster):
             for b in range(0,params.Clusters_Y,layer_params.used_Y_cluster):
@@ -283,11 +283,11 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
         run_jobs_bounded(
             lambda layer_repetition: mp.Process(
                 target = calculate_conv_output_stream_mp,
-                args = (layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict)),
+                args = (layer_repetition, layer_name, params, layer_params, cluster_order, calculated_results, return_dict)),
             layer_params.needed_total_transmissions)
         for layer_repetition in range(layer_params.needed_total_transmissions):
             output_order.append(return_dict[layer_repetition])
-    elif "Dense" in str(layer_params.layer_name):
+    elif "dense" in str(layer_params.layer_name):
         if params.SERIAL:
             # FC emits one accumulator per DMA beat, interleaving columns
             # at each buffer address. Cluster rows contribute to the same sum.
@@ -297,7 +297,7 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
                 tile = ((repetition // layer_params.iact_transmissions_pe)
                         % layer_params.psum_transmissions_pe)
                 offset = tile * params.Clusters_X * per_column
-                path = f'demo/layer_{layer_number}_{repetition}/dma_stream_ref.txt'
+                path = f'demo/layer_{layer_name}/dma_stream_ref.txt'
                 with gtu.open_or_create_file(path) as file_dma_ref:
                     for psum_repetition in range(layer_params.needed_psum_transmissions):
                         for address in range(per_column):
@@ -309,7 +309,7 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
         else:
             file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
             for layer_repetition in range(layer_params.needed_total_transmissions):
-                file_dma_ref[layer_repetition] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
+                file_dma_ref[layer_repetition] = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/dma_stream_ref.txt')
                 for psum_pe in range(math.ceil(layer_params.used_psum_per_PE/2)):
                     for cl_y in range(params.Clusters_Y):
                         for cl_x in range(params.Clusters_X):
@@ -342,7 +342,7 @@ def make_ref(params, layer_params, layer_number, dram, calculated_results):
     logger.info("Reference Output calculated.")
     return output_order
 
-def write_weight_file(layer_params, layer_number, dram):
+def write_weight_file(layer_params, layer_name, dram):
     """Write weight reference data to files for each layer type.
     
     This function handles the writing of weight data to reference files,
@@ -351,7 +351,7 @@ def write_weight_file(layer_params, layer_number, dram):
     
     Args:
         layer_params: Layer-specific parameters and configuration
-        layer_number: Current layer index in the network
+        layer_name: Current layer index in the network
         dram: Memory object containing weight data
         
     File Organization:
@@ -364,83 +364,83 @@ def write_weight_file(layer_params, layer_number, dram):
     - Right-justified numeric values
     - Each row represents a slice of the weight tensor
     """
-    if "Dense" in str(layer_params.layer_name):
-        wght_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_0.csv')
+    if "dense" in str(layer_params.layer_name):
+        wght_ref = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/weight/wght_ref' + '_0.csv')
         for c in range(layer_params.iact_size_x):
             for x in range(layer_params.filters):
-                wght_ref.write(str(int(dram.weights[layer_number][x][c])).rjust(5) + ";")
+                wght_ref.write(str(int(dram.weights[layer_name][x][c])).rjust(5) + ";")
             wght_ref.write("\n")
         wght_ref.close()
-    elif "Depthwise" in str(layer_params.layer_name):
+    elif "depthwise" in str(layer_params.layer_name):
         wght_ref = [0  for c in range(layer_params.input_shape[3])]
         for c in range(layer_params.input_shape[3]):
-            wght_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_' + str(c) + '.csv')
+            wght_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/weight/wght_ref' + '_' + str(c) + '.csv')
             for x in range(layer_params.kernel_size[0]):
                 for y in range(layer_params.kernel_size[1]):
-                    wght_ref[c].write(str(dram.weights[layer_number][c][y][x]).rjust(5) + ";")
+                    wght_ref[c].write(str(dram.weights[layer_name][c][y][x]).rjust(5) + ";")
                 wght_ref[c].write("\n")
             wght_ref[c].close()
-    elif "Conv" in str(layer_params.layer_name):
+    elif "conv" in str(layer_params.layer_name):
         wght_ref = [[0 for f in range(layer_params.filters)] for c in range(layer_params.input_shape[3])]
         for c in range(layer_params.input_shape[3]):
             for f in range(layer_params.filters):
-                wght_ref[c][f] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/weight/wght_ref' + '_' + str(c) + '_' + str(f) + '.csv')
+                wght_ref[c][f] = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/weight/wght_ref' + '_' + str(c) + '_' + str(f) + '.csv')
                 for y in range(layer_params.kernel_size[1]):
                     for x in range(layer_params.kernel_size[0]):
-                        wght_ref[c][f].write(str(dram.weights[layer_number][c][f][y][x]).rjust(5) + ";")
+                        wght_ref[c][f].write(str(dram.weights[layer_name][c][f][y][x]).rjust(5) + ";")
                     wght_ref[c][f].write("\n")
                 wght_ref[c][f].close()
     else:
         pass
 
-def write_iact_file(layer_params, layer_number, dram):
-    if "Dense" in str(layer_params.layer_name):
-        iact_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/iact/iact_ref' + '_0.csv')
+def write_iact_file(layer_params, layer_name, dram):
+    if "dense" in str(layer_params.layer_name):
+        iact_ref = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/iact/iact_ref' + '_0.csv')
         for c in range(layer_params.iact_size_x):
-            iact_ref.write(str(int(dram.fmap[layer_number][c])))
+            iact_ref.write(str(int(dram.fmap[layer_name][c])))
             iact_ref.write("\n")
         iact_ref.close()
-    elif "Pooling" in str(layer_params.layer_name):
+    elif "pooling" in str(layer_params.layer_name):
         iact_ref = [0 for c in range(layer_params.input_shape[3])]
         for c in range(layer_params.input_shape[3]):
-            iact_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/iact/iact_ref' + '_' +  str(c) + '.csv')
+            iact_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/iact/iact_ref' + '_' +  str(c) + '.csv')
             for y in range(layer_params.input_shape[2]):
                 for x in range(layer_params.input_shape[1]):
-                    iact_ref[c].write(str(int(dram.fmap[layer_number][c][x][y])).rjust(5) + ";")
+                    iact_ref[c].write(str(int(dram.fmap[layer_name][c][x][y])).rjust(5) + ";")
                 iact_ref[c].write("\n")
             iact_ref[c].close()
     else:
         iact_ref = [0 for c in range(layer_params.input_shape[3])]
         for c in range(layer_params.input_shape[3]):
-            iact_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/iact/iact_ref' + '_' +  str(c) + '.csv')
+            iact_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/iact/iact_ref' + '_' +  str(c) + '.csv')
             for y in range(0 - math.floor(layer_params.kernel_size[1]/2),layer_params.input_shape[2] + math.ceil(layer_params.kernel_size[1]/2) - 1):
                 for x in range(0 - math.floor(layer_params.kernel_size[0]/2),layer_params.input_shape[1] + math.ceil(layer_params.kernel_size[0]/2) - 1):
                     if(((x >= 0) & (x  < layer_params.input_shape[1])) & \
                         ((y >= 0) & (y < layer_params.input_shape[2]))):
-                        iact_ref[c].write(str(int(dram.fmap[layer_number][c][x][y])).rjust(5) + ";")
+                        iact_ref[c].write(str(int(dram.fmap[layer_name][c][x][y])).rjust(5) + ";")
                     else:
                         iact_ref[c].write(str(0).rjust(5) + ";")
                 iact_ref[c].write("\n")
             iact_ref[c].close()
 
-def write_psum_file(layer_params, layer_number, dram, calculated_results):
-    if "Dense" in str(layer_params.layer_name):
-        psum_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_0.csv')
+def write_psum_file(layer_params, layer_name, dram, calculated_results):
+    if "dense" in str(layer_params.layer_name):
+        psum_ref = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/psum/psum_ref' + '_0.csv')
         for x in range(layer_params.filters):
             psum_ref.write(str(calculated_results[x]))
             psum_ref.write("\n")
         psum_ref.close()
 
-    elif "Depthwise" in str(layer_params.layer_name):
+    elif "depthwise" in str(layer_params.layer_name):
         psum_ref = [0 for f in range(layer_params.output_shape[3])]
         for c in range(layer_params.output_shape[3]):
-            psum_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_' +  str(c) + '.csv')
+            psum_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/psum/psum_ref' + '_' +  str(c) + '.csv')
             for x in range(layer_params.output_shape[1]):
                 for y in range(layer_params.output_shape[2]):
                     psum_ref[c].write(str(calculated_results[c][y][x]).rjust(8) + ";")
                 psum_ref[c].write("\n")
             psum_ref[c].close()
-    elif "Conv" in str(layer_params.layer_name):
+    elif "conv" in str(layer_params.layer_name):
         manager = mp.Manager()
         return_dict = manager.dict()
         run_jobs_bounded(
@@ -449,11 +449,11 @@ def write_psum_file(layer_params, layer_number, dram, calculated_results):
             layer_params.output_shape[3])
         psum_ref = [0 for f in range(layer_params.output_shape[3])]
         for f in range(layer_params.output_shape[3]):
-            psum_ref[f] = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_' +  str(f) + '.csv')
+            psum_ref[f] = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/psum/psum_ref' + '_' +  str(f) + '.csv')
             psum_ref[f].write(return_dict[f])
             psum_ref[f].close()
-    elif "Pooling" in str(layer_params.layer_name):
-        psum_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '/psum/psum_ref' + '_0.csv')
+    elif "pooling" in str(layer_params.layer_name):
+        psum_ref = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/psum/psum_ref' + '_0.csv')
         for x in range(layer_params.output_shape[3]):
             psum_ref.write(str(calculated_results[x]))
             psum_ref.write("\n")
@@ -469,18 +469,18 @@ def write_psum_file_conv_mp(f, layer_params, calculated_results, return_dict):
 
 #Collect and get results
 
-def collect_results(layer_number, layer_params, dram, serial):
+def collect_results(layer_params, dram, serial):
     #Calculate Bias
-    if "Dense" in str(layer_params.layer_name):
+    if "dense" in str(layer_params.layer_name):
         # These dot products are small; spawning an interpreter per output
         # costs far more than the arithmetic. Keep the same reference routine
         # and output indexing, without multiprocessing startup or IPC.
         calculated_results = {}
         for x in range(layer_params.filters):
             calculate_dense_results_mp(
-                x, layer_params, layer_number, dram, 0, calculated_results)
+                x, layer_params, layer_params.layer_name, dram, 0, calculated_results)
 
-    elif "Depthwise" in str(layer_params.layer_name):
+    elif "depthwise" in str(layer_params.layer_name):
         calculated_results = [[[0 for i in range(layer_params.output_shape[2])] for j in range(layer_params.output_shape[1])]for k in range(layer_params.output_shape[3])]
         for j in range(layer_params.output_shape[1]):
             for i in range(layer_params.output_shape[2]):
@@ -494,41 +494,40 @@ def collect_results(layer_number, layer_params, dram, serial):
                             if((((x + i * layer_params.strideX) >= 0) & ((x + i * layer_params.strideX) < (layer_params.output_shape[2] * layer_params.strideX))) & \
                             (((y + j * layer_params.strideY) >= 0) & ((y + j * layer_params.strideY) < (layer_params.output_shape[1] * layer_params.strideY)))):
                                 calculated_results[c][i][j] = int(calculated_results[c][i][j] + \
-                                                                dram.weights[layer_number][c][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)] * \
-                                                                dram.fmap[layer_number][c][x + (i * layer_params.strideX)][y + (j * layer_params.strideY)])
+                                                                dram.weights[layer_params.layer_name][c][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)] * \
+                                                                dram.fmap[layer_params.layer_name][c][x + (i * layer_params.strideX)][y + (j * layer_params.strideY)])
                             else:
                                 calculated_results[c][i][j] = int(calculated_results[c][i][j] + \
-                                                                dram.weights[layer_number][c][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)])
-    elif "Conv" in str(layer_params.layer_name):
+                                                                dram.weights[layer_params.layer_name][c][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)])
+    elif "conv" in str(layer_params.layer_name):
         calculated_results = [[[0 for i in range(layer_params.output_shape[2])] for j in range(layer_params.output_shape[1])]for k in range(layer_params.output_shape[3])]
         for j in range(layer_params.output_shape[1]):
             for i in range(layer_params.output_shape[2]):
                 for f in range(layer_params.output_shape[3]):
-                    calculated_results[f][j][i] = int(calculated_results[f][j][i] + int(dram.bias[layer_number][f]))
+                    calculated_results[f][j][i] = int(calculated_results[f][j][i] + int(dram.bias[layer_params.layer_name][f]))
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
         conv_job_limit = 1
         semaphore = mp.Semaphore(conv_job_limit)
-
         run_jobs_bounded(
             lambda f: mp.Process(target = calculate_conv_results_mp,
-                                 args = (f, layer_number, layer_params, serial, dram, calculated_results[f], return_dict, semaphore)),
+                                 args = (f, layer_params.layer_name, layer_params, serial, dram, calculated_results[f], return_dict, semaphore)),
             layer_params.output_shape[3])
 
         calculated_results = return_dict
 
-    elif "Pooling" in str(layer_params.layer_name):
+    elif "pooling" in str(layer_params.layer_name):
         calculated_results = [[[0 for i in range(layer_params.output_shape[2])] for j in range(layer_params.output_shape[1])]for k in range(layer_params.output_shape[3])]
         if (layer_params.pooling_mode == 0): #Is Max Pooling
             for f in range(layer_params.output_shape[3]):
                 for i in range(layer_params.output_shape[2]):
                     for j in range(layer_params.output_shape[1]):
                         block = [
-                            dram.fmap[layer_number][f][2*j][2*i],
-                            dram.fmap[layer_number][f][2*j][2*i+1],
-                            dram.fmap[layer_number][f][2*j+1][2*i],
-                            dram.fmap[layer_number][f][2*j+1][2*i+1]
+                            dram.fmap[layer_params.layer_name][f][2*j][2*i],
+                            dram.fmap[layer_params.layer_name][f][2*j][2*i+1],
+                            dram.fmap[layer_params.layer_name][f][2*j+1][2*i],
+                            dram.fmap[layer_params.layer_name][f][2*j+1][2*i+1]
                         ]
                         calculated_results[f][j][i] = int(max(block))
         else:#Is Average Pooling
@@ -538,16 +537,16 @@ def collect_results(layer_number, layer_params, dram, serial):
                         temp = 0
                         for x in range(layer_params.input_shape[1]):
                             for y in range(layer_params.input_shape[2]):
-                                    temp = temp + dram.fmap[layer_number][f][x][y]
+                                    temp = temp + dram.fmap[layer_params.layer_name][f][x][y]
                         temp = temp//(layer_params.input_shape[1]*layer_params.input_shape[2])
                         calculated_results[f][j][i] = int(temp)
 
     return calculated_results
 
-def calculate_dense_results_mp(x, layer_params, layer_number, dram, calculated_results,return_dict):
+def calculate_dense_results_mp(x, layer_params, layer_name, dram, calculated_results,return_dict):
     for c in range(layer_params.iact_size_x):
-        calculated_results = int(calculated_results + dram.weights[layer_number][x][c] * dram.fmap[layer_number][c])
-    calculated_results = int(calculated_results + dram.bias[layer_number][x])
+        calculated_results = int(calculated_results + dram.weights[layer_name][x][c] * dram.fmap[layer_name][c])
+    calculated_results = int(calculated_results + dram.bias[layer_name][x])
     return_dict[x] = calculated_results
 
 def refresh_position(x_cor, y_cor, filter, y_line_counter, kernel_counter, layer_params, position) :
@@ -680,8 +679,8 @@ def calculate_conv_parallel(params, layer_params, calculated_results, cluster_or
                             file_dma_ref.write(partial_result_a + partial_result_b + "\n")
     return coordinates
 
-def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict):
-    file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
+def calculate_conv_output_stream_mp(layer_repetition, layer_name, params, layer_params, cluster_order, calculated_results, return_dict):
+    file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/dma_stream_ref.txt')
     if (params.SERIAL):
         calculate_conv_serial(params, layer_params, calculated_results, file_dma_ref)
         return_dict[layer_repetition] = []
@@ -690,10 +689,10 @@ def calculate_conv_output_stream_mp(layer_repetition, layer_number, params, laye
     file_dma_ref.close()
     logger.info("Stream " + str(layer_repetition) + " / " + str(layer_params.needed_total_transmissions) + " calculated.")
 
-def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_params, cluster_order, calculated_results, return_dict):
+def calculate_dw_output_stream_mp(layer_repetition, layer_name, params, layer_params, cluster_order, calculated_results, return_dict):
     coordinates = []
     filter_number = 0
-    file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
+    file_dma_ref = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/dma_stream_ref.txt')
     max_refresh = math.floor(((layer_repetition+1)/layer_params.needed_total_transmissions) * layer_params.Used_refreshes) - math.floor((layer_repetition/layer_params.needed_total_transmissions) * layer_params.Used_refreshes)
     max_refresh = math.ceil(max_refresh/math.floor(params.PSUM_Trans_Bitwidth/params.DATA_PSUM_BITWIDTH))
     for refresh in range(0,max_refresh):
@@ -741,7 +740,7 @@ def calculate_dw_output_stream_mp(layer_repetition, layer_number, params, layer_
     logger.info("Stream " + str(layer_repetition) + " / " + str(layer_params.needed_total_transmissions) + " calculated.")
     return_dict[layer_repetition] = coordinates
 
-def calculate_conv_results_mp(f, layer_number, layer_params, serial, dram, calculated_results, return_dict, semaphore):
+def calculate_conv_results_mp(f, layer_name, layer_params, serial, dram, calculated_results, return_dict, semaphore):
     with semaphore:
         if(f < layer_params.filters):
             for j in range(layer_params.output_shape[1]):
@@ -752,14 +751,14 @@ def calculate_conv_results_mp(f, layer_number, layer_params, serial, dram, calcu
                                 if((((x + j * layer_params.strideX) >= 0) & ((x + j * layer_params.strideX) < (layer_params.input_shape[1]))) & \
                                 (((y + i * layer_params.strideY) >= 0) & ((y + i * layer_params.strideY) < (layer_params.input_shape[2])))):
                                     calculated_results[j][i] = int(calculated_results[j][i] + \
-                                                                    dram.weights[layer_number][c][f][y + math.floor((layer_params.kernel_size[1]-1)/2)][x + math.floor(layer_params.kernel_size[0]/2)] * \
-                                                                    dram.fmap[layer_number][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
+                                                                    dram.weights[layer_name][c][f][y + math.floor((layer_params.kernel_size[1]-1)/2)][x + math.floor(layer_params.kernel_size[0]/2)] * \
+                                                                    dram.fmap[layer_name][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
                                 else:
                                     if (serial) :
                                         pass
                                     else:
                                         calculated_results[j][i] = int(calculated_results[j][i] + \
-                                            dram.weights[layer_number][c][f][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)])
+                                            dram.weights[layer_name][c][f][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)])
         return_dict[f] = calculated_results
 
 def compare_dram_with_ref(layer_params, ref_output, dram):
@@ -793,7 +792,7 @@ def compare_dram_with_ref(layer_params, ref_output, dram):
     # pass regardless of the DUT output. It is the authoritative check, so it
     # has to stay live; report how many values differ, not only the first.
     name = str(layer_params.layer_name)
-    if "Conv" in name:
+    if "conv" in name:
         manager = mp.Manager()
         return_dict = manager.dict()
         jobs = []
@@ -809,7 +808,7 @@ def compare_dram_with_ref(layer_params, ref_output, dram):
                          len(failed), len(ref_output), failed[:8])
             return False
 
-    elif "Dense" in name or "Pooling" in name:
+    elif "dense" in name or "pooling" in name:
         mismatches = [f for f in range(len(ref_output)) if dram[f] != ref_output[f]]
         if mismatches:
             logger.error("%d of %d outputs differ from the reference", len(mismatches), len(ref_output))
@@ -877,14 +876,14 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
     - Preserves layer-specific data organization
     """
     logger.info("Results are transmitted.")
-    if "Conv" in str(current_layer_params.layer_name):
-        if any(x in str(next_layer_params.layer_name) for x in ("Conv", "Pooling")):
+    if "conv" in str(current_layer_params.layer_name):
+        if any(x in str(next_layer_params.layer_name) for x in ("conv", "pooling")):
             for f in range(len(ref_output)):    
                 for x in range(len(ref_output[f])):
                     for y in range(len(ref_output[f][x])):
                         dram[f][x][y] = ref_output[f][x][y]
         else:
-            if any(x in str(next_layer_params.layer_name) for x in ("Dense")):
+            if any(x in str(next_layer_params.layer_name) for x in ("dense")):
                 for f in range(len(ref_output)):  
                     for x in range(len(ref_output[f])):
                         for y in range(len(ref_output[f][x])):
@@ -893,8 +892,8 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
                             pos = pos + (current_layer_params.iact_size_x*4*y)
                             pos = pos + (current_layer_params.iact_size_x*current_layer_params.iact_size_y*4*math.floor(f/4))
                             dram[pos] = ref_output[f][x][y]
-    elif "Pooling" in str(current_layer_params.layer_name):
-        if "Dense" in str(next_layer_params.layer_name):
+    elif "pooling" in str(current_layer_params.layer_name):
+        if "dense" in str(next_layer_params.layer_name):
             for f in range(len(ref_output)):
                 for x in range(len(ref_output[f])):
                     for y in range(len(ref_output[f][x])):
@@ -906,7 +905,7 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
                 for x in range(len(ref_output[f])):
                     for y in range(len(ref_output[f][x])):
                         dram[f][x][y] = ref_output[f][x][y]
-    elif "Dense" in str(current_layer_params.layer_name):
+    elif "dense" in str(current_layer_params.layer_name):
         for f in range(len(ref_output)):  
             dram[f] = ref_output[f]
     return dram

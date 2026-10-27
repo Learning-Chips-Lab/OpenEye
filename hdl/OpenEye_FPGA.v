@@ -2289,7 +2289,7 @@ end
 
             if (iact_to_psum_start_shifting) begin
               iact_to_psum_x_pos_counter <= iact_to_psum_x_pos_counter + 1;
-              if (iact_to_psum_x_pos_counter < iact_size_x) begin
+              if ((iact_to_psum_x_pos_counter < iact_size_x) & (!fully_connected_layer | iact_to_psum_x_pos_counter == 0)) begin
                 iact_to_psum_storage_counter <= iact_to_psum_storage_counter + 1;
                 if (iact_to_psum_storage_counter == ((8/WRITEBACK_WORDS)*IACT_RAM_CELLS)-1) begin
                   iact_to_psum_storage_counter <= 0;
@@ -2298,7 +2298,6 @@ end
                   end
                 end
 
-                
                 iact_buffer_data_w[(((8/WRITEBACK_WORDS)*IACT_RAM_CELLS)-1)*(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)+:(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)] <= iact_to_psum_shift_reg[0+:(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)];
                 iact_to_psum_shift_reg[(WRITEBACK_WORDS-1)*(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)+:(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)] <= 0;
                 for (b = 0; b < WRITEBACK_WORDS-1; b=b+1) begin
@@ -2321,7 +2320,7 @@ end
               // counter at the row period so the padding pixels are dropped by
               // the (x_pos < iact_size_x) test above instead of being written as
               // an extra word row.
-              if (iact_to_psum_x_pos_counter >= iact_x_add_up - 1) begin
+              if ((iact_to_psum_x_pos_counter >= iact_x_add_up - 1) | fully_connected_layer) begin
                 iact_to_psum_x_pos_counter <= 0;
               end
             end            
@@ -2343,6 +2342,7 @@ end
                 iact_buffer_en_w[a] <= 1;
               end
             end
+            iact_buffer_data_w[(((8/WRITEBACK_WORDS)*IACT_RAM_CELLS)-1)*(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)+:(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)] <= 0;
             for (b = 0; b < ((8/WRITEBACK_WORDS)*IACT_RAM_CELLS)-1; b=b+1) begin
               iact_buffer_data_w[(((8/WRITEBACK_WORDS)*IACT_RAM_CELLS)-1-(b+1))*(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)+:(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)] <=
               iact_buffer_data_w[(((8/WRITEBACK_WORDS)*IACT_RAM_CELLS)-1-b)*(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)+:(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)];

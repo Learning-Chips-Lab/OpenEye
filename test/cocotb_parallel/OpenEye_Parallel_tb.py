@@ -191,8 +191,8 @@ async def single_layer_test(dut):
                 layer_thread = calculate_layer(ptp, dut, stream, openeye_parameter, layer_parameters, layer_repetition, model, layer_es, dram, log_level, layer_number, layer, output_order)
                 await layer_thread
                 if(logging.DEBUG >= log_level):
-                    assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
-                                'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
+                    assert gtu.check_results('demo/layer_' + str(layer_number) + '/dma_stream_ref.txt',\
+                                'demo/layer_' + str(layer_number) + '/output.txt')
             assert ptu.compare_dram_with_ref(layer, calculated_results, dram.fmap[1 + layer_number])
         slo.batchnorm_output(layer, 512, layer_number, dram)
 
