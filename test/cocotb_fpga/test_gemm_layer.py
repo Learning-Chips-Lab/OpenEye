@@ -76,7 +76,7 @@ def test_gemm_layer(
     # Fixed platform configuration (matches the cocotb_fpga Makefile exports;
     # see test_conv3x3_sparse.py for the QUANT_AMOUNT rationale).
     os.environ["BRANCHES"]        = "1"
-    os.environ["BUFFER_WIDTH"]    = "12"
+    os.environ["BUFFER_WIDTH_IACT"] = "12"
     os.environ["QUANT_AMOUNT"]    = "1024"
     os.environ["RAM_CELLS"]       = "32"
     os.environ["CLUSTER_COLUMNS"] = str(CLUSTER_COLUMNS)

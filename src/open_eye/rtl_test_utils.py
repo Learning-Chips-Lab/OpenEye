@@ -1096,9 +1096,9 @@ def _iact_buffer_words(oep, layer_params, iact_ref):
     fields are still at their constructor defaults.
     """
     name = str(getattr(layer_params, "layer_name", ""))
-    if "Dense" in name:
+    if "dense" in name:
         mapper = iact_stream_mapper.DenseIactStreamMapper
-    elif "Conv" in name or "Depthwise" in name:
+    elif "conv" in name or "depthwise" in name:
         mapper = iact_stream_mapper.IactStreamMapper
     else:
         return None
@@ -1110,7 +1110,7 @@ def iact_half_offset(dut, oep):
 
     OpenEye_FPGA assembles the address as {choose_iact_buffer, addr_reg}, so the
     half-select occupies the top BRANCHES_CLOG bits and each half owns the lower
-    BRANCHES_WIDTH = BUFFER_WIDTH - BRANCHES_CLOG address bits.
+    BRANCHES_WIDTH = BUFFER_WIDTH_IACT - BRANCHES_CLOG address bits.
     """
     branches = getattr(oep, "BRANCHES", 1)
     if branches <= 1:
@@ -1119,7 +1119,7 @@ def iact_half_offset(dut, oep):
         half = int(dut.choose_iact_buffer.value)
     except Exception:
         return 0
-    return half << (oep.BUFFER_WIDTH - math.ceil(math.log2(branches)))
+    return half << (oep.BUFFER_WIDTH_IACT - math.ceil(math.log2(branches)))
 
 
 def iact_cells_per_group(oep):
@@ -1174,7 +1174,7 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
     try:
         depth = len(dut.BUFFER_A[0].iact_layer_buffer.impl.mem)
     except TypeError:
-        depth = 1 << oep.BUFFER_WIDTH
+        depth = 1 << oep.BUFFER_WIDTH_IACT
     logger.info("Iact buffer check: %d expected words, %d cells per group, depth %d (layer '%s')",
                 len(expected), cells_per_group, depth, getattr(layer_params, "layer_name", "?"))
     if len(expected) > cells_per_group * depth:

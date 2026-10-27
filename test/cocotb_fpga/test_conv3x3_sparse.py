@@ -80,7 +80,7 @@ def test_conv3x3_8ch_sparse50(
     # must be 1024: conv_mapper.write_quantize sends 512 DMA words and the
     # GET_QUANTIZE FSM expects QUANT_AMOUNT/2 of them.
     os.environ["BRANCHES"]        = "1"
-    os.environ["BUFFER_WIDTH"]    = "12"
+    os.environ["BUFFER_WIDTH_IACT"] = "12"
     os.environ["QUANT_AMOUNT"]    = "1024"
     os.environ["RAM_CELLS"]       = "32"
     os.environ["CLUSTER_COLUMNS"] = "2"

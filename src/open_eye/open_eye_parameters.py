@@ -187,9 +187,9 @@ class OpenEyeParameters(object):
 
         # Width of IACT GLBs
         try:
-            self.BUFFER_WIDTH = int(os.getenv("BUFFER_WIDTH"))
+            self.BUFFER_WIDTH_IACT = int(os.getenv("BUFFER_WIDTH_IACT"))
         except:
-            self.BUFFER_WIDTH = 10
+            self.BUFFER_WIDTH_IACT = 10
 
         # Width of WGHT GLBs
         try:
