@@ -146,7 +146,7 @@ async def start_test_fpga(dut):
     """
     global logger
     await setup_file_logging()
-    timeout_time = 15000000
+    timeout_time = 1500000000
     timeout_unit = 'ns'
 
     try:
@@ -162,7 +162,6 @@ async def single_layer_test(dut):
     """
 
     only_files, layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inputsize_y, outputsize, strides, channels, sparse_iacts, sparse_wghts = envvars_to_vars()
-
 
 
     try:
@@ -348,10 +347,10 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                                      "diff_iact_layer_next_layer", "psum_storage_cycles"))
             logger.info("layerparams %d: %s", n, " ".join("%s=%s" % (k, getattr(lpar, k)) for k in fields))
     for layer_name, lpar in layer_parameters.items():
-        logger.info("layer %d %s: in=%sx%s ch=%s filters=%s send_values_out=%s "
+        logger.info("layer %s: in=%sx%s ch=%s filters=%s send_values_out=%s "
                     "store_in_psum=%s transmissions=%s output_cycles=%s psum_output_words=%s "
                     "used_Y_cluster=%s used_X_cluster=%s",
-                    layer_name, lpar.layer_name, getattr(lpar, "iact_size_x", "?"),
+                    lpar.layer_name, getattr(lpar, "iact_size_x", "?"),
                     getattr(lpar, "iact_size_y", "?"), getattr(lpar, "channels", "?"),
                     getattr(lpar, "filters", "?"), lpar.send_values_out,
                     getattr(lpar, "store_in_psum", "?"), getattr(lpar, "needed_total_transmissions", "?"),

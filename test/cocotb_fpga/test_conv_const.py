@@ -98,7 +98,7 @@ def _run_conv_const(layer_mode, const_value, cluster_rows, num_glb_iact,
     # Use the standard quantization table: 1024 entries of 40 bits produce
     # 640 DMA words, matching GET_QUANTIZE's derived transfer count.
     os.environ["BRANCHES"]        = "1"
-    os.environ["BUFFER_WIDTH"]    = "12"
+    os.environ["BUFFER_WIDTH_IACT"] = "12"
     os.environ["QUANT_AMOUNT"]    = "1024"
     os.environ["RAM_CELLS"]       = "32"
     os.environ["CLUSTER_COLUMNS"] = "2"

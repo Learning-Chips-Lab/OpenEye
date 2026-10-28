@@ -224,6 +224,48 @@ def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inp
             ))
             model.add(tf.keras.layers.Flatten())
             model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
+        case "VGG-19":
+            alpha = 0.25
+            
+            # Block 1
+            model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same', input_shape=(inputsize_x, inputsize_y, channels)))
+            model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+
+            # Block 2
+            model.add(tf.keras.layers.Conv2D(int(128 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(128 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+
+            # Block 3
+            model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+
+            # Block 4
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+
+            # Block 5
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            """
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+
+            # Classification Block
+            model.add(tf.keras.layers.Flatten())
+            model.add(tf.keras.layers.Dense(int(4096 * alpha), activation='relu', use_bias=True))
+            model.add(tf.keras.layers.Dense(int(4096 * alpha), activation='relu', use_bias=True))
+            # Outputsize (Anzahl der Klassen) skaliert standardmäßig nicht mit alpha
+            model.add(tf.keras.layers.Dense(units=outputsize, activation='softmax', use_bias=True))"""
+
         case "MLP":
             inputsize_x = 6
             model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=32, use_bias = True))

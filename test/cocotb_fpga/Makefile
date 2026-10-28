@@ -1,15 +1,17 @@
 # Makefile
 
 # Icarus Verilog
-SIM ?= icarus
+#SIM ?= icarus
+#COMPILE_ARGS += -Wall -Winf-loop
 
 # Verilator
-#SIM ?= verilator
-#EXTRA_ARGS += --trace --trace-fst --trace-structs
+SIM ?= verilator
+COMPILE_ARGS += -Wall -Wno-fatal
+EXTRA_ARGS += --trace --trace-fst --trace-structs
+export WAVES=1
 #COMPILE_ARGS += --trace --trace-fst --trace-structs
 COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE
 COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE_cluster
-COMPILE_ARGS += -Wall -Winf-loop
 
 TOPLEVEL_LANG ?= verilog
 WAVEFORM=on
@@ -79,11 +81,14 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 
 export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 
+#export LAYER=GEMM
+#export LAYER=Residual_Block
 #export LAYER=FC
 #export LAYER=MNIST
+#export LAYER=VGG-19
 #export LAYER=Convolution_Stack
-#export LAYER=Conv_Pool_Conv
-export LAYER=Convolution_Single
+export LAYER=Conv_Pool_Conv
+#export LAYER=Convolution_Single
 #export LAYER=MLP
 #export LAYER=MobileNetV1
 #export LAYER=MaxPooling
@@ -91,11 +96,11 @@ export LAYER=Convolution_Single
 export NUM_FILTERS=16
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=16
-export INPUT_SIZE_Y=1
+export INPUT_SIZE_X=64
+export INPUT_SIZE_Y=64
 export STRIDE=1
 export INPUT_CHANNELS=4
-export OUTPUT_SIZE=64
+export OUTPUT_SIZE=10
 export USE_RANDOM_VALUES=1
 export USE_SPARSE_IACTS=0
 export USE_SPARSE_WEIGHTS=0
@@ -122,8 +127,8 @@ export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
 #Set number of Clusters
-export CLUSTER_COLUMNS=1
-export CLUSTER_ROWS=1
+export CLUSTER_COLUMNS=2
+export CLUSTER_ROWS=2
 
 #Amoutn of Iact RAM STORAGES
 export IACT_RAM_CELLS=4
@@ -136,10 +141,10 @@ export PE_WGHT_ADDR_ADDR=16
 export PSUM_PER_PE=32
 
 export BRANCHES=1
-export BUFFER_WIDTH=9
-export BUFFER_WIDTH_PSUM = 12
+export BUFFER_WIDTH_IACT = 16
+export BUFFER_WIDTH_PSUM = 18
 export BUFFER_WIDTH_WGHT = 13
-export QUANT_AMOUNT=64
+export QUANT_AMOUNT=256
 export TRANS_WORDS = 4
 export STRIDE_ENABLED = 1
 export DMA_BITWIDTH = 32
