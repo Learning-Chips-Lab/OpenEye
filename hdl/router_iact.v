@@ -201,6 +201,7 @@ module router_iact #(
   wire e30;
   wire e31;
   wire e32;
+  wire e33;
   wire r00;
   wire r01;
   wire r02;
@@ -223,18 +224,18 @@ module router_iact #(
                          | ({DATA_WIDTH{~e00 & ~e10 & e20}}        & data_src_port_2)
                          | ({DATA_WIDTH{~e00 & ~e10 & ~e20 & e30}} & data_src_port_3);
   ///North
-  assign data_dst_port_1 = ({DATA_WIDTH{e01}} & data_src_port_0)
+  assign data_dst_port_1 = ({DATA_WIDTH{e01 & ~e11 & ~e21}} & data_src_port_0)
       //| ({DATA_WIDTH{~e01 & e11}}               & data_src_port_1)
       | ({DATA_WIDTH{~e01 & ~e11 & e21}}        & data_src_port_2)
                          | ({DATA_WIDTH{~e01 & ~e11 & ~e21 & e31}} & data_src_port_3);
   ///East/West
-  assign data_dst_port_2 = ({DATA_WIDTH{e02}}                      & data_src_port_0)
-                         | ({DATA_WIDTH{~e02 & e12}}               & data_src_port_1)
+  assign data_dst_port_2 = ({DATA_WIDTH{e02 & ~e12 & ~e32}}                      & data_src_port_0)
+                         | ({DATA_WIDTH{~e02 & e12 & ~e32}}               & data_src_port_1)
       //| ({DATA_WIDTH{~e02 & ~e12 & e22}}        & data_src_port_2)
-      | ({DATA_WIDTH{LEFT_CLUSTER}} & ({DATA_WIDTH{~e02 & ~e12 & ~e22 & e32}} & data_src_port_3));
+      | ({DATA_WIDTH{LEFT_CLUSTER}} & ({DATA_WIDTH{~e02 & ~e12 & e32}} & data_src_port_3));
   ///South
-  assign data_dst_port_3 = ({DATA_WIDTH{e03}}                      & data_src_port_0)
-                         | ({DATA_WIDTH{~e03 & e13}}               & data_src_port_1)
+  assign data_dst_port_3 = ({DATA_WIDTH{e03 & ~e13 & ~e23}}                      & data_src_port_0)
+                         | ({DATA_WIDTH{~e03 & e13 & ~e23}}               & data_src_port_1)
                          | ({DATA_WIDTH{LEFT_CLUSTER}} & ({DATA_WIDTH{~e03 & ~e13 & e23}}        & data_src_port_2));
   //| ({DATA_WIDTH{~e03 & ~e13 & ~e23 & e33}} & data_src_port_3);
 
@@ -242,16 +243,16 @@ module router_iact #(
   ////////////////////////////////////////
 
   assign enable_dst_port_0 = e00 | e10 | e20 | e30;
-  assign enable_dst_port_1 = e01 | e21 | e31;
-  assign enable_dst_port_2 = e02 | e12 | e32;
+  assign enable_dst_port_1 = e01       | e21 | e31;
+  assign enable_dst_port_2 = e02 | e12       | e32;
   assign enable_dst_port_3 = e03 | e13 | e23;
 
   ///Source Port: Ready
   ////////////////////////////////////////
 
   assign ready_src_port_0 = r00 & r01 & r02 & r03;
-  assign ready_src_port_1 = r10 & r12 & r13;
-  assign ready_src_port_2 = r20 & r21 & r23;
+  assign ready_src_port_1 = r10       & r12 & r13;
+  assign ready_src_port_2 = r20 & r21       & r23;
   assign ready_src_port_3 = r30 & r31 & r32;
 
   ///Source Port: Enable
@@ -264,17 +265,20 @@ module router_iact #(
 
   assign e10 = (2'd1 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_1 : 0;
   assign e11 = (2'd1 == router_mode_i[5:4]) & router_mode_i[1] ? 0 : 0;
-  assign e12 = (2'd1 == router_mode_i[5:4]) & router_mode_i[2] ? enable_src_port_1 : 0;
+  //assign e12 = (2'd1 == router_mode_i[5:4]) & router_mode_i[2] ? enable_src_port_1 : 0;
+  assign e12 = 0;
   assign e13 = (2'd1 == router_mode_i[5:4]) & router_mode_i[3] ? enable_src_port_1 : 0;
 
   assign e20 = (2'd2 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_2 : 0;
   assign e21 = (2'd2 == router_mode_i[5:4]) & router_mode_i[1] ? enable_src_port_2 : 0;
   assign e22 = (2'd2 == router_mode_i[5:4]) & router_mode_i[2] ? 0 : 0;
-  assign e23 =  (2'd2 == router_mode_i[5:4]) & router_mode_i[3] ? enable_src_port_2 & LEFT_CLUSTER : 0;
+  assign e23 = (2'd2 == router_mode_i[5:4]) & router_mode_i[3] ? enable_src_port_2 : 0;
 
   assign e30 = (2'd3 == router_mode_i[5:4]) & router_mode_i[0] ? enable_src_port_3 : 0;
   assign e31 = (2'd3 == router_mode_i[5:4]) & router_mode_i[1] ? enable_src_port_3 : 0;
-  assign e32 =  (2'd3 == router_mode_i[5:4]) & router_mode_i[2] ? enable_src_port_3 & LEFT_CLUSTER: 0;
+  //assign e32 = (2'd3 == router_mode_i[5:4]) & router_mode_i[2] ? enable_src_port_3 : 0;
+  assign e32 =  0;
+  assign e33 = (2'd2 == router_mode_i[5:4]) & router_mode_i[3] ? 0 : 0;
 
   ///Destination Port: Ready
   ////////////////////////////////////////
