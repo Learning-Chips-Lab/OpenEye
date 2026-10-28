@@ -69,19 +69,19 @@ registers:
   - {name: used_wght_per_PE, width: int(BUFFER_WIDTH_WGHT)}
   - {name: psum_output_words, width: 16}
   - {name: overhang_discrepancy, width: 4}
-  - {name: iact_read_limit_0, width: 8}
-  - {name: iact_read_limit_1, width: 8}
-  - {name: iact_read_limit_2, width: 8}
-  - {name: iact_read_limit_3, width: 8}
-  - {name: iact_read_limit_4, width: 8}
+  - {name: iact_read_limit_0, width: 18}
+  - {name: iact_read_limit_1, width: 18}
+  - {name: iact_read_limit_2, width: 18}
+  - {name: iact_read_limit_3, width: 18}
+  - {name: iact_read_limit_4, width: 18}
   - {name: iact_read_inc_0, width: 12}
   - {name: iact_read_inc_1, width: 12}
   - {name: iact_read_inc_2, width: 12}
   - {name: iact_read_inc_3, width: 12}
   - {name: iact_read_inc_4, width: 12}
-  - {name: iact_write_limit_0, width: 12}
-  - {name: iact_write_limit_1, width: 8}
-  - {name: iact_write_limit_2, width: 8}
+  - {name: iact_write_limit_0, width: 18}
+  - {name: iact_write_limit_1, width: 18}
+  - {name: iact_write_limit_2, width: 18}
   - {name: iact_write_inc_0, width: 12}
   - {name: iact_write_inc_1, width: 12}
   - {name: iact_write_inc_2, width: 12}

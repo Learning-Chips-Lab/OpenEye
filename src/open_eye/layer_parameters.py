@@ -1238,6 +1238,7 @@ class LayerParameters(object):
             self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*math.ceil((self.channel_div_trans*(self.kernel_size[1]+self.iact_size_y-self.strideY)))*2
         else :
             self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*self.channel_div_trans*2
+
         if (self.buffer_cycles_for_x_iact == 1):
             self.start_param_array = (1 << math.ceil((self.different_kernels_per_calculation * self.y_lines_per_calculation * self.used_Y_cluster * math.ceil(self.iact_x_add_up / params.NUM_GLB_PSUM)))) - 1
         else:

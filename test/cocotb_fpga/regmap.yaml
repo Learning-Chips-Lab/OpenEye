@@ -13,9 +13,9 @@ registers:
   - {name: x_lines_reg, width: 8}
   - {name: needed_wght_cycles, width: 8}
   - {name: needed_cycles, width: 18}
-  - {name: trans_cycles_iact, width: 16}
-  - {name: trans_cycles_wght, width: 16}
-  - {name: trans_cycles_psum, width: 16}
+  - {name: trans_cycles_iact, width: 24}
+  - {name: trans_cycles_wght, width: 24}
+  - {name: trans_cycles_psum, width: 24}
   - {name: iact_glb_writing_cycles, width: 16}
   - {name: iact_converter_buffer_addr_max_cycles, width: 8}
   - {name: fc_size_reg, width: 14}
@@ -62,29 +62,29 @@ registers:
   - {name: cluster_per_conv_cycle, width: ceil(log2((int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS))+1))}
   - {name: iact_converter_max_cycles, width: 8}
   - {name: iact_x_pos_inc, width: 12}
-  - {name: iact_buffer_words_per_write, width: 12}
+  - {name: iact_buffer_words_per_write, width: int(BUFFER_WIDTH_IACT)}
   - {name: iact_words_per_compute, width: 8}
   - {name: pooling_mode, width: 1}
   - {name: gemm_mode, width: 1}
   - {name: used_wght_per_PE, width: int(BUFFER_WIDTH_WGHT)}
-  - {name: psum_output_words, width: 16}
+  - {name: psum_output_words, width: 24}
   - {name: overhang_discrepancy, width: 4}
-  - {name: iact_read_limit_0, width: 8}
-  - {name: iact_read_limit_1, width: 8}
-  - {name: iact_read_limit_2, width: 8}
-  - {name: iact_read_limit_3, width: 8}
-  - {name: iact_read_limit_4, width: 8}
-  - {name: iact_read_inc_0, width: 12}
-  - {name: iact_read_inc_1, width: 12}
-  - {name: iact_read_inc_2, width: 12}
-  - {name: iact_read_inc_3, width: 12}
-  - {name: iact_read_inc_4, width: 12}
-  - {name: iact_write_limit_0, width: 12}
-  - {name: iact_write_limit_1, width: 8}
-  - {name: iact_write_limit_2, width: 8}
-  - {name: iact_write_inc_0, width: 12}
-  - {name: iact_write_inc_1, width: 12}
-  - {name: iact_write_inc_2, width: 12}
+  - {name: iact_read_limit_0, width: 12}
+  - {name: iact_read_limit_1, width: 12}
+  - {name: iact_read_limit_2, width: 12}
+  - {name: iact_read_limit_3, width: 12}
+  - {name: iact_read_limit_4, width: 12}
+  - {name: iact_read_inc_0, width: int(BUFFER_WIDTH_IACT)}
+  - {name: iact_read_inc_1, width: int(BUFFER_WIDTH_IACT)}
+  - {name: iact_read_inc_2, width: int(BUFFER_WIDTH_IACT)}
+  - {name: iact_read_inc_3, width: int(BUFFER_WIDTH_IACT)}
+  - {name: iact_read_inc_4, width: int(BUFFER_WIDTH_IACT)}
+  - {name: iact_write_limit_0, width: 18}
+  - {name: iact_write_limit_1, width: 12}
+  - {name: iact_write_limit_2, width: 12}
+  - {name: iact_write_inc_0, width: int(BUFFER_WIDTH_IACT)}
+  - {name: iact_write_inc_1, width: int(BUFFER_WIDTH_IACT)}
+  - {name: iact_write_inc_2, width: int(BUFFER_WIDTH_IACT)}
   - {name: pagu_wght_limit, width: 10}
   - {name: psum_pagu_cs_limit_0, width: 4}
   - {name: psum_pagu_cs_limit_1, width: 4}
@@ -94,11 +94,11 @@ registers:
   - {name: psum_pagu_cs_inc_1, width: 4}
   - {name: psum_pagu_cs_inc_2, width: 4}
   - {name: psum_pagu_cs_inc_3, width: 4}
-  - {name: psum_pagu_loop_limit_0, width: 8}
-  - {name: psum_pagu_loop_limit_1, width: 8}
-  - {name: psum_pagu_loop_limit_2, width: 8}
-  - {name: psum_pagu_loop_limit_3, width: 8}
-  - {name: psum_pagu_loop_limit_4, width: 8}
+  - {name: psum_pagu_loop_limit_0, width: 12}
+  - {name: psum_pagu_loop_limit_1, width: 12}
+  - {name: psum_pagu_loop_limit_2, width: 12}
+  - {name: psum_pagu_loop_limit_3, width: 12}
+  - {name: psum_pagu_loop_limit_4, width: 12}
   - {name: psum_pagu_addr_inc_0, width: 8}
   - {name: psum_pagu_addr_inc_1, width: 8}
   - {name: psum_pagu_addr_inc_2, width: 8}

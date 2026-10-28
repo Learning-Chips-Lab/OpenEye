@@ -225,12 +225,12 @@ def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inp
             model.add(tf.keras.layers.Flatten())
             model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
         case "VGG-19":
-            alpha = 0.5
+            alpha = 0.25
             
             # Block 1
             model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same', input_shape=(inputsize_x, inputsize_y, channels)))
             model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same'))
-            """model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
 
             # Block 2
             model.add(tf.keras.layers.Conv2D(int(128 * alpha), (3, 3), activation='relu', padding='same'))
@@ -256,6 +256,7 @@ def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inp
             model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
             model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
             model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            """
             model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
 
             # Classification Block

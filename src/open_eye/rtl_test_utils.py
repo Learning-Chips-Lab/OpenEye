@@ -1461,7 +1461,7 @@ def _signal_is(handle, expected):
         return False
 
 
-async def await_ready_signal(ptp, dut, settle_cycles=5000, max_wait_cycles=2000000,
+async def await_ready_signal(ptp, dut, settle_cycles=5000, max_wait_cycles=40000000,
                              report_every=200000):
     """Wait until the DUT has finished the current layer and wants the next one.
 

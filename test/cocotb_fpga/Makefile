@@ -87,17 +87,17 @@ export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 #export LAYER=MNIST
 #export LAYER=VGG-19
 #export LAYER=Convolution_Stack
-#export LAYER=Conv_Pool_Conv
-export LAYER=Convolution_Single
+export LAYER=Conv_Pool_Conv
+#export LAYER=Convolution_Single
 #export LAYER=MLP
 #export LAYER=MobileNetV1
 #export LAYER=MaxPooling
 #export LAYER=AveragePooling
-export NUM_FILTERS=8
+export NUM_FILTERS=16
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=32
-export INPUT_SIZE_Y=4
+export INPUT_SIZE_X=64
+export INPUT_SIZE_Y=64
 export STRIDE=1
 export INPUT_CHANNELS=4
 export OUTPUT_SIZE=10
@@ -127,8 +127,8 @@ export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
 #Set number of Clusters
-export CLUSTER_COLUMNS=1
-export CLUSTER_ROWS=1
+export CLUSTER_COLUMNS=2
+export CLUSTER_ROWS=2
 
 #Amoutn of Iact RAM STORAGES
 export IACT_RAM_CELLS=4
@@ -144,7 +144,7 @@ export BRANCHES=1
 export BUFFER_WIDTH_IACT = 16
 export BUFFER_WIDTH_PSUM = 18
 export BUFFER_WIDTH_WGHT = 13
-export QUANT_AMOUNT=64
+export QUANT_AMOUNT=256
 export TRANS_WORDS = 4
 export STRIDE_ENABLED = 1
 export DMA_BITWIDTH = 32

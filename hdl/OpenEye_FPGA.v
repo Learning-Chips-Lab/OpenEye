@@ -182,7 +182,7 @@ module OpenEye_FPGA #(
     parameter ROUTER_MODES_PSUM = 3,
 
 
-    parameter BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR = BUFFER_WIDTH_IACT,
+    parameter BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR = BUFFER_WIDTH_IACT + 2,
     parameter real FSM_IACT_RTR_CCLS_A = (CLUSTERS * NUM_GLB_IACT),
     parameter real FSM_IACT_RTR_CCLS_B = DMA_BITWIDTH / ROUTER_MODES_IACT,
     parameter real FSM_IACT_RTR_CCLS = FSM_IACT_RTR_CCLS_A / FSM_IACT_RTR_CCLS_B,
@@ -205,9 +205,9 @@ module OpenEye_FPGA #(
 
     // Converter
     parameter BITWIDTH_IACT = TRANS_BITWIDTH_IACT / 2,
-    parameter TRANS_IACT_WIDTH = 16,
-    parameter TRANS_WGHT_WIDTH = 16,
-    parameter TRANS_PSUM_WIDTH = 16,
+    parameter TRANS_IACT_WIDTH = 24,
+    parameter TRANS_WGHT_WIDTH = 24,
+    parameter TRANS_PSUM_WIDTH = 24,
 
     //Storage RAMs
     parameter BRANCHES_CLOG = $clog2(BRANCHES),
@@ -228,6 +228,11 @@ module OpenEye_FPGA #(
     parameter integer OFFSET_WIDTH = 8,
     parameter integer EXPONENT_WIDTH = 7,  
     parameter integer MANTISSA_WIDTH = 25,
+
+    //PAGU WIDTH
+    parameter LIMIT_SIZE_IACT = 18,
+    parameter LIMIT_SIZE_WGHT = 12,
+    parameter LIMIT_SIZE_PSUM = 12,
 
     localparam FINAL_DATA_IACT_BITWIDTH = SPARSITY_EN ? 4 + DATA_IACT_BITWIDTH : DATA_IACT_BITWIDTH,
     localparam FINAL_DATA_WGHT_BITWIDTH = SPARSITY_EN ? 4 + DATA_WGHT_BITWIDTH : DATA_WGHT_BITWIDTH,
@@ -405,28 +410,28 @@ reg [1023:0] fst_path;
   wire send_data_out;                                  // When 1: final results go directly to DMA output (PSUM_SEND_RESULTS). When 0: quantize and loop back as next-layer iact.
   wire [7:0] iact_x_line_repetitions;                  // How many times each iact x-line is reused across cluster columns (from dma_storage).
   wire [7:0] buffer_cycles_for_x_iact;                 // How many times the Iact GLBs need to cycle for a given iact_x_size.
-  wire [16:0] fsm_psum_limit;                          // Total fsm_psum_cycle count before SEND_PSUM_TO_IACT returns to PSUM_IDLE.
+  wire [24-1:0] fsm_psum_limit;                          // Total fsm_psum_cycle count before SEND_PSUM_TO_IACT returns to PSUM_IDLE.
   wire [$clog2(CLUSTERS+1)-1:0] cluster_per_conv_cycle;// Amount of clusters, that are written IACTs in parallel 
 
   // -----------------------------------------------------------------------
   // PAGU Values
   // -----------------------------------------------------------------------
-  wire [ 7:0] iact_read_limit_0;
-  wire [ 7:0] iact_read_limit_1;
-  wire [ 7:0] iact_read_limit_2;
-  wire [ 7:0] iact_read_limit_3;
-  wire [ 7:0] iact_read_limit_4;
-  wire [11:0] iact_read_inc_0;
-  wire [11:0] iact_read_inc_1;
-  wire [11:0] iact_read_inc_2;
-  wire [11:0] iact_read_inc_3;
-  wire [11:0] iact_read_inc_4;
-  wire [11:0] iact_write_limit_0;
-  wire [ 7:0] iact_write_limit_1;
-  wire [ 7:0] iact_write_limit_2;
-  wire [11:0] iact_write_inc_0;
-  wire [11:0] iact_write_inc_1;
-  wire [11:0] iact_write_inc_2;
+  wire [LIMIT_SIZE_IACT-1:0] iact_read_limit_0;
+  wire [LIMIT_SIZE_IACT-1:0] iact_read_limit_1;
+  wire [LIMIT_SIZE_IACT-1:0] iact_read_limit_2;
+  wire [LIMIT_SIZE_IACT-1:0] iact_read_limit_3;
+  wire [LIMIT_SIZE_IACT-1:0] iact_read_limit_4;
+  wire [BUFFER_WIDTH_IACT-1:0] iact_read_inc_0;
+  wire [BUFFER_WIDTH_IACT-1:0] iact_read_inc_1;
+  wire [BUFFER_WIDTH_IACT-1:0] iact_read_inc_2;
+  wire [BUFFER_WIDTH_IACT-1:0] iact_read_inc_3;
+  wire [BUFFER_WIDTH_IACT-1:0] iact_read_inc_4;
+  wire [LIMIT_SIZE_IACT-1:0] iact_write_limit_0;
+  wire [LIMIT_SIZE_IACT-1:0] iact_write_limit_1;
+  wire [LIMIT_SIZE_IACT-1:0] iact_write_limit_2;
+  wire [BUFFER_WIDTH_IACT-1:0] iact_write_inc_0;
+  wire [BUFFER_WIDTH_IACT-1:0] iact_write_inc_1;
+  wire [BUFFER_WIDTH_IACT-1:0] iact_write_inc_2;
   wire [ 9:0] pagu_wght_limit;
   wire [4-1:0]psum_pagu_cs_limit_0;
   wire [4-1:0]psum_pagu_cs_limit_1;
@@ -436,11 +441,11 @@ reg [1023:0] fst_path;
   wire [4-1:0]psum_pagu_cs_inc_1;
   wire [4-1:0]psum_pagu_cs_inc_2;
   wire [4-1:0]psum_pagu_cs_inc_3;
-  wire [8-1:0]psum_pagu_loop_limit_0;
-  wire [8-1:0]psum_pagu_loop_limit_1;
-  wire [8-1:0]psum_pagu_loop_limit_2;
-  wire [8-1:0]psum_pagu_loop_limit_3;
-  wire [8-1:0]psum_pagu_loop_limit_4;
+  wire [LIMIT_SIZE_PSUM-1:0]psum_pagu_loop_limit_0;
+  wire [LIMIT_SIZE_PSUM-1:0]psum_pagu_loop_limit_1;
+  wire [LIMIT_SIZE_PSUM-1:0]psum_pagu_loop_limit_2;
+  wire [LIMIT_SIZE_PSUM-1:0]psum_pagu_loop_limit_3;
+  wire [LIMIT_SIZE_PSUM-1:0]psum_pagu_loop_limit_4;
   wire [8-1:0]psum_pagu_addr_inc_0;
   wire [8-1:0]psum_pagu_addr_inc_1;
   wire [8-1:0]psum_pagu_addr_inc_2;
@@ -595,11 +600,11 @@ reg [1023:0] fst_path;
   // Iact Converter Timing Counters
   // -----------------------------------------------------------------------
   wire [7:0] iact_converter_max_cycles;             // Total y-lines to process including kernel overlap = iact_size_y + kernel_size - 1 (set in GET_WGHT).
-  wire [11:0] iact_buffer_words_per_write;          // Words written per cycle into iact buffer per writing cycle
+  wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_buffer_words_per_write;          // Words written per cycle into iact buffer per writing cycle
   wire [11:0] iact_x_pos_inc;
   wire [7:0] iact_words_per_compute;
   wire [7:0] iact_converter_buffer_addr_max_cycles; // Maximum value of iact_converter_buffer_addr_cycles (from dma_storage).
-  reg [7:0] iact_converter_cycles;                  // Current y-line counter [0..iact_converter_max_cycles-1]; drives the sliding window advancement.
+  reg [12:0] iact_converter_cycles;                  // Current y-line counter [0..iact_converter_max_cycles-1]; drives the sliding window advancement.
   reg [7:0] iact_converter_buffer_addr_cycles;      // Sub-counter [0..iact_converter_buffer_addr_max_cycles-1]; controls how often the buffer address advances.
 
 
@@ -1432,7 +1437,7 @@ end
   reg [7:0] quantized_value_reg [TRANS_WORDS-1:0]; // Quantized output bytes [0..7]; one per parallel filter.
 
   reg [7:0] current_filter; // Index of the filter group currently being quantized/output [0..filters-1].
-  wire[15:0]psum_output_words; // Amoutn of Output words for streaming
+  wire[24-1:0]psum_output_words; // Amoutn of Output words for streaming
 
   // --- Wires from iact_stream_constructor instances to OpenEye_Parallel ---
   // These buses aggregate the per-instance outputs from all CLUSTER_COLUMNS×CLUSTER_ROWS
@@ -2636,7 +2641,8 @@ end
       .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
       .PSUM_PER_PE(PSUM_PER_PE),
       .PSUM_CYCLES_ONE_WORD_ALL_CELLS(PSUM_CYCLES_ONE_WORD_ALL_CELLS),
-      .PSUM_OUTPUT_WORDS(PSUM_OUTPUT_WORDS)
+      .PSUM_OUTPUT_WORDS(PSUM_OUTPUT_WORDS),
+      .LOOP_LIMIT_SIZE(LIMIT_SIZE_PSUM)
   ) psum_pipeline_inst (
       .clk_i(clk_i),
       .rst_n(rst_n),
@@ -2886,7 +2892,8 @@ end
             .DATA_IACT_OVERHEAD(DATA_IACT_OVERHEAD),
             .RAM_CELLS         (IACT_RAM_CELLS),
             .WORD_BITWIDTH     (TRANS_BITWIDTH_IACT * NUM_GLB_IACT),
-            .ADDRWIDTH         (19)
+            .ADDRWIDTH         (BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR),
+            .LIMIT_SIZE_IACT   (LIMIT_SIZE_IACT)
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
             .rst_ni                      (rst_n),
