@@ -196,7 +196,7 @@ async def single_layer_test(dut):
         trunc_model = [
             layer for layer in model.layers
                 if not isinstance(layer, (
-                    tf.keras.layers.Bidirectional
+                    tf.keras.layers.Bidirectional, tf.keras.layers.Flatten
                     ))
         ]
     else:
@@ -218,7 +218,7 @@ def truncate_model(model):
     trunc_model = [
         layer for layer in model
             if not isinstance(layer, (
-                tf.keras.layers.Bidirectional
+                tf.keras.layers.Bidirectional, tf.keras.layers.Flatten
             ))
     ]
     return trunc_model
@@ -249,6 +249,18 @@ def build_layer_topology(model):
                 # Bei diesem vorherigen Layer den aktuellen Layer als "nächsten" eintragen
                 next_layers[prev_layer.name].append(layer.name)
                 
+    # Flatten is a pure reshape that never reaches the hardware flow (it is
+    # filtered from the layer list): connect its neighbours directly.
+    for layer in model.layers:
+        if not isinstance(layer, tf.keras.layers.Flatten):
+            continue
+        name = layer.name
+        prevs = previous_layers.pop(name, [])
+        nexts = next_layers.pop(name, [])
+        for prev in prevs:
+            next_layers[prev] = [n for n in next_layers[prev] if n != name] + nexts
+        for nxt in nexts:
+            previous_layers[nxt] = [q for q in previous_layers[nxt] if q != name] + prevs
     rel_layers = {"Previous_Layer": previous_layers, "Next_Layer": next_layers}
     return rel_layers
 
