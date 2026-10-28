@@ -1096,9 +1096,9 @@ def _iact_buffer_words(oep, layer_params, iact_ref):
     fields are still at their constructor defaults.
     """
     name = str(getattr(layer_params, "layer_name", ""))
-    if "Dense" in name:
+    if "dense" in name:
         mapper = iact_stream_mapper.DenseIactStreamMapper
-    elif "Conv" in name or "Depthwise" in name:
+    elif "conv" in name or "depthwise" in name:
         mapper = iact_stream_mapper.IactStreamMapper
     else:
         return None
@@ -1110,7 +1110,7 @@ def iact_half_offset(dut, oep):
 
     OpenEye_FPGA assembles the address as {choose_iact_buffer, addr_reg}, so the
     half-select occupies the top BRANCHES_CLOG bits and each half owns the lower
-    BRANCHES_WIDTH = BUFFER_WIDTH - BRANCHES_CLOG address bits.
+    BRANCHES_WIDTH = BUFFER_WIDTH_IACT - BRANCHES_CLOG address bits.
     """
     branches = getattr(oep, "BRANCHES", 1)
     if branches <= 1:
@@ -1119,7 +1119,7 @@ def iact_half_offset(dut, oep):
         half = int(dut.choose_iact_buffer.value)
     except Exception:
         return 0
-    return half << (oep.BUFFER_WIDTH - math.ceil(math.log2(branches)))
+    return half << (oep.BUFFER_WIDTH_IACT - math.ceil(math.log2(branches)))
 
 
 def iact_cells_per_group(oep):
@@ -1174,7 +1174,7 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
     try:
         depth = len(dut.BUFFER_A[0].iact_layer_buffer.impl.mem)
     except TypeError:
-        depth = 1 << oep.BUFFER_WIDTH
+        depth = 1 << oep.BUFFER_WIDTH_IACT
     logger.info("Iact buffer check: %d expected words, %d cells per group, depth %d (layer '%s')",
                 len(expected), cells_per_group, depth, getattr(layer_params, "layer_name", "?"))
     if len(expected) > cells_per_group * depth:
@@ -1461,7 +1461,7 @@ def _signal_is(handle, expected):
         return False
 
 
-async def await_ready_signal(ptp, dut, settle_cycles=5000, max_wait_cycles=2000000,
+async def await_ready_signal(ptp, dut, settle_cycles=5000, max_wait_cycles=40000000,
                              report_every=200000):
     """Wait until the DUT has finished the current layer and wants the next one.
 
@@ -1521,7 +1521,7 @@ def _fsm_state_note(dut):
         return ""
 
 
-async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order):
+async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order, rel_layers):
     """Compare convolutional layer output stream with expected results.
 
     The debug logging functionality is controlled by login_level to manage file I/O:
@@ -1561,10 +1561,10 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
     """
 
     if(logging.DEBUG >= login_level):
-        filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt'
+        filename = 'demo/layer_' + str(layer_parameters.layer_name) + '/output.txt'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         txt_file = open(filename, 'w')
-        filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/storage_input.txt'
+        filename = 'demo/layer_' + str(layer_parameters.layer_name) + '/storage_input.txt'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         storage_file = open(filename, 'w')
 
@@ -1575,6 +1575,10 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
     x = 0
     y = 0
     les.current_position = 0
+    if (len(rel_layers["Next_Layer"][layer_parameters.layer_name]) != 0):
+        dram_string = rel_layers["Next_Layer"][layer_parameters.layer_name][0]
+    else:
+        dram_string = "Output"
     if(logging.DEBUG >= login_level):
         storage_file.write(" f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
     if (oep.SERIAL == 0) :
@@ -1593,12 +1597,12 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                     for x_cluster in reversed(range(oep.Clusters_X)):
                         for router in reversed(range(oep.NUM_GLB_PSUM)):
                             if(layer_parameters.computing_mx[oep.Clusters_X-x_cluster-1][oep.Clusters_Y-y_cluster-1][0][oep.NUM_GLB_PSUM-router-1]== 1):
-                                lower_limit = (x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * self.PSUM_Trans_Bitwidth + y_cluster * oep.NUM_GLB_PSUM * self.PSUM_Trans_Bitwidth + router * self.PSUM_Trans_Bitwidth)
+                                lower_limit = (x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * oep.PSUM_Trans_Bitwidth + y_cluster * oep.NUM_GLB_PSUM * oep.PSUM_Trans_Bitwidth + router * oep.PSUM_Trans_Bitwidth)
                                 upper_limit = lower_limit + oep.DATA_PSUM_BITWIDTH
                                 outputvalue = dut.psum_data_o.value[lower_limit:upper_limit]
                                 if(logging.DEBUG >= login_level):
-                                    txt_file.write(bin(outputvalue)[2:].zfill(self.PSUM_Trans_Bitwidth) + "\n")
-                                for i in range(self.PARALLEL_MACS):
+                                    txt_file.write(bin(outputvalue)[2:].zfill(oep.PSUM_Trans_Bitwidth) + "\n")
+                                for i in range(oep.PARALLEL_MACS):
                                     try:
                                         f = output_order[layer_repetition][les.current_position][0]
                                         x = output_order[layer_repetition][les.current_position][1]
@@ -1609,9 +1613,9 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                                     if(logging.DEBUG >= login_level):
                                         storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
                                     try:
-                                        dram.fmap[layer_number + 1][f][x][y] = int(dut.psum_data_o.value[lower_limit+oep.DATA_PSUM_BITWIDTH*(1-i):upper_limit-oep.DATA_PSUM_BITWIDTH*i])
-                                        if (dram.fmap[layer_number + 1][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
-                                            dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
+                                        dram.fmap[dram_string][f][x][y] = int(dut.psum_data_o.value[lower_limit+oep.DATA_PSUM_BITWIDTH*(1-i):upper_limit-oep.DATA_PSUM_BITWIDTH*i])
+                                        if (dram.fmap[dram_string][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
+                                            dram.fmap[dram_string][f][x][y] = dram.fmap[dram_string][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
                                     except:
                                         pass
                 await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
@@ -1659,9 +1663,9 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                             storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
                         
                         try:
-                            dram.fmap[layer_number + 1][f][x][y] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH*(i+1)-1:oep.DATA_PSUM_BITWIDTH*i])
-                            if (dram.fmap[layer_number + 1][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)):
-                                dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
+                            dram.fmap[dram_string][f][x][y] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH*(i+1)-1:oep.DATA_PSUM_BITWIDTH*i])
+                            if (dram.fmap[dram_string][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)):
+                                dram.fmap[dram_string][f][x][y] = dram.fmap[dram_string][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
                         except:
                             pass
                         x = x + 1
@@ -1758,10 +1762,10 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
         - storage_input.txt: State tracking and debugging information
     """
     if(logging.DEBUG >= login_level):
-        filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt'
+        filename = 'demo/layer_' + str(layer_number) + '/output.txt'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         txt_file = open(filename, 'w')
-        filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/storage_input.txt'
+        filename = 'demo/layer_' + str(layer_number) + '/storage_input.txt'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         storage_file = open(filename, 'w')
     if(logging.DEBUG >= login_level):
@@ -3036,7 +3040,7 @@ async def check_fc_activation_writes(dut, params, layer, activations):
     logger.info("FC activation RAM writes checked: %s", counts)
 
 
-async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level):
+async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, rel_layers):
     """ Await the output stream and compare it to the reference output.
 
     This function awaits the output stream and compares it to the reference output.
@@ -3051,10 +3055,10 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         les: The layer execution state.
     """
     if(logging.DEBUG >= login_level):
-        filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt'
+        filename = 'demo/layer_' + str(layer_parameters.layer_name) + '/output.txt'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         txt_file = open(filename, 'w')
-        filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/storage_input.txt'
+        filename = 'demo/layer_' + str(layer_parameters.layer_name) + '/storage_input.txt'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         storage_file = open(filename, 'w')
 
@@ -3072,6 +3076,10 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         "Dense DMA output count disagrees with column/address layout")
     beat = 0
     dut._log.info("Output Stream started")
+    if (len(rel_layers["Next_Layer"][layer_parameters.layer_name]) != 0):
+        dram_string = rel_layers["Next_Layer"][layer_parameters.layer_name][0]
+    else:
+        dram_string = "Output"
     while dut.enable_dma_o.value == 1:
         assert beat < expected_words, "Dense DMA emitted too many words"
         # Do not swallow unknown data or indexing errors: that hid missing
@@ -3080,8 +3088,8 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         f = offset + (beat % columns) * per_column + beat // columns
         value = _signed(word & ((1 << oep.DATA_PSUM_BITWIDTH) - 1),
                         oep.DATA_PSUM_BITWIDTH)
-        if f < len(dram.fmap[layer_number + 1]):
-            dram.fmap[layer_number + 1][f] = value
+        if f < len(dram.fmap[dram_string]):
+            dram.fmap[dram_string][f] = value
         else:
             assert value == 0, "Dense DMA padding output is nonzero"
         if logging.DEBUG >= login_level:
@@ -3120,7 +3128,7 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         logger.debug("f: " + str(f) + "\n")
     pass
 
-async def compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level):
+async def compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, rel_layers):
     """ Await the output stream and compare it to the reference output.
 
     This function awaits the output stream and compares it to the reference output.
@@ -3135,10 +3143,10 @@ async def compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer
         les: The layer execution state.
     """
     if(logging.DEBUG >= login_level):
-        filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt'
+        filename = 'demo/layer_' + str(layer_number) + '/output.txt'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         txt_file = open(filename, 'w')
-        filename = 'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/storage_input.txt'
+        filename = 'demo/layer_' + str(layer_number) + '/storage_input.txt'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         storage_file = open(filename, 'w')
 

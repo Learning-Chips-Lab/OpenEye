@@ -153,8 +153,6 @@ class LayerParameters(object):
         layer_parameters (list): List of previously computed layer parameters (for inter-layer dependencies)
         layer: A Keras/TensorFlow layer object with weights, shape, and configuration
         params: OpenEye hardware parameters (PE counts, memory sizes, cluster config, etc.)
-        layer_number (int): Index of this layer in the network (0-indexed)
-        max_layers (int): Total number of layers in the network
 
     Raises:
         ValueError: If layer type is unsupported or kernel size exceeds hardware constraints
@@ -164,7 +162,7 @@ class LayerParameters(object):
         based on layer type: write_conv2d_layer, write_convdw_layer, write_dense_layer,
         or write_pooling_layer.
     """
-    def __init__(self, layer_parameters, layer, params, layer_number, max_layers):
+    def __init__(self, layer_parameters, layer, params, rel_layers, layer_number):
         """Initialize layer parameters by dispatching to layer-type-specific methods.
 
         This constructor initializes all parameter attributes to default values, then
@@ -176,6 +174,10 @@ class LayerParameters(object):
         3. Calls appropriate write_*_layer method to compute actual parameters
         4. Raises ValueError if layer type is not supported
         """
+        # === Layer Identification ===
+        self.use_layer_on_hw = True
+        self.rel_layers = rel_layers
+        self.layer_number_in_model = layer_number
         # === Layer Identification ===
         self.layer_name = ""
         # === Pooling Identification ===
@@ -338,6 +340,8 @@ class LayerParameters(object):
         self.psum_pagu_addr_inc = [0,0,0,0,0,0]
 
         # === Layer Type Detection and Dispatch ===
+        # Write layer name
+        self.layer_name = layer.name
         # Detect layer type from name and call appropriate initialization method
         if "depthwise_conv2d" in layer.name:
             logger.debug("Depthwise Convolution Layer")
@@ -345,19 +349,29 @@ class LayerParameters(object):
 
         elif "conv2d" in layer.name:
             logger.debug("2D Convolution Layer")
-            self.write_conv2d_layer(layer_parameters, layer, params, layer_number, max_layers)
+            self.write_conv2d_layer(layer_parameters, layer, params)
 
         elif "dense" in layer.name:
             logger.debug("Dense Layer")
-            self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
+            self.write_dense_layer(layer_parameters, layer, params)
 
         elif "gemm" in layer.name or "matmul" in layer.name:
             logger.debug("GEMM Layer (output-stationary)")
-            self.write_gemm_layer(layer_parameters, layer, params, layer_number, max_layers)
+            self.write_gemm_layer(layer_parameters, layer, params)
 
         elif "pooling2d" in layer.name:
             logger.debug("Pooling Layer")
-            self.write_pooling_layer(layer_parameters, layer, params, layer_number, max_layers)
+            self.write_pooling_layer(layer_parameters, layer, params)
+
+        elif "add" in layer.name:
+            logger.debug("Adding Layer")
+            self.use_layer_on_hw = False
+            return
+
+        elif "input" in layer.name:
+            logger.debug("Input Layer")
+            self.use_layer_on_hw = False
+            return
 
         else:
             # Unsupported layer type
@@ -618,7 +632,6 @@ class LayerParameters(object):
             Control flags (store_in_psum, skipPsum, choose_iact_storage_input)
             Quantization parameters (quantize array with [factor, bits] per filter)
         """
-        self.layer_name = "Convolution2D"
         self.fully_connected = 0
 
         # Extract basic layer dimensions
@@ -660,16 +673,12 @@ class LayerParameters(object):
         self.psum_size_y = self.output_shape[2]
         self.channels = self.input_shape[3]
 
-    def choose_iact_location(self, layer_number, max_layers):
+    def choose_iact_location(self):
         """Configure activation storage and data flow flags based on layer position.
 
         Determines whether to load activations from DRAM or reuse from previous layer,
         and whether to send outputs back to DRAM. This enables layer fusion optimization
         by keeping intermediate activations in on-chip memory.
-
-        Args:
-            layer_number (int): Current layer index (0-indexed)
-            max_layers (int): Total number of layers in the network
 
         Sets:
             self.choose_iact_storage_input: 1 to load from DRAM, 0 to reuse from prev layer
@@ -679,14 +688,14 @@ class LayerParameters(object):
         self.choose_iact_storage_input = 1
 
         # Last layer must send outputs to DRAM
-        if (layer_number == max_layers - 1):
+        if (len(self.rel_layers["Next_Layer"][self.layer_name]) == 0):
             self.send_values_out = 1
         else:
             # Intermediate layers keep outputs on-chip
             self.send_values_out = 0
 
         # Non-first layers can skip loading activations (reuse from previous)
-        if (layer_number != 0):
+        if (self.rel_layers["Previous_Layer"][self.layer_name] != ["input_layer"]):
             self.skipIact = 1
             self.choose_iact_storage_input = 0
 
@@ -1114,7 +1123,7 @@ class LayerParameters(object):
         temp = math.ceil(params.NUM_GLB_PSUM * (params.Clusters * params.DATA_PSUM_BITWIDTH/params.DMA_BITWIDTH))
         self.trans_cycles_psum = self.filters * self.iact_size_y * self.iact_x_line_repetitions * temp
 
-    def write_conv2d_layer(self, layer_parameters, layer, params, layer_number, max_layers):
+    def write_conv2d_layer(self, layer_parameters, layer, params):
         """Compute all configuration parameters for a Conv2D layer.
 
         This is the main orchestrator method for Conv2D layers. It calls a sequence
@@ -1135,8 +1144,6 @@ class LayerParameters(object):
             layer_parameters (list): Previously computed parameters for other layers
             layer: Keras Conv2D layer object with shape and configuration
             params: OpenEye hardware parameters
-            layer_number (int): Index of this layer (0-indexed)
-            max_layers (int): Total number of layers in network
 
         Note:
             This method updates all instance attributes with computed values.
@@ -1144,7 +1151,7 @@ class LayerParameters(object):
         """
         # === Phase 1: Read layer configuration ===
         self.read_data_from_layer(layer)
-        self.choose_iact_location(layer_number, max_layers)
+        self.choose_iact_location()
 
         # === Phase 2: Calculate computation requirements ===
         self.calculate_total_computations()
@@ -1171,11 +1178,11 @@ class LayerParameters(object):
 
         # Calculate channel iteration metrics
         self.diff_iact_layer = math.ceil(self.input_shape[3]/self.used_channels)
-        if (layer_number != max_layers - 1):
+        if (len(self.rel_layers["Next_Layer"][self.layer_name]) != 0):
             # Store next layer's channel requirements for inter-layer optimization
-            self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
-            if (layer_parameters[max_layers - layer_number - 2].layer_name == "Dense"):
-                self.diff_iact_layer_next_layer = 4
+            self.diff_iact_layer_next_layer = layer_parameters[self.rel_layers["Next_Layer"][self.layer_name][0]].used_channels
+            """if ("dense" in layer_parameters[self.rel_layers["Next_Layer"][self.layer_name][0]].layer_name ):
+                self.diff_iact_layer_next_layer = 4"""
 
         # Total activations per PE = kernel height * channels per iteration
         self.used_iact_per_PE = self.kernel_size[1] * self.used_channels
@@ -1231,6 +1238,7 @@ class LayerParameters(object):
             self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*math.ceil((self.channel_div_trans*(self.kernel_size[1]+self.iact_size_y-self.strideY)))*2
         else :
             self.needed_iact_buffer_words = self.iact_x_line_repetitions*self.needed_Iact_writes*self.channel_div_trans*2
+
         if (self.buffer_cycles_for_x_iact == 1):
             self.start_param_array = (1 << math.ceil((self.different_kernels_per_calculation * self.y_lines_per_calculation * self.used_Y_cluster * math.ceil(self.iact_x_add_up / params.NUM_GLB_PSUM)))) - 1
         else:
@@ -1269,7 +1277,7 @@ class LayerParameters(object):
             psum_cycles = 2
         else:
             psum_cycles = 1
-        if (layer_number != max_layers - 1):
+        if (len(self.rel_layers["Next_Layer"][self.layer_name]) != 0):
             self.fsm_psum_limit = math.ceil(self.iact_x_add_up * self.filters * self.iact_size_y /4)
             self.fsm_psum_limit = self.fsm_psum_limit + 11
         else:
@@ -1328,7 +1336,6 @@ class LayerParameters(object):
             Depthwise layers typically have filters = kernel_size[0].
         """
         # Identify layer type
-        self.layer_name = "DepthwiseConvolution"
                         
             
         self.strideX = layer.strides[0]
@@ -1477,7 +1484,7 @@ class LayerParameters(object):
             logger.error("Can't fit model, kernel size must be adjusted.")
         return
     
-    def write_dense_layer(self, layer_parameters, layer, params, layer_number, max_layers):
+    def write_dense_layer(self, layer_parameters, layer, params):
         """Compute all configuration parameters for a Dense (Fully Connected) layer.
 
         Dense layers perform matrix multiplication between flattened input and weight matrix.
@@ -1488,14 +1495,11 @@ class LayerParameters(object):
             layer_parameters (list): Previously computed parameters for other layers
             layer: Keras Dense layer object
             params: OpenEye hardware parameters
-            layer_number (int): Index of this layer (0-indexed)
-            max_layers (int): Total number of layers in network
 
         Note:
             Sets fully_connected = 1 flag.
             Dense layers typically use only PE[0][0] in each cluster.
         """
-        self.layer_name = "Dense"
         try:
             self.iact_size_x = layer.input.shape[3]
         except:
@@ -1518,14 +1522,14 @@ class LayerParameters(object):
         self.kernel_size = [0]
         self.used_iact_addr_per_PE = 15
         self.channels = 1
-        if (layer_number == max_layers - 1):
+        if (len(self.rel_layers["Next_Layer"][self.layer_name]) == 0):
             self.send_values_out = 1
         else:
             self.send_values_out = 0
         for f in range(self.filters):
             self.quantize[f][0] = 1
             self.quantize[f][1] = 9
-        if (layer_number != 0): 
+        if (self.rel_layers["Previous_Layer"][self.layer_name] != ["input_layer"]): 
             self.skipIact = 1
         self.input_shape = layer.input.shape
         self.kernel_shape = layer.kernel.shape
@@ -1558,7 +1562,10 @@ class LayerParameters(object):
         self.output_cycles = self.needed_psum_transmissions
         self.used_wght_per_PE = self.used_iact_per_PE * math.ceil(self.filters/params.Clusters_X/params.PARALLEL_MACS/self.needed_psum_transmissions)*params.PARALLEL_MACS
         self.used_psum_per_PE = math.ceil(self.used_wght_per_PE/self.used_iact_per_PE)
-        self.fsm_psum_limit = self.used_psum_per_PE + 3
+        if (len(self.rel_layers["Next_Layer"][self.layer_name]) != 0):
+            self.fsm_psum_limit = self.filters + 3 + 5
+        else:
+            self.fsm_psum_limit = self.filters + 3
         self.x_pos_inc = params.Clusters_Y * self.used_iact_per_PE * params.NUM_GLB_WGHT
         #self.needed_wght_transmissions = self.needed_wght_transmissions * 1
         self.iact_read_limit_0 = self.needed_Iact_writes * math.ceil(self.used_iact_per_PE / 2)
@@ -1688,7 +1695,7 @@ class LayerParameters(object):
         logger.debug("Needed transmissions TOTAL   : " + str(self.needed_total_transmissions))
         return
 
-    def write_gemm_layer(self, layer_parameters, layer, params, layer_number, max_layers):
+    def write_gemm_layer(self, layer_parameters, layer, params):
         """Compute configuration parameters for a GEMM layer (output-stationary).
 
         A GEMM layer computes C = A x B (+ bias). The mapping reuses the dense
@@ -1702,19 +1709,16 @@ class LayerParameters(object):
             layer_parameters (list): Previously computed parameters for other layers
             layer: Layer object with input/kernel/output shapes (dense-compatible)
             params: OpenEye hardware parameters
-            layer_number (int): Index of this layer (0-indexed)
-            max_layers (int): Total number of layers in network
 
         Note:
             Sets fully_connected = 1 (shared FPGA datapath) and gemm_mode = 1
             (output-stationary routing).
         """
-        self.write_dense_layer(layer_parameters, layer, params, layer_number, max_layers)
-        self.layer_name = "Gemm"
+        self.write_dense_layer(layer_parameters, layer, params)
         self.gemm_mode = 1
         return
 
-    def write_pooling_layer(self, layer_parameters, layer, params, layer_number, max_layers):
+    def write_pooling_layer(self, layer_parameters, layer, params):
         """Compute all configuration parameters for a Max Pooling layer.
 
         Pooling layers reduce spatial dimensions by taking the maximum value in each
@@ -1725,15 +1729,12 @@ class LayerParameters(object):
             layer_parameters (list): Previously computed parameters for other layers
             layer: Keras MaxPooling2D layer object
             params: OpenEye hardware parameters
-            layer_number (int): Index of this layer (0-indexed)
-            max_layers (int): Total number of layers in network
 
         Note:
             Sets max_pooling = 1 flag.
             Sets skipIact, skipWght, skipPsum = 1 (no weight/bias operations).
             Always sends output values to DRAM (send_values_out = 1).
         """
-        self.layer_name = "Pooling"
         if ("max" in layer.name):
             self.pooling_mode = 0
         else:
@@ -1755,11 +1756,11 @@ class LayerParameters(object):
                                         for _ in range(params.Clusters_Y)]
                                         for _ in range(params.Clusters_X)]
         self.diff_iact_layer = self.input_shape[3]
-        if ((layer_parameters[max_layers - layer_number - 2].layer_name == "Dense") & (self.pooling_mode == 0)):
+        if (("dense" in layer_parameters[self.rel_layers["Next_Layer"][self.layer_name][0]].layer_name) & (self.pooling_mode == 0)):
             self.used_channels = 1
         else:
             self.used_channels = 4
-        self.diff_iact_layer_next_layer = layer_parameters[max_layers - layer_number - 2].used_channels
+        self.diff_iact_layer_next_layer = layer_parameters[self.rel_layers["Next_Layer"][self.layer_name][0]].used_channels
         if (self.pooling_mode == 0):
             self.iact_converter_buffer_addr_max_cycles = math.ceil((((self.iact_size_y*self.diff_iact_layer))/(self.strideY*4)))
         else:

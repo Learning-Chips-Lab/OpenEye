@@ -13,7 +13,7 @@ import tensorflow as tf
 
 logger = logging.getLogger("cocotb")
 
-def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inputsize_y, strides, channels, outputsize):
+def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inputsize_y, strides, channels, outputsize):
     """Create a TensorFlow/Keras neural network layer based on the specified configuration.
 
     Constructs a Keras Sequential model containing the requested layer type with the
@@ -21,7 +21,7 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
     convolution, fully connected (dense), and pooling layers.
 
     Args:
-        layer_mode (str): Type of layer to create. Supported values:
+        layer_mode (str): Type of net to create. Supported values:
             - "Convolution": Legacy two-layer convolution model
             - "Convolution_Single": One 2D convolution layer (no write-back)
             - "Convolution_Stack": Two stacked 2D convolution layers (exercises
@@ -64,14 +64,14 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
         case "Convolution_Single":
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides=strides))
         case "Convolution":
-            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
+            #model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
             #model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="same", input_shape=(inputsize_x, inputsize_y, filters), strides = 1))
             #model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, filters), strides = strides))
             #model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, filters), strides = strides))
             #model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(64, 4, filters), strides = 1))
-            #model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(64, 4, filters), strides = 1))
-            #model.add(tf.keras.layers.Flatten())
-            #model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(64, 4, filters), strides = 1))
+            model.add(tf.keras.layers.Flatten())
+            model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
 
         case "Convolution_Stack":
             # Two stacked Conv2D layers. The first layer's psums are quantised
@@ -87,6 +87,54 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
             model.add(tf.keras.layers.MaxPooling2D(pool_size = (2, 2), strides=(2, 2), padding="valid"))
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(math.ceil(inputsize_x/2), math.ceil(inputsize_y/2), filters), strides = strides))
+        
+        case "Residual_Block":
+            # 1. Startpunkt (Input) definieren
+            inputs = tf.keras.Input(shape=(inputsize_x, inputsize_y, channels), name="input_layer")
+            
+            # 2. Gemeinsame erste Faltung (Shared Convolution)
+            # Nimmt die inputs entgegen.
+            shared_conv = tf.keras.layers.Conv2D(
+                filters, (kernelsize_x, kernelsize_y), 
+                padding="same", strides=1, name="shared_initial_conv2d"
+            )(inputs)
+            
+            # 3. Zwei Pfade entstehen aus 'shared_conv'
+            
+            # -- Pfad A (Hauptpfad) --
+            path_a = tf.keras.layers.Conv2D(
+                filters, (kernelsize_x, kernelsize_y), 
+                padding="same", strides=strides, name="path_A1_main_conv2d"
+            )(shared_conv)
+            path_a = tf.keras.layers.Conv2D(
+                filters, (kernelsize_x, kernelsize_y), 
+                padding="same", strides=strides, name="path_A2_main_conv2d"
+            )(path_a)
+            
+            # -- Pfad B (Skip-Connection / Shortcut) --
+            # Da dieser Pfad aus der gemeinsamen Faltung entsteht, stimmt die Filteranzahl bereits.
+            # Wir müssen nur eingreifen, falls die Dimension durch Strides verkleinert wurde.
+            if strides != (1,1):
+                path_b = tf.keras.layers.Conv2D(
+                    filters, (1, 1), 
+                    padding="same", strides=strides, name="path_B_shortcut_conv2d"
+                )(shared_conv)
+            else:
+                # Kein Stride -> Pfad B reicht die Daten einfach 1:1 weiter
+                path_b = shared_conv
+                
+            # 4. Beide Pfade zusammen addieren
+            added = tf.keras.layers.Add(name="add_paths")([path_a, path_b])
+            
+            # 5. Weitere Faltung nach der Addition
+            final_conv = tf.keras.layers.Conv2D(
+                filters, (kernelsize_x, kernelsize_y), 
+                padding="same", strides=1, name="final_output_conv2d"
+            )(added)
+            
+            # Das Modell aus Input und letzter Schicht zusammensetzen
+            model = tf.keras.Model(inputs=inputs, outputs=final_conv)
+        
         case "Conv_Pool_Conv_Pool_Conv":
             # As Conv_Pool_Conv with a second pool/conv pair: catches state that
             # the first pooling pass leaves behind for the second, as in MNIST.
@@ -176,20 +224,53 @@ def create_layer(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, i
             ))
             model.add(tf.keras.layers.Flatten())
             model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
-            """x_axis = math.ceil(x_axis/pool_x_axis)
-            y_axis = math.ceil(y_axis/pool_y_axis)
-            model.add(tf.keras.layers.Conv2D(
-                filters, 
-                (3, 3), 
-                padding="same",
-                input_shape=(x_axis, y_axis, channels), 
-                strides=strides
-            ))"""
+        case "VGG-19":
+            alpha = 0.25
+            
+            # Block 1
+            model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same', input_shape=(inputsize_x, inputsize_y, channels)))
+            model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+
+            # Block 2
+            model.add(tf.keras.layers.Conv2D(int(128 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(128 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+
+            # Block 3
+            model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+
+            # Block 4
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+
+            # Block 5
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(512 * alpha), (3, 3), activation='relu', padding='same'))
+            """
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+
+            # Classification Block
+            model.add(tf.keras.layers.Flatten())
+            model.add(tf.keras.layers.Dense(int(4096 * alpha), activation='relu', use_bias=True))
+            model.add(tf.keras.layers.Dense(int(4096 * alpha), activation='relu', use_bias=True))
+            # Outputsize (Anzahl der Klassen) skaliert standardmäßig nicht mit alpha
+            model.add(tf.keras.layers.Dense(units=outputsize, activation='softmax', use_bias=True))"""
+
         case "MLP":
             inputsize_x = 6
             model.add(tf.keras.layers.Dense(input_shape=(1,1,inputsize_x), units=32, use_bias = True))
             model.add(tf.keras.layers.Dense(units=16, use_bias = True))
-            model.add(tf.keras.layers.Dense(units=4, use_bias = True))
+            #model.add(tf.keras.layers.Dense(units=4, use_bias = True))
             """
             model.add(tf.keras.layers.Flatten())
 

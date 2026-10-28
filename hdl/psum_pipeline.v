@@ -26,7 +26,8 @@ module psum_pipeline #(
     parameter DATA_PSUM_BITWIDTH = 32,
     parameter PSUM_PER_PE = 32,
     parameter PSUM_CYCLES_ONE_WORD_ALL_CELLS = 2,
-    parameter PSUM_OUTPUT_WORDS = 2
+    parameter PSUM_OUTPUT_WORDS = 2,
+    parameter LOOP_LIMIT_SIZE = 12
 ) (
     input wire clk_i,
     input wire rst_n,
@@ -70,8 +71,8 @@ module psum_pipeline #(
     input wire [8*QUANT_AMOUNT-1:0] quant_offset_flat,
     input wire [7*QUANT_AMOUNT-1:0] quant_exp_flat,
     input wire [25*QUANT_AMOUNT-1:0] quant_mant_flat,
-    input wire [ 16:0] fsm_psum_limit,
-    input wire [ 15:0] output_words,
+    input wire [24-1:0] fsm_psum_limit,
+    input wire [24-1:0] output_words,
     input wire [  3:0] psum_cluster_limit_0,
     input wire [  3:0] psum_cluster_limit_1,
     input wire [  3:0] psum_cluster_limit_2,
@@ -80,11 +81,11 @@ module psum_pipeline #(
     input wire [  3:0] psum_cluster_inc_1,
     input wire [  3:0] psum_cluster_inc_2,
     input wire [  3:0] psum_cluster_inc_3,
-    input wire [8-1:0] psum_cycle_loop_limit_0,
-    input wire [8-1:0] psum_cycle_loop_limit_1,
-    input wire [8-1:0] psum_cycle_loop_limit_2,
-    input wire [8-1:0] psum_cycle_loop_limit_3,
-    input wire [8-1:0] psum_cycle_loop_limit_4,
+    input wire [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_limit_0,
+    input wire [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_limit_1,
+    input wire [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_limit_2,
+    input wire [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_limit_3,
+    input wire [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_limit_4,
     input wire [8-1:0] psum_cycle_addr_inc_0,
     input wire [8-1:0] psum_cycle_addr_inc_1,
     input wire [8-1:0] psum_cycle_addr_inc_2,
@@ -104,7 +105,7 @@ module psum_pipeline #(
     output reg last_data_o,
     output reg [3:0] fsm_psum_last_state,
     output reg [3:0] fsm_psum_current_state,
-    output reg [15:0] fsm_psum_cycle,
+    output reg [24-1:0] fsm_psum_cycle,
     output reg psum_transmitted,
     output reg psum_router_set_reg,
     output reg start_new_cycle,
@@ -133,21 +134,21 @@ module psum_pipeline #(
   reg [4:0] psum_select_cnt_1;
   reg [4:0] psum_select_cnt_2;
   reg [4:0] psum_select_cnt_3;
-  reg [15:0] psum_cycle_loop_cnt_0;
-  reg [7:0] psum_cycle_loop_cnt_1;
-  reg [7:0] psum_cycle_loop_cnt_2;
-  reg [7:0] psum_cycle_loop_cnt_3;
-  reg [7:0] psum_cycle_loop_cnt_4;
+  reg [24-1:0] psum_cycle_loop_cnt_0;
+  reg [12-1:0] psum_cycle_loop_cnt_1;
+  reg [12-1:0] psum_cycle_loop_cnt_2;
+  reg [12-1:0] psum_cycle_loop_cnt_3;
+  reg [12-1:0] psum_cycle_loop_cnt_4;
   reg [3:0] sending_cluster_rows;
   reg [3:0]  psum_cluster_select_0;
   reg [3:0]  psum_cluster_select_1;
   reg [3:0]  psum_cluster_select_2;
   reg [3:0]  psum_cluster_select_3;
-  reg [11:0] psum_cycle_addr_0;
-  reg [11:0] psum_cycle_addr_1;
-  reg [11:0] psum_cycle_addr_2;
-  reg [11:0] psum_cycle_addr_3;
-  reg [11:0] psum_cycle_addr_4;
+  reg [BUFFER_WIDTH-1:0] psum_cycle_addr_0;
+  reg [BUFFER_WIDTH-1:0] psum_cycle_addr_1;
+  reg [BUFFER_WIDTH-1:0] psum_cycle_addr_2;
+  reg [BUFFER_WIDTH-1:0] psum_cycle_addr_3;
+  reg [BUFFER_WIDTH-1:0] psum_cycle_addr_4;
   reg [7:0] iact_channel_counter_reg;
   reg [17:0] finished_cycles_psum;
   reg [BUFFER_WIDTH-1:0] psum_buffer_addr_storage;
@@ -589,10 +590,6 @@ module psum_pipeline #(
                   end
                 end
               end
-              // Keep psum_ready_i_reg high between rounds. The delay cluster
-              // delays it by 22 cycles on its way to the PEs, so dropping it here
-              // leaves a stale "ready" in the chain when the next round starts
-              // 16 cycles later and results_ready fires before the PEs have run.
             end
           end
         end
@@ -669,7 +666,7 @@ module psum_pipeline #(
             psum_cycle_loop_cnt_1 <= psum_cycle_loop_cnt_1 + 1;
             psum_cycle_loop_cnt_2 <= psum_cycle_loop_cnt_2 + 1;
             if (((fsm_psum_cycle >= 1 + fully_connected_layer) & CLUSTER_COLUMNS == 1) |
-                (fsm_psum_cycle >= 1 & CLUSTER_COLUMNS != 1)) begin
+                 (fsm_psum_cycle >= 1 & CLUSTER_COLUMNS != 1)) begin
               psum_cycle_loop_cnt_0     <= psum_cycle_loop_cnt_0 + 1;
               enable_dma_o              <= 1;
               data_dma_o                <= psum_dma_word;
@@ -768,6 +765,7 @@ module psum_pipeline #(
             end
           end
         end
+
         SEND_PSUM_TO_IACT: begin
           if (fsm_psum_cycle >= 3) begin
             if (CLUSTERS != 1) begin 

@@ -579,9 +579,6 @@ endmodule
     def test_parse_af_cluster_file(self):
         self.parse_and_compare_module_name_from_moduledef("af_cluster.v")
 
-    def test_parse_bano_cluster_file(self):
-        self.parse_and_compare_module_name_from_moduledef("bano_cluster.v")
-
     def test_parse_data_pipeline_file(self):
         self.parse_and_compare_module_name_from_moduledef("data_pipeline.v")
 

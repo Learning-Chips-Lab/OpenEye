@@ -66,6 +66,7 @@ module iact_stream_constructor #(
     parameter  RAM_CELLS_WORDWIDTH = 64,   // Buffer word width
     parameter  WORD_BITWIDTH       = 72,   // Total word width
     parameter  ADDRWIDTH           = 13,   // Address width
+    parameter  LIMIT_SIZE_IACT     = 18,
     localparam CLUSTERS            = CLUSTER_ROWS * CLUSTER_COLUMNS,
     localparam PES                 = PE_X * PE_Y,
     localparam IACT_WORDS_IN_RAM   = RAM_CELLS_WORDWIDTH / DATA_IACT_BITWIDTH,
@@ -106,25 +107,25 @@ module iact_stream_constructor #(
     input      [                                  3-1:0] stride_y_i,
     input      [                                  4-1:0] y_lines_per_calc,
     input                                                fully_connected_i,
-    input      [                                   11:0] x_pos_inc,
-    input      [                                   11:0] needed_iact_buffer_words_i,
+    input      [                                 12-1:0] x_pos_inc,
+    input      [                          ADDRWIDTH-1:0] needed_iact_buffer_words_i,
     input      [                                  8-1:0] iact_words_per_compute,
-    input      [                                    7:0] rd_loop_limit_0,
-    input      [                                    7:0] rd_loop_limit_1,
-    input      [                                    7:0] rd_loop_limit_2,
-    input      [                                    7:0] rd_loop_limit_3,
-    input      [                                    7:0] rd_loop_limit_4,
-    input      [                                   11:0] rd_addr_inc_0,
-    input      [                                   11:0] rd_addr_inc_1,
-    input      [                                   11:0] rd_addr_inc_2,
-    input      [                                   11:0] rd_addr_inc_3,
-    input      [                                   11:0] rd_addr_inc_4,
-    input      [                                   11:0] wr_loop_limit_0,
-    input      [                                    7:0] wr_loop_limit_1,
-    input      [                                    7:0] wr_loop_limit_2,
-    input      [                                   11:0] wr_addr_inc_0,
-    input      [                                   11:0] wr_addr_inc_1,
-    input      [                                   11:0] wr_addr_inc_2,
+    input      [                    LIMIT_SIZE_IACT-1:0] rd_loop_limit_0,
+    input      [                    LIMIT_SIZE_IACT-1:0] rd_loop_limit_1,
+    input      [                    LIMIT_SIZE_IACT-1:0] rd_loop_limit_2,
+    input      [                    LIMIT_SIZE_IACT-1:0] rd_loop_limit_3,
+    input      [                    LIMIT_SIZE_IACT-1:0] rd_loop_limit_4,
+    input      [                          ADDRWIDTH-1:0] rd_addr_inc_0,
+    input      [                          ADDRWIDTH-1:0] rd_addr_inc_1,
+    input      [                          ADDRWIDTH-1:0] rd_addr_inc_2,
+    input      [                          ADDRWIDTH-1:0] rd_addr_inc_3,
+    input      [                          ADDRWIDTH-1:0] rd_addr_inc_4,
+    input      [                    LIMIT_SIZE_IACT-1:0] wr_loop_limit_0,
+    input      [                    LIMIT_SIZE_IACT-1:0] wr_loop_limit_1,
+    input      [                    LIMIT_SIZE_IACT-1:0] wr_loop_limit_2,
+    input      [                          ADDRWIDTH-1:0] wr_addr_inc_0,
+    input      [                          ADDRWIDTH-1:0] wr_addr_inc_1,
+    input      [                          ADDRWIDTH-1:0] wr_addr_inc_2,
     input      [                                    3:0] padding_x,
     input      [                                    3:0] padding_y
 );
@@ -197,32 +198,32 @@ module iact_stream_constructor #(
     reg [ 4-1:0] iacts_in_one_trans;
 
     reg [16-1:0] fsm_cycle;
-    reg [12-1:0] wr_addr_0;
-    reg [12-1:0] wr_addr_1;
-    reg [12-1:0] wr_addr_2;
-    reg [12-1:0] rd_addr_0;
-    reg [12-1:0] rd_addr_1;
-    reg [12-1:0] rd_addr_2;
+    reg [ADDRWIDTH-1:0] wr_addr_0;
+    reg [ADDRWIDTH-1:0] wr_addr_1;
+    reg [ADDRWIDTH-1:0] wr_addr_2;
+    reg [ADDRWIDTH-1:0] rd_addr_0;
+    reg [ADDRWIDTH-1:0] rd_addr_1;
+    reg [ADDRWIDTH-1:0] rd_addr_2;
     wire [ADDRWIDTH-1:0] fc_output_base_addr =
         rd_addr_2 * (iact_channels_per_pe_i[3:0] >> 1) * fc_rows_in_output_bank +
         fc_output_row / NUM_GLB_IACT;
-    reg [12-1:0] rd_addr_3;
-    reg [12-1:0] rd_addr_4;
-    reg [7:0] wr_cycle_loop_cnt_0;
-    reg [7:0] wr_cycle_loop_cnt_1;
-    reg [7:0] wr_cycle_loop_cnt_2;
-    reg [7:0] rd_cycle_loop_cnt_0;
-    reg [7:0] rd_cycle_loop_cnt_1;
-    reg [7:0] rd_cycle_loop_cnt_2;
-    reg [7:0] rd_cycle_loop_cnt_3;
-    reg [7:0] rd_cycle_loop_cnt_4;
-    reg [ 8-1:0] x_pos_in_w_cycle;
+    reg [ADDRWIDTH-1:0] rd_addr_3;
+    reg [ADDRWIDTH-1:0] rd_addr_4;
+    reg [LIMIT_SIZE_IACT-1:0] wr_cycle_loop_cnt_0;
+    reg [LIMIT_SIZE_IACT-1:0] wr_cycle_loop_cnt_1;
+    reg [LIMIT_SIZE_IACT-1:0] wr_cycle_loop_cnt_2;
+    reg [LIMIT_SIZE_IACT-1:0] rd_cycle_loop_cnt_0;
+    reg [LIMIT_SIZE_IACT-1:0] rd_cycle_loop_cnt_1;
+    reg [LIMIT_SIZE_IACT-1:0] rd_cycle_loop_cnt_2;
+    reg [LIMIT_SIZE_IACT-1:0] rd_cycle_loop_cnt_3;
+    reg [LIMIT_SIZE_IACT-1:0] rd_cycle_loop_cnt_4;
+    reg [12-1:0] x_pos_in_w_cycle;
     reg [ 8-1:0] router_cycle;
-  wire [12-1:0] rd_addr_inc_0_next;
-  wire [12-1:0] rd_addr_inc_1_next;
-  wire [12-1:0] rd_addr_inc_2_next;
-  wire [12-1:0] rd_addr_inc_3_next;
-  wire [12-1:0] rd_addr_inc_4_next;
+  wire [ADDRWIDTH-1:0] rd_addr_inc_0_next;
+  wire [ADDRWIDTH-1:0] rd_addr_inc_1_next;
+  wire [ADDRWIDTH-1:0] rd_addr_inc_2_next;
+  wire [ADDRWIDTH-1:0] rd_addr_inc_3_next;
+  wire [ADDRWIDTH-1:0] rd_addr_inc_4_next;
   wire [3:0]values_per_word;
   assign values_per_word = fully_connected_i ? 1 : iact_channels_per_pe_i;
   // Every bank holds the serial input window. Read neighboring pixels from

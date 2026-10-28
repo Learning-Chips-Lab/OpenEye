@@ -56,7 +56,7 @@ def twos_complement(binary_str, bits):
 def open_ref_txts(layer_params, layer, layer_number):
     file_dma_ref = [0 for layer_repetition in range(layer_params.needed_total_transmissions)]
     for layer_repetition in range(layer_params.needed_total_transmissions):
-        file_dma_ref[layer_repetition] = open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt')
+        file_dma_ref[layer_repetition] = open_or_create_file('demo/layer_' + str(layer_number) + '/dma_stream_ref.txt')
     
     if "Conv" in str(layer):
         iact_ref = [0 for c in range(layer.input.shape[3])]
@@ -172,8 +172,8 @@ def reset_nested_list(lst):
     else:
         return 0
 
-def create_stream_file(stream, layer_number, layer_repetition):
-    f_dump = open_or_create_file('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_input.txt')
+def create_stream_file(stream, layer_parameters, layer_repetition):
+    f_dump = open_or_create_file('demo/layer_' + str(layer_parameters.layer_name) + '/dma_stream_input.txt')
     for v in stream[strdic.stream_parallel_dict["status"]]:
         f_dump.write(f'{v}\n')
     for v in stream[strdic.stream_parallel_dict["iact"]]:

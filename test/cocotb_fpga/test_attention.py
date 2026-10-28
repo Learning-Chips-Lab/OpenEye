@@ -110,7 +110,7 @@ def test_attention_fpga(SEQ_LEN, D_MODEL, NUM_HEADS, CLUSTER_ROWS, DATAFLOW,
     os.environ["NUM_GLB_WGHT"] = str(NUM_GLB_WGHT)
     os.environ["DATAFLOW"]     = DATAFLOW
     os.environ["BRANCHES"]        = "1"
-    os.environ["BUFFER_WIDTH"]    = "12"
+    os.environ["BUFFER_WIDTH_IACT"] = "12"
     os.environ["QUANT_AMOUNT"]    = "1024"
     os.environ["RAM_CELLS"]       = "32"
     os.environ["CLUSTER_COLUMNS"] = "2"

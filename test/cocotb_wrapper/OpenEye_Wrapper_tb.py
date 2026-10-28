@@ -193,15 +193,15 @@ async def single_layer_test(dut):
                 logger.info("Send stream.")
                 await cocotb.start_soon(rtl_test_utils.send_stream(ptp, dut, stream[layer_repetition], openeye_parameter, layer_parameters))
                 logger.info("Stream is sent.")
-                if("Depthwise" in str(layer)):
+                if("depthwise" in str(layer)):
                     await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
-                elif("Conv" in str(layer)):
+                elif("conv" in str(layer)):
                     await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Conv(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
-                elif("Dense" in str(layer)):
+                elif("dense" in str(layer)):
                     await cocotb.start_soon(rtl_test_utils.await_and_compare_stream_Dense(ptp, dut, layer_number, model, layer_repetition, layer_parameters, openeye_parameter, layer_es, dram, log_level))
                 if(logging.DEBUG >= log_level):
-                    assert gtu.check_results('demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/dma_stream_ref.txt',\
-                                            'demo/layer_' + str(layer_number) + '_' + str(layer_repetition) + '/output.txt')
+                    assert gtu.check_results('demo/layer_' + str(layer_number) + '/dma_stream_ref.txt',\
+                                            'demo/layer_' + str(layer_number) + '/output.txt')
                     
             assert ptu.compare_dram_with_ref(layer, calculated_results, dram.fmap[1 + layer_number])
 
