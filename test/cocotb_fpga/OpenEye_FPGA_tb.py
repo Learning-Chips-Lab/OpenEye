@@ -264,6 +264,10 @@ def build_layer_topology(model):
     rel_layers = {"Previous_Layer": previous_layers, "Next_Layer": next_layers}
     return rel_layers
 
+def _is_standard_conv(name):
+    # Layers are keyed by their Keras name (conv2d, conv2d_1, depthwise_conv2d, ...).
+    return "conv" in str(name) and "depthwise" not in str(name)
+
 async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model, rel_layers):
     global logger
     openeye_parameter = oep.get_oep(serial)
@@ -379,7 +383,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         # from the same DRAM, so it stays consistent.
         def _zero(x):
             return [_zero(v) for v in x] if isinstance(x, list) else 0
-        dram.fmap[0] = _zero(dram.fmap[0])
+        dram.fmap[model[0].name] = _zero(dram.fmap[model[0].name])
         logger.info("OPENEYE_ZERO_IACTS: layer-0 input zeroed")
     if os.environ.get("OPENEYE_CONST_IACTS"):
         # Debug: force every layer-0 activation to one constant. With c = 1 the
@@ -390,7 +394,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         const_iact = int(os.environ["OPENEYE_CONST_IACTS"])
         def _const(x):
             return [_const(v) for v in x] if isinstance(x, list) else const_iact
-        dram.fmap[0] = _const(dram.fmap[0])
+        dram.fmap[model[0].name] = _const(dram.fmap[model[0].name])
         logger.info("OPENEYE_CONST_IACTS: layer-0 input set to %d", const_iact)
     if os.environ.get("OPENEYE_CONST_WGHTS"):
         # Debug: force every weight to one constant. Combined with
@@ -401,15 +405,15 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         const_wght = int(os.environ["OPENEYE_CONST_WGHTS"])
         def _const_w(x):
             return [_const_w(v) for v in x] if isinstance(x, list) else const_wght
-        dram.weights = _const_w(dram.weights)
+        dram.weights = {name: _const_w(w) for name, w in dram.weights.items()}
         logger.info("OPENEYE_CONST_WGHTS: all weights set to %d", const_wght)
     if os.environ.get("OPENEYE_ASYMMETRIC_KERNEL"):
         # Distinct kernel rows/columns expose permutations that constant
         # weights hide. Both the mapper and reference read this same DRAM.
-        for layer_number, params in enumerate(layer_parameters):
-            if "Conv" not in str(params.layer_name):
+        for params in layer_parameters.values():
+            if not _is_standard_conv(params.layer_name):
                 continue
-            for channel in dram.weights[layer_number]:
+            for channel in dram.weights[params.layer_name]:
                 for kernel in channel:
                     for y, row in enumerate(kernel):
                         for x in range(len(row)):
@@ -418,10 +422,10 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
     if os.environ.get("OPENEYE_MIX_WEIGHTS"):
         # weight[c][f] = 1 + c + 5*f for every tap: exposes channel or filter
         # mix-ups that channel-independent kernels (ASYMMETRIC_KERNEL) hide.
-        for layer_number, params in enumerate(layer_parameters):
-            if "Conv" not in str(params.layer_name):
+        for params in layer_parameters.values():
+            if not _is_standard_conv(params.layer_name):
                 continue
-            for c, channel in enumerate(dram.weights[layer_number]):
+            for c, channel in enumerate(dram.weights[params.layer_name]):
                 for f, kernel in enumerate(channel):
                     for row in kernel:
                         for x in range(len(row)):
@@ -440,20 +444,20 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                 # Deterministic pseudo-random activations, full-rank for fitting.
                 return ((ctr[0] - 1) * int(os.environ["OPENEYE_RAMP_MULT"])) % 61 + 1
             return (ctr[0] - 1) % 100 + 1
-        dram.fmap[0] = _ramp(dram.fmap[0])
+        dram.fmap[model[0].name] = _ramp(dram.fmap[model[0].name])
         logger.info("OPENEYE_RAMP_IACTS: layer-0 input set to 1..N in flat order")
     if os.environ.get("OPENEYE_BIAS_STEP"):
         # Give each output channel a distinct value after quantization so a
         # channel permutation cannot pass a constant-weight regression.
         step = int(os.environ["OPENEYE_BIAS_STEP"])
-        dram.bias = [[1 + step*f for f in range(len(bias))] for bias in dram.bias]
+        dram.bias = {name: [1 + step*f for f in range(len(bias))] for name, bias in dram.bias.items()}
         logger.info("OPENEYE_BIAS_STEP: bias[f] = 1 + %d*f", step)
     if os.environ.get("DUMP_INPUT_IACTS"):
         # Print the first activations of layer 0 so the values a PE holds can
         # be matched against the input vector. Every PE holding the same window
         # means the converter broadcasts instead of partitioning K.
         try:
-            flat = dram.fmap[0]
+            flat = dram.fmap[model[0].name]
             while isinstance(flat, list) and flat and isinstance(flat[0], list):
                 flat = [v for sub in flat for v in sub]
             logger.info("layer-0 input activations (first 34): %s", flat[:34])
