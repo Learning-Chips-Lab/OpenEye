@@ -159,9 +159,61 @@ est-srv02 host gotchas (learned 2026-10-23):
   exact. The io models are compiled as-is (their specify blocks carry no
   `delayed_*` data; Verilator just ignores them).
 
-## Current state (as of 2026-10-27, evening)
+## Current state (as of 2026-10-29 evening)
 
-### Done and verified
+**p2_15 (fork of p2_14, 50 MHz / 20 ns) relaunched ~19:30 — resuming at
+`OpenROAD.GlobalRouting` (step 38) with `-F`.** Steps 1–37 reused from
+p2_14 (run dir copied, state paths rewritten, mtimes restored).
+
+### p2_14 result (launched 10-27 19:53, died at GRT 10-29 17:02)
+
+- Steps 1–37 all clean; 20 ns confirmed in SDC (`Period: 20.000000`).
+  CTS 4:13 (p2_12: 4:07), post-CTS resizer 10:40 (capped at 1 % TNS).
+- **Timing (nom_typ 1.20 V 25 °C) — 50 MHz setup is MET:**
+
+  | | Setup WNS | Setup TNS | Hold WNS | Hold TNS | Hold violators |
+  |---|---|---|---|---|---|
+  | pre-resizer (35) | 0.0 | 0.0 | −1.01 | −687 | — |
+  | post-resizer (37) | 0.0 | 0.0 | −0.44 | −4.65 | 41 |
+
+  Pre-resizer best setup slack +0.42 ns (prediction: ~+0.4). Post-resizer
+  +4.25 ns. The 41 remaining hold violators are all on SRAM-macro inputs
+  (wght_buffer A_DIN, BUFFER_A, PSUM); the fatal `_29536xx_` DMA
+  input-capture net of the 10 ns runs is GONE — the 6.4 ns input delay
+  works as designed. The post-GRT hold resizer (capped) takes the 41.
+- **GRT failure (step 38), 13.8 h, 150 iterations:** `[GRT-0116] Global
+  routing finished with congestion`. Final congestion report: GLOBAL
+  usage only 30.3 % (24.2M/80M resources) — not a density problem;
+  LOCAL overflow in the dense PE-fabric/SRAM regions (max 143 units in
+  one M3-H cell, 108 M2-V; 216,531 total overflow = 0.9 % of demand).
+  Metal1 is the PDN layer (routing M2..TM2), no spare layer; GRT
+  already disabled the NDR on `net781646`. Evidence: p2_14 step dir
+  `38-openroad-globalrouting` + flow.log (kept intact).
+- **Fix: `GRT_ALLOW_CONGESTION: true`** (commit `82d393b`,
+  `gen_config.py`). GRT then completes with the residual overflow
+  (OpenROAD `-allow_congestion`); the detailed router (zroute) detours
+  around it — at 30 % global usage / 6 layers the residual is inside
+  what DRT can absorb. If DRT chokes on a hotspot, the next levers are
+  `GRT_LAYER_ADJUSTMENTS` (steer demand between layers) or a placement
+  change (expensive).
+
+### p2_15 relaunch details (2026-10-29 evening)
+
+- First launch at 19:03 went WITHOUT `-F` (wrong assumption, see
+  Pitfalls) → re-ran from step 1 in dirs 39–44; killed at synthesis,
+  junk dirs deleted, that flow.log archived as
+  `flow.log.launch1_killed_1903`.
+- `run_openeye.sh` now takes `<runname> <resume-step-id>` (→ `-F`),
+  `watchdog.sh` resolves the resume step automatically before every
+  launch (commit `234c2de`).
+- **ETA (from ~19:30, 10-29):** GRT done ~09:00 10-30 → DRT (10–20 h,
+  wildcard) → post-GRT resizer + STA → **STAPostPNR = 50 MHz signoff
+  numbers ~10-30 evening** → GDS ~10-31 midday → DRC/LVS (3 documented
+  PDK-gap failures expected, see Blocked).
+
+### History (as of 2026-10-27, evening)
+
+#### Done and verified
 
 - **Phase 0**: LibreLane Chip-flow smoke test (counter) passed; 3 PDK gaps
   documented (see `asic/README.md`).
@@ -535,13 +587,17 @@ Decision rules:
 
 ### 3. Re-launch chain (reference)
 
-`watchdog.sh p2_NN` (HOST, detached) → `run_openeye.sh p2_NN` →
+`watchdog.sh p2_NN` (HOST, detached) → `run_openeye.sh p2_NN [StepId]` →
 staging (container `gen.sh` + host `gen_top.py` + `gen_config.py`) →
 `docker exec iic-osic-tools_asic bash -lc "cd …/openeye_p2_NN/design &&
-source asic/scripts/env.sh && librelane openeye.json --run-tag p2_NN"`
-— **no `--overwrite`** (it wipes the run dir; see Pitfalls). All pre-flow
-gates are green (RTL regressions post-rename, p2_10 netlist gate-sim
-PASS, loopchk 0 conflicts, synthesis checker 0 errors in p2_11).
+source asic/scripts/env.sh && librelane openeye.json --run-tag p2_NN
+[-F StepId]"`
+— **no `--overwrite`** (it wipes the run dir) and **resume only with
+`-F`** (a plain `--run-tag` re-runs everything from step 1; see
+Pitfalls). The watchdog resolves the resume step automatically since
+2026-10-29. All pre-flow gates are green (RTL regressions post-rename,
+p2_10 netlist gate-sim PASS, loopchk 0 conflicts, synthesis checker 0
+errors in p2_11).
 
 ## Key commands
 
@@ -609,13 +665,28 @@ override inherited environment.
 - **`librelane --overwrite` WIPEs the run** (2026-10-27, cost: 30 h of
   p2_12): the flag means "Overwrite run, if exists" → LibreLane does
   `shutil.rmtree(run_dir)` (`librelane/flows/flow.py`, `flow.start`) and
-  starts a fresh run — step dirs are renumbered from `01-`. Resume or
-  relaunch with the PLAIN `librelane openeye.json --run-tag <tag>`
-  (optionally `[-F <StepId>]`): LibreLane loads the existing run dir,
-  `Step.load_finished` for each finished step dir, and the latest
-  `state_out.json` as initial state → resumes in place. `run_openeye.sh`
-  no longer passes `--overwrite` (before the fix, every watchdog
-  crash-restart would have wiped the run too).
+  starts a fresh run — step dirs are renumbered from `01-`. NEVER use it
+  for a resume. `run_openeye.sh` no longer passes it.
+- **Resume REQUIRES `-F <StepId>`** (verified in librelane source +
+  empirically 2026-10-29, p2_15 fork): a plain
+  `librelane openeye.json --run-tag <tag>` on an existing run does NOT
+  skip finished steps — it re-runs the WHOLE flow from step 1 in NEW
+  numbered directories (39, 40, ...), using only the latest
+  `state_out.json` as initial state (the flow.py loop only skips via the
+  `-F`/`-T`/`--skip`/gating flags; `Step.start` has no
+  "already finished" short-circuit). The p2_15 fork launch at 19:03
+  without `-F` re-ran synthesis and was killed. Use
+  `run_openeye.sh <tag> <StepId>` — the watchdog now auto-resolves the
+  resume step (first flow step without a complete step dir; a dir is
+  complete if it has `state_out.json`, or holds ONLY `config.json` +
+  `state_in.json` like the output-less `Checker.PowerGridViolations`).
+- **Forking a run dir (run-tag copy) has two traps**: (1) every
+  `state_*.json` embeds ABSOLUTE paths to the old run dir → rewrite
+  them; (2) `sed -i` (or any rewriting) resets mtimes to "now" → the
+  latest-`state_out.json` selection (by mtime) then picks the wrong
+  state → restore original mtimes with `touch -r <old> <new>` per file.
+  After both, verify: latest `state_out.json` = last finished step, and
+  all paths referenced in it exist in the new dir.
 - `/tmp/opencode/` (host) is NOT visible inside the container — write
   container outputs to container paths (`/tmp/...` inside the container).
 - Make variable name collisions: never name a Makefile variable `RM` (clobbers
@@ -641,8 +712,12 @@ override inherited environment.
 
 ## Git state
 
-Branch `dev_asic_sg13g2`, commits (newest first) as of 2026-10-27 ~20:40:
+Branch `dev_asic_sg13g2`, commits (newest first) as of 2026-10-29 evening:
 ```
+234c2de Scripts: correct LibreLane resume semantics (verified in source 2026-10-29)
+82d393b Config: GRT_ALLOW_CONGESTION=true after p2_14 GRT-0116 failure
+4ceb2ea QWEN.md: correct p2_13/p2_14 timestamps and ETAs
+9eb8e6d QWEN.md: 50 MHz decision, p2_14 as current run, updated ETAs
 cbf35ff Config: 50 MHz variant — CLOCK_PERIOD 20 ns, IO_DELAY_CONSTRAINT 32
 f0e14fd QWEN.md: p2_12 --overwrite data-loss incident + p2_13 plan; drop --overwrite from run_openeye.sh
 92675e6 gen_config: cap resizer HOLD TNS repair at 1% as well (4 knobs)
