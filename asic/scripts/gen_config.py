@@ -176,6 +176,20 @@ def main() -> None:
         "PL_RESIZER_HOLD_REPAIR_TNS_PCT": 1,
         "GRT_RESIZER_SETUP_REPAIR_TNS_PCT": 1,
         "GRT_RESIZER_HOLD_REPAIR_TNS_PCT": 1,
+        # p2_14 GRT failure (2026-10-29 17:02): [GRT-0116] "Global routing
+        # finished with congestion" after 50+50+50 iterations (~13.8 h).
+        # Analysis of the final congestion report: GLOBAL usage is only
+        # 30.3 % (24.2M / 80M resources) -- not a density problem, but
+        # local overflow in the dense PE-fabric/SRAM regions (max 143
+        # overflow units in one M3-H cell, 108 M2-V; 216,531 total
+        # overflow = 0.9 % of demand, spread over many cells). Metal1
+        # carries the PDN (routing starts at Metal2), so there is no
+        # spare layer, and GRT already disabled the NDR on net781646 to
+        # fight the congestion. 150 iterations could not drive the
+        # residual to zero. With 6 usable layers at 30 % global usage
+        # the residual is well inside what the detailed router (zroute)
+        # can detour away -> let GRT finish and let DRT absorb it:
+        "GRT_ALLOW_CONGESTION": True,
         "PAD_SOUTH": pad_order["SOUTH"],
         "PAD_EAST": pad_order["EAST"],
         "PAD_NORTH": pad_order["NORTH"],

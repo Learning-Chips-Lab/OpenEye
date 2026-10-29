@@ -452,6 +452,7 @@
     "PL_RESIZER_HOLD_REPAIR_TNS_PCT": 1,
     "GRT_RESIZER_SETUP_REPAIR_TNS_PCT": 1,
     "GRT_RESIZER_HOLD_REPAIR_TNS_PCT": 1,
+    "GRT_ALLOW_CONGESTION": true,
     "PAD_SOUTH": [
         "u_vdd1",
         "u_vss1",
