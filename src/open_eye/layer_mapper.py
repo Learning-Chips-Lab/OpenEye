@@ -60,9 +60,19 @@ Subclasses:
 """
 
 import logging
+import concurrent.futures
 import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
+
+def _mp_generate_iact(creator, skip):
+    return [] if skip != 0 else creator.get_iact_stream()
+
+def _mp_generate_wght(creator, skip):
+    return [] if skip != 0 else creator.get_wght_stream()
+
+def _mp_generate_psum(creator, skip):
+    return [] if skip != 0 else creator.get_psum_stream()
 
 class LayerMapper(object):
     """Abstract base class for mapping neural network layers to OpenEye hardware.
@@ -149,65 +159,16 @@ class LayerMapper(object):
             self.storage = [[] for _ in range(len(strdic.stream_parallel_dict))]
 
     def make_stream(self):
-        # Sequential on purpose. A process pool (80d6e67) ran the stream
-        # creators and write_working_parameters on copies of layer_params, so
-        # the effects they have on it (stream lengths for trans_cycles_*,
-        # skip flags, ...) never reached the parent and the configuration no
-        # longer matched the streams (test_pooling, test_single_layers).
-        """Generate all data streams for the layer execution.
-
-        This is the main orchestration method that coordinates the generation of all
-        required hardware streams for layer execution. It populates the storage structure
-        with working parameters, input activations, weights, biases/partial sums,
-        quantization parameters, and offset values.
-
-        The method respects skip flags (skipIact, skipWght, skipPsum) to avoid redundant
-        data transfers when data can be reused from previous transmissions.
-
-        Storage Channels Populated:
-            - status: Working parameters and hardware configuration
-            - iact: Input activation data (if skipIact == 0)
-            - wght: Weight data (if skipWght == 0)
-            - psum: Bias/partial sum data (if skipPsum == 0)
-            - quantize: Quantization parameters for output
-            - offset: Offset values for activation functions
-
-        Note:
-            This method delegates to layer-specific implementations:
-            - write_working_parameters() for hardware configuration
-            - IactStreamCreator.get_iact_stream() for input activations
-            - WghtStreamCreator.get_wght_stream() for weights
-            - PsumStreamCreator.get_psum_stream() for biases/partial sums
-            - write_quant_and_offset() for post-processing parameters
-        """
-        # Generate input activation stream (skip if data can be reused)
-        if (self.layer_params.skipIact == 0) :
-            self.storage[strdic.stream_parallel_dict["iact"]] = self.IactStreamCreator.get_iact_stream()
-        else :
-            self.storage[strdic.stream_parallel_dict["iact"]] = []
-
-        # Generate weight stream (skip if weights can be reused)
-        if (self.layer_params.skipWght == 0) :
-            self.storage[strdic.stream_parallel_dict["wght"]] = self.WghtStreamCreator.get_wght_stream()
-        else :
-            self.storage[strdic.stream_parallel_dict["wght"]] = []
-
-        # Generate bias/partial sum stream (skip if not needed)
-        if (self.layer_params.skipPsum == 0) :
-            self.storage[strdic.stream_parallel_dict["psum"]] = self.PsumStreamCreator.get_psum_stream()
-        else :
-            self.storage[strdic.stream_parallel_dict["psum"]] = []
-
-        # The data streams are built before the configuration is packed so the
-        # accelerator is told how many words it will actually receive. Each
-        # trans_cycles_* is otherwise derived from a formula over the layer
-        # geometry, and every place those formulas disagree with the emitted
-        # stream the corresponding GET_* state - which exits on an equality -
-        # either waits forever or over-consumes into the next section and drags
-        # everything after it out of alignment. Observed: sparse weights emit
-        # about half the uncompressed count, and the psum stream ran longer than
-        # trans_cycles_psum, which ended GET_BIAS early and left GET_QUANTIZE
-        # short of words.
+        """Generate all streams. The three data streams are independent and run
+        in a process pool; the configuration (status, quantization) is packed in
+        this process afterwards because it needs the stream lengths."""
+        with concurrent.futures.ProcessPoolExecutor(max_workers=3) as executor:
+            f_iact = executor.submit(_mp_generate_iact, self.IactStreamCreator, self.layer_params.skipIact)
+            f_wght = executor.submit(_mp_generate_wght, self.WghtStreamCreator, self.layer_params.skipWght)
+            f_psum = executor.submit(_mp_generate_psum, self.PsumStreamCreator, self.layer_params.skipPsum)
+            self.storage[strdic.stream_parallel_dict["iact"]] = f_iact.result()
+            self.storage[strdic.stream_parallel_dict["wght"]] = f_wght.result()
+            self.storage[strdic.stream_parallel_dict["psum"]] = f_psum.result()
         if self.params.SERIAL:
             for name, key in (("trans_cycles_iact", "iact"),
                               ("trans_cycles_wght", "wght"),
