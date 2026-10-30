@@ -464,6 +464,25 @@ Status lines (30-min cadence):
   (≈76 %), growing 69–300 KB/s. Remaining: flood + area report +
   write_db (2.5 GB odb) + DEF → state_out.json. ETA ~30–60 min. No
   action; watcher will fire Phase B.
+- **22:20:** step 42 structure clarified: it is a two-substep step —
+  `1-openroad-diodeinsertion` (the 11-h repair, done ~22:00, odb+DEF
+  written) and `2-openroad-checkantennas` (running, openroad 408120,
+  `antenna_check.tcl` = `check_antennas -verbose`, report-only, cannot
+  fail the step). Reference runtime: step 40 (same check) took 00:49:21
+  → ETA ~22:50, then 42's state_out.json. **Phase B kill window:**
+  state_out.json appears, and within seconds–minutes the CURRENT
+  (old-config) flow starts `OpenROAD.STAMidPNR-3` and creates dir 43.
+  Playbook: (1) `kill 329446` (watchdog) FIRST — with the OLD design
+  config its resolver would pick STAMidPNR-3 (resizer gated off) and
+  auto-restart the flow; (2) `kill 397962` (monitor); (3) `kill 329603`
+  (librelane) + the current openroad (pgrep in container); (4) if dir
+  43 exists it is an INCOMPLETE STAMidPNR-3 started under the old
+  config minutes ago → **delete it** (its re-run will happen after the
+  resizer in the new launch; deleting an incomplete dir is not
+  discarding a finished run); (5) B3: gen_config.py + copy to
+  design/openeye.json, diff vs. running copy = exactly the 3 knobs,
+  resolver → expect `OpenROAD.ResizerTimingPostGRT`; (6) B4 relaunch
+  watchdog + monitor; (7) B5 verify threads.
 
 - **18:35 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
   + regenerated `openeye.json`, diff = exactly 1 line.
