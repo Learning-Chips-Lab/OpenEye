@@ -11,7 +11,8 @@ re-pipelining (RTL change).
 **Status (2026-10-30, 18:00):** run `p2_15` is at `RepairAntennas` (run dir
 42). Synthesis, placement, CTS, resizer and global routing are done.
 Remaining: post-GRT resizer, detailed routing, 3-corner signoff STA, DRC,
-LVS, GDS. ETA for the signoff numbers: 10-31 evening to 10-32 morning.
+LVS, GDS. ETA for the signoff numbers: 10-31 evening to 10-32 morning (assumes
+the OpenROAD thread fix at the next resume, see Phase 2).
 Run history, decisions and the current run: [Phase 2](#phase-2--first-full-implementation-2026-10-23).
 
 Handoff doc with the full incident history: `QWEN.md` in the repo root.
@@ -314,6 +315,15 @@ Floorplan: 10.5 × 10.5 mm die, core 97.2 mm², 143 pads (80 µm pitch,
 stdcells (1,663,263 combinational, 506,219 sequential), 8.58 mm² SRAM
 macros, ≈ 55 % core utilization (stdcell + macros).
 
+All OpenROAD steps currently run **single-threaded**. LibreLane 3.1's
+`get_command()` passes `-threads None` (LibreLane bug: `str(None)` is a
+truthy string, so the process-count fallback never fires). Evidence:
+`[WARNING ORD-0032] Invalid thread number specification: None` in the
+step logs, `-threads None` on every openroad command line. All runtimes
+quoted in this document are single-threaded. The fix
+(`"OPENROAD_THREADS": 48` in the config) is prepared and goes in at the
+next resume (QWEN.md TODO PLAN, phases A/B).
+
 ### Run infrastructure
 
 - Launch chain (host): `watchdog.sh p2_NN` (detached) →
@@ -327,6 +337,8 @@ macros, ≈ 55 % core utilization (stdcell + macros).
   flow step without a complete step dir. A dir is complete if it holds a
   `state_out.json`, or only `config.json` + `state_in.json` (output-less
   steps like `Checker.PowerGridViolations` write no state_out).
+  Known flaw (fix prepared, see Current status): gated-off steps have no
+  dir and get picked as resume points.
 - The monitor (per run, 5-min snapshots) tracks flow.log size, the step-dir
   set and the watchdog state. It flags STALL/DEAD/RESTART. Long
   single-process steps (GRT, DRT, antenna repair) buffer their output and
@@ -486,6 +498,24 @@ nom_typ, 1.20 V / 25 °C:
   vias. The `repair_antennas` command legalizes them internally
   (detailed placement + GRT re-run), so no extra full GRT step follows.
 
+Prepared for the next resume (QWEN.md TODO PLAN 2026-10-30, phases
+A–B, user decision pending):
+
+- `OPENROAD_THREADS: 48` — OpenROAD runs single-threaded today (see
+  Flow). Without the fix, DetailedRouting can take days.
+- Watchdog resolver fix — it currently resolves to the gated-off
+  `OpenROAD.RepairDesignPostGRT` (verified 2026-10-30 18:10, read-only).
+  A crash-restart now would re-run CheckAntennas + DiodesOnPorts +
+  RepairAntennas (7 h+).
+- `run_openeye.sh`: append to flow.log (`tee -a` + launch separators),
+  skip RTL regeneration on resume.
+- Monitor: CPU-time liveness check instead of log-size-only STALL.
+- `SETUP_VIOLATION_CORNERS: ["*"]` — make the setup checker a real
+  signoff gate (currently a no-op).
+
+Plan: let step 42 finish, stop watchdog and monitor, relaunch p2_15
+(same run name) with the new config, resume at ResizerTimingPostGRT.
+
 ### What remains (stages after RepairAntennas)
 
 | Stage | Expectation |
@@ -504,8 +534,10 @@ nom_typ, 1.20 V / 25 °C:
 | Spice extraction, LVS (Netgen), EQY | the bondpad↔pad-port LVS mismatch is expected (PDK gap 1) |
 | Setup/Hold/MaxSlew/MaxCap checkers, manufacturability report | HoldViolations should pass after ResizerTimingPostGRT |
 
-ETA (from 2026-10-30 18:00): signoff (STAPostPNR) 10-31 evening → 10-32
-morning. GDS 10-32. DRC/LVS on 10-32.
+ETA (from 2026-10-30 18:00, with the thread fix applied at the next
+resume): signoff (STAPostPNR) 10-31 evening → 10-32 morning. GDS 10-32.
+DRC/LVS on 10-32. Without the fix the DetailedRouting estimate is open
+(single-threaded zroute on this netlist can take days).
 
 ### Next steps (after signoff)
 
