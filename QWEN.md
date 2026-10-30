@@ -414,19 +414,23 @@ est-srv02 host gotchas (learned 2026-10-23):
   exact. The io models are compiled as-is (their specify blocks carry no
   `delayed_*` data; Verilator just ignores them).
 
-## Current state (as of 2026-10-30 18:40)
+## Current state (as of 2026-10-30 19:10)
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
-**18:40 status:** step 42 `OpenROAD.RepairAntennas` running since 10:45
-(openroad PID 370311, 99.6 % CPU, ~23 GB RAM, single-threaded — the A1
-fix takes effect with the Phase B relaunch). Latest flow.log lines
-(15:11): internal GRT re-route inside the repair iteration (NDR disabled
-again on net781646, GRT-0273) → "Found 6152 antenna violations" →
-"Inserted 9200 jumpers for 5607 nets". Watchdog 329446 (0 restarts),
-monitor 330001 (intermittent STALL flags = known false positive, fixed
-by A4). flow.log ~508 MB and still growing (162 B between 18:30 and
-18:35 snapshots).
+**19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
+Step 42 `OpenROAD.RepairAntennas` still running (since 10:45, openroad
+PID 370311, CPU time ~28.7k s ≈ 99.7 % of elapsed — working, log
+buffered). Last console output (15:11): internal GRT re-route in the
+repair iteration (NDR off on net781646) → 6152 antenna violations →
+9200 jumpers inserted. Watchdog 329446 (0 restarts), new monitor
+397962 (no STALL). Config diff for Phase B verified: new openeye.json
+vs. the running copy = exactly `OPENROAD_THREADS`,
+`RUN_POST_GRT_RESIZER_TIMING`, `SETUP_VIOLATION_CORNERS` (the three
+intended knobs). B2 kill chain mapped: host watchdog 329446 →
+run_openeye.sh 329490 → docker exec 329555; container bash 329587 →
+librelane 329603 → openroad 370311. Background watcher armed on
+`42-openroad-repairantennas/state_out.json` → Phase B starts there.
 
 - **18:35 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
   + regenerated `openeye.json`, diff = exactly 1 line.
