@@ -10,6 +10,159 @@ Implement the OpenEye DNN accelerator as an ASIC on IHP SG13G2: full RTL→GDS
 backend via LibreLane 3.x in the iic-osic-tools container, using the real
 `RM_IHPSG13_1P` SRAM macros for the top-level staging buffers.
 
+## TODO PLAN (2026-10-30, review by Claude) — START HERE
+
+Everything below this section up to "Key commands" is **history**; the
+"Next steps (as of 2026-10-27)" section is superseded by this plan.
+Work the phases in order. Ground rules for every task:
+
+- One task = one small commit (config/script change + matching QWEN.md
+  note). Never `--overwrite`. Never kill p2_15 without the user's OK.
+- "Verify" lines are mandatory — a task is only done when its check passed.
+  Record results (numbers, timestamps) in "Current state".
+- Ask the user before any action that discards compute time (killing a
+  running step, starting a new run name).
+
+### Phase A — prepare fixes while p2_15 keeps running (no restart yet)
+
+- [ ] **A1 (CRITICAL) — OpenROAD runs single-threaded in EVERY step.**
+  Evidence: `ps` shows `openroad -exit -threads None …` at 99.7 % CPU on
+  a 56-core host; `warning.log` has 19× `[ORD-0032] Invalid thread number
+  specification: None.`; flow.log `OpenROAD will use None threads`
+  (same in p2_14). Root cause: LibreLane 3.1 bug in
+  `librelane/steps/openroad.py` `get_command()`:
+  `threads = str(self.config["OPENROAD_THREADS"]) or str(_get_process_limit())`
+  — `str(None)` is the truthy string `"None"`, the fallback never fires.
+  This is why GRT took 14:42 h, resizer 10:40 h, CTS 4:13 h; DetailedRouting
+  (heavily parallel) would take days single-threaded.
+  Fix: add `"OPENROAD_THREADS": 48` to the config dict in
+  `asic/scripts/gen_config.py` (with a comment citing the bug; 48 leaves
+  headroom on 56 cores, RAM is fine: openroad ~23 GB, host 251 GB).
+  Verify: regenerated `openeye.json` contains it; after relaunch (Phase B)
+  flow.log says `OpenROAD will use 48 threads`, `ps` shows `-threads 48`
+  and >100 % CPU, no new ORD-0032 in `warning.log`.
+
+- [ ] **A2 (CRITICAL) — watchdog resume resolver picks SKIPPED steps.**
+  Run read-only against p2_15 (2026-10-30 18:10) it returned
+  `OpenROAD.RepairDesignPostGRT`: that step is gated off by config and
+  never creates a step dir, so the resolver's "no dir → never ran →
+  resume here" rule fires on it. A restart now would re-run
+  CheckAntennas + DiodesOnPorts + RepairAntennas (7 h+). Same trap for
+  every later skipped step (HeuristicDiodeInsertion, IR drop, EQY, …).
+  Fix in `asic/scripts/watchdog.sh` `resolve_resume_step()`: resume at
+  the step **after the last complete step in flow order**, i.e. walk the
+  flow, remember the last step with a complete latest dir; a step with an
+  incomplete latest dir is the resume point; steps without any dir are
+  ignored (skipped) unless no later step has a dir. Factor the Python
+  into its own file (e.g. `asic/scripts/resolve_resume.py <run_dir>`) so
+  it can be tested standalone.
+  Verify: against p2_15 it must print `OpenROAD.RepairAntennas` while
+  step 42 is running (dir without `state_out.json`), and the step after
+  it once `42-…/state_out.json` exists. Also test against a p2_14 copy /
+  synthetic dirs: fresh run → empty output; crashed step → that step.
+
+- [ ] **A3 — `run_openeye.sh`: don't lose logs, don't change RTL on resume.**
+  (a) `tee` overwrites `flow.log` on every (re)launch — a watchdog crash
+  restart destroys the crash evidence. Use `tee -a` and write a
+  `=== launch <date> resume=<step> ===` separator line first.
+  (b) On resume (2nd arg set) skip `gen.sh` and `gen_top.py` (RTL must not
+  change mid-run); only `gen_config.py` runs (config knobs may change).
+  Optionally store `git rev-parse HEAD` + `git status --porcelain hdl asic/rtl`
+  in the run dir at fresh start and warn on resume if it differs.
+  (c) Success check: instead of `grep "ERROR|Traceback"` on a 500 MB log,
+  use librelane's exit code (`set -o pipefail` + `${PIPESTATUS[0]}`) and
+  the presence of `runs/<tag>/final/`.
+  Verify: `bash -n`; dry-run the staging part with a dummy run name.
+
+- [ ] **A4 — monitor false STALL.** `monitor_p2_15.log` reports
+  "STALL (no activity 165 min)" while openroad is at 100 % CPU. Add a
+  liveness check on the CPU time (`ps -o times=` of the newest
+  openroad/yosys/klayout/magic process in the container); STALL only if
+  log, step files AND cpu time are all flat.
+  Verify: restart the monitor for p2_15, no STALL while RepairAntennas runs.
+
+- [ ] **A5 — make setup a real signoff gate.** `Checker.SetupViolations`
+  is a no-op (`SETUP_VIOLATION_CORNERS` unset). Add
+  `"SETUP_VIOLATION_CORNERS": ["*"]` to `gen_config.py` (50 MHz setup is
+  met with +4.25 ns post-resizer, so this should pass; if it fails, that
+  is a real finding).
+
+- [ ] **A6 — comment fix in `gen_config.py`:** "70 % PE-pad latches" is
+  wrong — the netlist has no latches; area is 506,219 `sg13g2_dfrbpq_1`
+  (24.8 of 55.3 mm², ~45 %, async-reset DFFs).
+
+### Phase B — apply A1–A5 to p2_15 (needs the user's OK first)
+
+- [ ] **B1** Let step 42 `RepairAntennas` finish (7 h+ invested, do not
+  kill it). Watch for `42-openroad-repairantennas/state_out.json`.
+- [ ] **B2** Then immediately: (1) stop the host watchdog for p2_15 FIRST
+  (otherwise it may auto-restart), (2) stop the monitor, (3) kill
+  librelane + its openroad child in the container. Check the next step
+  dir (43-…) has no `state_out.json` (it was interrupted) — that's fine.
+- [ ] **B3** Regenerate config (`python3 asic/scripts/gen_config.py`),
+  copy to `asic/runs/openeye_p2_15/design/openeye.json`, check the diff is
+  exactly the intended knobs. Run the fixed resolver (A2): expected is
+  the step right after RepairAntennas (`OpenROAD.ResizerTimingPostGRT`).
+- [ ] **B4** Relaunch the watchdog with the SAME run name p2_15 (this is a
+  resume, not a new run): `sg docker -c "cd ~/projekte/OpenEye && setsid
+  nohup asic/scripts/watchdog.sh p2_15 >> asic/runs/watchdog_p2_15.log 2>&1 < /dev/null &"`.
+  Restart the fixed monitor.
+- [ ] **B5** Verify A1 (threads) within the first minutes. Then monitor
+  DetailedRouting: per-iteration DRC violation count must decrease;
+  report runtime and final violation count. If DRT stalls on congestion
+  hotspots → analyze (do not blindly re-run); levers are in Phase D.
+
+### Phase C — evaluate the 50 MHz baseline (after p2_15 ends)
+
+- [ ] **C1** Collect per-corner setup/hold WNS/TNS (STAPostPNR), power,
+  utilization, wire length, DRC/LVS results. Classify every DRC/LVS error:
+  documented PDK gap (bondpad LVS, PSM-0069, sealring) vs. NEW.
+- [ ] **C2** Post-route gate-level sim: rerun `asic/sim/gatesim/run_verilator.sh`
+  on the FINAL netlist (`final/nl/OpenEye_Asic.nl.v`) — it differs a lot
+  from p2_10 (846k repair buffers, hold buffers, 5k diodes). Must PASS
+  `start_test_fpga`.
+- [ ] **C3** Ask the user to confirm the IO assumption (6.4 ns pad delay,
+  external driver ≤ 6 ns clock-to-pad at 50 MHz) against the board/tester.
+- [ ] **C4** Write a short results summary in "Current state" + push to
+  `utz12`.
+
+### Phase D — next physical iteration p2_16 (proposal; user decides scope)
+
+Metrics at step 37 of p2_15 that motivate this: 3.12 M instances of which
+**846k timing-repair buffers (27 %)** from RepairDesignPostGPL (4:35 h),
+clock skew ~2.1 ns, 501k hold violators pre-resizer, GRT local overflow
+in PE-fabric/SRAM regions, worst 10 ns path = cross-chip wire.
+
+- [ ] **D1 Macro placement near consumers** (`macro_placement.py`): today
+  all 33 SRAMs sit in three rows at the core bottom, so every cluster
+  routes across the chip. Place each cluster's psum buffers
+  (`PSUM_RAM_X[x].PSUM_RAM_Y[y]`, 6 macros each) next to that cluster,
+  wght/iact buffers central. Needs a look at where GPL puts the clusters
+  (p2_15 placement DEF / ODB) to decide the floorplan.
+- [ ] **D2** `PL_TIMING_DRIVEN: true`; `GPL_CELL_PADDING`/`DPL_CELL_PADDING`
+  1–2 sites or a lower `PL_TARGET_DENSITY_PCT` (now 0.65 auto) against the
+  local overflow.
+- [ ] **D3** Larger macro halos (`FP_MACRO_HORIZONTAL/VERTICAL_HALO`, now
+  10 µm) + `GRT_MACRO_EXTENSION` for the SRAM pin hotspots.
+- [ ] **D4** CTS / skew analysis: find where the 2.1 ns skew comes from
+  (suspect: SRAM clock pins far from the cluster sinks, IO capture regs);
+  tune `CTS_SINK_CLUSTERING_SIZE/MAX_DIAMETER`, buffer distance.
+- [ ] **D5** Fast corner: stdcell `fast_1p32V_m40C` is paired with SRAM
+  liberty `fast_1p32V_m55C` (`CORNERS` in `gen_config.py`) — document or
+  align. Optional: add the sg13g2_io liberty for pad timing.
+- Goal for D: same 50 MHz closure in far less runtime, then try 66 MHz.
+
+### Phase E — architecture/RTL (only after discussion with the user)
+
+- [ ] **E1** PE scratchpads in DFFs are ~45 % of area. Evaluate the small
+  PDK macros (`RM_IHPSG13_1P_64x16/64x64`, `2P_64x22/64x32`, `*_256x*`)
+  or latch-based register files for the iact/wght/psum SPads.
+- [ ] **E2** Datapath registers without functional need for reset →
+  reset-less DFFs (smaller cells, lighter reset tree).
+- [ ] **E3** Clock gating (none today; 506k FFs).
+- [ ] **E4** Re-pipelining of cross-cluster fabric paths for 100 MHz
+  (already identified in the p2_12 analysis).
+
 ## Machine / environment
 
 Work happens on **est-srv02** (`est-srv02.med.fh-koeln.de`, AlmaLinux 10,
@@ -538,7 +691,7 @@ Caveats learned (final):
   specify-strip is needed) is documented above at the
   `run_verilator.sh` entry.
 
-## Next steps (as of 2026-10-27 evening)
+## Next steps (as of 2026-10-27 evening) — SUPERSEDED by the TODO PLAN at the top
 
 p2_14 is running (launched ~19:53 via the watchdog, host side; config:
 **50 MHz** — `CLOCK_PERIOD: 20`, `IO_DELAY_CONSTRAINT: 32` (6.4 ns pad
