@@ -142,7 +142,10 @@ def main() -> None:
         "FP_SIZING": "absolute",
         # 10.5 mm die: p2_14 floorplan metrics (measured): 44.7 mm^2
         # stdcell + 8.6 mm^2 SRAM macros = 53.2 mm^2 on the 97.2 mm^2 core
-        # -> ~55 % utilization (stdcell + macros, pads excluded). 143 pads
+        # -> ~55 % utilization (stdcell + macros, pads excluded). The
+        # netlist has NO latches: of the 55.3 mm^2 synthesized area,
+        # 24.8 mm^2 (~45 %) are the 506,219 async-reset DFFs
+        # (sg13g2_dfrbpq_1) -- the PE scratchpads live in DFFs. 143 pads
         # at 80 um pitch (2.9 mm span, centered) leave ample room.
         "DIE_AREA": [0, 0, 10500, 10500],
         "LEFT_MARGIN_MULT": 667,

@@ -155,9 +155,16 @@ Work the phases in order. Ground rules for every task:
   (already a hard gate). The gate itself runs at the end of p2_15
   (step 79 `Checker.SetupViolations`, ungated).
 
-- [ ] **A6 — comment fix in `gen_config.py`:** "70 % PE-pad latches" is
+- [x] **A6 — comment fix in `gen_config.py`:** "70 % PE-pad latches" is
   wrong — the netlist has no latches; area is 506,219 `sg13g2_dfrbpq_1`
   (24.8 of 55.3 mm², ~45 %, async-reset DFFs).
+  **Done 2026-10-30 18:58:** the wrong "70 % PE-pad latches" comment was
+  already removed by `2711d09` (README fact-check, replaced with the
+  measured p2_14 floorplan metrics). What was missing is now in the
+  `DIE_AREA` comment: the netlist has NO latches; of the 55.3 mm²
+  synthesized area, 24.8 mm² (~45 %) are the 506,219 async-reset DFFs
+  (`sg13g2_dfrbpq_1`). Comment-only change — regenerated
+  `openeye.json` is byte-identical (verified by diff).
 
 - [ ] **A7 (new, found while implementing A2, 2026-10-30) — the
   post-GRT resizer is OFF by default, contradicting the plan's own
@@ -431,6 +438,11 @@ by A4). flow.log ~508 MB and still growing (162 B between 18:30 and
   `SETUP_VIOLATION_CORNERS: ["*"]` in gen_config.py + openeye.json
   (diff = exactly that knob). Effective from the Phase B relaunch; the
   gate runs at p2_15 end (step 79).
+- **18:58 — A6 done** (DFF comment, see plan item): the wrong
+  "70 % PE-pad latches" line was already gone (`2711d09`); the
+  `DIE_AREA` comment now carries the verified DFF facts (no latches;
+  506,219 `sg13g2_dfrbpq_1` = 24.8/55.3 mm² ≈ 45 %). Comment-only:
+  regenerated openeye.json byte-identical.
 
 **p2_15 (fork of p2_14, 50 MHz / 20 ns) relaunched ~19:30 — resuming at
 `OpenROAD.GlobalRouting` (step 38) with `-F`.** Steps 1–37 reused from
