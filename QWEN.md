@@ -550,6 +550,13 @@ Status lines (30-min cadence):
   ps %cpu 527 %, monitor CPU time 10,459 s in 2,027 s elapsed (~5.1×),
   49 threads. Remaining: per-corner repair_timing (1 % TNS caps — fast)
   + write_views (flood + odb + DEF). warning.log still flat (21× ORD-0032).
+- **23:54** resizer internal GRT at extra iteration 12/50 (~6.5 min/iter,
+  main routing phase was silent/fast). p2_15's real GRT (step 39) needed
+  ALL 50 extra iterations (residual overflow never reached 0), so expect
+  the same: ~4.5 h more GRT + short capped repair_timing + write_views
+  → step 43 done ~05:00–06:00. CPU 5.3× (19,082 s / 3,603 s), flow.log
+  nearly flat (one line per iteration — expected, not a stall; the
+  monitor's CPU-time liveness covers this).
 - Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
   repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
   routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
