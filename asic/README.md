@@ -4,12 +4,24 @@ Backend flow (RTL → GDS) for the OpenEye accelerator on IHP SG13G2, built on
 the [IIC-OSIC-TOOLS](https://github.com/iic-jku/iic-osic-tools) container
 (LibreLane 3.x, OpenROAD, Yosys, Magic, KLayout, Netgen).
 
+Goal: close the first physical baseline of the chip. The baseline target is
+50 MHz (20 ns period). 100 MHz is a follow-up that needs PE-fabric
+re-pipelining (RTL change).
+
+**Status (2026-10-30, 18:00):** run `p2_15` is at `RepairAntennas` (run dir
+42). Synthesis, placement, CTS, resizer and global routing are done.
+Remaining: post-GRT resizer, detailed routing, 3-corner signoff STA, DRC,
+LVS, GDS. ETA for the signoff numbers: 10-31 evening to 10-32 morning.
+Run history, decisions and the current run: [Phase 2](#phase-2--first-full-implementation-2026-10-23).
+
+Handoff doc with the full incident history: `QWEN.md` in the repo root.
+
 ## Layout
 
 ```
 asic/
 ├── README.md               this file
-├── .gitignore              runs/ (flow outputs) is not committed
+├── .gitignore              runs/, rtl/generated/, *.log, *.rpt are not committed
 ├── target.sh               ASIC target configuration (env vars, see Phase 1)
 ├── rtl/
 │   ├── sg13g2_io_blackbox.v  clean pad blackbox models (OpenSTA-compatible)
@@ -26,27 +38,41 @@ asic/
 ├── scripts/
 │   ├── container.sh          start/stop/status/exec of the worker container
 │   ├── env.sh                PDK env (ihp-sg13g2, sg13g2_stdcell, sg13g2_io)
+│   │                         + openroad binary pin (_LLN_OVERRIDE_OPENROAD)
 │   ├── run_smoke.sh          counter smoke test through the full Chip flow
-│   ├── run_openeye.sh        full OpenEye ASIC flow (LibreLane Chip)
+│   ├── run_openeye.sh        full OpenEye flow: <runname> [resume-step-id]
+│   ├── watchdog.sh           detached launch + auto-restart (budget 3),
+│   │                         resolves the resume step from the run dir
 │   ├── gen.sh                regenerate asic/rtl/generated/ + stage into hdl/
 │   ├── gen_top.py            regenerate OpenEye_Asic.v + pad_order.json
-│   ├── gen_config.py         regenerate openeye.json
+│   ├── gen_config.py         regenerate openeye.json (timing, floorplan,
+│   │                         macros, PDN, resizer caps, GRT)
+│   ├── macro_placement.py    fixed R0 positions for the 33 SRAM instances
 │   ├── regress.sh            cocotb regression (generic RAMs)
 │   ├── regress_macros.sh     cocotb regression (sg13g2 SRAM macros)
+│   ├── rename_loops_fpga.py  one-shot: split shared loop counters (yosys check)
 │   ├── hoist_parallel_wires.py / hoist_hier_wires.py  (one-shot Yosys-compat transforms)
+│   └── pdk_specify_strip.py  strip specify blocks for the Verilator gate-sim
 ├── sim/
 │   ├── tb_ram_equiv.v        unit test: sg13g2_ram_sp vs RAM_SP_generic
-│   ├── gatesim/              gate-level sim of the synthesized netlist
-│   │   ├── OpenEye_Asic_gatesim_top.v  wrapper: pad ports -> FPGA signals
-│   │   ├── Makefile                iverilog + cocotb (slow fallback)
-│   │   ├── run_verilator.sh        Verilator + cocotb VPI (fast, preferred)
-│   │   ├── sg13g2_primitives_vlt.v Verilator stand-ins for the 17 stdcell
-│   │   │                           UDP primitives (no UDP support)
-│   │   ├── gatesim_probe_tb.v      standalone liveness probe
-│   │   ├── forloop_tests/          yosys for-loop unrolling evidence
-│   │   └── vpi_probes/             VPI exposure decision probes (P15b/P15c)
+│   └── gatesim/              gate-level sim of the synthesized netlist
+│       ├── OpenEye_Asic_gatesim_top.v  wrapper: pad ports -> FPGA signals
+│       ├── Makefile                iverilog + cocotb (slow fallback)
+│       ├── run_verilator.sh        Verilator + cocotb VPI (fast, preferred)
+│       ├── sg13g2_primitives_vlt.v Verilator stand-ins for the 17 stdcell
+│       │                           UDP primitives (no UDP support)
+│       ├── gatesim_probe_tb.v      standalone liveness probe
+│       ├── demo/                   cocotb stimulus/reference data
+│       ├── forloop_tests/          yosys for-loop unrolling evidence
+│       └── vpi_probes/             VPI exposure decision probes
 ├── smoke/counter/            smoke design (RTL + LibreLane config + SDC)
-└── runs/                     (gitignored) flow + regression logs
+└── runs/                     (gitignored, est-srv02 only, kept as evidence)
+    ├── openeye_p2_NN/        one dir per flow run: flow.log + design/
+    │   └── design/runs/p2_NN/  one subdir per run dir (NN-stepname), each with
+    │                           config.json, state_in/out.json, views, metrics
+    ├── monitor_p2_NN.sh/.log 5-min progress snapshots (host side)
+    ├── watchdog_p2_NN.log    watchdog state (host side)
+    └── (regression, loop-check and gate-sim logs)
 ```
 
 ## Environment
@@ -56,7 +82,7 @@ asic/
 - PDK: `ihp-sg13g2` in-container at `/foss/pdks` (PDK commit `a49358cc`),
   30 SRAM macro variants (1P/2P), `sg13g2_io` pad library (22 cells),
   3 timing corners (typ 1.2 V/25 °C, fast 1.32 V/−40 °C, slow 1.08 V/125 °C)
-- Worker container: `iic-osic-tools_asic` (headless; uid 1002 on
+- Worker container: `iic-osic-tools_asic` (headless. uid 1002 on
   est-srv02, 1000 on the old machine), mounts `~/projekte` →
   `/foss/designs` (repo therefore at `/foss/designs/OpenEye`).
   Container setup + est-srv02 gotchas: see `QWEN.md`
@@ -89,9 +115,9 @@ Reference runs (kept in `runs/`):
 1. Yosys synthesis with pad blackboxes: Liberty blackboxes do **not** expose
    power pins as connectable ports → pads are blackboxed via
    `EXTRA_VERILOG_MODELS` with clean Verilog models
-   (`rtl/sg13g2_io_blackbox.v`; the PDK's `sg13g2_io.v` is not parseable by
-   OpenSTA's netlist reader — specify blocks).
-2. Absolute floorplan: `FP_SIZING: absolute` + `DIE_AREA`; core margins as
+   (`rtl/sg13g2_io_blackbox.v`). The PDK's `sg13g2_io.v` is not parseable by
+   OpenSTA's netlist reader (specify blocks).
+2. Absolute floorplan: `FP_SIZING: absolute` + `DIE_AREA`. Core margins as
    multiples of site width/height (`LEFT/RIGHT_MARGIN_MULT=667` → 320.16 µm,
    `TOP/BOTTOM_MARGIN_MULT=85` → 321.3 µm) so the core does not overlap the
    pad band (140+180 µm).
@@ -110,10 +136,12 @@ Reference runs (kept in `runs/`):
    streamout).
 6. Timing: 20 ns clock met in all three corners (setup/hold WNS = 0).
 
-### Open PDK integration gaps (must be solved before tape-out)
+### Open PDK integration gaps
 
-These are **not flow bugs**; the IHP open PDK marks the pad power/bondpad
+These are **not flow bugs**. The IHP open PDK marks the pad power/bondpad
 area as work-in-progress ("TODO bondpads need to be part of the PDK").
+The gaps block tape-out. They do not block the baseline run. Expected
+failures in the p2_15 signoff: items 1–3 below.
 
 1. **Bondpad ↔ pad port not electrically connected** (LVS: 15 net mismatches,
    e.g. `out_pad[0]`: layout has `bondpad_70x70/pad`, schematic has
@@ -124,17 +152,18 @@ area as work-in-progress ("TODO bondpads need to be part of the PDK").
    → Need the proper IHP bondpad design (layers, vias, orientation per side)
    or confirmation from IHP how pad→bondpad connectivity is intended.
 2. **Pad `vdd` pins not connected to the power grid** (PSM-0069 in
-   `check_power_grid`; 44 pins + 4 bondpad pins). `vss/iovdd/iovss` connect,
-   `vdd` does not — none of the tested ring variants
+   `check_power_grid`, 44 pins + 4 bondpad pins). `vss/iovdd/iovss`
+   connect. `vdd` does not. None of the tested ring variants
    (`-core_offsets`, `-pad_offsets`, `-connect_to_pads`, `-nets`,
-   `-extend_to_boundary`) closes it. `RUN_IRDROP_REPORT` was disabled for
-   the smoke test. → Pad power architecture needs a PDK-level definition.
+   `-extend_to_boundary`) closes it. `RUN_IRDROP_REPORT` is disabled until
+   this gap is resolved. → Pad power architecture needs a PDK-level
+   definition.
 3. **Sealring offset vs. bondpads** (1.59 M × `Seal.l`: "no structures
    outside sealring boundary"): sealring at 140 µm, bondpads at 70..140 µm
    (outside). → Sealring offset must move inside the bondpad band
    (KLAYOUT sealring step parameters / PDK config).
-4. `check_power_grid` in `generatepdn` is a warning; the fatal check sits in
-   `IRDropReport` — re-enable once gap 2 is resolved.
+4. `check_power_grid` in `generatepdn` is a warning. The fatal check sits in
+   `IRDropReport`, which is disabled for the duration of gap 2.
 
 ### Config notes carried over to the OpenEye design (Phase 2)
 
@@ -156,15 +185,23 @@ area as work-in-progress ("TODO bondpads need to be part of the PDK").
 64-bit DMA, BRANCHES=2, QUANT_AMOUNT=32, TRANS_WORDS=8, 10 ns target.
 Buffer depths are aligned to the sg13g2 SRAM macro grid:
 
-| Buffer (count)            | Depth × Width | Macro tiling (all `RM_IHPSG13_1P`)        |
-|---------------------------|---------------|-------------------------------------------|
-| BUFFER_A iact (4)         | 1024 × 64     | 1 × 1024x64                               |
-| wght_buffer (1)           | 2048 × 288    | 4 × 2048x64 + 1 × 2048x32                 |
-| psum_buffer (8)           | 4096 × 40     | 2 × 4096x16 + 1 × 4096x8                  |
-| iact_stream_constructor (4) | 1024 × 72   | 1 × 1024x64 + 1 × 1024x8                  |
+| Buffer (count)            | Depth × Width | Implementation                              |
+|---------------------------|---------------|---------------------------------------------|
+| BUFFER_A iact (4)         | 1024 × 64     | 1 × 1024x64 (macro)                         |
+| wght_buffer (1)           | 2048 × 288    | 4 × 2048x64 + 1 × 2048x32 (macros)          |
+| psum_buffer (8)           | 4096 × 40     | 2 × 4096x16 + 1 × 4096x8 (macros)           |
+| iact_stream_constructor (4) | 1024 × 24   | generic FF RAM (no macro for this width)    |
 
-= 37 macro instances, 6 macro types, ≈ 11.1 mm² SRAM. PE-internal
-scratchpads stay standard-cell latches.
+= 33 macro instances, 5 macro types, ≈ 8.6 mm² SRAM (p2_14 floorplan
+metrics). The PE-internal scratchpads stay standard-cell latches.
+
+The iact_stream_constructor storage is 1024 × 24 in this target
+(BITS_PER_ROUTER = TRANS_BITWIDTH_IACT × NUM_GLB_IACT / NUM_GLB_IACT = 24).
+This (AddrWidth, DataWidth) pair is not among the four macro-hook
+configurations in `hdl/RAM_SP.v`, so the RAM synthesizes to the generic
+FF implementation (verified in the p2_14 netlist:
+`iact_buffer_SP.g_generic`). The four iact RAMs hold 294,912 FFs, 58 % of
+all 506,219 sequential cells in the netlist.
 
 **`NUM_GLB_IACT=1` (not the oep default 3):** the NUM_GLB_IACT=3 iact
 routing path is broken in the current codebase snapshot — cocotb
@@ -174,18 +211,17 @@ configuration (FPGA test setup). Fixing the GLB=3 path is a separate
 RTL-debug task (follow-up).
 
 **`IACT_SC_ADDRWIDTH` (new parameter):** `OpenEye_FPGA.v` hard-coded
-`.ADDRWIDTH(13)` (8192 rows) for the iact_stream_constructor RAM. With
-NUM_GLB_IACT=1 the RAM is 72 bits wide — 72 = 64+8 exists only up to
-1024 rows in the macro grid. The parameter (oep + parameters_FPGA.vh +
-RTL, default 13 keeps all existing setups unchanged) sets the depth to
-1024 for the ASIC target. Supported max input size per iact pass shrinks
-accordingly (documented limitation of target v1).
+`.ADDRWIDTH(13)` (8192 rows) for the iact_stream_constructor RAM. The
+parameter (oep + parameters_FPGA.vh + RTL, default 13 keeps all existing
+setups unchanged) sets the depth to 1024 for the ASIC target. Supported
+max input size per iact pass shrinks accordingly (documented limitation
+of target v1).
 
 ### SRAM macro integration
 
-- `hdl/RAM_SP.v`: the `OPENEYE_RAM_SPECIFIC` hook now selects
+- `hdl/RAM_SP.v`: the `OPENEYE_RAM_SPECIFIC` hook selects
   `sg13g2_ram_sp` for the four (DataWidth, AddrWidth) configurations
-  above; everything else falls back to `RAM_SP_generic`.
+  above. Everything else falls back to `RAM_SP_generic`.
 - `rtl/sg13g2/sg13g2_ram_sp.v`: drop-in replacement (identical
   interface to `RAM_SP_generic`), width-sliced macro tiling,
   write-mask expansion (A_BM is active-high write-enable in the PDK
@@ -200,8 +236,8 @@ accordingly (documented limitation of target v1).
 
 - **cocotb single-layer regression (generic RAMs): PASS**
   (`runs/cocotb_refactor1.log`).
-  ⚠ All target values must be passed as **make command-line variables**;
-  environment-only overrides are ignored by recipe subshells (the test
+  ⚠ All target values must be passed as **make command-line variables**.
+  Environment-only overrides are ignored by recipe subshells (the test
   Makefile's own `export` lines win) → mixed configuration, X on
   `data_dma_o`. `regress.sh` does this correctly.
 - **cocotb regression with sg13g2 macro models: PASS**
@@ -215,7 +251,7 @@ accordingly (documented limitation of target v1).
 
 ### Yosys compatibility (FPGA-only constructs removed)
 
-The RTL was written for iverilog/Vivado; Yosys 0.70 rejects several
+The RTL was written for iverilog/Vivado. Yosys 0.70 rejects several
 constructs. Fixed (functionally equivalent, both cocotb regressions
 re-verified):
 
@@ -225,8 +261,8 @@ re-verified):
   Yosys → the affected scope-local wires were hoisted to module scope as
   2D/1D wire arrays (`hdl/OpenEye_FPGA.v`, `hdl/iact_stream_constructor.v`,
   `hdl/OpenEye_Parallel.v`, `hdl/GLB_cluster.v`, `hdl/PE_cluster.v`,
-  `hdl/PE.v`; transforms: `scripts/hoist_parallel_wires.py`,
-  `scripts/hoist_hier_wires.py`).
+  `hdl/PE.v`). Transforms: `scripts/hoist_parallel_wires.py`,
+  `scripts/hoist_hier_wires.py`.
 - `$bits(x)'(y)` size casts (not supported) → plain assignments/comparisons
   (`hdl/PE.v`, `hdl/data_pipeline_iact.v`, `hdl/data_pipeline_wght.v`).
 - `$value$plusargs` debug wave-dump (Icarus-only) → flow defines `NO_TRACE`
@@ -247,7 +283,7 @@ tb1–tb14, real-design checks `runs/flowchk.log`):
 
 - Yosys 0.70 `proc` **does unroll** constant-bounded `for` loops inside
   clocked blocks — all 244 of them (9 files). Loop bodies come out with
-  constant indices; the loops are NOT a synthesis hazard by themselves.
+  constant indices. The loops are NOT a synthesis hazard by themselves.
 - The module-scope `integer` loop counters remain as **dead "zombie" FFs**
   (self-referential next state, zero external fanout). The flow's own `opt`
   passes (`opt_dff`/`opt_clean`) remove all of them — verified: the
@@ -262,7 +298,226 @@ tb1–tb14, real-design checks `runs/flowchk.log`):
   `OpenEye_FPGA.v`): **one loop variable per always block**
   (`a`→`a1..a4`, `b`→`b1..b4`). Netlist-identical, checker-clean.
 
-### Gate-level verification of the synthesized netlist
+## Phase 2 — First full implementation (2026-10-23 →)
+
+### Flow
+
+LibreLane 3.1 Chip flow, 83 steps, 3 timing corners. Stage order:
+
+Lint → Synthesis → Checkers → Floorplan → PDN → Padring/Bondpads →
+Macro placement → Tap/endcap → Placement → CTS → Resizer → Global routing
+→ Antenna repair → Detailed routing → Post-PNR STA (3 corners) → DRC
+(Magic + KLayout) → LVS (Netgen) → GDS (Magic + KLayout streamout).
+
+Floorplan: 10.5 × 10.5 mm die, core 97.2 mm², 143 pads (80 µm pitch,
+2.9 mm span per side, centered). p2_14 floorplan metrics: 2,196,035
+stdcells (1,663,263 combinational, 506,219 sequential), 8.58 mm² SRAM
+macros, ≈ 55 % core utilization (stdcell + macros).
+
+### Run infrastructure
+
+- Launch chain (host): `watchdog.sh p2_NN` (detached) →
+  `run_openeye.sh p2_NN [StepId]` → staging (container `gen.sh` + host
+  `gen_top.py` + `gen_config.py`) →
+  `librelane openeye.json --run-tag p2_NN [-F StepId]` in the container.
+- The watchdog has a 3-restart budget. It restarts only on unexpected
+  crashes (OOM, SIGKILL, traceback). Design-level checker failures need
+  analysis, not a rerun.
+- Before every launch the watchdog resolves the resume step: the first
+  flow step without a complete step dir. A dir is complete if it holds a
+  `state_out.json`, or only `config.json` + `state_in.json` (output-less
+  steps like `Checker.PowerGridViolations` write no state_out).
+- The monitor (per run, 5-min snapshots) tracks flow.log size, the step-dir
+  set and the watchdog state. It flags STALL/DEAD/RESTART. Long
+  single-process steps (GRT, DRT, antenna repair) buffer their output and
+  leave flow.log flat for hours. STALL flags on those are false positives.
+- Every run dir is kept as evidence (gitignored, est-srv02 only). Old runs
+  are never deleted.
+
+### Resume semantics (verified in the LibreLane 3.1 source, 2026-10-29)
+
+- `librelane --overwrite` wipes the run dir (`shutil.rmtree`). p2_12 lost
+  30 h of outputs to it. Never use it.
+- A plain `librelane openeye.json --run-tag <tag>` on an existing run does
+  not skip finished steps. It re-runs the whole flow from step 1 in new
+  numbered directories. The initial state comes only from the latest
+  `state_out.json` (by mtime).
+- Resume requires `-F <StepId>`: the steps before it are skipped, the step
+  and everything after run in the next free directory numbers.
+- Forking a run dir (copying a run-tag): rewrite the absolute paths in all
+  `state_*.json`. Restore the original mtimes (`touch -r`) afterwards. Any
+  rewriting tool (e.g. `sed -i`) resets mtimes to "now" and breaks the
+  latest-state selection. After both: verify that the latest
+  `state_out.json` is the last finished step and that all files it
+  references exist.
+
+### Run history
+
+| Run | Period | Ended at | Outcome |
+|---|---|---|---|
+| p2_8 – p2_10 | 10-23 → 10-24 | step 8 (YosysSynthChecks) | 128/64/64 check errors (shared loop counters, Phase 1). The p2_10 netlist is functionally correct (gate-sim PASS) |
+| p2_11 | 10-26 | step 22 (GeneratePDN) | PDN-0235: unplaced macros. Fixed with 33 fixed R0 positions (D4) |
+| p2_12 | 10-26 → 10-27 | step 36 (ResizerTimingPostCTS, killed at 11 h+) | 10 ns variant. Timing analysis drove the 50 MHz switch (D1). The later `--overwrite` resume wiped the run dir (evidence kept) |
+| p2_13 | 10-27 | killed before outputs | launcher log only |
+| p2_14 | 10-27 19:53 → 10-29 17:02 | step 38 (GlobalRouting) | 20 ns. Steps 1–37 clean (29 h). Setup met, 41 hold violators left. GRT-0116 after 13.8 h / 150 iterations (D6) |
+| p2_15 | 10-29 19:13 → running | run dir 42 (RepairAntennas) | fork of p2_14 (D8). GRT done 14:42. Antenna repair running |
+
+Notable runtimes from p2_14 (20 ns, for planning): synthesis 0:59,
+floorplan 0:37, padring 1:13, generatePDN 1:11, global placement 1:53,
+repairPostGPL 4:35, detailed placement 0:43, CTS 4:13,
+resizer post-CTS 10:40, GRT 13.8 (failed).
+
+### Decisions
+
+**D1 — 50 MHz (20 ns) instead of 10 ns** (user decision 2026-10-27, commit `cbf35ff`)
+- p2_12 pre-resizer STA (nom_typ): worst setup path ≈ 19.6 ns
+  (wire-dominated PE-fabric cross-chip net), 270k violating endpoints.
+  CTS + resizer cannot close 10 ns on this netlist.
+- The first physical baseline closes at 50 MHz. 100 MHz needs PE-fabric
+  re-pipelining (RTL change, follow-up).
+
+**D2 — IO_DELAY_CONSTRAINT 32 → 6.4 ns pad in/out delay** (commit `cbf35ff`)
+- `base.sdc` computes the pad delay as period × IO_DELAY_CONSTRAINT / 100.
+  The default 20 would give 4.0 ns at 20 ns.
+- The worst hold requirement is 5.173 ns (DMA input-capture regs, clock
+  latency 4.95 ns). 6.4 ns covers it with ~1.5 ns margin.
+- The fatal `_29536xx_` input-capture net of the 10 ns runs is gone in
+  p2_14 (post-resizer STA). The 6.4 ns input delay works as designed.
+- Open assumption: an external synchronous driver at 50 MHz with
+  ≤ 6 ns clock-to-pad. Verify against the board spec.
+
+**D3 — All four resizer TNS caps at 1 % of initial TNS** (commits `f55a817`, `92675e6`)
+- p2_12 incident: step 36 ran 11 h+ with no stop condition. The setup
+  phase gave up on its own after ~2.7 h (structural, wire-dominated). The
+  hold phase was the long tail: THS −27,166 → −220 over ~8.5 h at a
+  decaying rate, WHS flat at −4.064 on the DMA input-capture regs
+  (clock-latency vs input-delay mismatch, not buffer-fixable).
+- 1 % is the knee of the measured curve. The caps bound run time only.
+  The HoldViolations gate fails on the residual with or without them.
+- Knobs: `PL_RESIZER_{SETUP,HOLD}_REPAIR_TNS_PCT` (post-CTS),
+  `GRT_RESIZER_{SETUP,HOLD}_REPAIR_TNS_PCT` (post-GRT).
+
+**D4 — Fixed R0 positions for the 33 SRAM macros** (commit `3d6c242`)
+- The LibreLane 3.1 Chip flow does not place macros on its own.
+  `Odb.ManualMacroPlacement` only acts on `MACROS.<cell>.instances` from
+  the config. Without them `GeneratePDN` dies with PDN-0235 (p2_11).
+- `macro_placement.py` computes the positions: three rows along the bottom
+  of the core, tallest macros first (wght row: 5, psum row: 24, BUFFER_A
+  row: 4). 15 µm spacing in a row, 20 µm between rows, snapped to the
+  5 µm grid, with legality assertions (≥ 10 µm gap, inside the core).
+- The instance names are the exact ODB names from the p2_11 padring DEF.
+  `placers.py` hard-fails on a mismatch, so a stale list cannot silently
+  misplace.
+
+**D5 — OpenROAD binary pin** (commit `3d6c242`)
+- The container's openroad silently changed which build the flow used. The
+  librelane process keeps its launch-time env, so steps can run on a
+  different build than a fresh shell sees. Symptom: openroad prints its
+  usage and exits 1 with an identical argv.
+- `env.sh` pins `_LLN_OVERRIDE_OPENROAD` to the -python-capable build
+  `/foss/tools/openroad-librelane/bin/openroad`.
+
+**D6 — GRT_ALLOW_CONGESTION: true** (commit `82d393b`)
+- p2_14 died in GRT with GRT-0116 ("Global routing finished with
+  congestion") after 13.8 h / 150 iterations.
+- Final congestion report: global usage 30.3 % (24.2M / 80M resources).
+  The residual is local overflow in the dense PE-fabric / SRAM regions
+  (max 143 units in one M3-H cell, 108 in one M2-V cell. 216,531 total =
+  0.9 % of demand).
+- Metal1 carries the PDN (routing runs Metal2..TopMetal2), so there is no
+  spare layer. GRT already disabled the NDR on `net781646` to fight the
+  congestion.
+- With six layers at 30 % global usage the residual is inside what the
+  detailed router (zroute) can detour. `-allow_congestion` lets GRT
+  complete. DRT absorbs the rest.
+- Next lever if DRT chokes on a hotspot: `GRT_LAYER_ADJUSTMENTS` (steer
+  demand between layers). Last resort: placement.
+
+**D7 — Never `--overwrite`, resume only with `-F`** (commit `234c2de`)
+- See Resume semantics above. `run_openeye.sh` takes
+  `<runname> [resume-step-id]`. The watchdog resolves the resume step
+  automatically before every launch.
+
+**D8 — Fork p2_14 → p2_15** (2026-10-29)
+- GRT was the only failed step. A rerun of steps 1–37 would cost ~29 h.
+- The fork: run-dir copy (41 GB) + state-path rewrite + mtime restore,
+  verified before launch (latest state_out = step 37, all references
+  exist).
+- The first relaunch (19:03) went without `-F` and restarted the whole
+  flow in new dirs 39–44 (it proved the resume-semantics gap in
+  production). Killed. Junk dirs deleted. Relaunch at 19:13 with
+  `-F OpenROAD.GlobalRouting`: all 37 steps skipped, GRT re-ran in dir 39.
+  The failed GRT dir of p2_14 lives on in p2_15 as dir 38 (evidence).
+
+### p2_14 timing results (20 ns)
+
+nom_typ, 1.20 V / 25 °C:
+
+| | Setup WNS | Setup TNS | Best setup slack | Hold WNS | Hold TNS |
+|---|---|---|---|---|---|
+| pre-resizer (step 35) | 0.0 | 0.0 | +0.418 ns | −1.01 | −687 |
+| post-resizer (step 37) | 0.0 | 0.0 | +4.25 ns | −0.44 | −4.65 |
+
+- Setup is met at 50 MHz before the resizer runs.
+- 41 hold violators remain post-resizer, all on SRAM-macro inputs
+  (wght_buffer A_DIN, BUFFER_A, PSUM). The post-GRT hold resizer (D3)
+  takes them.
+- The final numbers come from the post-PNR STA (3 corners) and the
+  Setup/Hold violation checkers at the end of the flow.
+- STA numbers before CTS (before step 34) are star-net artifacts. Do not
+  treat them as config errors.
+
+### Current status (p2_15, as of 2026-10-30 18:00)
+
+| Run dir (p2_15) | Stage | Runtime | State |
+|---|---|---|---|
+| 01–37 | lint … STA post-resizer | ~29 h | reused from p2_14 |
+| 38 | GlobalRouting (failed, p2_14) | 13.8 h | kept as evidence |
+| 39 | GlobalRouting (`-allow_congestion`) | 14:42:19 | done 10-30 ~09:56 |
+| 40 | CheckAntennas | 0:49:21 | done, 12,970 antenna violations |
+| 41 | DiodesOnPorts | ~0 | done (no-op) |
+| 42 | RepairAntennas | 7 h 24 min | running: iteration 2 of 3. 12,970 → 2,714 violations. 21,723 jumpers + 5,123 diodes inserted. Internal GRT reroute done (NDR off on net781646) |
+
+- Process state: openroad 99.7 % CPU / 23.4 GB, librelane stable,
+  watchdog restarts 0.
+- The monitor's STALL flags since 13:30 are the known false positives
+  (buffered subprocess output, flow.log flat).
+- The jumpers and diodes are antenna mitigations. They add cells and
+  vias. The `repair_antennas` command legalizes them internally
+  (detailed placement + GRT re-run), so no extra full GRT step follows.
+
+### What remains (stages after RepairAntennas)
+
+| Stage | Expectation |
+|---|---|
+| ResizerTimingPostGRT | 4–10 h, capped at 1 % TNS (D3) |
+| STAMidPNR | ~20 min |
+| DetailedRouting (zroute) | 10–20 h. Must detour the 0.9 % GRT residual (D6) |
+| RemoveRoutingObstructions, CheckAntennas | ~1 h |
+| TrDRC, DisconnectedPins, WireLength (+ reports) | ~1 h |
+| FillInsertion, CellFrequencyTables | minutes |
+| RCX (parasitic extraction) | ~1 h |
+| STAPostPNR (3 corners) | **the 50 MHz signoff numbers** |
+| IRDropReport | skipped (`RUN_IRDROP_REPORT` off, PDK gap 2) |
+| Magic/KLayout streamout, XOR, KLayout antenna, sealring, filler, density | ~1 h |
+| DRC (Magic + KLayout) | the 3 known PDK-gap failures are expected |
+| Spice extraction, LVS (Netgen), EQY | the bondpad↔pad-port LVS mismatch is expected (PDK gap 1) |
+| Setup/Hold/MaxSlew/MaxCap checkers, manufacturability report | HoldViolations should pass after ResizerTimingPostGRT |
+
+ETA (from 2026-10-30 18:00): signoff (STAPostPNR) 10-31 evening → 10-32
+morning. GDS 10-32. DRC/LVS on 10-32.
+
+### Next steps (after signoff)
+
+- Collect the signoff metrics: utilization, WNS/TNS per corner at 20 ns,
+  antenna balance, routing stats, DRC/LVS violation counts.
+- The 3 PDK-gap failures are expected. They block tape-out, not the
+  baseline.
+- 100 MHz: PE-fabric re-pipelining (~2–3 stages), an RTL change. Separate
+  task after the baseline closes.
+- Board-spec check of the 6.4 ns input-delay assumption (D2).
+
+## Gate-level verification of the synthesized netlist
 
 Functional proof that the unrolled netlist matches the RTL: the same
 cocotb test as the RTL regression (`OpenEye_FPGA_tb`, `start_test_fpga`)
@@ -271,7 +526,7 @@ wrapper `sim/gatesim/OpenEye_Asic_gatesim_top.v` (pad ports → FPGA signal
 names, 9 ports total).
 
 - **`sim/gatesim/Makefile`** — iverilog path (slow: ~200 ns/min on the old
-  machine; the PDK models' specify blocks make every gate a delay).
+  machine. The PDK models' specify blocks make every gate a delay).
 - **`sim/gatesim/run_verilator.sh <netlist>`** — Verilator path (fast).
   Usage (container):
   ```
@@ -283,17 +538,17 @@ names, 9 ports total).
   script header):
 
   - **No UDP support**: the PDK stdcell models instantiate 17 `ihp_*` UDP
-    primitives; `sg13g2_primitives_vlt.v` provides behavioral stand-ins
+    primitives. `sg13g2_primitives_vlt.v` provides behavioral stand-ins
     with identical port lists (semantics transcribed from the PDK UDP
-    tables; the 6 in-use types were differential-tested against the real
+    tables. The 6 in-use types were differential-tested against the real
     UDPs in iverilog, 4000 randomized cycles).
   - **Unnamed instances**: the PDK stdcell file instantiates the
     primitives without instance names (legal per LRM, iverilog accepts,
     Verilator rejects). The script generates a named copy
-    (`ihp_xxx u_prim_N (`) into the build dir at build time; the iverilog
+    (`ihp_xxx u_prim_N (`) into the build dir at build time. The iverilog
     path still uses the PDK original.
   - **VPI exposure: marks + `--flatten`** (both REQUIRED, root-caused
-    2026-10-25; probes in `vpi_probes/`). Without any `public_on` marks
+    2026-10-25. Probes in `vpi_probes/`). Without any `public_on` marks
     Verilator 5.052 generates no VPI var table at all (cocotb init
     fataled with "Can not find root handle", 2026-10-25 build), so the
     wrapper's 9 ports carry the marks (in `OpenEye_Asic_gatesim_top.v`).
@@ -301,16 +556,17 @@ names, 9 ports total).
     survives as its own class while `$root` holds a mirror copy of the 9
     ports that is re-synced onto the wrapper on every clock edge,
     clobbering cocotb's writes (outputs read 0x0). `--flatten` inlines
-    everything into one `$root` class; the top module's scope view then
-    binds its var table to `$root` storage, so the cocotb root handle
+    everything into one `$root` class. The top module's scope view binds
+    its var table to `$root` storage, so the cocotb root handle
     (`COCOTB_TOPLEVEL=OpenEye_Asic_gatesim_top`) exposes the live port
     variables.
     - **File order is functional** (build 6 root cause, 2026-10-25, probes
       in `vpi_probes/`): Verilator 5.052 auto-marks a module `modPublic`
       iff its definition is parsed AFTER the `--top-module` definition
-      (command-line file order, then in-file order). Public inlined cells
+      (command-line file order, falling back to in-file order). Public
+      inlined cells
       keep per-instance hierarchical var names and therefore materialize a
-      per-instance VPI scope; non-public cells merge their vars into
+      per-instance VPI scope. Non-public cells merge their vars into
       top-level `__Vcellout__` members (no scope). The script lists ALL
       cell files (netlist, primitives, stdcell, RM, io) BEFORE the wrapper
       → expected scope table: 2 rows (TOP + wrapper), ~9-20 var entries
@@ -321,13 +577,13 @@ names, 9 ports total).
       `asic/scripts/pdk_specify_strip.py` (84 blocks → 57
       `assign delayed_X = X;` aliases): Verilator is 2-state and ignores
       specify contents, so the `delayed_*` wires of the 16 FF/latch cells
-      would fold to 0 and break every sequential cell; all PDK specify
+      would fold to 0 and break every sequential cell. All PDK specify
       delays are 0.0, so the aliasing is exact.
     Do NOT use `--public`/`--public-flat-rw` instead: `--public-flat-rw`
     exposes every internal signal of the flat netlist and exploded codegen
     to 653 GB of C++ (2026-10-23 build, killed).
   - **Build with `-cc --exe`**, not `--binary`: cocotb's
-    `verilator.cpp` provides `main()`; `--binary` generates a second one
+    `verilator.cpp` provides `main()`. `--binary` generates a second one
     (link error `duplicate symbol: main`). Compile with low `make -j`
     (`MAKE_JOBS`, default 4): the generated translation units are huge.
   - **cocotb 2.1 runtime env**: `COCOTB_TEST_MODULES` /

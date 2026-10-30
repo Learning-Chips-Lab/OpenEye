@@ -130,10 +130,10 @@ def main() -> None:
         # at 50 MHz with <= 6 ns clock-to-pad -- verify against board spec.
         "IO_DELAY_CONSTRAINT": 32,
         "FP_SIZING": "absolute",
-        # 10.5 mm die: post-synthesis area is 35.4 mm^2 logic (70 % PE-pad
-        # latches) + 11.1 mm^2 SRAM = 46.5 mm^2 cells; the core
-        # (~9.86 mm x 9.86 mm) gives ~48 % utilization. 143 pads at 80 um
-        # pitch (2.9 mm span, centered) leave ample room.
+        # 10.5 mm die: p2_14 floorplan metrics (measured): 44.7 mm^2
+        # stdcell + 8.6 mm^2 SRAM macros = 53.2 mm^2 on the 97.2 mm^2 core
+        # -> ~55 % utilization (stdcell + macros, pads excluded). 143 pads
+        # at 80 um pitch (2.9 mm span, centered) leave ample room.
         "DIE_AREA": [0, 0, 10500, 10500],
         "LEFT_MARGIN_MULT": 667,
         "RIGHT_MARGIN_MULT": 667,
