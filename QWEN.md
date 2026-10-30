@@ -50,7 +50,7 @@ Work the phases in order. Ground rules for every task:
   (`-threads 48`, >100 % CPU, no new ORD-0032) is checked in Phase B
   (B5) after the relaunch.
 
-- [ ] **A2 (CRITICAL) — watchdog resume resolver picks SKIPPED steps.**
+- [x] **A2 (CRITICAL) — watchdog resume resolver picks SKIPPED steps.**
   Run read-only against p2_15 (2026-10-30 18:10) it returned
   `OpenROAD.RepairDesignPostGRT`: that step is gated off by config and
   never creates a step dir, so the resolver's "no dir → never ran →
@@ -68,6 +68,29 @@ Work the phases in order. Ground rules for every task:
   step 42 is running (dir without `state_out.json`), and the step after
   it once `42-…/state_out.json` exists. Also test against a p2_14 copy /
   synthetic dirs: fresh run → empty output; crashed step → that step.
+  **Done 2026-10-30 19:15:** logic factored into
+  `asic/scripts/resolve_resume.py <run_dir>` (standalone, container-side),
+  `watchdog.sh resolve_resume_step()` now just calls it. Rules: crashed/
+  running step (latest dir w/o `state_out.json`) → that step; otherwise
+  first step after the frontier of completed steps that is NOT gated by
+  the design config (gating evaluated like `sequential.py`:
+  `Chip.gating_config_vars` expanded, defaults from the flow, overrides
+  from `<design>/openeye.json`); a no-dir step followed by a step WITH a
+  dir = -F-skipped by the previous launch → must not re-run; fresh run →
+  nothing. Prints the UNIQFIED step id (`OpenROAD.STAMidPNR-3`, ...),
+  because `-F <plain id>` would resolve to the first occurrence.
+  Verified (2026-10-30 19:15): `bash -n`, `py_compile`; live p2_15 →
+  `OpenROAD.RepairAntennas` (step 42 running);
+  `asic/scripts/test_resolve_resume.py` (synthetic runs in container
+  /tmp from the real Chip step list) → **7/7 PASS**: fresh → empty;
+  crashed step → that step; frontier 42 complete +
+  `RUN_POST_GRT_RESIZER_TIMING=true` → `OpenROAD.ResizerTimingPostGRT`;
+  same frontier + knob unset → `OpenROAD.STAMidPNR-3`; all ungated
+  complete → empty (flow done); fork-like duplicate dirs (latest wins,
+  both variants). The "42 complete" case is re-checked live in Phase B
+  (B3). NOTE: the B3 expectation (ResizerTimingPostGRT) requires the A7
+  knob — with p2_15's current design config the resolver would print
+  `OpenROAD.STAMidPNR-3` (resizer gated off by default).
 
 - [ ] **A3 — `run_openeye.sh`: don't lose logs, don't change RTL on resume.**
   (a) `tee` overwrites `flow.log` on every (re)launch — a watchdog crash
@@ -98,6 +121,22 @@ Work the phases in order. Ground rules for every task:
 - [ ] **A6 — comment fix in `gen_config.py`:** "70 % PE-pad latches" is
   wrong — the netlist has no latches; area is 506,219 `sg13g2_dfrbpq_1`
   (24.8 of 55.3 mm², ~45 %, async-reset DFFs).
+
+- [ ] **A7 (new, found while implementing A2, 2026-10-30) — the
+  post-GRT resizer is OFF by default, contradicting the plan's own
+  assumptions.** `RUN_POST_GRT_RESIZER_TIMING` defaults to False
+  (librelane `classic.py`; p2_15 `resolved.json` confirms: False). So
+  `OpenROAD.ResizerTimingPostGRT` (flow step 44) never runs: the four
+  `GRT_RESIZER_*_REPAIR_TNS_PCT` caps in `gen_config.py` are inert, and
+  the p2_14 analysis line "the post-GRT hold resizer (capped) takes the
+  41" (remaining hold violators, WNS −0.44 pre-GRT, all on SRAM-macro
+  inputs) never happens — the final hold gate could then trip the stop
+  criterion (final Hold-WNS < −0.5 ns). Fix:
+  `"RUN_POST_GRT_RESIZER_TIMING": True` in `gen_config.py` (runtime is
+  bounded by the 1 % TNS caps; at post-GRT the hold TNS to repair is
+  small, ~−4.65 ns). Verify: knob in regenerated `openeye.json`; A2
+  resolver then prints `OpenROAD.ResizerTimingPostGRT` for the 42
+  frontier (test S3).
 
 ### Phase B — apply A1–A5 to p2_15 (needs the user's OK first)
 
@@ -335,8 +374,13 @@ by A4). flow.log ~508 MB and still growing (162 B between 18:30 and
 18:35 snapshots).
 
 - **18:50 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
-  + regenerated `openeye.json`, diff = exactly 1 line. Commit to follow
-  in the log below.
+  + regenerated `openeye.json`, diff = exactly 1 line.
+- **19:15 — A2 done** (resume resolver, see plan item): new
+  `asic/scripts/resolve_resume.py` + `test_resolve_resume.py`, watchdog
+  rewired. Live p2_15 → `OpenROAD.RepairAntennas` (correct while step 42
+  runs); 7/7 synthetic scenarios pass. New task **A7** added to the plan
+  (post-GRT resizer is off by default — `RUN_POST_GRT_RESIZER_TIMING`
+  False in p2_15 resolved.json; plan B3/ETA assumed it runs).
 
 **p2_15 (fork of p2_14, 50 MHz / 20 ns) relaunched ~19:30 — resuming at
 `OpenROAD.GlobalRouting` (step 38) with `-F`.** Steps 1–37 reused from
