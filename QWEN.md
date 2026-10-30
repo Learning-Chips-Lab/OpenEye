@@ -447,6 +447,12 @@ Status lines (30-min cadence):
   (920 jumpers / 551 nets) → "Found 420 antenna violations" → "Inserted
   590 diodes". Openroad 370311: etimes 36,292 s, CPU 36,180 s ≈ 99.5 %.
   flow.log 508.1 MB. No state_out.json, no dir 43 yet.
+- **21:19:** final phase of RepairAntennas = verbose net matching
+  (".* matched with _NNNNNN_", 7.8 M lines so far, net index ~3.23 M and
+  rising at a stable ~2,200 nets/s). I/O-bound: openroad mostly blocked
+  in pipe_write, ~2–7 % CPU, flow.log grows ~300 KB/s (633 MB and
+  counting — disk fine, 1.3 T free). Healthy, not a stall: net index,
+  CPU time and log all advancing. Watcher on state_out.json armed.
 
 - **18:35 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
   + regenerated `openeye.json`, diff = exactly 1 line.
