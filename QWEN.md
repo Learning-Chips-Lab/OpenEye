@@ -206,10 +206,12 @@ p2_14 (run dir copied, state paths rewritten, mtimes restored).
 - `run_openeye.sh` now takes `<runname> <resume-step-id>` (→ `-F`),
   `watchdog.sh` resolves the resume step automatically before every
   launch (commit `234c2de`).
-- **ETA (from ~19:30, 10-29):** GRT done ~09:00 10-30 → DRT (10–20 h,
-  wildcard) → post-GRT resizer + STA → **STAPostPNR = 50 MHz signoff
-  numbers ~10-30 evening** → GDS ~10-31 midday → DRC/LVS (3 documented
-  PDK-gap failures expected, see Blocked).
+- **ETA (updated 10-30 12:20):** GRT **done 10-30 ~09:56 (14:42, with
+  `-allow_congestion`)** → CheckAntennas 0:49 done → RepairAntennas
+  running (12,970 antenna violations, 21,723 jumpers inserted) → DRT
+  (10–20 h wildcard) → post-GRT resizer + STA → **STAPostPNR = 50 MHz
+  signoff numbers ~10-31 midday/evening** → GDS ~10-31 evening →
+  DRC/LVS (3 documented PDK-gap failures expected, see Blocked).
 
 ### History (as of 2026-10-27, evening)
 
@@ -697,12 +699,14 @@ override inherited environment.
 
 ## Blocked / open threads
 
-- **Push**: `utz12` has no write access to `Learning-Chips-Lab/OpenEye`, no
-  fork, no PAT. Either add `utz12` as collaborator, create a fork, or use a
-  PAT. Until then, transfer the branch via git bundle:
-  `git bundle create openeye_dev_asic_sg13g2.bundle dev_asic_sg13g2`
-  — a bundle has been created in the repo root on the old machine (untracked);
-  copy it over and `git clone openeye_dev_asic_sg13g2.bundle` on the new one.
+- **Push: RESOLVED 2026-10-30.** No write access to upstream
+  `Learning-Chips-Lab/OpenEye`; the work lives in the fork
+  `github.com/utz12/OpenEye`, branch `dev_asic_sg13g2` (pushed, HEAD
+  9654ac4). SSH: default key `~/.ssh/id_ed25519` on est-srv02 is
+  registered on GitHub (comment `est-srv02-github`), remote `utz12`
+  configured in the repo. Future pushes: `git push utz12 dev_asic_sg13g2`.
+  A PR into upstream can be created from the fork if ever needed
+  (https://github.com/utz12/OpenEye/pull/new/dev_asic_sg13g2).
 - PDK gaps (documented in `asic/README.md`): bondpad↔pad-port LVS mismatch,
   pad `vdd` pins unconnected (PSM-0069), sealring offset (bondpads outside
   sealring). Plus SRAM `vddarray`/`vssarray` have no PDK power net.
