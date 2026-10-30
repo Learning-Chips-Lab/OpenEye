@@ -41,7 +41,7 @@ Work the phases in order. Ground rules for every task:
   Verify: regenerated `openeye.json` contains it; after relaunch (Phase B)
   flow.log says `OpenROAD will use 48 threads`, `ps` shows `-threads 48`
   and >100 % CPU, no new ORD-0032 in `warning.log`.
-  **Done 2026-10-30 18:50:** `"OPENROAD_THREADS": 48` in `gen_config.py`
+  **Done 2026-10-30 18:35:** `"OPENROAD_THREADS": 48` in `gen_config.py`
   (comment cites the `str(None)` bug). Regenerated
   `asic/rtl/sg13g2/openeye.json` — diff vs. committed version = exactly
   that one knob (1 line, no other change). The running flow's copy
@@ -68,7 +68,7 @@ Work the phases in order. Ground rules for every task:
   step 42 is running (dir without `state_out.json`), and the step after
   it once `42-…/state_out.json` exists. Also test against a p2_14 copy /
   synthetic dirs: fresh run → empty output; crashed step → that step.
-  **Done 2026-10-30 19:15:** logic factored into
+  **Done 2026-10-30 18:41:** logic factored into
   `asic/scripts/resolve_resume.py <run_dir>` (standalone, container-side),
   `watchdog.sh resolve_resume_step()` now just calls it. Rules: crashed/
   running step (latest dir w/o `state_out.json`) → that step; otherwise
@@ -79,7 +79,7 @@ Work the phases in order. Ground rules for every task:
   dir = -F-skipped by the previous launch → must not re-run; fresh run →
   nothing. Prints the UNIQFIED step id (`OpenROAD.STAMidPNR-3`, ...),
   because `-F <plain id>` would resolve to the first occurrence.
-  Verified (2026-10-30 19:15): `bash -n`, `py_compile`; live p2_15 →
+  Verified (2026-10-30 18:41): `bash -n`, `py_compile`; live p2_15 →
   `OpenROAD.RepairAntennas` (step 42 running);
   `asic/scripts/test_resolve_resume.py` (synthetic runs in container
   /tmp from the real Chip step list) → **7/7 PASS**: fresh → empty;
@@ -92,7 +92,7 @@ Work the phases in order. Ground rules for every task:
   knob — with p2_15's current design config the resolver would print
   `OpenROAD.STAMidPNR-3` (resizer gated off by default).
 
-- [ ] **A3 — `run_openeye.sh`: don't lose logs, don't change RTL on resume.**
+- [x] **A3 — `run_openeye.sh`: don't lose logs, don't change RTL on resume.**
   (a) `tee` overwrites `flow.log` on every (re)launch — a watchdog crash
   restart destroys the crash evidence. Use `tee -a` and write a
   `=== launch <date> resume=<step> ===` separator line first.
@@ -104,6 +104,21 @@ Work the phases in order. Ground rules for every task:
   use librelane's exit code (`set -o pipefail` + `${PIPESTATUS[0]}`) and
   the presence of `runs/<tag>/final/`.
   Verify: `bash -n`; dry-run the staging part with a dummy run name.
+  **Done 2026-10-30 18:44:** all three implemented (a: host-side
+  `>> flow.log` append + separator written before the launch; b: resume
+  path runs only `gen_config.py`, git state recorded at fresh start in
+  `design/launch_git_state.txt` and diffed on resume with `[WARN]`;
+  c: success = librelane exit 0 AND `design/runs/<tag>/final/` present —
+  librelane saves the final snapshot only after ALL steps completed; the
+  "finished without ERROR lines" marker is kept verbatim for the
+  watchdog's grep). Added `DRY_RUN=1` mode (stops after staging) for
+  testing. Verified (18:43–18:50): `bash -n`; DRY_RUN fresh with dummy
+  name `p2_drytest` (separator in flow.log, git state file, gen.sh ran —
+  hdl mtimes updated); DRY_RUN resume with `-F OpenROAD.Floorplan`
+  (hdl/ + OpenEye_Asic.v mtimes UNCHANGED, only openeye.json rewritten,
+  2nd separator appended); git-state warning fires on a temporary
+  `hdl/PE.v` modification and is clean after revert. Dummy run dir
+  deleted.
 
 - [ ] **A4 — monitor false STALL.** `monitor_p2_15.log` reports
   "STALL (no activity 165 min)" while openroad is at 100 % CPU. Add a
@@ -373,14 +388,18 @@ monitor 330001 (intermittent STALL flags = known false positive, fixed
 by A4). flow.log ~508 MB and still growing (162 B between 18:30 and
 18:35 snapshots).
 
-- **18:50 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
+- **18:35 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
   + regenerated `openeye.json`, diff = exactly 1 line.
-- **19:15 — A2 done** (resume resolver, see plan item): new
+- **18:41 — A2 done** (resume resolver, see plan item): new
   `asic/scripts/resolve_resume.py` + `test_resolve_resume.py`, watchdog
   rewired. Live p2_15 → `OpenROAD.RepairAntennas` (correct while step 42
   runs); 7/7 synthetic scenarios pass. New task **A7** added to the plan
   (post-GRT resizer is off by default — `RUN_POST_GRT_RESIZER_TIMING`
   False in p2_15 resolved.json; plan B3/ETA assumed it runs).
+- **18:44 — A3 done** (run_openeye.sh, see plan item): append-mode
+  flow.log + launch separator, RTL untouched on resume, success check
+  via exit code + `final/`, DRY_RUN mode. Verified with dummy run
+  `p2_drytest` (fresh/resume/warning paths), dummy dir deleted.
 
 **p2_15 (fork of p2_14, 50 MHz / 20 ns) relaunched ~19:30 — resuming at
 `OpenROAD.GlobalRouting` (step 38) with `-F`.** Steps 1–37 reused from
