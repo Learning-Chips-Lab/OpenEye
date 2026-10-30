@@ -189,6 +189,18 @@ def main() -> None:
         "PL_RESIZER_HOLD_REPAIR_TNS_PCT": 1,
         "GRT_RESIZER_SETUP_REPAIR_TNS_PCT": 1,
         "GRT_RESIZER_HOLD_REPAIR_TNS_PCT": 1,
+        # The GRT_RESIZER_* caps above only take effect if the post-GRT
+        # resizer actually runs -- and it is OFF by default
+        # (RUN_POST_GRT_RESIZER_TIMING=False in librelane classic.py;
+        # confirmed in p2_15 resolved.json). With it off, the ~41
+        # remaining hold violators after the post-CTS resizer (WNS -0.44,
+        # TNS -4.65 pre-GRT, all on SRAM-macro inputs, p2_14 step 37)
+        # never get a post-route repair pass and the final HoldViolations
+        # gate risks the stop criterion (final Hold-WNS < -0.5 ns).
+        # Enabled with the 1 % TNS caps bounding runtime (the hold TNS to
+        # repair at post-GRT is small); the A2 resolver then picks
+        # OpenROAD.ResizerTimingPostGRT as the step after RepairAntennas.
+        "RUN_POST_GRT_RESIZER_TIMING": True,
         # p2_14 GRT failure (2026-10-29 17:02): [GRT-0116] "Global routing
         # finished with congestion" after 50+50+50 iterations (~13.8 h).
         # Analysis of the final congestion report: GLOBAL usage is only

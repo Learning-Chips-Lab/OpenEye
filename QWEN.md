@@ -166,7 +166,7 @@ Work the phases in order. Ground rules for every task:
   (`sg13g2_dfrbpq_1`). Comment-only change — regenerated
   `openeye.json` is byte-identical (verified by diff).
 
-- [ ] **A7 (new, found while implementing A2, 2026-10-30) — the
+- [x] **A7 (new, found while implementing A2, 2026-10-30) — the
   post-GRT resizer is OFF by default, contradicting the plan's own
   assumptions.** `RUN_POST_GRT_RESIZER_TIMING` defaults to False
   (librelane `classic.py`; p2_15 `resolved.json` confirms: False). So
@@ -181,8 +181,19 @@ Work the phases in order. Ground rules for every task:
   small, ~−4.65 ns). Verify: knob in regenerated `openeye.json`; A2
   resolver then prints `OpenROAD.ResizerTimingPostGRT` for the 42
   frontier (test S3).
+  **Done 2026-10-30 19:05:** knob added to `gen_config.py` (comment
+  cites the default-False in librelane classic.py, the p2_15
+  resolved.json evidence, the 41-hold-violator motivation, and the
+  TNS-cap runtime bound); regenerated `openeye.json` — diff = exactly
+  `"RUN_POST_GRT_RESIZER_TIMING": true`. Resolver end-to-end with the
+  REAL regenerated openeye.json as design config (synthetic frontier
+  run in container /tmp, 41 complete dirs): prints
+  `OpenROAD.ResizerTimingPostGRT` (test S3 of test_resolve_resume.py
+  covers the minimal-config variant). Takes effect at the Phase B
+  relaunch; next step dir after 42 will be
+  `43-openroad-resizertimingpostgrt`.
 
-### Phase B — apply A1–A5 to p2_15 (needs the user's OK first)
+### Phase B — apply A1–A7 to p2_15 (Autonomie-Modus: user OK granted 2026-10-30)
 
 - [ ] **B1** Let step 42 `RepairAntennas` finish (7 h+ invested, do not
   kill it). Watch for `42-openroad-repairantennas/state_out.json`.
@@ -443,6 +454,12 @@ by A4). flow.log ~508 MB and still growing (162 B between 18:30 and
   `DIE_AREA` comment now carries the verified DFF facts (no latches;
   506,219 `sg13g2_dfrbpq_1` = 24.8/55.3 mm² ≈ 45 %). Comment-only:
   regenerated openeye.json byte-identical.
+- **19:05 — A7 done** (post-GRT resizer, see plan item):
+  `RUN_POST_GRT_RESIZER_TIMING: true` in gen_config.py + openeye.json
+  (diff = exactly that knob); resolver end-to-end with the real
+  regenerated config → `OpenROAD.ResizerTimingPostGRT` for the 42
+  frontier. **Phase A complete (A1–A7)** — Phase B triggers when step
+  42 `state_out.json` exists (watching, ~30 min cadence).
 
 **p2_15 (fork of p2_14, 50 MHz / 20 ns) relaunched ~19:30 — resuming at
 `OpenROAD.GlobalRouting` (step 38) with `-F`.** Steps 1–37 reused from
