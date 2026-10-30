@@ -432,6 +432,22 @@ run_openeye.sh 329490 → docker exec 329555; container bash 329587 →
 librelane 329603 → openroad 370311. Background watcher armed on
 `42-openroad-repairantennas/state_out.json` → Phase B starts there.
 
+Status lines (30-min cadence):
+- **19:59:** step 42 still running (openroad 370311, etimes 33,265 s,
+  CPU 33,162 s = 99.7 %). New console output since 15:11: repair
+  iteration converging — "Found 1053 antenna violations" → "Inserted
+  2035 diodes" (was 12,970 at start, 2,714 at 18:09, 6,152 after the
+  internal GRT re-route). Monitor: alive, no STALL. Watchdog: 0
+  restarts. Disk 1.3 T free. No `state_out.json` yet.
+- **20:25:** step 42 still running (CPU 34,674 s, +1,512 s in 26 min ≈
+  97 % — working, no new console output since 19:59; post-diode phase,
+  likely internal GRT/STA). No dir 43 yet, monitor clean, watchdog 0
+  restarts.
+- **20:50:** repair converging: another internal GRT re-route
+  (920 jumpers / 551 nets) → "Found 420 antenna violations" → "Inserted
+  590 diodes". Openroad 370311: etimes 36,292 s, CPU 36,180 s ≈ 99.5 %.
+  flow.log 508.1 MB. No state_out.json, no dir 43 yet.
+
 - **18:35 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
   + regenerated `openeye.json`, diff = exactly 1 line.
 - **18:41 — A2 done** (resume resolver, see plan item): new
