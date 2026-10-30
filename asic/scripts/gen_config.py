@@ -129,6 +129,16 @@ def main() -> None:
         # it with ~1.5 ns margin. Assumption: external synchronous driver
         # at 50 MHz with <= 6 ns clock-to-pad -- verify against board spec.
         "IO_DELAY_CONSTRAINT": 32,
+        # LibreLane 3.1 bug (librelane/steps/openroad.py, get_command):
+        #     threads = str(self.config["OPENROAD_THREADS"]) or str(_get_process_limit())
+        # str(None) == "None" is a truthy string, so the fallback never
+        # fires: every OpenROAD step runs with "-threads None", OpenROAD
+        # logs ORD-0032 and falls back to a single thread. All runtimes
+        # recorded so far are single-threaded (p2_15 GRT 14:42 h,
+        # post-CTS resizer 10:40 h, CTS 4:13 h; DetailedRouting would
+        # take days). 48 threads on the 56-core host leaves headroom;
+        # RAM is fine (openroad ~23 GB, host 251 GB).
+        "OPENROAD_THREADS": 48,
         "FP_SIZING": "absolute",
         # 10.5 mm die: p2_14 floorplan metrics (measured): 44.7 mm^2
         # stdcell + 8.6 mm^2 SRAM macros = 53.2 mm^2 on the 97.2 mm^2 core

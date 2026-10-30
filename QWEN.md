@@ -25,7 +25,7 @@ Work the phases in order. Ground rules for every task:
 
 ### Phase A — prepare fixes while p2_15 keeps running (no restart yet)
 
-- [ ] **A1 (CRITICAL) — OpenROAD runs single-threaded in EVERY step.**
+- [x] **A1 (CRITICAL) — OpenROAD runs single-threaded in EVERY step.**
   Evidence: `ps` shows `openroad -exit -threads None …` at 99.7 % CPU on
   a 56-core host; `warning.log` has 19× `[ORD-0032] Invalid thread number
   specification: None.`; flow.log `OpenROAD will use None threads`
@@ -41,6 +41,14 @@ Work the phases in order. Ground rules for every task:
   Verify: regenerated `openeye.json` contains it; after relaunch (Phase B)
   flow.log says `OpenROAD will use 48 threads`, `ps` shows `-threads 48`
   and >100 % CPU, no new ORD-0032 in `warning.log`.
+  **Done 2026-10-30 18:50:** `"OPENROAD_THREADS": 48` in `gen_config.py`
+  (comment cites the `str(None)` bug). Regenerated
+  `asic/rtl/sg13g2/openeye.json` — diff vs. committed version = exactly
+  that one knob (1 line, no other change). The running flow's copy
+  `asic/runs/openeye_p2_15/design/openeye.json` untouched (mtime
+  29.10. 19:13, no `OPENROAD_THREADS`). The live part of Verify
+  (`-threads 48`, >100 % CPU, no new ORD-0032) is checked in Phase B
+  (B5) after the relaunch.
 
 - [ ] **A2 (CRITICAL) — watchdog resume resolver picks SKIPPED steps.**
   Run read-only against p2_15 (2026-10-30 18:10) it returned
@@ -312,7 +320,23 @@ est-srv02 host gotchas (learned 2026-10-23):
   exact. The io models are compiled as-is (their specify blocks carry no
   `delayed_*` data; Verilator just ignores them).
 
-## Current state (as of 2026-10-29 evening)
+## Current state (as of 2026-10-30 18:40)
+
+### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
+
+**18:40 status:** step 42 `OpenROAD.RepairAntennas` running since 10:45
+(openroad PID 370311, 99.6 % CPU, ~23 GB RAM, single-threaded — the A1
+fix takes effect with the Phase B relaunch). Latest flow.log lines
+(15:11): internal GRT re-route inside the repair iteration (NDR disabled
+again on net781646, GRT-0273) → "Found 6152 antenna violations" →
+"Inserted 9200 jumpers for 5607 nets". Watchdog 329446 (0 restarts),
+monitor 330001 (intermittent STALL flags = known false positive, fixed
+by A4). flow.log ~508 MB and still growing (162 B between 18:30 and
+18:35 snapshots).
+
+- **18:50 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
+  + regenerated `openeye.json`, diff = exactly 1 line. Commit to follow
+  in the log below.
 
 **p2_15 (fork of p2_14, 50 MHz / 20 ns) relaunched ~19:30 — resuming at
 `OpenROAD.GlobalRouting` (step 38) with `-F`.** Steps 1–37 reused from
