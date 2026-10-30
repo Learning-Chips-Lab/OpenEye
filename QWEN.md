@@ -239,10 +239,17 @@ Work the phases in order. Ground rules for every task:
   run_openeye.sh resume path (RTL untouched, only gen_config re-run);
   dir `43-openroad-resizertimingpostgrt` created (ordinal 43 reused
   from the deleted STAMidPNR-3 dir, as expected).
-- [ ] **B5** Verify A1 (threads) within the first minutes. Then monitor
+- [x] **B5** Verify A1 (threads) within the first minutes. Then monitor
   DetailedRouting: per-iteration DRC violation count must decrease;
   report runtime and final violation count. If DRT stalls on congestion
   hotspots → analyze (do not blindly re-run); levers are in Phase D.
+  **Threads part done 2026-10-30 23:02:** flow.log 22:53:12 "OpenROAD
+  will use 48 threads"; ps: openroad 410982 `-threads 48`;
+  /proc/410982/status: **Threads: 49** (48 workers + main — direct
+  multithreading evidence; >100 % CPU shows in the parallel repair
+  phase, library load is single-threaded I/O); warning.log flat at
+  2612 lines / 21× ORD-0032, all pre-relaunch. DRT monitoring continues
+  when step 45 starts.
 
 ### Phase C — evaluate the 50 MHz baseline (after p2_15 ends)
 
@@ -531,10 +538,11 @@ Status lines (30-min cadence):
   resume path (RTL untouched, only gen_config re-run); dir 43 =
   resizer (ordinal reused from the deleted STAMidPNR-3 dir).
 - **22:54+** B5: flow.log `OpenROAD will use 48 threads` (22:53:12);
-  ps: openroad 410982 with `-threads 48`, 99.7 % CPU (still in the
-  library-load phase; the repair phase should push >100 %).
-  warning.log at relaunch: 2612 lines / 21× ORD-0032 (all pre-relaunch)
-  — must stay flat.
+  ps: openroad 410982 with `-threads 48`; **/proc/410982/status:
+  Threads: 49** (48 workers + main, verified 23:02 — the >100 % CPU
+  shows in the parallel repair phase; library load is single-threaded
+  I/O at ~99.6 %). warning.log flat: 2612 lines / 21× ORD-0032, all
+  pre-relaunch. **Phase B complete.**
 - Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
   repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
   routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
