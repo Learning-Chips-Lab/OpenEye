@@ -195,20 +195,50 @@ Work the phases in order. Ground rules for every task:
 
 ### Phase B — apply A1–A7 to p2_15 (Autonomie-Modus: user OK granted 2026-10-30)
 
-- [ ] **B1** Let step 42 `RepairAntennas` finish (7 h+ invested, do not
+- [x] **B1** Let step 42 `RepairAntennas` finish (7 h+ invested, do not
   kill it). Watch for `42-openroad-repairantennas/state_out.json`.
-- [ ] **B2** Then immediately: (1) stop the host watchdog for p2_15 FIRST
+  **Done 2026-10-30 22:45:** state_out.json appeared 22:45 (watcher
+  fired). Step 42 took 12:00 total (10:45 → 22:45): 11 h
+  diode-insertion repair (12,970 → 420 antenna violations, 3,600+
+  diodes/jumpers) + 45 min final `check_antennas -verbose` substep.
+  Final cell count 3,125,970. Odb 2.5 GB + DEF written.
+- [x] **B2** Then immediately: (1) stop the host watchdog for p2_15 FIRST
   (otherwise it may auto-restart), (2) stop the monitor, (3) kill
   librelane + its openroad child in the container. Check the next step
   dir (43-…) has no `state_out.json` (it was interrupted) — that's fine.
-- [ ] **B3** Regenerate config (`python3 asic/scripts/gen_config.py`),
+  **Done 2026-10-30 22:50:** killed in the planned order — watchdog
+  329446 (+wrapper 329444) FIRST, monitor 397962, librelane 329603,
+  openroad 410431. By 22:48 the old-config flow had already started
+  `OpenROAD.STAMidPNR-3` (dir 43, 0-byte log, no state_out, ~3 min of
+  STA) — **deleted dir 43** (incomplete, wrong-config start; it re-runs
+  AFTER the resizer in the new launch). Frontier back to 42 (complete).
+  NOTE: the old launcher (run_openeye.sh from 29.10) exited with
+  `Zeile 67: GIT_STATE ist nicht gesetzt` — bash had the OLD file's
+  read offset and continued reading the NEW (A3-replaced) file after
+  the 27.5-h docker exec returned; cosmetic only, nothing executed
+  beyond the error (line 67 = `if [ -f "${GIT_STATE}" ]`, before its
+  definition in the re-read fragment). PITFALL for the record: never
+  replace run_openeye.sh while a launch is in flight.
+- [x] **B3** Regenerate config (`python3 asic/scripts/gen_config.py`),
   copy to `asic/runs/openeye_p2_15/design/openeye.json`, check the diff is
   exactly the intended knobs. Run the fixed resolver (A2): expected is
   the step right after RepairAntennas (`OpenROAD.ResizerTimingPostGRT`).
-- [ ] **B4** Relaunch the watchdog with the SAME run name p2_15 (this is a
+  **Done 2026-10-30 22:51:** diff old running config vs. new = exactly
+  `OPENROAD_THREADS: 48`, `RUN_POST_GRT_RESIZER_TIMING: true`,
+  `SETUP_VIOLATION_CORNERS: ["*"]` (nothing else). Copied to
+  `asic/runs/openeye_p2_15/design/openeye.json`. Resolver (container,
+  real run dir + new config) → **`OpenROAD.ResizerTimingPostGRT`** —
+  live confirmation of A2/A7 (synthetic test S3 had predicted it).
+- [x] **B4** Relaunch the watchdog with the SAME run name p2_15 (this is a
   resume, not a new run): `sg docker -c "cd ~/projekte/OpenEye && setsid
   nohup asic/scripts/watchdog.sh p2_15 >> asic/runs/watchdog_p2_15.log 2>&1 < /dev/null &"`.
   Restart the fixed monitor.
+  **Done 2026-10-30 22:52:** watchdog 410875 (log line "resuming at
+  step: OpenROAD.ResizerTimingPostGRT"), monitor 411032. flow.log
+  separator `=== launch 2026-10-30T22:53:11 resume=OpenROAD.ResizerTimingPostGRT ===`;
+  run_openeye.sh resume path (RTL untouched, only gen_config re-run);
+  dir `43-openroad-resizertimingpostgrt` created (ordinal 43 reused
+  from the deleted STAMidPNR-3 dir, as expected).
 - [ ] **B5** Verify A1 (threads) within the first minutes. Then monitor
   DetailedRouting: per-iteration DRC violation count must decrease;
   report runtime and final violation count. If DRT stalls on congestion
@@ -483,6 +513,32 @@ Status lines (30-min cadence):
   design/openeye.json, diff vs. running copy = exactly the 3 knobs,
   resolver → expect `OpenROAD.ResizerTimingPostGRT`; (6) B4 relaunch
   watchdog + monitor; (7) B5 verify threads.
+
+### Phase B EXECUTED (2026-10-30 22:45–22:55) — p2_15 relaunched with A1–A7
+
+- **22:45** step 42 `state_out.json` → watcher fired. Kill sequence in
+  60 s: watchdog 329446 first, monitor 397962, librelane 329603,
+  openroad 410431 (already STAMidPNR-3 — the old flow had moved on at
+  22:45). Dir 43 (incomplete STAMidPNR-3, ~3 min of STA, wrong config)
+  **deleted**; frontier back to 42 (complete).
+- **22:51** B3: diff old running config vs. new = exactly the 3 knobs
+  (threads 48, RUN_POST_GRT_RESIZER_TIMING, SETUP_VIOLATION_CORNERS);
+  copied to `asic/runs/openeye_p2_15/design/openeye.json`; resolver
+  (real run dir, container) → **`OpenROAD.ResizerTimingPostGRT`**
+  (live confirmation of A2+A7).
+- **22:53** relaunch (watchdog 410875, monitor 411032): flow.log
+  separator `resume=OpenROAD.ResizerTimingPostGRT`; run_openeye.sh
+  resume path (RTL untouched, only gen_config re-run); dir 43 =
+  resizer (ordinal reused from the deleted STAMidPNR-3 dir).
+- **22:54+** B5: flow.log `OpenROAD will use 48 threads` (22:53:12);
+  ps: openroad 410982 with `-threads 48`, 99.7 % CPU (still in the
+  library-load phase; the repair phase should push >100 %).
+  warning.log at relaunch: 2612 lines / 21× ORD-0032 (all pre-relaunch)
+  — must stay flat.
+- Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
+  repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
+  routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
+  (setup is now a real gate via A5; hold was already gated).
 
 - **18:35 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
   + regenerated `openeye.json`, diff = exactly 1 line.
