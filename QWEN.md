@@ -120,12 +120,26 @@ Work the phases in order. Ground rules for every task:
   `hdl/PE.v` modification and is clean after revert. Dummy run dir
   deleted.
 
-- [ ] **A4 — monitor false STALL.** `monitor_p2_15.log` reports
+- [x] **A4 — monitor false STALL.** `monitor_p2_15.log` reports
   "STALL (no activity 165 min)" while openroad is at 100 % CPU. Add a
   liveness check on the CPU time (`ps -o times=` of the newest
   openroad/yosys/klayout/magic process in the container); STALL only if
   log, step files AND cpu time are all flat.
   Verify: restart the monitor for p2_15, no STALL while RepairAntennas runs.
+  **Done 2026-10-30 18:47:** tracked generic script
+  `asic/scripts/monitor_flow.sh <runname>` (per-run instances in
+  asic/runs/ are gitignored; the new one writes the same
+  `asic/runs/monitor_<run>.log`). Liveness = newest non-zombie tool
+  process (host ps sees the container processes; they share the PID
+  namespace): a new process or increasing cumulative CPU seconds
+  (`times`) resets the CPU-flat timer. STALL now requires log flat AND
+  no step files newer than STALL_S AND CPU time flat — all at once.
+  Snapshot line gained `cpu=<pid>:<seconds>s`. Old monitor PID 330001
+  killed, new one (PID 397962) launched 18:45; first snapshot
+  18:45:02 shows `cpu=370311:28691s`, no STALL (the 18:25/18:30
+  false STALLs were the buffered-log artifact). No-STALL while
+  RepairAntennas runs continues to be watched in the 30-min status
+  notes.
 
 - [ ] **A5 — make setup a real signoff gate.** `Checker.SetupViolations`
   is a no-op (`SETUP_VIOLATION_CORNERS` unset). Add
@@ -400,6 +414,11 @@ by A4). flow.log ~508 MB and still growing (162 B between 18:30 and
   flow.log + launch separator, RTL untouched on resume, success check
   via exit code + `final/`, DRY_RUN mode. Verified with dummy run
   `p2_drytest` (fresh/resume/warning paths), dummy dir deleted.
+- **18:47 — A4 done** (monitor, see plan item): new tracked
+  `asic/scripts/monitor_flow.sh <runname>` with CPU-time liveness
+  (STALL only when log + step files + CPU time are ALL flat). Old
+  monitor (330001) replaced by PID 397962; first snapshot 18:45:02:
+  `cpu=370311:28691s`, no STALL.
 
 **p2_15 (fork of p2_14, 50 MHz / 20 ns) relaunched ~19:30 — resuming at
 `OpenROAD.GlobalRouting` (step 38) with `-F`.** Steps 1–37 reused from
