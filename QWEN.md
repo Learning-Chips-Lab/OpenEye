@@ -453,6 +453,17 @@ Status lines (30-min cadence):
   in pipe_write, ~2–7 % CPU, flow.log grows ~300 KB/s (633 MB and
   counting — disk fine, 1.3 T free). Healthy, not a stall: net index,
   CPU time and log all advancing. Watcher on state_out.json armed.
+- **21:52:** flood identified — it is NOT a stall and NOT the repair
+  loop. Step-42 log shows `repair_antennas` is DONE (final iteration:
+  "Found 420 antenna violations" → "Inserted 590 diodes"); the
+  3.27-M-instance flood is `write_views` → `set_global_connections`
+  (io.tcl:488) printing one line per instance per `.*` entry of
+  PDN_MACRO_CONNECTIONS (2 entries: vdd/vss + iovdd/iovss). GRT (step
+  39) printed the same 6.2 M lines in its write_views — known behavior,
+  ~6.5 M lines per openroad step. Step-42 log: 4.94 M of ~6.53 M lines
+  (≈76 %), growing 69–300 KB/s. Remaining: flood + area report +
+  write_db (2.5 GB odb) + DEF → state_out.json. ETA ~30–60 min. No
+  action; watcher will fire Phase B.
 
 - **18:35 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
   + regenerated `openeye.json`, diff = exactly 1 line.
