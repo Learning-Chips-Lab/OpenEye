@@ -543,6 +543,13 @@ Status lines (30-min cadence):
   shows in the parallel repair phase; library load is single-threaded
   I/O at ~99.6 %). warning.log flat: 2612 lines / 21× ORD-0032, all
   pre-relaunch. **Phase B complete.**
+- **23:27** resizer (43, openroad 410982, 34 min) is in the
+  `estimate_parasitics -global_routing` phase of rsz_timing_postgrt.tcl
+  — an internal FastRoute run (GRT-0102 extra iterations 8/50,
+  TopMetal2 horizontal 40.3 %). Multithreading confirmed in work:
+  ps %cpu 527 %, monitor CPU time 10,459 s in 2,027 s elapsed (~5.1×),
+  49 threads. Remaining: per-corner repair_timing (1 % TNS caps — fast)
+  + write_views (flood + odb + DEF). warning.log still flat (21× ORD-0032).
 - Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
   repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
   routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
