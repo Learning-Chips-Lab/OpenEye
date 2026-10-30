@@ -141,11 +141,19 @@ Work the phases in order. Ground rules for every task:
   RepairAntennas runs continues to be watched in the 30-min status
   notes.
 
-- [ ] **A5 — make setup a real signoff gate.** `Checker.SetupViolations`
+- [x] **A5 — make setup a real signoff gate.** `Checker.SetupViolations`
   is a no-op (`SETUP_VIOLATION_CORNERS` unset). Add
   `"SETUP_VIOLATION_CORNERS": ["*"]` to `gen_config.py` (50 MHz setup is
   met with +4.25 ns post-resizer, so this should pass; if it fails, that
   is a real finding).
+  **Done 2026-10-30 18:52:** knob in `gen_config.py` (comment explains
+  the default `[""]` no-op); regenerated `openeye.json` — diff = exactly
+  `"SETUP_VIOLATION_CORNERS": ["*"]`. Variable name verified in
+  librelane source: `TimingViolations.get_corner_variable()` derives
+  `SETUP_VIOLATION_CORNERS` from `violation_type="setup"`, default `[""]`
+  (matches no corner); `HoldViolations` has `corner_override=["*"]`
+  (already a hard gate). The gate itself runs at the end of p2_15
+  (step 79 `Checker.SetupViolations`, ungated).
 
 - [ ] **A6 — comment fix in `gen_config.py`:** "70 % PE-pad latches" is
   wrong — the netlist has no latches; area is 506,219 `sg13g2_dfrbpq_1`
@@ -419,6 +427,10 @@ by A4). flow.log ~508 MB and still growing (162 B between 18:30 and
   (STALL only when log + step files + CPU time are ALL flat). Old
   monitor (330001) replaced by PID 397962; first snapshot 18:45:02:
   `cpu=370311:28691s`, no STALL.
+- **18:52 — A5 done** (setup signoff gate, see plan item):
+  `SETUP_VIOLATION_CORNERS: ["*"]` in gen_config.py + openeye.json
+  (diff = exactly that knob). Effective from the Phase B relaunch; the
+  gate runs at p2_15 end (step 79).
 
 **p2_15 (fork of p2_14, 50 MHz / 20 ns) relaunched ~19:30 — resuming at
 `OpenROAD.GlobalRouting` (step 38) with `-F`.** Steps 1–37 reused from

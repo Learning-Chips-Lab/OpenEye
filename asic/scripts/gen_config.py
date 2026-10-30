@@ -200,6 +200,14 @@ def main() -> None:
         # the residual is well inside what the detailed router (zroute)
         # can detour away -> let GRT finish and let DRT absorb it:
         "GRT_ALLOW_CONGESTION": True,
+        # Make setup a REAL signoff gate. By default SETUP_VIOLATION_CORNERS
+        # is [""] (matches no corner -> Checker.SetupViolations is a no-op).
+        # At 50 MHz setup is met with margin (p2_14: post-resizer best
+        # +4.25 ns, WNS 0.0), so this should pass; if it fails, that is a
+        # real finding (post-route setup regression), not a config gap.
+        # (Checker.HoldViolations is already a hard gate via its
+        # corner_override ["*"].)
+        "SETUP_VIOLATION_CORNERS": ["*"],
         "PAD_SOUTH": pad_order["SOUTH"],
         "PAD_EAST": pad_order["EAST"],
         "PAD_NORTH": pad_order["NORTH"],
