@@ -634,6 +634,20 @@ Status lines (30-min cadence):
   min/iter, steady — no slowdown yet; GRT#1 crept 4→20 min/iter on
   its tail). GRT#2 ETA ~13:00–15:00. CPU 3.2× (124,841 s), 0 restarts,
   disk 1.3 T, no dir 44 yet. Step-43 ETA unchanged (~15:00–21:00).
+- **10:35** GRT#2 at extra iter 25/50 — 6 iters in 60 min = 10
+  min/iter, the GRT#1-style tail slowdown starting (GRT#1: 4→20
+  min/iter). Remaining 25 iters ≈ 4–8 h → **GRT#2 done ~14:45–19:00**.
+  CPU 3.2× (136,117 s), 0 restarts, disk 1.3 T, no dir 44 yet.
+  **Step-43 full breakdown (replaces the 08:33 estimate):** GRT#2
+  4–8 h + repair_timing setup (clean at 20 ns, <1 h) + hold (1 % TNS
+  cap; p2_14's capped postCTS resizer ref ~8 h worst case, post-GRT
+  hold set is small — 48 violators / TNS −4.65 — expect 1–3 h) +
+  re-DPL (1–3 h @ 48 thr) + GRT#3 (main ~40 min + extra iters,
+  3–8 h) + write_views (~1 h) → **step 43 done 01.11 ~00:00–12:00
+  (central ~03:00)**, then 44 STAMidPNR-3 (30–60 min) + 45 DRT
+  (6–12 h) → **p2_15 done during the day 01.11** (previously:
+  "tonight 23:00 → early 01.11" — that is stale, the 3rd GRT inside
+  step 43 plus the GRT#2 tail pushed everything by ~1 day).
 - Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
   repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
   routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
