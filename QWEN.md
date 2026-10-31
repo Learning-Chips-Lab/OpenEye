@@ -278,6 +278,31 @@ in PE-fabric/SRAM regions, worst 10 ns path = cross-chip wire.
   (`PSUM_RAM_X[x].PSUM_RAM_Y[y]`, 6 macros each) next to that cluster,
   wght/iact buffers central. Needs a look at where GPL puts the clusters
   (p2_15 placement DEF / ODB) to decide the floorplan.
+
+  **D1 data (verified 2026-10-31 from the p2_15 post-DPL DEF, step 33,
+  read-only; units nm, die 10.5×10.5 mm):**
+  - All 33 macros in THREE left-aligned rows at the core bottom,
+    orientation N: WGHT `RM_2048x64`×4 + `2048x32`×1 at y=0.325 mm,
+    x=0.325–3.525 mm; PSUM `4096x16`×16 + `4096x8`×8 at y=0.970 mm,
+    x=0.325–8.995 mm; IACT `1024x64`×4 at y=1.610 mm, x=0.325–2.725 mm.
+  - PSUM row is in cluster-grid order (RTL `OpenEye_FPGA.v:2989` —
+    X=CLUSTER_COLUMNS=2, Y=CLUSTER_ROWS=2, 2 GLB×3 macros per group):
+    X0Y0 @0.3–2.3 mm, X0Y1 @2.6–4.5, X1Y0 @4.8–6.8, X1Y1 @7.0–9.0.
+  - Placement map (506,010 DFFs + 1.22 M other stdcells, 0.5/0.25 mm
+    bin histogram): the PE fabric is ONE continuous dense block
+    x≈0.5–10.5 mm, y≈2.0–10.25 mm (uniform density, no resolvable
+    2×2 cluster seams at 0.25 mm — the fabric is FLATTENED in the
+    ODB; only the macro-wrapper hierarchies survive, so exact
+    cluster→region mapping needs netlist-level tracing, Phase D).
+  - Hold-violating DFFs (e.g. `_2911245_` @0.48/2.86 mm) sit directly
+    above the macro band → consumers are at the fabric bottom edge.
+  - D1 floorplan implications: (a) split the single PSUM row so each
+    6-macro group sits under its half of the fabric (X index = column),
+    ideally one row for Y[0] (fabric bottom) and one for Y[1] (fabric
+    top / inside the block as a channel); (b) move WGHT+IACT (global
+    buffers) from the bottom-left corner toward center x≈5 mm; (c) the
+    fabric itself could then shrink its bottom edge from y≈2.0 to
+    y≈1.9, i.e. the macro band stays below the consumers.
 - [ ] **D2** `PL_TIMING_DRIVEN: true`; `GPL_CELL_PADDING`/`DPL_CELL_PADDING`
   1–2 sites or a lower `PL_TARGET_DENSITY_PCT` (now 0.65 auto) against the
   local overflow.
