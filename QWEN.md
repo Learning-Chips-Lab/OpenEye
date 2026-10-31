@@ -648,6 +648,19 @@ Status lines (30-min cadence):
   (6–12 h) → **p2_15 done during the day 01.11** (previously:
   "tonight 23:00 → early 01.11" — that is stale, the 3rd GRT inside
   step 43 plus the GRT#2 tail pushed everything by ~1 day).
+  **CALIBRATED 10:45 (runtime.txt refs):** p2_14/p2_15's step 36
+  (SAME capped problem class: 48 hold violators, TNS −4.65, 1 % cap)
+  actually took **10:40:28** — but it ran SINGLE-threaded (pre-A1);
+  whether 26Q4's `repair_timing` benefits from 48 threads is unverified
+  locally, so budget hold phase **3–12 h** (single-threaded ref
+  10:40 is the upper bound). DPL ref: step 33 took only 00:43:33 →
+  re-DPL ≤1 h. GRT ref: step 39 took 14:42:19 single-threaded; GRT#1
+  with 48 threads took ~9 h → GRT#3 ≈ 9–12 h. Revised sum from 10:35:
+  GRT#2 4–8 h + setup <1 h + hold 3–12 h + re-DPL ≤1 h + GRT#3 9–12 h
+  + write_views ~1 h ≈ **17–35 h (central ~24 h)** → **step 43 done
+  01.11 noon → 02.11 noon (central ~01.11 evening)**; then
+  STAMidPNR-3 (~1 h) + DRT (6–12 h @ 48 thr, no local ref) →
+  **p2_15 done late 01.11 → 02.11 (central ~02.11 morning)**.
 - Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
   repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
   routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
