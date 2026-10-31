@@ -573,6 +573,10 @@ Status lines (30-min cadence):
 - **05:56** extra iter 44/50 (~18 min/iter, slowing on the last
   overflow), CPU 3.2× (80,914 s / 25,379 s), no restarts, no errors.
   Internal GRT ETA ~08:00, step 43 done ~09:30–10:00.
+- **07:26** extra iter 48/50 — internal GRT finishes in ~40 min, then
+  capped repair_timing (fast) + write_views (flood + odb + DEF).
+  CPU 3.1× (94,108 s / 30,802 s), no restarts, no errors. Step 43
+  done ~09:00–09:45, then STAMidPNR-3 (44).
 - Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
   repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
   routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
