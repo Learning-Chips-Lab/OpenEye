@@ -97,13 +97,17 @@ OpenEye/
 ## Getting started
 
 ### 1. Install dependencies
-
+## Using pip
 ```bash
 pip install -r requirements.txt
 ```
+## Using uv
+```bash
+uv python install && uv sync
+```
 
 Required tools:
-- **Python 3.10+**
+- **Python >=3.13,<3.14**
 - **Icarus Verilog** (`iverilog`) — default simulator; `brew install icarus-verilog` on macOS
 - **CocoTB** — installed via pip (see `requirements.txt`)
 - Optional: **Verilator ≥ 5.020** (faster simulation; see note below)
