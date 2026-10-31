@@ -577,6 +577,34 @@ Status lines (30-min cadence):
   capped repair_timing (fast) + write_views (flood + odb + DEF).
   CPU 3.1× (94,108 s / 30,802 s), no restarts, no errors. Step 43
   done ~09:00–09:45, then STAMidPNR-3 (44).
+- **08:33 (31.10.)** 2nd GRT run investigated — **it is expected,
+  stock librelane 3.1 behavior**, and there will be a THIRD one.
+  Read the full `rsz_timing_postgrt.tcl`: (1) line 29 sources
+  `grt.tcl` → `global_route` = run #1 (22:54–07:49, 49 extra iters,
+  ~9 h; NOTE: the 23:27 line above mislabeled run #1 as the
+  `estimate_parasitics` phase — it was this `grt.tcl` call); (2) line
+  31 `estimate_parasitics -global_routing` internally runs FastRoute
+  AGAIN = run #2 (GRT-0102 counter restarts at 1/50, started ~07:49,
+  at 08:33 at 9/50, ~4–5 min/iter — faster because it reuses run #1's
+  routing results already in the DB; total iter lines after the
+  22:53 separator = 58 = 49 + 9); (3) after the two capped
+  `repair_timing` calls (setup, then hold — `GRT_RESIZER_FIX_HOLD_FIRST`
+  default 0) the script sources `dpl.tcl` (remove_fillers +
+  detailed_placement + optimize_mirroring on 3.1 M cells) and line 66
+  sources `grt.tcl` a second time, because `GRT_RESIZER_RUN_GRT`
+  defaults to **True** (`steps/openroad.py:2900`; the knob is NOT in
+  `openeye.json`) → **run #3** after the re-DPL. No intervention:
+  this is the flow's designed sequence (the caps bound only the
+  resizer repair time, not the GRT runs), no errors, 0 restarts.
+  CPU 3.15× (108,327 s), disk 1.3 T free.
+- **08:33 ETA revision (replaces the ~09:00–09:45 estimate):**
+  GRT#2 → ~10:00–12:00; repair_timing setup+hold (1 % TNS caps) ~1–3 h;
+  re-DPL ~1–4 h; GRT#3 (main phase fast, extra iters 2–8 h);
+  write_views (flood + 2.5 GB odb + DEF) ~1 h → **step 43 done
+  ~15:00–21:00 (central ~18:00)**. Then 44 STAMidPNR-3 (~30–60 min,
+  48 thr) + 45 DRT (~6–12 h) → **p2_15 done tonight ~23:00 → early
+  01.11** (previously: "18:00–24:00 on 31.10" — roughly still holds,
+  but now leaning to the early-01.11 side).
 - Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
   repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
   routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
