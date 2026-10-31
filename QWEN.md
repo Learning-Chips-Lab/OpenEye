@@ -560,6 +560,8 @@ Status lines (30-min cadence):
 - **00:34 (31.10.)** extra iter 18/50 (~6.8 min/iter, steady), CPU
   4.6× (27,923 s / 6,055 s), no restarts, disk 1.3 T. Internal GRT ETA
   ~04:20, step 43 done ~05:30–06:30.
+- **01:14** extra iter 23/50 (~8 min/iter), CPU 4.7× (36,760 s), no
+  restarts, no errors.
 - Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
   repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
   routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
