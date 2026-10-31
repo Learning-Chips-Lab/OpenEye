@@ -605,6 +605,10 @@ Status lines (30-min cadence):
   48 thr) + 45 DRT (~6–12 h) → **p2_15 done tonight ~23:00 → early
   01.11** (previously: "18:00–24:00 on 31.10" — roughly still holds,
   but now leaning to the early-01.11 side).
+- **09:35** GRT#2 at extra iter 19/50 (10 iters in 62 min ≈ 6.2
+  min/iter, steady — no slowdown yet; GRT#1 crept 4→20 min/iter on
+  its tail). GRT#2 ETA ~13:00–15:00. CPU 3.2× (124,841 s), 0 restarts,
+  disk 1.3 T, no dir 44 yet. Step-43 ETA unchanged (~15:00–21:00).
 - Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
   repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
   routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
