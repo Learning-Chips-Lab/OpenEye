@@ -967,12 +967,32 @@ watchdog exited 0 at 11:49, flow.log "Flow complete").
   build, −j 32; running ~50 min as of 12:29, log `asic/runs/
   gatesim_p2_16.log`).
 
-**Status:** **F2 DONE** (steps 1–12 PASS, dfrbpq deviation resolved by
-census → benign; see 12:25 line). F3 gate-sim building in parallel (a
-FAIL is a stop criterion). Next: **G1 resume** of p2_16 (26-thread
-overlay, stop step `OpenROAD.ResizerTimingPostGRT`, resume step
-auto-resolved) and **P2** (p2_16b, 66 MHz) after G1 is up; RAM watch on
-both runs.
+**12:35 — Phase F complete; G1 + P2 launched.**
+- F2 doc + tick + census tool committed (a205b6b `asic/scripts/
+  dff_census.py`, 555ba3c QWEN.md) and **pushed to utz12**
+  (476c187..555ba3c) — phase-F push duty fulfilled.
+- **G1 resume** of p2_16 (12:3x): resolver auto-picked
+  `OpenROAD.Floorplan`, `STOP_STEP=OpenROAD.ResizerTimingPostGRT`,
+  26-thread overlay applied (staged config verified: 26/26; copy
+  recorded as `design/config_overlay.json`). openroad 64907 runs with
+  `-threads 26`, step 13 Floorplan in flight. The launcher's "RTL state
+  differs" warning is expected: `git diff 00a6698..555ba3c -- hdl
+  asic/rtl asic/sim` = only the two new overlay JSONs, no RTL.
+- **P2** launched: p2_16b fresh run at 66 MHz (staged config verified:
+  period 15 / IO_DELAY 43 / 26 threads), no stop step (runs to the end),
+  own watchdog + monitor (G1 gates belong to p2_16's monitor 544861,
+  still running).
+- F3 gate-sim still building (Verilator ~55 min at 12:35, −j 32).
+  Machine: 231 G RAM free (headroom for two GRT peaks, old openroad
+  ~55 G each), 1.3 T disk. Temp census tree `asic/runs/diag_rtl_p2_15/`
+  removed (dumps + ys scripts kept, gitignored).
+
+**Status:** **Phase F DONE and pushed (555ba3c).** G1: p2_16 resuming
+step 13 Floorplan → stop step 44 ResizerTimingPostGRT (26 threads,
+G1 gates in monitor 544861). P2: p2_16b fresh 66 MHz run-to-the-end
+(26 threads, own monitor). F3 gate-sim building (a FAIL is a stop
+criterion). 30-min cadence continues; RAM watch while both runs
+approach GRT.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
