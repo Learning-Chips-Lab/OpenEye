@@ -278,9 +278,9 @@ instance names, the gate-level sim of the new netlist.
   Gates so far: 18 placed=41 OK, 22 PDN OK, **27 overflow 28.5388 FAIL**
   (inflation 0.00 %, single iteration; p2_15 ref 1039.35 across 4
   iterations; p2_16b identical 28.5388 → reproducible geometry
-  property). **Decision (a), 18:3x: accepted with deviation, both
+  property). **Decision (a), 18:2x: accepted with deviation, both
   runs resumed** (p2_16 at step 31, p2_16b at step 30; see Current
-  state, 18:3x line). Analysis + proposals in the 18:1x line.
+  state, 18:2x line). Analysis + proposals in the 18:1x line.
 - [ ] **G2** All G1 gates green → resume `-F OpenROAD.STAMidPNR`? NO —
   `STAMidPNR` occurs 4× in the flow; resume with the watchdog's resolver
   (no stop step), which picks the first incomplete step after 44. Run to
@@ -1074,7 +1074,7 @@ watchdog exited 0 at 11:49, flow.log "Flow complete").
   outcome is the open question (tighter period). Scenario b adds
   ~5–6 h before any G1 progress.
 
-**18:3x — decision (a): deviation accepted, both runs resumed.**
+**18:2x — decision (a): deviation accepted, both runs resumed.**
 User chose option (a). G1-27 is documented as "failed numerically,
 accepted with deviation" (28.5388 vs ≤ 0.1; 0.00 % inflation, single
 iteration, 36× better than p2_15, p2_16b-corroborated geometry
@@ -1090,7 +1090,7 @@ is the accepted deviation, not a new failure. Resumes:
   `-threads 26`).
 - Monitors: 600572 (p2_16, G1 gates), 600558 (p2_16b).
 
-**Status:** **RUNNING (since 18:3x, decision a).** p2_16: step 31
+**Status:** **RUNNING (since 18:2x, decision a).** p2_16: step 31
 → stop 44 (G1; G1-27 deviation accepted). p2_16b: step 30 → end
 (66 MHz). F3 gate-sim PASS (15:02). ETA: G1 stop 44 ~10–22 h
 (11/2 noon → 11/3 morning), final metrics after G2 ~11/3–11/4
