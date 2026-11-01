@@ -661,10 +661,97 @@ Status lines (30-min cadence):
   01.11 noon → 02.11 noon (central ~01.11 evening)**; then
   STAMidPNR-3 (~1 h) + DRT (6–12 h @ 48 thr, no local ref) →
   **p2_15 done late 01.11 → 02.11 (central ~02.11 morning)**.
-- Remaining flow (new config): 43 ResizerTimingPostGRT (hold/setup
-  repair, 1 % TNS caps) → 44 STAMidPNR-3 → 45 DRT (first 48-thread
-  routing step) → fill → SPEF → MCSTA → DRC → LVS → signoff gates
-  (setup is now a real gate via A5; hold was already gated).
+- **09:43 (01.11.)** — MAJOR FINDING + flow re-mapped (full log
+  archaeology; session had been suspended overnight, flow ran
+  unattended healthy: openroad 410982 etimes 34.8 h, CPU 3.0×, 0
+  restarts, disk 1.3 T). Command echoes in flow.log decode the real
+  step-43 structure — FOUR internal FastRoute runs, not three:
+  1. `global_route` (grt.tcl #1, echo rel 327): 10/30 22:54 → 10/31
+     07:49, 49 extra iters (residual overflow, NDR off net781646).
+  2. `estimate_parasitics -global_routing` (no echo): 07:49:23 →
+     ~15:00–17:30, **50/50** extra iters + via filling (22,339,297
+     vias) + final congestion report + extraction.
+  3. `repair_timing -setup` (echo rel 493): started right after,
+     1,500+ iters, ended 19:30:42 RSZ-0062 "Unable to repair all
+     setup". **Setup at GRT (nom corner): WNS −193.865 → −73.773
+     (FROZEN from ~iter 850), TNS −654,027 → −381,642, 84,625 →
+     84,435 violators** (1 % cap allowed only 846 endpoints; only
+     ~190 actually repaired). Worst endpt iter 0: PSUM_RAM
+     u_mac0/A_DIN[2]; final worst: _2932751_/D ("no solution meets
+     design rules" on _1829321_/Y).
+  4. `repair_timing -hold` (echo rel 2009): 10,575 endpoints,
+     10,570 iters, ended 21:35:21 RSZ-0064 "Unable to repair all
+     hold checks" (6 hold buffers). **Hold at GRT: WNS −30.911
+     FROZEN from early iters to final, TNS −52,369 → −36,955.**
+  5. `detailed_placement -max_displacement 500 100` (echo rel 4141,
+     ~5 min — near-zero incremental displacement).
+  6. `global_route` (grt.tcl #2, echo rel 4155): 21:40 → 04:35:42,
+     49 extra iters (~8.5 min/iter).
+  7. **CURRENT**: `write_views` → `write_spef` (SAVE_SPEF set) runs
+     its OWN internal FastRoute (NDR 04:35:42) — at 09:43 extra iter
+     43/50, ~7.2 min/iter → done ~10:30–11:00, then via filling +
+     REAL SPEF extraction + set_global_connections flood + ODB/DEF →
+     **step 43 done ~12:00–13:00**, then step 44 STAMidPNR-3
+     (multicorner STA, ~30–60 min @ 48 thr) → ~13:00–14:00.
+  - Side observation: an EST-0026 "Missing route to pin" burst
+    (×1000, message limit reached, 21:40:26) during GRT#C — some
+    pins have no GRT route (residual overflow) → estimated with
+    defaults; contributes to the pathological parasitics below.
+  **FINDING — post-GRT timing is catastrophically worse than pre-GRT
+  (this is NOT normal congestion degradation; stop criteria
+  triggered):**
+  - Pre-GRT (step 37, nom): setup WNS **+4.25** / TNS 0 / 0
+    violators; hold WNS **−0.440** / TNS −4.65 / 48 violators.
+  - Post-GRT estimate (step 43 resizer, nom): setup WNS **−73.77
+    (frozen, unrepairable)** / TNS −381,642 / **84,435 violators**;
+    hold WNS **−30.91 (frozen)** / TNS −36,955 / ~10,5xx violators.
+  - Sanity check: a wire on a 10.5 mm die adds at most ~0.1–0.3 ns
+    per mm; even a fully detoured worst path cannot physically
+    explain −194 ns (pre-repair) / −74 ns (post-repair) at a 20 ns
+    period. The frozen WNS (resizer exhausted: "no solution meets
+    design rules") + EST-0026 missing-route burst + 49–50 extra
+    GRT iterations with residual overflow point to **pathological
+    `estimate_parasitics` results on the congested GRT solution**
+    (cf. the tcl comment citing OpenROAD issue #5590 — exactly this
+    code path). The true post-DRT signoff SPEF may be far better OR
+    the worst paths may be real but still far from −74 ns.
+  - **STOP CRITERIA TRIGGERED (two of them):** "post-route timing
+    worse than pre-route by >1 ns WNS" (198 ns pre-repair / 78 ns
+    post-repair on setup) AND "final Hold-WNS < −0.5 ns" (−30.91).
+    Per the plan: analyze, record cause + proposal, **wait for the
+    user** — no blind DRT re-run. DRT (12–18 h tail incl. fill/
+    MCSTA/DRC/LVS) cannot fix a frozen −74 ns setup WNS (it follows
+    the GRT guides), so continuing would only buy physical
+    artifacts with guaranteed SetupViolations-gate failure (A5 made
+    it a real gate) + HoldViolations failure.
+  - **DECISION (autonomy mode, per stop criteria):** let step 43
+    finish (SPEF + ODB/DEF — ~2 h) and step 44 STAMidPNR-3 finish
+    (definitive per-corner STA, ~1 h), THEN KILL THE FLOW before
+    step 45 DRT (kill chain: watchdog → monitor → librelane →
+    openroad; dirs 43+44 complete, no restart). Then: (1) analyze
+    step-44 reports per corner (worst paths, which nets, macro
+    inputs vs fabric); (2) record finding + cause + proposals in
+    "Current state"; (3) commit, push, WAIT for user.
+  - PROPOSALS for the user (after the step-44 data):
+    - **P1 — investigate the estimate before any further routing**:
+      extract the GRT route lengths of the worst nets (ODB/guide
+      files in dir 43), check whether −73.8 ns is a real detour
+      mass or an estimation artifact. If artifact → the signoff
+      SPEF after a DRT would tell the truth; a short DRT-only
+      continuation (or a p2_16 re-run) becomes the measurement.
+    - **P2 — continue p2_15 to GDS anyway** (~12–18 h): delivers the
+      full physical baseline (GDS + DRC + LVS, 3 known PDK gaps)
+      with a documented timing FAIL at the signoff gates; timing
+      closure deferred to Phase D. Cost: 12–18 h that won't change
+      the setup result.
+    - **P3 — stop now (after step 44) and go straight to Phase D
+      p2_16**: macro placement D1 (data ready: 3 bottom rows →
+      split per cluster), D2 density/overflow, D3 halos; target the
+      GRT congestion that produced this. p2_15 stands as proof the
+      flow runs end-to-end through GRT with 48 threads.
+- Remaining flow (new config): 44 STAMidPNR-3 → **STOP HERE
+  (decision above)** → [45 DRT → fill → SPEF → MCSTA → DRC → LVS →
+  signoff gates] only if the user chooses P2.
 
 - **18:35 — A1 done** (threads 48, see plan item): knob in `gen_config.py`
   + regenerated `openeye.json`, diff = exactly 1 line.
