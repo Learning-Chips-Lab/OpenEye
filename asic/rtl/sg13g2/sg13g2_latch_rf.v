@@ -105,6 +105,8 @@ module oe_latch_rf_1w1r #(
                 .en_i  (we_i && (waddr_i == w)),
                 .gclk_o(gclk)
             );
+`ifdef OPENEYE_SG13G2_CELLS
+            // ASIC: one sg13g2_dlhq_1 per bit
             for (b = 0; b < DataWidth; b = b + 1) begin : g_bit
                 oe_dlatch u_lat (
                     .gate_i(gclk),
@@ -112,6 +114,16 @@ module oe_latch_rf_1w1r #(
                     .q_o   (mem_q[w*DataWidth+b])
                 );
             end
+`else
+            // RTL sim: one behavioral word latch (same function as the
+            // per-bit cells, ~DataWidth x fewer instances/events -- the
+            // full-chip cocotb regression has ~400k latch bits)
+            reg [DataWidth-1:0] word_q;
+            /* verilator lint_off LATCH */
+            always @(*) if (gclk) word_q = wdata_q;
+            /* verilator lint_on LATCH */
+            assign mem_q[w*DataWidth +: DataWidth] = word_q;
+`endif
         end
     endgenerate
 

@@ -10,7 +10,307 @@ Implement the OpenEye DNN accelerator as an ASIC on IHP SG13G2: full RTL→GDS
 backend via LibreLane 3.x in the iic-osic-tools container, using the real
 `RM_IHPSG13_1P` SRAM macros for the top-level staging buffers.
 
-## TODO PLAN (2026-10-30, review by Claude) — START HERE
+## SESSION INSTRUCTIONS (user prompt: "Lies QWEN.md und setze es um.")
+
+These instructions are the user's standing orders for every session that
+starts with that prompt. They come from the user (2026-10-30 / 11-01).
+
+1. Read this whole file. The authoritative plan is **TODO PLAN v2**
+   directly below. Plan v1 and everything after it is history/reference.
+2. **p2_15 is stopped and must not be resumed** (cause in v2 section 0).
+3. Claude changed code on 2026-11-01 (commits "ASIC v2: floorplan v2,
+   latch-RF scratchpads, iact_sc SRAM" and its follow-ups). Read the diffs
+   (`git log -5`, `git show <commit>`) and v2 section 1 before working:
+   what Claude verified and what not is listed there.
+4. **Autonomy mode:** work phases F → G → P → H in this order on your own.
+   As soon as all checks of a phase pass, start the next phase without
+   asking — including fresh runs (p2_16, p2_16b). Phase I: document
+   only, do not start.
+5. Per task: (a) implement; (b) run the listed checks and compare the
+   numbers with the expected values in the plan (cell counts, 41 macros,
+   GRT overflow, WNS); (c) tick it off (`[x]`) in this file and record
+   results with numbers, timestamp and log path; (d) one small commit per
+   task. At the end of each phase: `git push utz12 dev_asic_sg13g2`.
+6. Monitoring: check running flows every 30 min (flow.log, monitor,
+   watchdog, `ps`, `free -g`, `df -h`) and note a short status line in
+   "Current state". Check the G1 gates actively (GlobalRouting: no
+   GRT-0115/0116, overflow ≈ 0, post-GRT timing at most 1 ns worse than
+   pre-GRT), ideally automated in `monitor_flow.sh`.
+7. Obey the stop criteria at the end of plan v2 strictly: stop, analyze,
+   write cause + proposal into "Current state", commit, push, wait for
+   the user. Never `--overwrite`, never restart blindly, never delete a
+   finished run dir.
+
+## TODO PLAN v2 (2026-11-01, Claude) — START HERE
+
+Plan v1 below (phases A–E) is DONE or SUPERSEDED by this plan. Everything
+after plan v1 is history. **Autonomy mode continues** (see SESSION
+INSTRUCTIONS above): work the phases in order and move on automatically
+when all checks of a phase pass; stop only on the stop criteria at the
+end of this plan.
+
+### 0. Starting point (what happened since your last session)
+
+**p2_15 was stopped by Claude on 2026-11-01 ~10:05** (user decision):
+host watchdog 410876 first, then the monitors (`monitor_p2_15.sh` and a
+stale `monitor_p2_14.sh` 196642), then librelane 52926 and openroad 52943
+(step 43 `ResizerTimingPostGRT`, writing SPEF). Run dir
+`asic/runs/openeye_p2_15/` is kept as evidence; dir 43 has no
+`state_out.json`. **Do not resume p2_15** — its routing is unusable.
+
+**Root cause of the post-GRT collapse (replaces your hypothesis P1
+"estimate_parasitics artifact" — the numbers are real routes):**
+- Every RM_IHPSG13_1P macro has ALL signal pins incl. `A_CLK` on Metal2
+  at its BOTTOM edge (LEF y=0; e.g. 2048x64: 352 pins, x 3.3..780.9) and
+  OBS on Metal1..Metal4 over the whole macro (checked in the PDK LEFs).
+- Floorplan v1 placed 33 macros R0 in three stacked rows at the core
+  bottom, so every pin edge faced a narrow channel: row 1 (wght, 1,600
+  pins) 3.7 µm to the core edge, row 2 (psum, 2,416 pins) 18.3 µm to row
+  1, row 3 (BUFFER_A, 1,400 pins) 21.7 µm to row 2. ~5,400 pins had to
+  escape sideways through 15 µm gaps.
+- GRT (p2_15 step 43 log): Metal4 17 % usage but 124,188 overflow,
+  Metal2 51 % / 20,087 → local pin-access congestion → multi-mm
+  unbuffered Metal2 detours (RC of tens of ns). Worst setup endpoints:
+  `PSUM…u_mac0/A_DIN[2]` (−193.9 ns), `wght_buffer…u_mac2/A_ADDR[4]`;
+  worst hold `wght_buffer…u_mac0/A_ADDR[3]` (−30.9 ns = A_CLK routed
+  through the same channel, very late). RSZ-2021 "no solution meets
+  design rules", 1000+ EST-0026 missing routes. DRT follows the GRT
+  guides → continuing would not have produced usable numbers.
+- The long runtimes came from this congestion too (150+ extra FastRoute
+  iterations); with 48 threads step 43 still ran ~35 h at only ~3 CPUs
+  busy — GRT (FastRoute) and the resizer barely parallelize.
+
+**Flop breakdown of the p2_15 netlist** (506,219 `sg13g2_dfrbpq_1`,
+grouped by hierarchy; 464,212 of them `$_DFFE_PP_` = storage):
+
+| Storage | bits | note |
+|---|---|---|
+| `pe.weight_data_SPad` (48 PE × 256 × 24) | 294,912 | 58 % of all flops |
+| `iact_stream_constructor` RAM (4 × 1024 × 24) | 65,600+ | fell back to flops (see below) |
+| `pe.psum_SPad` (48 × 2 × 32 × 20, SPad_DP) | 61,440 | SERIAL=1 → SPad_DP, SPad_DP_RW unused |
+| `pe.weight_addr_SPad` (48 × 64 × 8) | 24,576 | |
+| `pe.iact_data_SPad` (48 × 16 × 12) | 9,216 | |
+| `pe.iact_addr_SPad` (48 × 16 × 4) | 3,072 | |
+
+The iact_stream_constructor RAM was meant to be SRAM (target.sh comment
+"1024x72") but its width is `WORD_BITWIDTH = TRANS_BITWIDTH_IACT ×
+NUM_GLB_IACT = 24 × 1 = 24` → no `RAM_SP.v` config matched → `g_generic`.
+
+### 1. Changes Claude made (2026-11-01) — read them before you start
+
+Commit "ASIC v2: floorplan v2, latch-RF scratchpads, iact_sc SRAM"
+(see `git log`):
+
+1. **Latch register file for the PE scratchpads** —
+   `asic/rtl/sg13g2/sg13g2_latch_rf.v` (new): `oe_latch_rf_1w1r`,
+   `oe_icg`, `oe_dlatch`. Selected by `OPENEYE_LATCH_RF` in
+   `hdl/SPad_SP.v` and `hdl/SPad_DP.v` (else unchanged RAM_SP/RAM_DP
+   path). One `sg13g2_dlhq_1` (30.84 µm²) per bit + one `sg13g2_lgcp_1`
+   (27.22 µm²) per word + one shared write-data register; replaces
+   dfrbpq_1 + enable mux (~67 µm²/bit). Write: ICG latches
+   `we & (waddr==w)` in the low phase of the request cycle, `wdata_q`
+   captured at the next posedge, word latch transparent in that high
+   phase → cycle-equivalent to the flop RAM (read at the same edge sees
+   the old value, next cycle the new one; no hold race at the latch
+   closing edge). With `OPENEYE_SG13G2_CELLS` the PDK cells are
+   instantiated explicitly (no inferred latches → no Verilator LATCH
+   lint error, CTS sees real ICGs); without it behavioral models (RTL sim:
+   one behavioral latch per WORD, `g_word[w].word_q` — the first
+   per-bit-module version made iverilog elaborate >12 min on the full
+   chip, killed; log `asic/runs/regress_macros_latchrf_perbit_killed.log`).
+   Instance name `ram` is kept, so ASIC hierarchical paths are
+   `…SPad.ram.g_word[w].g_bit[b].u_lat.u_lat`. NOTE: `test/cocotb_PE_cluster/
+   PE_cluster_tb.py` and `src/open_eye/rtl_test_utils.py:566` peek into
+   `….ram.impl.mem` — they only work WITHOUT `OPENEYE_LATCH_RF` (the
+   ASIC regressions do not use them).
+2. **iact_stream_constructor RAM → SRAM**: config `(24, 10, WM=2)` =
+   `RM_IHPSG13_1P_1024x16` (d[23:8]) + `RM_IHPSG13_1P_1024x8` (d[7:0])
+   in `asic/rtl/sg13g2/sg13g2_ram_sp.v` (`g_cfg1024x24`), enabled in
+   `hdl/RAM_SP.v`; 1024x16 blackbox in `sg13g2_sram_blackbox.v`; model
+   added to `regress_macros.sh`, `asic/sim/gatesim/Makefile`,
+   `run_verilator.sh`; `MACRO_TYPES` in `gen_config.py`. **41 macros now.**
+3. **Floorplan v2** — `asic/scripts/macro_placement.py` rewritten (header
+   documents the rules, asserts them): two macro rows only, one macro
+   deep, along the BOTTOM (orientation **MX**, pins on top) and TOP
+   (orientation **R0**, pins at the bottom) core edges; pin edges face the
+   >8 mm open core interior; ≥30 µm between macros (actual 58–83 µm);
+   10 µm back-side margin. Grouped per cluster:
+   bottom `[psum X0Y0 g0 g1][iact X0Y0][wght ×5][iact X1Y0][psum X1Y0 g0 g1]`,
+   top `[psum X0Y1 g0 g1][iact X0Y1][BUFFER_A ×4][iact X1Y1][psum X1Y1 g0 g1]`.
+   Orientation semantics verified with OpenDB (`dbInst.setOrient` +
+   `setLocation` = lower-left of the oriented bbox): MX at y=335 → A_CLK
+   at y=961.44–961.70 (top edge), R0 at y=9545 → A_CLK at y=9545 (bottom
+   edge). The 8 new iact instance names
+   (`u_openeye.IACT_CONVERTER_X[x].IACT_CONVERTER_Y[y].iact_stream_
+   constructor.BUFFER[0].iact_buffer_SP.g_specific.impl.g_cfg1024x24.
+   u_mac0/1`) are derived from the p2_15 netlist naming but NOT yet seen in
+   a real synthesized netlist → check in F2.
+4. **`gen_config.py`**: `VERILOG_DEFINES += OPENEYE_LATCH_RF,
+   OPENEYE_SG13G2_CELLS`; `sg13g2_latch_rf.v` in `VERILOG_FILES`;
+   `FP_MACRO_HORIZONTAL/VERTICAL_HALO: 20` (std-cell keep-out, room for
+   pin access; `GRT_MACRO_EXTENSION` deliberately left 0 — it enlarges
+   the routing blockage). Your A1/A5/A7 knobs are unchanged.
+   `PL_TIMING_DRIVEN` stays off for this run (runtime; see I2).
+5. **Tests** — `asic/sim/tb_latch_rf_equiv.v` (new): latch RF vs
+   RAM_SP_generic (256×24, 64×8, 16×12) and RAM_DP_generic (32×20) with
+   random stimulus incl. write+read (write wins) and DP concurrent R/W.
+   `asic/sim/tb_ram_equiv.v`: cfg4 (24×1024, WM=2) added.
+
+**Verified by Claude (2026-11-01, container):**
+- `tb_latch_rf_equiv` behavioral models: **PASS** (200,000 cycles,
+  699,358 defined comparisons).
+- `tb_latch_rf_equiv` with the REAL PDK cells (`-DOPENEYE_SG13G2_CELLS`,
+  `pdk_specify_strip.py` copy of `sg13g2_stdcell.v` + `sg13g2_udp.v` —
+  iverilog cannot compile the original specify blocks): **PASS**, same
+  numbers.
+- `tb_ram_equiv` cfg0–cfg4 with PDK functional SRAM models: **PASS**.
+- `regress_macros.sh` (full FPGA cocotb test, SRAM macros + latch RF):
+  REGRESS_RESULT
+- `macro_placement.py`: 41 instances, all assertions pass;
+  `gen_config.py` writes 7 macro types / 41 placed instances.
+
+**NOT yet verified (your job, F1–F3):** `regress.sh` (generic path),
+Verilator lint + yosys synthesis of the new RTL in the flow, the macro
+instance names, the gate-level sim of the new netlist.
+
+### Phase F — pre-flow checks (blocking)
+
+- [ ] **F0** Read the diff of Claude's commit; `git log -3`. Start the
+  monitors only for runs that exist.
+- [ ] **F1** `regress.sh` (generic RAMs, no ASIC defines) must still
+  PASS. `regress_macros.sh` must PASS (Claude's result above — rerun if
+  REGRESS_RESULT is not PASS).
+- [ ] **F2 — synthesis gate of p2_16.** Add a stop-at option to the
+  launch chain first: `run_openeye.sh <run> [resume-step] [stop-step]`
+  (→ `librelane … -F <resume> -T <stop>`), and `watchdog.sh` passes it
+  through. With a stop step, success = the stop step's latest dir has
+  `state_out.json` (there is no `final/`), the watchdog then exits 0
+  without restart. Test with `DRY_RUN=1`. Then launch the fresh run
+  **p2_16** with stop step `OpenROAD.STAPrePNR` (flow step 12).
+  Checks (all must hold, record the numbers):
+  - steps 1–4 lint clean (no LATCH / unknown-module errors;
+    `sg13g2_lgcp_1`/`sg13g2_dlhq_1` must resolve via LibreLane's
+    `CELL_VERILOG_MODELS` blackboxes),
+  - step 7 unmapped cells 0, step 8 synth checks 0 errors,
+  - `06-yosys-synthesis/reports/stat.rpt` (explicit cells whose output is
+    unused may be removed by opt_clean, so allow a few % below):
+    `sg13g2_dlhq_1` ≈ **393,216**
+    (294,912 + 61,440 + 24,576 + 9,216 + 3,072); `sg13g2_lgcp_1` =
+    **19,968** (48 × (256 + 64 + 16 + 16) + 48 × 2 × 32);
+    `sg13g2_dfrbpq_1` ≪ 506,219 (expect ~15–30k); RM macros = **41**
+    (4 × 1024x16 and 4 × 1024x8 new); chip area ≈ 30–36 mm² (was
+    55.3). Big deviations → stop and analyze (e.g. yosys removed or
+    duplicated cells).
+  - step 11 `CheckMacroInstances` PASS = all 41 configured instance names
+    exist. If it fails on the iact names: take the real names from
+    `grep RM_IHPSG13_1P_1024x16 06-yosys-synthesis/*.nl.v` and fix the
+    `I` template in `macro_placement.py` (commit), then resume `-F
+    OpenROAD.CheckMacroInstances`.
+  - step 12 `STAPrePNR`: no errors; note worst setup/hold per corner and
+    check that latch paths are timed (look for the `dlhq` / ICG
+    clock-gating checks in the reports; unconstrained endpoints must not
+    jump).
+- [ ] **F3 — gate-level sim of the new netlist, in parallel to the flow.**
+  As soon as `06-yosys-synthesis/OpenEye_Asic.nl.v` exists, start
+  `asic/sim/gatesim/run_verilator.sh` on it (detached, logs in
+  `asic/runs/gatesim_p2_16.log`). `start_test_fpga` must PASS. It now
+  covers the real `sg13g2_lgcp_1`/`sg13g2_dlhq_1` cells + the new SRAM
+  config end-to-end. The flow does not wait for it, but a FAIL is a stop
+  criterion (kill the flow, analyze).
+
+### Phase G — p2_16 physical run with gates
+
+- [ ] **G1** Resume p2_16 with `-F OpenROAD.Floorplan` and stop step
+  `OpenROAD.ResizerTimingPostGRT` (flow step 44). Gates, checked by you
+  (extend `monitor_flow.sh` so it flags them automatically):
+  - step 18: "Successfully placed 41 instances"; readback with
+    `asic/scripts/macro_positions.py` on the step-18 DEF: 21 macros MX
+    at y=335, 20 R0 at the top, coordinates = `macro_placement.py`
+    output.
+  - step 22 GeneratePDN: no PDN-0235 (PSM-0069 on pad vdd is the known
+    PDK gap).
+  - step 27 GlobalPlacement: final overflow ≤ 0.1; note the routability
+    inflation messages.
+  - step 34 CTS: number of clock sinks ≪ p2_15 (ICGs + ~20k flops +
+    41 macros instead of 506k flops); skew per corner.
+  - step 37 (STAMidPNR after ResizerTimingPostCTS): nom_typ setup WNS
+    ≥ 0, hold WNS ≥ −0.5 ns.
+  - **step 38 GlobalRouting — the key gate**: no `GRT-0115/0116`, total
+    overflow 0 (tolerate ≤ 0.01 % of demand), few or no
+    "extra iteration" lines, no `EST-0026` storm. Runtime should be
+    hours, not 14 h.
+  - step 44 ResizerTimingPostGRT: setup WNS (nom) within 1 ns of the
+    pre-GRT value, hold WNS ≥ −0.5 ns, no RSZ-2021 storm.
+  Any gate failing → stop criterion (analyze; most likely levers:
+  GPL density/padding, halos, GRT layer adjustments).
+- [ ] **G2** All G1 gates green → resume `-F OpenROAD.STAMidPNR`? NO —
+  `STAMidPNR` occurs 4× in the flow; resume with the watchdog's resolver
+  (no stop step), which picks the first incomplete step after 44. Run to
+  the end (DRT → fill → RCX → STAPostPNR → GDS → DRC → LVS → gates).
+  DRT: log the violation count per iteration; it must converge to 0.
+
+### Phase P — use the idle cores (start right after F2 passed)
+
+One run uses the machine poorly (GRT/resizer ≈ 1–3 cores, synthesis 1
+core, only DRT/GPL/CTS scale). Use the spare cores for a SECOND run in
+parallel that answers the next question with the same wall time:
+
+- [ ] **P1** Add a config-overlay option to `run_openeye.sh`
+  (`CONFIG_OVERLAY=<json>` env → merged into the run's
+  `design/openeye.json` after the copy, keys override; record the
+  overlay file in the run dir). Test with `DRY_RUN=1`.
+- [ ] **P2** Launch **p2_16b** = p2_16 at **66 MHz** (`CLOCK_PERIOD: 15`,
+  `IO_DELAY_CONSTRAINT` so that period × % ≥ 6.4 ns → 43) only AFTER p2_16
+  has passed step 12 (the fresh launch re-stages `hdl/` via `gen.sh`;
+  identical content, but don't race step 6). Threads: p2_16 and p2_16b
+  each `OPENROAD_THREADS: 26`, `KLAYOUT_DRC_THREADS: 26` (overlay for b;
+  for p2_16 the next resume picks up the new config). RAM: watch
+  `free -g`, each openroad peaked ~55 GB on the old netlist. Same gates
+  as G1/G2. If p2_16 fails a gate, kill p2_16b too (same floorplan).
+- (Optional, only if both run cleanly through GRT:) a third variant
+  with `PL_TIMING_DRIVEN: true` at 15 ns.
+
+### Phase H — evaluation and report
+
+- [ ] **H1** For p2_16 (and p2_16b): table per corner of setup/hold
+  WNS/TNS (STAPostPNR), area (stdcell / macro / utilization), instance
+  count, clock skew, power report if present, runtime per step, DRC/LVS
+  result classified against the 3 documented PDK gaps.
+- [ ] **H2** Gate-sim of the FINAL netlist (`final/nl/…`) with
+  `run_verilator.sh` → PASS.
+- [ ] **H3** Summary in "Current state", commit, `git push utz12
+  dev_asic_sg13g2`. Leave the IO-delay question (6.4 ns external
+  clock-to-pad assumption) in "Blocked / open threads" for the user.
+
+### Phase I — next levers (document only, do not start without the user)
+
+- **I1 weight_data_SPad as SRAM**: 256×24 per PE = `RM_IHPSG13_1P_256x16`
+  (236.8 × 118.78 µm) + `256x8` (236.8 × 74.1 µm) ≈ 0.046 mm²/PE vs.
+  ≈ 0.19 mm² latches + the same 256:1 read mux — ~4–6× smaller, but 96
+  more macros inside the PE fabric (floorplan per PE, pin edges again).
+- **I2** `PL_TIMING_DRIVEN`, GPL cell padding, for 66–100 MHz.
+- **I3** Die shrink: with ~35 mm² stdcell the 10.5 mm die is half
+  empty; floorplan v2 needs ~8.9 mm core width per macro row, so a
+  smaller die needs macros on the left/right edges too (R90/R270, pins
+  then on the side edges — check access).
+- **I4** 100 MHz: re-pipelining of the cross-cluster paths (p2_12
+  analysis).
+- **I5** SPad_DP_RW latch version (only needed for SERIAL=0), clock
+  gating of the remaining flops, sg13g2_io liberty for pad timing, SRAM
+  fast-corner liberty m55C vs. stdcell m40C.
+
+### Stop criteria (stop, analyze, write cause + proposal to "Current state", commit, push, wait for the user)
+
+- A check of phase F/G fails and cannot be fixed in 2 attempts.
+- A regression, `tb_*` unit test or gate-sim FAILS.
+- A new error class in the flow, or the same step fails twice.
+- A G1 gate fails (esp. GRT overflow / post-GRT timing).
+- DRC/LVS errors outside the 3 documented PDK gaps.
+- Free disk < 200 GB or OOM.
+- Anything that would delete or overwrite a finished run dir.
+Never restart blindly; every restart needs a documented cause and fix.
+
+## TODO PLAN v1 (2026-10-30, review by Claude) — DONE / SUPERSEDED by v2
 
 Everything below this section up to "Key commands" is **history**; the
 "Next steps (as of 2026-10-27)" section is superseded by this plan.
