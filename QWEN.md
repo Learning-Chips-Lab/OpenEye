@@ -848,12 +848,42 @@ with DRY_RUN + stub docker. Overlay files committed:
 `openeye_overlay_26thr.json` (G1 resume of p2_16),
 `openeye_overlay_66mhz_26thr.json` (p2_16b: 15 ns, IO 43, 26 threads).
 
-**Status:** F2 pending synthesis (step 6, ~40–60 min): unmapped 0,
-synth checks 0, stat.rpt (≈ 393,216 `sg13g2_dlhq_1`, 19,968
-`sg13g2_lgcp_1`, `sg13g2_dfrbpq_1` ~15–30 k, 41 RM macros, 30–36 mm²),
-CheckMacroInstances 41/41 (iact names are the open risk — fallback in
-plan), STAPrePNR. Then G1 resume with 26-thread overlay, P2 (p2_16b)
-after step 12.
+**Pre-flight verification (11:4x): iact instance names de-risked.** All
+41 placement names verified 1:1 against the p2_15 netlist hierarchy
+(`BUFFER_A[i].iact_layer_buffer.g_specific.impl.g_cfg1024x64.u_mac`
+×4, `wght_buffer…g_cfg2048x288.u_mac0..4`, `PSUM_RAM_X[x].PSUM_RAM_Y[y].
+PSUM_RAM_GLB[g].psum_buffer…g_cfg4096x40.u_mac0..2` ×24, iact path
+`IACT_CONVERTER_X[x].IACT_CONVERTER_Y[y].iact_stream_constructor.BUFFER[0].
+iact_buffer_SP` ×4 — only the `g_cfg1024x24.u_mac0/1` suffix is new and
+matches the wrapper structure). DEF names are ODB-escaped (`\[0\]`),
+handled.
+
+**macro_positions.py --check** (commit 41bfc3f): G1 step-18 readback
+compares DEF macros against the placement JSON (position 0.5 µm tol,
+orientation, cell, both-direction completeness, MX/R0 counts). Validated
+on p2_15's GeneratePDN DEF: round-trip ALL MATCH (33, all N); 3 tamper
+types detected, exit 1. G1 command: `python3 asic/scripts/
+macro_positions.py <18-dir>/OpenEye_Asic.def --check <placement.json>`
+(placement.json from `compute_placement()` — the script's `__main__`
+appends a `#` comment line that would break json.load).
+
+**F3 readiness:** run_verilator.sh carries the new RM_1024x16 model
+(line 147, PDK file exists); PDK stdcell models include sg13g2_dlhq_1/
+lgcp_1. Build will take hours (p2_10 ref: 8.4 h for the 55 mm² netlist;
+p2_16 netlist is smaller) — the flow does not wait for it, a FAIL is a
+stop criterion.
+
+**12:00 status (30-min cadence):** step 6 Yosys.Synthesis running
+(yosys 544104, 163 % CPU, CPU time 9:56 at 11:5x, pass ~133 OPT_EXPR;
+p2_11 ref 58:41 → ETA ~12:10–12:30). Steps 1–5 clean (see 11:30 line).
+Watchdog 0 restarts, monitor (gates) silent so far, disk 1.3 T, RAM
+243 G free. F3 watcher armed on step-6 state_out.json.
+
+**Status:** F2 pending synthesis: unmapped 0, synth checks 0, stat.rpt
+(≈ 393,216 `sg13g2_dlhq_1`, 19,968 `sg13g2_lgcp_1`, `sg13g2_dfrbpq_1`
+~15–30 k, 41 RM macros, 30–36 mm²), CheckMacroInstances 41/41,
+STAPrePNR. Then G1 resume with 26-thread overlay, P2 (p2_16b) after
+step 12.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
