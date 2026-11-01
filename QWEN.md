@@ -193,7 +193,7 @@ instance names, the gate-level sim of the new netlist.
   `regress_macros.sh`: Claude's 10:52 PASS valid (log
   `asic/runs/regress_macros_latchrf.log`; last RTL change 10:43:56
   < log 10:52:24) — not re-run.
-- [ ] **F2 — synthesis gate of p2_16.** Add a stop-at option to the
+- [x] **F2 — synthesis gate of p2_16.** Add a stop-at option to the
   launch chain first: `run_openeye.sh <run> [resume-step] [stop-step]`
   (→ `librelane … -F <resume> -T <stop>`), and `watchdog.sh` passes it
   through. With a stop step, success = the stop step's latest dir has
@@ -223,6 +223,18 @@ instance names, the gate-level sim of the new netlist.
     check that latch paths are timed (look for the `dlhq` / ICG
     clock-gating checks in the reports; unconstrained endpoints must not
     jump).
+   **Done 2026-11-01 12:25:** all steps 1–12 PASS, run stopped at
+   `OpenROAD.STAPrePNR` (see Current state, 12:25 line). stat.rpt:
+   dlhq 393,216 / lgcp 19,968 exact, dfrbpq **51,883** — the 15–30 k band
+   was based on a wrong assumption (p2_15 "other" = 43,585, not 14,699);
+   pre-abc census (now `asic/scripts/dff_census.py`) accounts the whole
+   −487,392 DFF delta to the latch-RF structural change, "other" logic
+   bit-identical → benign, not a stop criterion. RM 41, 32.78 mm²,
+   CheckMacroInstances 41/41, STAPrePNR hold WNS identical to p2_15
+   (−0.514/−0.966/−0.665), setup WNS a pre-PNR baseline artifact,
+   violators 49–59 k vs 400 k+. Launch deviation: steps 1–12 ran on the
+   base config (48 threads, 26-thread overlay not yet applicable) —
+   artifact-neutral.
 - [ ] **F3 — gate-level sim of the new netlist, in parallel to the flow.**
   As soon as `06-yosys-synthesis/OpenEye_Asic.nl.v` exists, start
   `asic/sim/gatesim/run_verilator.sh` on it (detached, logs in
@@ -879,11 +891,88 @@ p2_11 ref 58:41 → ETA ~12:10–12:30). Steps 1–5 clean (see 11:30 line).
 Watchdog 0 restarts, monitor (gates) silent so far, disk 1.3 T, RAM
 243 G free. F3 watcher armed on step-6 state_out.json.
 
-**Status:** F2 pending synthesis: unmapped 0, synth checks 0, stat.rpt
-(≈ 393,216 `sg13g2_dlhq_1`, 19,968 `sg13g2_lgcp_1`, `sg13g2_dfrbpq_1`
-~15–30 k, 41 RM macros, 30–36 mm²), CheckMacroInstances 41/41,
-STAPrePNR. Then G1 resume with 26-thread overlay, P2 (p2_16b) after
-step 12.
+**12:25 — F2 DONE: p2_16 steps 1–12 all PASS** (run stopped at
+`OpenROAD.STAPrePNR` per contract: `state_out.json` in the 12 dir,
+watchdog exited 0 at 11:49, flow.log "Flow complete").
+
+- Step 6 Yosys.Synthesis finished 11:41:28 (00:38:07; p2_11 ref 58:41).
+- `06-yosys-synthesis/reports/stat.rpt`: `sg13g2_dlhq_1` = **393,216**
+  (expected exactly), `sg13g2_lgcp_1` = **19,968** (expected exactly),
+  `sg13g2_dfrbpq_1` = **51,883**, RM macros = **41** (1024x16×4,
+  1024x64×4, 1024x8×4, 2048x32×1, 2048x64×4, 4096x16×16, 4096x8×8),
+  chip area **32,783,956 µm² = 32.78 mm²** (was 55.29). PDK cell
+  identities: dlhq_1 = D-latch ("IQ"), lgcp_1 = ICG ("CLK*int_GATE"),
+  dfrbpq_1 = enable-DFF (48.99 µm²).
+- Latch-RF geometry resolved exactly by census — 5 param sets
+  (Words×DataWidth)×count → latch / FF / ICG bits: (8,24)×48 → 294,912 /
+  2,304 / 12,288; (5,20)×96 → 61,440 / 3,840 / 3,072; (6,8)×48 → 24,576 /
+  768 / 3,072; (4,12)×48 → 9,216 / 1,152 / 768; (4,4)×48 → 3,072 / 384 /
+  768. Total = **393,216 latch + 8,448 FF + 19,968 ICG** (ICG total
+  matches the plan formula 48×(256+64+16+16)+48×2×32).
+- Steps 7–11: unmapped 0; synth checks 0 errors, 0 inferred latches
+  (instance_count 1,161,732, area 32,783,956 µm², lint_warning 637);
+  CheckMacroInstances **41/41**.
+- Step 12 STAPrePNR done 11:48:51, no errors (error.log 0, warning.log
+  3). Pre-PNR absolute setup WNS is a flow baseline artifact (no
+  placement → routing estimates); the meaningful gates are hold WNS and
+  violator counts:
+
+  | corner | p2_16 setup / hold WNS (ns) | p2_15 setup / hold WNS (ns) | setup violators p2_16 / p2_15 |
+  |---|---|---|---|
+  | fast | −458.56 / **−0.514** | −455.91 / **−0.514** | 49,096 / 402,000 |
+  | slow | −1034.48 / **−0.966** | −1028.64 / **−0.966** | 58,789 / 430,000 |
+  | typ | −706.62 / **−0.665** | −702.60 / **−0.665** | 56,005 / 403,000 |
+
+  Hold WNS identical on all three corners (same clock/IO constraints)
+  → parity with p2_15 confirmed, gate met. Power 0.282 W vs 1.519 W.
+
+- **dfrbpq census — deviation RESOLVED, benign (NOT a stop criterion).**
+  Method: census of the pre-abc hierarchical dump (`asic/runs/
+  diag_pre_abc_p2_{16,15}.v`, scripts `diag_ys_p2_1{6,5}.ys`, parser now
+  `asic/scripts/dff_census.py` — commit a205b6b). Identical pipeline for
+  both (read → hierarchy → proc → memory → memory_map; no
+  opt/techmap/abc). Totals: **p2_16 54,049 FF / 393,216 latch / 19,968
+  ICG / 41 RM** (latch/ICG/RM exact vs stat.rpt → parser validated);
+  **p2_15 541,441 FF / 0 / 0 / 33 RM** (RTL of f0e14fd, no
+  `OPENEYE_LATCH_RF`). Δ = −487,392 = −397,440 (SPad RAM FFs → latch
+  RF: 296,064+63,360+24,960+9,792+3,264) − 98,496 (iact_sc RAM FFs → 8
+  RM macros) + 8,448 (RF wdata_q/memout) + 96 (g_cfg1024x24 wrapper) —
+  **100 % accounted**. The "other" logic (**43,585 FF**) is
+  bit-identical per module in both runs: PE 15,888, delay_cluster 7,744,
+  data_pipeline_wght 6,048, OpenEye_FPGA 4,637, data_pipeline_iact
+  4,224, psum_pipeline 1,711, dma_storage 896, iact_stream_constructor
+  754×2, OpenEye_Parallel 593, router_configurator 145,
+  quantization_unit 112, adder_tree 48, RST_SYNC 12,
+  ring_buffer_pipelined 11, PE_cluster 8 (ring RAM_DP_generic 1,056 and
+  the sg13g2_ram_sp wrapper FFs 320+288+256(+96 new) counted in their
+  own buckets). No duplicated/missing logic. **The plan's 15–30 k band
+  was based on a wrong assumption** (p2_15 "other" taken as 14,699;
+  actually 43,585) — 51,883 is the correct post-opt number. Post-opt:
+  51,883 (p2_16, −2,166 removed by opt) vs 506,219 (p2_15, −35,222);
+  context-independent FF types are identical across runs (DFF_PN0 16,808,
+  DFFE_PN1P 483, DFFE_PN 32, DFF_PN1 52); the remaining enabled variants
+  are context-dependent ABC mappings; p2_15's final netlist carries 0
+  lgcp (checked in its stat.rpt), p2_16's 19,968 all from the latch RF.
+- **Launch deviation (recorded):** steps 1–12 ran with the base config
+  `OPENROAD_THREADS=48`, not the planned 26 — the effective launch
+  (10:59:53, HEAD 00a6698) predates P1 (0901113); a second launch
+  attempt ~11:05:30 died in staging with a bash syntax error in an
+  uncommitted P1-WIP overlay (`run_openeye.sh: Zeile 121 … »)«`), whose
+  "failed with step/checker errors" line in `watchdog_p2_16.log` is a
+  false alarm — the flow was never affected (watchdog of the first
+  launch kept running it). Both committed scripts pass `bash -n`; no
+  artifact impact (netlist/STA are thread-independent). The 26-thread
+  overlay applies from the G1 resume on.
+- F3 gate-sim auto-launched 11:41:28 by the step-6 watcher (Verilator
+  build, −j 32; running ~50 min as of 12:29, log `asic/runs/
+  gatesim_p2_16.log`).
+
+**Status:** **F2 DONE** (steps 1–12 PASS, dfrbpq deviation resolved by
+census → benign; see 12:25 line). F3 gate-sim building in parallel (a
+FAIL is a stop criterion). Next: **G1 resume** of p2_16 (26-thread
+overlay, stop step `OpenROAD.ResizerTimingPostGRT`, resume step
+auto-resolved) and **P2** (p2_16b, 66 MHz) after G1 is up; RAM watch on
+both runs.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
