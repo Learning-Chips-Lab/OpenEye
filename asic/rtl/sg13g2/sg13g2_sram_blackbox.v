@@ -31,6 +31,22 @@ module RM_IHPSG13_1P_1024x64_c2_bm_bist (
     input [63:0] A_BIST_DIN, A_BIST_BM;
 endmodule
 
+module RM_IHPSG13_1P_1024x16_c2_bm_bist (
+    A_CLK, A_MEN, A_WEN, A_REN,
+    A_ADDR, A_DIN, A_DLY, A_DOUT, A_BM,
+    A_BIST_CLK, A_BIST_EN, A_BIST_MEN, A_BIST_WEN, A_BIST_REN,
+    A_BIST_ADDR, A_BIST_DIN, A_BIST_BM
+);
+    input A_CLK, A_MEN, A_WEN, A_REN, A_DLY;
+    input [9:0] A_ADDR;
+    input [15:0] A_DIN;
+    output [15:0] A_DOUT;
+    input [15:0] A_BM;
+    input A_BIST_CLK, A_BIST_EN, A_BIST_MEN, A_BIST_WEN, A_BIST_REN;
+    input [9:0] A_BIST_ADDR;
+    input [15:0] A_BIST_DIN, A_BIST_BM;
+endmodule
+
 module RM_IHPSG13_1P_1024x8_c2_bm_bist (
     A_CLK, A_MEN, A_WEN, A_REN,
     A_ADDR, A_DIN, A_DLY, A_DOUT, A_BM,

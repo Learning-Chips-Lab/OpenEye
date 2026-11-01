@@ -1,5 +1,8 @@
 #!/bin/bash
-# ASIC-target regression WITH sg13g2 SRAM macros (OPENEYE_RAM_SPECIFIC).
+# ASIC-target regression WITH sg13g2 SRAM macros (OPENEYE_RAM_SPECIFIC) and
+# the latch-based PE scratchpads (OPENEYE_LATCH_RF, behavioral cell models;
+# the real sg13g2_lgcp_1/dlhq_1 cells are covered by asic/sim/tb_latch_rf_equiv.v
+# and the gate-level sim) -- i.e. exactly the RTL configuration of the flow.
 #
 # Runs the same single-layer cocotb test as regress.sh, but compiles the
 # PDK functional SRAM macro models + asic/rtl/sg13g2/sg13g2_ram_sp.v so the
@@ -20,6 +23,7 @@ PDK_SRAM_VERILOG=/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/verilog
 MACRO_MODELS=(
   RM_IHPSG13_1P_core_behavioral_bm_bist.v
   RM_IHPSG13_1P_1024x64_c2_bm_bist.v
+  RM_IHPSG13_1P_1024x16_c2_bm_bist.v
   RM_IHPSG13_1P_1024x8_c2_bm_bist.v
   RM_IHPSG13_1P_2048x64_c2_bm_bist.v
   RM_IHPSG13_1P_2048x32_c2_bm_bist.v
@@ -71,12 +75,13 @@ for f in OpenEye_FPGA psum_pipeline dma_storage varlenFIFO OpenEye_Parallel \
   VSRC+=("${REPO}/hdl/${f}.v")
 done
 VSRC+=("${REPO}/asic/rtl/sg13g2/sg13g2_ram_sp.v")
+VSRC+=("${REPO}/asic/rtl/sg13g2/sg13g2_latch_rf.v")
 for m in "${MACRO_MODELS[@]}"; do
   VSRC+=("${PDK_SRAM_VERILOG}/${m}")
 done
 
 CA="-DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster \
-    -DOPENEYE_RAM_SPECIFIC -DFUNCTIONAL \
+    -DOPENEYE_RAM_SPECIFIC -DOPENEYE_LATCH_RF -DFUNCTIONAL \
     -I${REPO}/hdl/include -I${REPO}/test/cocotb_fpga -Wall"
 
 cd "${REPO}/test/cocotb_fpga"
@@ -84,4 +89,4 @@ rm -rf sim_build
 make -f "$(cocotb-config --makefiles)/Makefile.sim" \
   VERILOG_SOURCES="${VSRC[*]}" \
   COMPILE_ARGS="${CA}"
-echo "[OK] ASIC-target regression with sg13g2 SRAM macros passed"
+echo "[OK] ASIC-target regression with sg13g2 SRAM macros + latch RF passed"

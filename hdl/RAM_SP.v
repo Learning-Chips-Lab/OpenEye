@@ -132,7 +132,8 @@ module RAM_SP
         if ((AddrWidth == 10 && DataWidth == 64)  ||
             (AddrWidth == 11 && DataWidth == 288) ||
             (AddrWidth == 12 && DataWidth == 40)  ||
-            (AddrWidth == 10 && DataWidth == 72)) begin : g_specific
+            (AddrWidth == 10 && DataWidth == 72)  ||
+            (AddrWidth == 10 && DataWidth == 24)) begin : g_specific
             sg13g2_ram_sp #(
                 .AddrWidth      (AddrWidth),
                 .DataWidth      (DataWidth),

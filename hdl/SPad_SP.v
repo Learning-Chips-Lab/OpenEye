@@ -94,6 +94,22 @@ module SPad_SP #(
     output [DATA_WIDTH-1:0] data_o
 );
 
+`ifdef OPENEYE_LATCH_RF
+  // ASIC: latch-based register file (asic/rtl/sg13g2/sg13g2_latch_rf.v).
+  // Same timing as RAM_SP (Pipelined=0): write wins over read.
+  oe_latch_rf_1w1r #(
+      .AddrWidth(ADDR_WIDTH),
+      .DataWidth(DATA_WIDTH)
+  ) ram (
+      .clk_i  (clk_i),
+      .we_i   (we_i),
+      .waddr_i(addr_i),
+      .wdata_i(data_i),
+      .re_i   (re_i && !we_i),
+      .raddr_i(addr_i),
+      .rdata_o(data_o)
+  );
+`else
   RAM_SP #(
       .AddrWidth(ADDR_WIDTH),
       .DataWidth(DATA_WIDTH),
@@ -107,5 +123,6 @@ module SPad_SP #(
       .wr_mask_i(1'b0),
       .data_o (data_o)
   );
+`endif
 
 endmodule

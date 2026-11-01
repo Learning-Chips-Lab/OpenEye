@@ -17,6 +17,9 @@
 ///   (288, 11, 1)  wght buffer (24*4*3)        4 x 2048x64 + 1 x 2048x32
 ///   (40,  12, 1)  psum buffer (20*2)          2 x 4096x16 + 1 x 4096x8
 ///   (72,  10, 6)  iact_stream_constructor RAM 1 x 1024x64 + 1 x 1024x8
+///                 (NUM_GLB_IACT=3: WORD_BITWIDTH = 24*3)
+///   (24,  10, 2)  iact_stream_constructor RAM 1 x 1024x16 + 1 x 1024x8
+///                 (NUM_GLB_IACT=1, the current ASIC target: 24*1)
 ///
 /// Behavioral mapping (must match RAM_SP_generic):
 ///   - write:  !cen && !rdwen, per-subword enable wm (active high)
@@ -80,7 +83,8 @@ module sg13g2_ram_sp #(
         (DataWidth == 64  && AddrWidth == 10) ? 0 :
         (DataWidth == 288 && AddrWidth == 11) ? 1 :
         (DataWidth == 40  && AddrWidth == 12) ? 2 :
-        (DataWidth == 72  && AddrWidth == 10) ? 3 : -1;
+        (DataWidth == 72  && AddrWidth == 10) ? 3 :
+        (DataWidth == 24  && AddrWidth == 10) ? 4 : -1;
 
     wire [63:0] dout_w64_0, dout_w64_1, dout_w64_2, dout_w64_3;
     wire [31:0] dout_w32_0;
@@ -195,6 +199,27 @@ module sg13g2_ram_sp #(
                     .A_BIST_ADDR(10'b0), .A_BIST_DIN(8'b0), .A_BIST_BM(8'b0)
                 );
                 assign dout = {dout_w64_0, dout_w8_0};
+            end
+
+            // (24, 10): iact_stream_constructor (NUM_GLB_IACT=1) = 1 x 16 + 1 x 8
+            4: begin : g_cfg1024x24
+                RM_IHPSG13_1P_1024x16_c2_bm_bist u_mac0 (
+                    .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
+                    .A_ADDR(a), .A_DIN(d[23:8]), .A_DLY(1'b1),
+                    .A_DOUT(dout_w16_0), .A_BM(bm[23:8]),
+                    .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
+                    .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
+                    .A_BIST_ADDR(10'b0), .A_BIST_DIN(16'b0), .A_BIST_BM(16'b0)
+                );
+                RM_IHPSG13_1P_1024x8_c2_bm_bist u_mac1 (
+                    .A_CLK(clk), .A_MEN(a_men), .A_WEN(a_wen), .A_REN(a_ren),
+                    .A_ADDR(a), .A_DIN(d[7:0]), .A_DLY(1'b1),
+                    .A_DOUT(dout_w8_0), .A_BM(bm[7:0]),
+                    .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
+                    .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0),
+                    .A_BIST_ADDR(10'b0), .A_BIST_DIN(8'b0), .A_BIST_BM(8'b0)
+                );
+                assign dout = {dout_w16_0, dout_w8_0};
             end
 
             default: begin : g_err

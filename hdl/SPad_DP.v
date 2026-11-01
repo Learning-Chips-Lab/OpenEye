@@ -112,6 +112,22 @@ module SPad_DP #(
     output wire [DATA_WIDTH-1:0] data_o
 );
 
+`ifdef OPENEYE_LATCH_RF
+  // ASIC: latch-based register file (asic/rtl/sg13g2/sg13g2_latch_rf.v).
+  // Same timing as RAM_DP (Pipelined=0).
+  oe_latch_rf_1w1r #(
+      .AddrWidth(ADDR_WIDTH),
+      .DataWidth(DATA_WIDTH)
+  ) ram (
+      .clk_i  (clk_i),
+      .we_i   (we_i),
+      .waddr_i(addr_w_i),
+      .wdata_i(data_i),
+      .re_i   (re_i),
+      .raddr_i(addr_r_i),
+      .rdata_o(data_o)
+  );
+`else
   RAM_DP #(
       .AddrWidth(ADDR_WIDTH),
       .DataWidth(DATA_WIDTH),
@@ -125,4 +141,5 @@ module SPad_DP #(
       .data_i  (data_i),
       .data_o  (data_o)
   );
+`endif
 endmodule

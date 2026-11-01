@@ -6,6 +6,7 @@
     "VERILOG_FILES": [
         "/foss/designs/OpenEye/asic/rtl/sg13g2/OpenEye_Asic.v",
         "/foss/designs/OpenEye/asic/rtl/sg13g2/sg13g2_ram_sp.v",
+        "/foss/designs/OpenEye/asic/rtl/sg13g2/sg13g2_latch_rf.v",
         "/foss/designs/OpenEye/asic/rtl/sg13g2_io_blackbox.v",
         "/foss/designs/OpenEye/hdl/GLB_cluster.v",
         "/foss/designs/OpenEye/hdl/OpenEye_Cluster.v",
@@ -49,6 +50,8 @@
         "USE_INTERNAL_PARAMS_PE",
         "USE_INTERNAL_PARAMS_PE_cluster",
         "OPENEYE_RAM_SPECIFIC",
+        "OPENEYE_LATCH_RF",
+        "OPENEYE_SG13G2_CELLS",
         "NO_TRACE"
     ],
     "CLOCK_PORT": "clk_pad",
@@ -72,6 +75,7 @@
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib.gz",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_io/lib/sg13g2_io_typ_1p2V_3p3V_25C.lib.gz",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_typ_1p20V_25C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x16_c2_bm_bist_typ_1p20V_25C.lib",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x8_c2_bm_bist_typ_1p20V_25C.lib",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_typ_1p20V_25C.lib",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x32_c2_bm_bist_typ_1p20V_25C.lib",
@@ -82,6 +86,7 @@
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_fast_1p32V_m40C.lib.gz",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_io/lib/sg13g2_io_fast_1p32V_3p6V_m40C.lib.gz",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_fast_1p32V_m55C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x16_c2_bm_bist_fast_1p32V_m55C.lib",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x8_c2_bm_bist_fast_1p32V_m55C.lib",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_fast_1p32V_m55C.lib",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x32_c2_bm_bist_fast_1p32V_m55C.lib",
@@ -92,6 +97,7 @@
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_stdcell/lib/sg13g2_stdcell_slow_1p08V_125C.lib.gz",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_io/lib/sg13g2_io_slow_1p08V_3p0V_125C.lib.gz",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x64_c2_bm_bist_slow_1p08V_125C.lib",
+            "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x16_c2_bm_bist_slow_1p08V_125C.lib",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x8_c2_bm_bist_slow_1p08V_125C.lib",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_slow_1p08V_125C.lib",
             "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x32_c2_bm_bist_slow_1p08V_125C.lib",
@@ -117,29 +123,74 @@
             "instances": {
                 "u_openeye.BUFFER_A[0].iact_layer_buffer.g_specific.impl.g_cfg1024x64.u_mac": {
                     "location": [
-                        325,
-                        1610
+                        3505.0,
+                        9825.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.BUFFER_A[1].iact_layer_buffer.g_specific.impl.g_cfg1024x64.u_mac": {
                     "location": [
-                        1125,
-                        1610
+                        4375.0,
+                        9825.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.BUFFER_A[2].iact_layer_buffer.g_specific.impl.g_cfg1024x64.u_mac": {
                     "location": [
-                        1925,
-                        1610
+                        5245.0,
+                        9825.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.BUFFER_A[3].iact_layer_buffer.g_specific.impl.g_cfg1024x64.u_mac": {
                     "location": [
-                        2725,
-                        1610
+                        6115.0,
+                        9825.0
+                    ],
+                    "orientation": "R0"
+                }
+            }
+        },
+        "RM_IHPSG13_1P_1024x16_c2_bm_bist": {
+            "gds": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_1024x16_c2_bm_bist.gds",
+            "lef": "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_1024x16_c2_bm_bist.lef",
+            "lib": {
+                "*_typ_1p20V_25C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x16_c2_bm_bist_typ_1p20V_25C.lib"
+                ],
+                "*_fast_1p32V_m40C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x16_c2_bm_bist_fast_1p32V_m55C.lib"
+                ],
+                "*_slow_1p08V_125C": [
+                    "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x16_c2_bm_bist_slow_1p08V_125C.lib"
+                ]
+            },
+            "instances": {
+                "u_openeye.IACT_CONVERTER_X[0].IACT_CONVERTER_Y[0].iact_stream_constructor.BUFFER[0].iact_buffer_SP.g_specific.impl.g_cfg1024x24.u_mac0": {
+                    "location": [
+                        2830.0,
+                        335.0
+                    ],
+                    "orientation": "MX"
+                },
+                "u_openeye.IACT_CONVERTER_X[1].IACT_CONVERTER_Y[0].iact_stream_constructor.BUFFER[0].iact_buffer_SP.g_specific.impl.g_cfg1024x24.u_mac0": {
+                    "location": [
+                        7155.0,
+                        335.0
+                    ],
+                    "orientation": "MX"
+                },
+                "u_openeye.IACT_CONVERTER_X[0].IACT_CONVERTER_Y[1].iact_stream_constructor.BUFFER[0].iact_buffer_SP.g_specific.impl.g_cfg1024x24.u_mac0": {
+                    "location": [
+                        2980.0,
+                        9825.0
+                    ],
+                    "orientation": "R0"
+                },
+                "u_openeye.IACT_CONVERTER_X[1].IACT_CONVERTER_Y[1].iact_stream_constructor.BUFFER[0].iact_buffer_SP.g_specific.impl.g_cfg1024x24.u_mac0": {
+                    "location": [
+                        6985.0,
+                        9825.0
                     ],
                     "orientation": "R0"
                 }
@@ -158,6 +209,36 @@
                 "*_slow_1p08V_125C": [
                     "/foss/pdks/ihp-sg13g2/libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x8_c2_bm_bist_slow_1p08V_125C.lib"
                 ]
+            },
+            "instances": {
+                "u_openeye.IACT_CONVERTER_X[0].IACT_CONVERTER_Y[0].iact_stream_constructor.BUFFER[0].iact_buffer_SP.g_specific.impl.g_cfg1024x24.u_mac1": {
+                    "location": [
+                        3125.0,
+                        335.0
+                    ],
+                    "orientation": "MX"
+                },
+                "u_openeye.IACT_CONVERTER_X[1].IACT_CONVERTER_Y[0].iact_stream_constructor.BUFFER[0].iact_buffer_SP.g_specific.impl.g_cfg1024x24.u_mac1": {
+                    "location": [
+                        7450.0,
+                        335.0
+                    ],
+                    "orientation": "MX"
+                },
+                "u_openeye.IACT_CONVERTER_X[0].IACT_CONVERTER_Y[1].iact_stream_constructor.BUFFER[0].iact_buffer_SP.g_specific.impl.g_cfg1024x24.u_mac1": {
+                    "location": [
+                        3305.0,
+                        9825.0
+                    ],
+                    "orientation": "R0"
+                },
+                "u_openeye.IACT_CONVERTER_X[1].IACT_CONVERTER_Y[1].iact_stream_constructor.BUFFER[0].iact_buffer_SP.g_specific.impl.g_cfg1024x24.u_mac1": {
+                    "location": [
+                        7305.0,
+                        9825.0
+                    ],
+                    "orientation": "R0"
+                }
             }
         },
         "RM_IHPSG13_1P_2048x64_c2_bm_bist": {
@@ -177,31 +258,31 @@
             "instances": {
                 "u_openeye.wght_buffer.g_specific.impl.g_cfg2048x288.u_mac0": {
                     "location": [
-                        325,
-                        325
+                        3305.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
                 },
                 "u_openeye.wght_buffer.g_specific.impl.g_cfg2048x288.u_mac1": {
                     "location": [
-                        1125,
-                        325
+                        4150.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
                 },
                 "u_openeye.wght_buffer.g_specific.impl.g_cfg2048x288.u_mac2": {
                     "location": [
-                        1925,
-                        325
+                        4990.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
                 },
                 "u_openeye.wght_buffer.g_specific.impl.g_cfg2048x288.u_mac3": {
                     "location": [
-                        2725,
-                        325
+                        5835.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
                 }
             }
         },
@@ -222,10 +303,10 @@
             "instances": {
                 "u_openeye.wght_buffer.g_specific.impl.g_cfg2048x288.u_mac4": {
                     "location": [
-                        3525,
-                        325
+                        6680.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
                 }
             }
         },
@@ -246,113 +327,113 @@
             "instances": {
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[0].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac0": {
                     "location": [
-                        325,
-                        970
+                        335.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
                 },
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[0].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac1": {
                     "location": [
-                        755,
-                        970
+                        810.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
                 },
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[0].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac0": {
                     "location": [
-                        1440,
-                        970
+                        1580.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
                 },
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[0].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac1": {
                     "location": [
-                        1870,
-                        970
+                        2055.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
+                },
+                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac0": {
+                    "location": [
+                        7630.0,
+                        335.0
+                    ],
+                    "orientation": "MX"
+                },
+                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac1": {
+                    "location": [
+                        8105.0,
+                        335.0
+                    ],
+                    "orientation": "MX"
+                },
+                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac0": {
+                    "location": [
+                        8880.0,
+                        335.0
+                    ],
+                    "orientation": "MX"
+                },
+                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac1": {
+                    "location": [
+                        9355.0,
+                        335.0
+                    ],
+                    "orientation": "MX"
                 },
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[1].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac0": {
                     "location": [
-                        2555,
-                        970
+                        335.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[1].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac1": {
                     "location": [
-                        2985,
-                        970
+                        835.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[1].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac0": {
                     "location": [
-                        3670,
-                        970
+                        1655.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[1].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac1": {
                     "location": [
-                        4100,
-                        970
-                    ],
-                    "orientation": "R0"
-                },
-                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac0": {
-                    "location": [
-                        4785,
-                        970
-                    ],
-                    "orientation": "R0"
-                },
-                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac1": {
-                    "location": [
-                        5215,
-                        970
-                    ],
-                    "orientation": "R0"
-                },
-                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac0": {
-                    "location": [
-                        5900,
-                        970
-                    ],
-                    "orientation": "R0"
-                },
-                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac1": {
-                    "location": [
-                        6330,
-                        970
+                        2160.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[1].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac0": {
                     "location": [
-                        7015,
-                        970
+                        7510.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[1].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac1": {
                     "location": [
-                        7445,
-                        970
+                        8010.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[1].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac0": {
                     "location": [
-                        8130,
-                        970
+                        8835.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[1].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac1": {
                     "location": [
-                        8560,
-                        970
+                        9335.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 }
@@ -375,57 +456,57 @@
             "instances": {
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[0].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac2": {
                     "location": [
-                        1190,
-                        970
+                        1285.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
                 },
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[0].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac2": {
                     "location": [
-                        2305,
-                        970
+                        2535.0,
+                        335.0
                     ],
-                    "orientation": "R0"
+                    "orientation": "MX"
+                },
+                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac2": {
+                    "location": [
+                        8580.0,
+                        335.0
+                    ],
+                    "orientation": "MX"
+                },
+                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac2": {
+                    "location": [
+                        9830.0,
+                        335.0
+                    ],
+                    "orientation": "MX"
                 },
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[1].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac2": {
                     "location": [
-                        3420,
-                        970
+                        1335.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.PSUM_RAM_X[0].PSUM_RAM_Y[1].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac2": {
                     "location": [
-                        4535,
-                        970
-                    ],
-                    "orientation": "R0"
-                },
-                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac2": {
-                    "location": [
-                        5650,
-                        970
-                    ],
-                    "orientation": "R0"
-                },
-                "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[0].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac2": {
-                    "location": [
-                        6765,
-                        970
+                        2660.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[1].PSUM_RAM_GLB[0].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac2": {
                     "location": [
-                        7880,
-                        970
+                        8510.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 },
                 "u_openeye.PSUM_RAM_X[1].PSUM_RAM_Y[1].PSUM_RAM_GLB[1].psum_buffer.g_specific.impl.g_cfg4096x40.u_mac2": {
                     "location": [
-                        8995,
-                        970
+                        9835.0,
+                        9545.0
                     ],
                     "orientation": "R0"
                 }
@@ -442,6 +523,8 @@
     "EXTRA_GDS": [
         "/foss/designs/OpenEye/asic/rtl/bondpad_70x70.gds"
     ],
+    "FP_MACRO_HORIZONTAL_HALO": 20,
+    "FP_MACRO_VERTICAL_HALO": 20,
     "PDN_CORE_RING": true,
     "PDN_CORE_RING_CONNECT_TO_PADS": true,
     "PDN_MACRO_CONNECTIONS": [

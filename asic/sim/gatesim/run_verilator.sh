@@ -144,6 +144,7 @@ verilator -cc --exe -j "${JOBS}" \
   "${STDC_VLT}" \
   "${SRAM_DIR}/RM_IHPSG13_1P_core_behavioral_bm_bist.v" \
   "${SRAM_DIR}/RM_IHPSG13_1P_1024x64_c2_bm_bist.v" \
+  "${SRAM_DIR}/RM_IHPSG13_1P_1024x16_c2_bm_bist.v" \
   "${SRAM_DIR}/RM_IHPSG13_1P_1024x8_c2_bm_bist.v" \
   "${SRAM_DIR}/RM_IHPSG13_1P_2048x64_c2_bm_bist.v" \
   "${SRAM_DIR}/RM_IHPSG13_1P_2048x32_c2_bm_bist.v" \

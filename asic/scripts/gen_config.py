@@ -22,9 +22,11 @@ PDK = "/foss/pdks/ihp-sg13g2"
 SRAM = f"{PDK}/libs.ref/sg13g2_sram"
 OUT = REPO / "asic" / "rtl" / "sg13g2" / "openeye.json"
 
-# the six RM_IHPSG13_1P macro types used by sg13g2_ram_sp.v
+# the seven RM_IHPSG13_1P macro types used by sg13g2_ram_sp.v
+# (1024x16: iact_stream_constructor 1024x24 = 16 + 8, added 2026-11-01)
 MACRO_TYPES = [
     "RM_IHPSG13_1P_1024x64_c2_bm_bist",
+    "RM_IHPSG13_1P_1024x16_c2_bm_bist",
     "RM_IHPSG13_1P_1024x8_c2_bm_bist",
     "RM_IHPSG13_1P_2048x64_c2_bm_bist",
     "RM_IHPSG13_1P_2048x32_c2_bm_bist",
@@ -59,6 +61,8 @@ HDL = f"{CTR_REPO}/hdl"
 VERILOG_FILES = [
     f"{CTR_REPO}/asic/rtl/sg13g2/OpenEye_Asic.v",
     f"{CTR_REPO}/asic/rtl/sg13g2/sg13g2_ram_sp.v",
+    # latch-based PE scratchpads (OPENEYE_LATCH_RF, added 2026-11-01)
+    f"{CTR_REPO}/asic/rtl/sg13g2/sg13g2_latch_rf.v",
     f"{CTR_REPO}/asic/rtl/sg13g2_io_blackbox.v",
 ] + sorted(f"{HDL}/{f}" for f in [
     "OpenEye_FPGA.v", "psum_pipeline.v", "dma_storage.v", "varlenFIFO.v",
@@ -87,10 +91,12 @@ def main() -> None:
             },
         }
 
-    # Fixed R0 positions for the 33 SRAM instances. LibreLane's
-    # Odb.ManualMacroPlacement only acts on MACROS.<cell>.instances and the
-    # flow never places macros on its own -> without this, GeneratePDN dies
-    # with [PDN-0235] Design has unplaced macros (happened in p2_11).
+    # Fixed positions for the 41 SRAM instances (floorplan v2: two edge
+    # rows, pin edges facing the core interior -- see macro_placement.py).
+    # LibreLane's Odb.ManualMacroPlacement only acts on
+    # MACROS.<cell>.instances and the flow never places macros on its own
+    # -> without this, GeneratePDN dies with [PDN-0235] Design has unplaced
+    # macros (happened in p2_11).
     merge_into_macros(macros)
 
     # CELL_LIBS replaces the PDK dict entirely -> stdcell + io + SRAMs
@@ -112,6 +118,13 @@ def main() -> None:
             "USE_INTERNAL_PARAMS_PE",
             "USE_INTERNAL_PARAMS_PE_cluster",
             "OPENEYE_RAM_SPECIFIC",
+            # PE scratchpads (SPad_SP/SPad_DP) as latch register files with
+            # explicitly instantiated sg13g2_lgcp_1 / sg13g2_dlhq_1 cells
+            # (asic/rtl/sg13g2/sg13g2_latch_rf.v). p2_15: the scratchpads
+            # were 393k enable-DFFs (~67 um^2/bit), weight_data_SPad alone
+            # 58 % of all flops; latch RF ~32 um^2/bit.
+            "OPENEYE_LATCH_RF",
+            "OPENEYE_SG13G2_CELLS",
             # yosys cannot resolve $value$plusargs (Icarus-only, used by the
             # FPGA debug waveform dump in OpenEye_FPGA.v)
             "NO_TRACE",
@@ -142,11 +155,16 @@ def main() -> None:
         "FP_SIZING": "absolute",
         # 10.5 mm die: p2_14 floorplan metrics (measured): 44.7 mm^2
         # stdcell + 8.6 mm^2 SRAM macros = 53.2 mm^2 on the 97.2 mm^2 core
-        # -> ~55 % utilization (stdcell + macros, pads excluded). The
-        # netlist has NO latches: of the 55.3 mm^2 synthesized area,
-        # 24.8 mm^2 (~45 %) are the 506,219 async-reset DFFs
-        # (sg13g2_dfrbpq_1) -- the PE scratchpads live in DFFs. 143 pads
-        # at 80 um pitch (2.9 mm span, centered) leave ample room.
+        # -> ~55 % utilization (stdcell + macros, pads excluded). Up to
+        # p2_15 the netlist had NO latches: of the 55.3 mm^2 synthesized
+        # area, 24.8 mm^2 (~45 %) were the 506,219 async-reset DFFs
+        # (sg13g2_dfrbpq_1) -- PE scratchpads (393k) + iact_stream_
+        # constructor RAM (98k, fell back to flops because its 1024x24
+        # shape had no macro config). Both fixed 2026-11-01 (latch RF +
+        # g_cfg1024x24); expected stdcell area ~35 mm^2 -> the die can
+        # shrink in a later iteration (floorplan v2 needs ~8.9 mm of
+        # core width per macro row). 143 pads at 80 um pitch (2.9 mm span,
+        # centered) leave ample room.
         "DIE_AREA": [0, 0, 10500, 10500],
         "LEFT_MARGIN_MULT": 667,
         "RIGHT_MARGIN_MULT": 667,
@@ -163,6 +181,11 @@ def main() -> None:
         ],
         "EXTRA_LEFS": [f"{CTR_REPO}/asic/rtl/bondpad_70x70.lef"],
         "EXTRA_GDS": [f"{CTR_REPO}/asic/rtl/bondpad_70x70.gds"],
+        # Std-cell keep-out around macros (cut rows, default 10 um). 20 um
+        # in front of the SRAM pin edges (all pins on Metal2 at one edge)
+        # leaves the router room for pin access (p2_15 lesson).
+        "FP_MACRO_HORIZONTAL_HALO": 20,
+        "FP_MACRO_VERTICAL_HALO": 20,
         "PDN_CORE_RING": True,
         "PDN_CORE_RING_CONNECT_TO_PADS": True,
         "PDN_MACRO_CONNECTIONS": [
