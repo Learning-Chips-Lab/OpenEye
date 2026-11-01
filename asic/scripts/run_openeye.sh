@@ -6,7 +6,14 @@
 # bondpads) -> fill -> multi-corner STA -> DRC -> LVS -> GDS.
 #
 # Usage (from the host, container must be started via scripts/container.sh):
-#   asic/scripts/run_openeye.sh [runname] [resume-step-id]
+#   asic/scripts/run_openeye.sh [runname] [resume-step-id] [stop-step-id]
+#
+# Stop-step semantics (2026-11-01, plan v2 F2): the third argument is passed
+# to librelane as -T <stop-step-id>: the flow runs at most up to and
+# INCLUDING that step, then exits 0. Success for a stopped run is NOT the
+# final/ snapshot (librelane writes it only after ALL steps completed) but
+# the stop step's latest run dir carrying state_out.json. The success marker
+# line is still printed, so watchdog.sh exits 0 without restarting.
 #
 # Output lands in asic/runs/openeye_<runname>/ (gitignored).
 #
@@ -48,6 +55,7 @@ CONTAINER_NAME="${CONTAINER_NAME:-iic-osic-tools_asic}"
 
 RUN_NAME="${1:-$(date +%Y%m%d_%H%M)}"
 RESUME_STEP="${2:-}"
+STOP_STEP="${3:-}"
 WORKDIR_HOST="${ASIC_DIR}/runs/openeye_${RUN_NAME}"
 WORKDIR_CTR="/foss/designs/OpenEye/asic/runs/openeye_${RUN_NAME}"
 FLOW_LOG="${WORKDIR_HOST}/flow.log"
@@ -93,7 +101,7 @@ echo "=== launch $(date -Is) resume=${RESUME_STEP:-<full run>} ===" >> "${FLOW_L
 
 if [ "${DRY_RUN:-0}" = "1" ]; then
     echo "[DRY_RUN] staging done; would launch in ${CONTAINER_NAME}:"
-    echo "[DRY_RUN]   librelane openeye.json --run-tag '${RUN_NAME}' ${RESUME_STEP:+"-F '${RESUME_STEP}'"}"
+    echo "[DRY_RUN]   librelane openeye.json --run-tag '${RUN_NAME}' ${RESUME_STEP:+"-F '${RESUME_STEP}'"} ${STOP_STEP:+"-T '${STOP_STEP}'"}"
     exit 0
 fi
 
@@ -108,13 +116,34 @@ rc=0
 docker exec "${CONTAINER_NAME}" bash -lc "
   cd '${WORKDIR_CTR}/design' || exit 1
   source '${WORKDIR_CTR%/runs/openeye_${RUN_NAME}}/scripts/env.sh'
-  librelane openeye.json --run-tag '${RUN_NAME}' ${RESUME_STEP:+-F '${RESUME_STEP}'}
+  librelane openeye.json --run-tag '${RUN_NAME}' ${RESUME_STEP:+-F '${RESUME_STEP}'} ${STOP_STEP:+-T '${STOP_STEP}'}
 " >> "${FLOW_LOG}" 2>&1 || rc=$?
 
-# Success = librelane exit code 0 AND the final/ state snapshot present
-# (sequential.py saves it only after every step completed; checker
+RUNS_DIR="${WORKDIR_HOST}/design/runs/${RUN_NAME}"
+
+if [ -n "${STOP_STEP}" ]; then
+    # Stopped run: final/ is NOT written (librelane saves it only after ALL
+    # steps completed) -> success = exit 0 AND the stop step's latest dir
+    # carries state_out.json (several dirs per step happen after crash
+    # re-runs; the highest ordinal decides, as in resolve_resume.py).
+    slug="$(docker exec "${CONTAINER_NAME}" python3 -c \
+        "from librelane.common.misc import slugify; print(slugify('${STOP_STEP}'))")"
+    # "|| true" inside: without a matching dir, ls's failure would kill
+    # the script (set -e + pipefail) before the error branch below.
+    stop_dir="$( { ls -d "${RUNS_DIR}"/[0-9]*-"${slug}" 2>/dev/null || true; } | sort | tail -1 )"
+    stop_ok=$([ -n "${stop_dir}" ] && [ -f "${stop_dir}/state_out.json" ] && echo yes || echo no)
+    if [ "${rc}" -ne 0 ] || [ "${stop_ok}" != "yes" ]; then
+        echo "[ERROR] Run '${RUN_NAME}' failed: librelane exit ${rc}; stop-step '${STOP_STEP}' dir: ${stop_dir:-<none>}; state_out.json: ${stop_ok}. Check ${FLOW_LOG}" >&2
+        exit 1
+    fi
+    echo "[INFO] Run '${RUN_NAME}' finished without ERROR lines (stopped at ${STOP_STEP})."
+    exit 0
+fi
+
+# Full run: success = librelane exit code 0 AND the final/ state snapshot
+# present (sequential.py saves it only after every step completed; checker
 # failures raise before it).
-FINAL_DIR="${WORKDIR_HOST}/design/runs/${RUN_NAME}/final"
+FINAL_DIR="${RUNS_DIR}/final"
 if [ "${rc}" -ne 0 ] || [ ! -d "${FINAL_DIR}" ]; then
     echo "[ERROR] Run '${RUN_NAME}' failed: librelane exit ${rc}; final/ present: $([ -d "${FINAL_DIR}" ] && echo yes || echo no). Check ${FLOW_LOG}" >&2
     exit 1

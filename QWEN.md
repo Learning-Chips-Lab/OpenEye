@@ -176,11 +176,23 @@ instance names, the gate-level sim of the new netlist.
 
 ### Phase F — pre-flow checks (blocking)
 
-- [ ] **F0** Read the diff of Claude's commit; `git log -3`. Start the
+- [x] **F0** Read the diff of Claude's commit; `git log -3`. Start the
   monitors only for runs that exist.
-- [ ] **F1** `regress.sh` (generic RAMs, no ASIC defines) must still
+  **Done 2026-11-01 10:55:** diffs of `1880b6b` (floorplan v2 + latch RF
+  + iact_sc SRAM) and `4caea86` (word-level behavioral sim model) read in
+  full (gen_config.py, macro_placement.py, sg13g2_latch_rf.v,
+  sg13g2_ram_sp.v cfg4, sg13g2_sram_blackbox.v 1024x16, SPad_SP/SPad_DP
+  hooks, RAM_SP.v cfg condition); `git log -3` = a7b5421/4caea86/1880b6b.
+  No flow running (p2_15 stopped, zombie procs only); the STALE p2_15
+  monitor (PID 411032) was killed — p2_15 stays evidence, no monitor.
+- [x] **F1** `regress.sh` (generic RAMs, no ASIC defines) must still
   PASS. `regress_macros.sh` must PASS (Claude's result above; rerun
   only if the RTL changed since).
+  **Done 2026-11-01 10:57:** `regress.sh` PASS — TESTS=1 PASS=1 FAIL=0,
+  10210 ns, 4.50 s sim (log `asic/runs/regress_generic_latchrf.log`).
+  `regress_macros.sh`: Claude's 10:52 PASS valid (log
+  `asic/runs/regress_macros_latchrf.log`; last RTL change 10:43:56
+  < log 10:52:24) — not re-run.
 - [ ] **F2 — synthesis gate of p2_16.** Add a stop-at option to the
   launch chain first: `run_openeye.sh <run> [resume-step] [stop-step]`
   (→ `librelane … -F <resume> -T <stop>`), and `watchdog.sh` passes it
@@ -778,6 +790,40 @@ est-srv02 host gotchas (learned 2026-10-23):
   `delayed_*` data; Verilator just ignores them).
 
 ## Current state (as of 2026-10-30 19:10)
+
+### Session 2026-11-01 (plan v2, Autonomie-Modus F→G→P→H)
+
+**10:55 — F0/F1 done.** Diffs of Claude's 3 commits read (F0, see plan);
+stale p2_15 monitor (411032) killed, no flow running, p2_15 run dir kept
+as evidence (stopped at step 43, no `state_out.json` there — as
+documented). F1: `regress.sh` PASS (10:57, TESTS=1 PASS=1, log
+`asic/runs/regress_generic_latchrf.log`); `regress_macros.sh` covered by
+Claude's 10:52 PASS (RTL unchanged since). Machine: 1.3 T disk free,
+243 G RAM available, container `iic-osic-tools_asic` up 6 days.
+
+**11:0x — F2 (part 1) done: stop-step launch chain.**
+`run_openeye.sh <run> [resume-step] [stop-step]` → `librelane … -F … -T …`
+(third arg; `librelane --help` confirms `-T, --to`); success for a
+stopped run = librelane exit 0 AND the stop step's latest dir (slug via
+librelane's `slugify`, highest ordinal) carries `state_out.json` (no
+`final/` check); success marker line kept verbatim (suffix in parens) so
+the watchdog exits 0 without restart. `watchdog.sh` passes the
+`STOP_STEP` env through as third positional (always passes all three
+args — positional shift on fresh+stop would otherwise corrupt the args).
+Tests (stub `docker`, synthetic run dirs, all PASS, artifacts deleted):
+resolver on stopped frontier (step 12 complete) → `OpenROAD.Floorplan`;
+resume+stop with state_out → marker/exit 0; without → `[ERROR]`/exit 1;
+watchdog `STOP_STEP=OpenROAD.STAPrePNR` → "flow completed", exit 0, no
+restart; DRY_RUN fresh+stop prints `-T 'OpenROAD.STAPrePNR'`; DRY_RUN
+plain unchanged. Regenerated tracked files (OpenEye_Asic.v, pad_order.
+json, openeye.json) byte-identical (git status clean).
+
+**Status:** p2_16 launch prepared — fresh run, stop step
+`OpenROAD.STAPrePNR` (flow step 12), watchdog + `monitor_flow.sh` on
+launch. F2 checks (lint steps 1–4, unmapped 0, stat.rpt cell counts
+≈ 393,216 dlhq / 19,968 lgcp / 41 macros / 30–36 mm², CheckMacroInstances
+41/41, STAPrePNR timing) pending; F3 gate-sim starts as soon as
+`06-yosys-synthesis/OpenEye_Asic.nl.v` exists (watcher armed).
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
