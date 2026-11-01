@@ -242,6 +242,12 @@ instance names, the gate-level sim of the new netlist.
   covers the real `sg13g2_lgcp_1`/`sg13g2_dlhq_1` cells + the new SRAM
   config end-to-end. The flow does not wait for it, but a FAIL is a stop
   criterion (kill the flow, analyze).
+  **Done 2026-11-01 15:02: PASS.** `start_test_fpga` PASS,
+  TESTS=1 PASS=1 FAIL=0 (10210 ns, 4.72 s sim; build 11:41 → 15:02,
+  ~3.4 h vs p2_10 ref 8.4 h for the bigger netlist; log `asic/runs/
+  gatesim_p2_16.log`, results.xml timestamp 14:02:27 UTC). The new
+  netlist (latch RF + 41 RM configs) is functionally correct at gate
+  level — one stop criterion cleared.
 
 ### Phase G — p2_16 physical run with gates
 
@@ -268,6 +274,12 @@ instance names, the gate-level sim of the new netlist.
     pre-GRT value, hold WNS ≥ −0.5 ns, no RSZ-2021 storm.
   Any gate failing → stop criterion (analyze; most likely levers:
   GPL density/padding, halos, GRT layer adjustments).
+  **STOPPED 2026-11-01 18:1x — G1-27 gate FAIL (overflow 28.54 vs ≤ 0.1).**
+  Gates so far: 18 placed=41 OK, 22 PDN OK, **27 overflow 28.5388 FAIL**
+  (inflation 0.00 %, single iteration; p2_15 ref 1039.35 across 4
+  iterations; p2_16b identical 28.5388 → reproducible geometry
+  property). Analysis + proposal in Current state, 18:1x line; both
+  runs killed, run dirs kept, awaiting decision.
 - [ ] **G2** All G1 gates green → resume `-F OpenROAD.STAMidPNR`? NO —
   `STAMidPNR` occurs 4× in the flow; resume with the watchdog's resolver
   (no stop step), which picks the first incomplete step after 44. Run to
@@ -987,12 +999,85 @@ watchdog exited 0 at 11:49, flow.log "Flow complete").
   ~55 G each), 1.3 T disk. Temp census tree `asic/runs/diag_rtl_p2_15/`
   removed (dumps + ys scripts kept, gitignored).
 
-**Status:** **Phase F DONE and pushed (555ba3c).** G1: p2_16 resuming
-step 13 Floorplan → stop step 44 ResizerTimingPostGRT (26 threads,
-G1 gates in monitor 544861). P2: p2_16b fresh 66 MHz run-to-the-end
-(26 threads, own monitor). F3 gate-sim building (a FAIL is a stop
-criterion). 30-min cadence continues; RAM watch while both runs
-approach GRT.
+**18:1x — F3 PASS; G1-27 GATE-FAIL → STOP per plan (both runs killed).**
+
+- **F3 gate-sim: PASS** (stop criterion cleared, finished 15:02 —
+  before the G1-27 gate failed): `start_test_fpga` PASS,
+  TESTS=1 PASS=1 FAIL=0 (10210 ns, 4.72 s sim; build 11:41 → 15:02,
+  ~3.4 h vs p2_10 ref 8.4 h for the bigger netlist; log `asic/runs/
+  gatesim_p2_16.log`, results.xml timestamp 14:02:27 UTC). Latch RF +
+  all 41 RM configs functionally correct at gate level.
+- **G1 gates (p2_16, monitor 544861):** 14:14 `G1-18:placed=41 OK`;
+  16:04 `G1-22:PDN OK` (no PDN-0235); **17:29 `G1-27:overflow=28.5388
+  GATE-FAIL(exp <=0.1)`**. Flow had continued (steps 28–30 done, 31
+  in flight) — the monitor flags, the flow does not self-stop.
+- **G1-27 analysis** (step-27 logs, both runs):
+  - p2_16: `global_placement -density 0.421845 -routability_driven`,
+    **single iteration**, `[GPL-0041] Total routing overflow: 28.5388`,
+    `[GPL-1012] Total routability artificial inflation: 0.00
+    (+0.00%)`.
+  - p2_15 (the run the v2 floorplan was built to fix): overflow rose
+    785.09 → 834.10 → 924.27 → **1039.35** over multiple iterations →
+    downstream GRT-0115, 99 extra iterations, 14 h GRT.
+  - **p2_16b (66 MHz, same geometry, different timing): identical
+    28.5388 / 0.00 %** — the overflow is a reproducible property of the
+    floorplan v2 geometry, not a run artifact.
+  - Interpretation: `Total routing overflow` = Σ max(0,
+    wireDensity−1) in tracks over the whole routing grid. 28.54 is
+    36× below p2_15's 1039.35, with zero artificial inflation and no
+    extra iterations — i.e. OpenROAD itself did not consider
+    congestion a global problem; realistically a handful of slightly
+    over-capacity blocks (macro/IO-ring neighborhood) that GRT's
+    normal rip-up&reroute typically absorbs. But that is a
+    prediction, not a gate pass — the gate says ≤ 0.1 and 28.54 > 0.1.
+- **Stop action taken 18:1x (plan: "Any gate failing → stop
+  criterion"; P2 rule: "if p2_16 fails a G1 gate, kill p2_16b too"):**
+  killed watchdogs 560669 (p2_16) + 561027 (p2_16b), container
+  librelane 64890/64985 + openroad 76249/76279, monitors 544861/
+  561028. Verified: host + container clean. Run dirs kept untouched
+  (p2_16 completed through step 30, step 31 in flight at kill →
+  resume would pick step 31; p2_16b through step 29, step 30 in
+  flight → resume would pick step 30). RAM 230 G free, disk 1.2 T
+  free at stop.
+- **Proposal (decision needed):**
+  - **(a) Accept deviation, resume p2_16 at step 31 (my
+    recommendation).** The gate's purpose was to catch p2_15's GRT
+    pathology (1039 overflow → GRT-0115 → 99 extra iterations → 14
+    h). 28.54 / 0.00 % inflation / single iteration / p2_16b
+    corroboration is a different regime; the real congestion
+    checkpoint — G1 step 38 (no GRT-0115/0116, overflow ≤ 0.01 % of
+    demand) — is stricter and still ahead. Document G1-27 as "failed
+    numerically, accepted with deviation". Cost ≈ 0 (Floorplan→GPL
+    not re-run; next is step 31 → CTS).
+  - **(b) Tighten, re-run Floorplan→GPL:** raise target density
+    (0.4218 → ~0.45) and/or macro halos/padding or GRT layer
+    adjustments, re-run steps 13→27 (~5 h, today 12:32→17:29), accept
+    only if new overflow ≤ 0.1. Cost ~5–6 h plus the risk that a
+    higher density worsens CTS/DRT timing.
+  - **(c) Amend the gate formally:** keep ≤ 0.1 as warning, define
+    "pass" as ≤ 30 with 0.00 % inflation (i.e. codify option a with a
+    tighter monitor rule), then resume.
+- **Time estimates** (from 18:1x, scenario a/c). p2_15 per-step
+  runtimes as upper-bound reference (its 506 k-FF design is far
+  heavier than p2_16's 52 k-FF/393 k-latch design): 31
+  RepairDesignPostGPL 4h35, 33 DetailedPlacement 43m, 34 CTS 4h13
+  (506 k sinks → p2_16 ~20 k sinks: est. 0.5–2 h), 35 17m, 36
+  ResizerTimingPostCTS 10h40 (est. 1–4 h for p2_16), 37 18m, **38/39
+  GRT 14h42 (pathological, 99 extra iterations; p2_16 target "hours
+  not 14 h": est. 2–6 h)**, 40 CheckAntennas 49m, 42 RepairAntennas
+  11h59 (est. 1–5 h). → **G1 stop step 44: est. ~10–22 h → 11/2 noon
+  to 11/3 morning.** G2 (run-to-end: DRT → fill → RCX → STAPostPNR →
+  GDS → DRC → LVS) adds ~1–2 days (DRT convergence several hours to a
+  day at 50 MHz; 66 MHz harder) → **final metrics + gates 11/3–11/4.**
+  p2_16b (66 MHz) in parallel from step 30; same geometry, its GRT
+  outcome is the open question (tighter period). Scenario b adds
+  ~5–6 h before any G1 progress.
+
+**Status:** **STOPPED at user decision point (18:1x).** F2/F3 done
+(F3 PASS). G1: gates 18 OK, 22 OK, **27 FAIL (28.54 vs ≤ 0.1)** →
+both runs killed per plan, run dirs kept, awaiting choice (a/b/c,
+see 18:1x line). F3 gate-sim PASS documented. Nothing running
+(host + container clean). Machine: 230 G RAM, 1.2 T disk free.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
