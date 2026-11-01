@@ -45,6 +45,14 @@
 # checker failure raises before that). No more grepping of a 500 MB log.
 # The success marker line is kept verbatim for watchdog.sh's grep.
 #
+# Config overlay (plan v2 P1, 2026-11-01): CONFIG_OVERLAY=<path-to-json> is
+# deep-merged into the staged design/openeye.json AFTER the copy; the
+# overlay's keys win (nested dicts merge, lists/scalars replace). Applied on
+# EVERY launch (fresh and resume -- the config is re-staged both ways), so a
+# watchdog crash-restart keeps the overlay. The overlay file is copied into
+# the run dir as design/config_overlay.json for provenance. Example (p2_16b
+# at 66 MHz): CONFIG_OVERLAY=asic/rtl/sg13g2/openeye_overlay_66mhz_26thr.json
+#
 # DRY_RUN=1 stops after staging (before the flow launch) -- for testing.
 set -euo pipefail
 
@@ -92,6 +100,31 @@ fi
 
 cp "${ASIC_DIR}/rtl/sg13g2/openeye.json" "${WORKDIR_HOST}/design/"
 
+# Config overlay (plan v2 P1): merge CONFIG_OVERLAY into the staged config.
+if [ -n "${CONFIG_OVERLAY:-}" ]; then
+    [ -f "${CONFIG_OVERLAY}" ] || { echo "[ERROR] CONFIG_OVERLAY not found: ${CONFIG_OVERLAY}" >&2; exit 1; }
+    cp "${CONFIG_OVERLAY}" "${WORKDIR_HOST}/design/config_overlay.json"
+    python3 - "${WORKDIR_HOST}/design/openeye.json" "${WORKDIR_HOST}/design/config_overlay.json" <<'PYEOF'
+import json, sys
+
+def merge(base, over):
+    for k, v in over.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            merge(base[k], v)
+        else:
+            base[k] = v
+
+with open(sys.argv[1]) as f:
+    base = json.load(f)
+with open(sys.argv[2]) as f:
+    over = json.load(f)
+merge(base, over)
+with open(sys.argv[1], "w") as f:
+    f.write(json.dumps(base, indent=4) + "\n")
+PYEOF
+    echo "[INFO] config overlay applied: ${CONFIG_OVERLAY} (copy: design/config_overlay.json)"
+fi
+
 echo "[INFO] OpenEye ASIC run '${RUN_NAME}': ${WORKDIR_CTR}"
 echo "[INFO] Log: ${FLOW_LOG} (appended, separator per launch)"
 
@@ -101,6 +134,7 @@ echo "=== launch $(date -Is) resume=${RESUME_STEP:-<full run>} ===" >> "${FLOW_L
 
 if [ "${DRY_RUN:-0}" = "1" ]; then
     echo "[DRY_RUN] staging done; would launch in ${CONTAINER_NAME}:"
+    [ -n "${CONFIG_OVERLAY:-}" ] && echo "[DRY_RUN]   (config overlay: ${CONFIG_OVERLAY})"
     echo "[DRY_RUN]   librelane openeye.json --run-tag '${RUN_NAME}' ${RESUME_STEP:+"-F '${RESUME_STEP}'"} ${STOP_STEP:+"-T '${STOP_STEP}'"}"
     exit 0
 fi
