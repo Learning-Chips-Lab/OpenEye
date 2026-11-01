@@ -165,7 +165,8 @@ Commit "ASIC v2: floorplan v2, latch-RF scratchpads, iact_sc SRAM"
   numbers.
 - `tb_ram_equiv` cfg0–cfg4 with PDK functional SRAM models: **PASS**.
 - `regress_macros.sh` (full FPGA cocotb test, SRAM macros + latch RF):
-  REGRESS_RESULT
+  **PASS** (2026-11-01 10:52, `OpenEye_FPGA_tb.start_test_fpga`, 10210 ns,
+  238 s wall; log `asic/runs/regress_macros_latchrf.log`).
 - `macro_placement.py`: 41 instances, all assertions pass;
   `gen_config.py` writes 7 macro types / 41 placed instances.
 
@@ -178,8 +179,8 @@ instance names, the gate-level sim of the new netlist.
 - [ ] **F0** Read the diff of Claude's commit; `git log -3`. Start the
   monitors only for runs that exist.
 - [ ] **F1** `regress.sh` (generic RAMs, no ASIC defines) must still
-  PASS. `regress_macros.sh` must PASS (Claude's result above — rerun if
-  REGRESS_RESULT is not PASS).
+  PASS. `regress_macros.sh` must PASS (Claude's result above; rerun
+  only if the RTL changed since).
 - [ ] **F2 — synthesis gate of p2_16.** Add a stop-at option to the
   launch chain first: `run_openeye.sh <run> [resume-step] [stop-step]`
   (→ `librelane … -F <resume> -T <stop>`), and `watchdog.sh` passes it
