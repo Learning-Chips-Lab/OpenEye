@@ -818,12 +818,42 @@ restart; DRY_RUN fresh+stop prints `-T 'OpenROAD.STAPrePNR'`; DRY_RUN
 plain unchanged. Regenerated tracked files (OpenEye_Asic.v, pad_order.
 json, openeye.json) byte-identical (git status clean).
 
-**Status:** p2_16 launch prepared — fresh run, stop step
-`OpenROAD.STAPrePNR` (flow step 12), watchdog + `monitor_flow.sh` on
-launch. F2 checks (lint steps 1–4, unmapped 0, stat.rpt cell counts
-≈ 393,216 dlhq / 19,968 lgcp / 41 macros / 30–36 mm², CheckMacroInstances
-41/41, STAPrePNR timing) pending; F3 gate-sim starts as soon as
-`06-yosys-synthesis/OpenEye_Asic.nl.v` exists (watcher armed).
+**11:05 — p2_16 launched** (fresh run, stop step `OpenROAD.STAPrePNR`,
+watchdog with `STOP_STEP` env, monitor with G1 gates). F3 watcher armed
+on step-6 `state_out.json` → detached `run_verilator.sh` on
+`06-yosys-synthesis/OpenEye_Asic.nl.v`, log `asic/runs/gatesim_p2_16.log`.
+
+**11:30 status (30-min cadence):** steps 1–5 DONE — Verilator.Lint clean
+(0× LATCH with `--Werror-LATCH`, 0× errors; `sg13g2_lgcp_1`/
+`sg13g2_dlhq_1` resolve via LibreLane auto-blackbox in `tmp/*.bb.v`,
+84 stdcell modules incl. both latch cells); defines
+`OPENEYE_LATCH_RF`+`OPENEYE_SG13G2_CELLS` confirmed in the lint command
+line. Step 6 Yosys.Synthesis running (flow.log ~5 MB). Monitor 544861
+(gates enabled), watchdog 0 restarts, machine idle otherwise.
+
+**Monitor G1 gates implemented + validated** (commit 49440b9):
+`monitor_flow.sh` evaluates each completed key step once (18 placed=41,
+22 no PDN-0235, 27 overflow ≤ 0.1, 34 sinks report, 37 nom setup ≥ 0 /
+hold ≥ −0.5, 38 no GRT-0115/0116 + total overflow ≤ 0.01 % of demand +
+extra-iteration/EST-0026 report, 44 setup within 1 ns of pre-GRT /
+hold ≥ −0.5 / RSZ-2021 report); GATE line printed only on change.
+Read-only dry run against p2_15 reproduces all documented numbers
+(placed=33, overflow=1039.35, sinks=506219, setup=0.0, hold=−0.440,
+GRT-0115=1, extra_iter=99).
+
+**P1 done** (commit 0901113): `CONFIG_OVERLAY=<json>` deep-merge into
+the staged `design/openeye.json` (every launch, copy recorded as
+`design/config_overlay.json`); tested fresh/nested/resume/missing-file
+with DRY_RUN + stub docker. Overlay files committed:
+`openeye_overlay_26thr.json` (G1 resume of p2_16),
+`openeye_overlay_66mhz_26thr.json` (p2_16b: 15 ns, IO 43, 26 threads).
+
+**Status:** F2 pending synthesis (step 6, ~40–60 min): unmapped 0,
+synth checks 0, stat.rpt (≈ 393,216 `sg13g2_dlhq_1`, 19,968
+`sg13g2_lgcp_1`, `sg13g2_dfrbpq_1` ~15–30 k, 41 RM macros, 30–36 mm²),
+CheckMacroInstances 41/41 (iact names are the open risk — fallback in
+plan), STAPrePNR. Then G1 resume with 26-thread overlay, P2 (p2_16b)
+after step 12.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
