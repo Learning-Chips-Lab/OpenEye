@@ -108,9 +108,11 @@ check_gates() {
     # 34: CTS clock sinks (report; p2_15 was 506219)
     d=$(latest_dir openroad-cts)
     if [ -n "$d" ] && [ -f "$d/state_out.json" ]; then
-        # LAST occurrence: CTS prints one per clock; the first is the macro
-        # A_CLK net set (33 in p2_15), the last the total for all clocks
-        n=$(grep -hoE "Total number of sinks: [0-9]+" "$d"/*.log 2>/dev/null | tail -1 | grep -oE "[0-9]+")
+        # MAX occurrence: CTS prints one per clock, in processing order
+        # (p2_15: last = total 506219; p2_16: the 51883-sink clk_pad tree
+        # is processed BEFORE the small macro A_CLK trees, so the last
+        # line is 24 — the max is the main-clock sink count)
+        n=$(grep -hoE "Total number of sinks: [0-9]+" "$d"/*.log 2>/dev/null | grep -oE "[0-9]+" | sort -n | tail -1)
         if [ -n "$n" ] && [ "$n" -gt 100000 ]; then
             out="${out} G1-34:sinks=${n} GATE-WARN(exp << 506219)"
         else

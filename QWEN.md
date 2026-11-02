@@ -1116,12 +1116,37 @@ is the accepted deviation, not a new failure. Resumes:
   (est. 2–6 h), antennas, → **G1 stop step 44: 11/2 evening → 11/3
   morning.**
 
-**Status:** **RUNNING (since 18:2x, decision a; 06:00 11/2: both in
-CTS, see 06:00 line).** p2_16: step 35 CTS → stop 44 (G1; G1-27
-deviation accepted). p2_16b: step 35 CTS → end (66 MHz). F3
-gate-sim PASS (15:02). ETA: CTS done ~08:00–10:00, G1 stop 44
-11/2 evening → 11/3 morning, final metrics after G2 ~11/3–11/4.
-RAM 190 G avail, disk 1.2 T free, 0 watchdog restarts.
+**10:2x (11/2) status: CTS done (both), now in ResizerTimingPostCTS.**
+- **CTS finished: p2_16 07:05 (11 h), p2_16b 06:39 (10.3 h)** — slower
+  than p2_15's 4 h 13 min despite fewer sinks (latency balancing on
+  the clk_pad tree over the PE array; the sink-match log spam is the
+  same as p2_15's 10.3M lines).
+- **CTS sink counts (p2_16, corrected monitor rule):** max per-clock
+  = **51,883** (clk_pad — exactly the DFF count), plus 20,009
+  (= 19,968 ICG + 41 macros) and 3×24 (RM A_CLK trees). **Total ~72k
+  ≪ p2_15's 506,219 → G1-34 gate intent satisfied.** The 393,216
+  latch GATE pins are NOT CTS sinks in this flow (corrects my 06:00
+  ~465k fear). Monitor bug fixed: rule took the LAST per-clock line
+  (24 — the small macro trees process after clk_pad in p2_16) instead
+  of the max; `monitor_flow.sh` now reports the max, monitors
+  restarted (790792 p2_16, 790793 p2_16b; stateless, re-derives from
+  step dirs), 10:25 GATE line confirms `G1-34:sinks=51883`.
+- **Step 36 STAMidPNR-1:** p2_16 20 min (p2_15 ref 17 min).
+- **Step 37 ResizerTimingPostCTS running:** p2_16 since 07:25:41,
+  p2_16b since 06:59:32; both actively repairing (logs ~1 MB, growing):
+  current setup WNS **−2.888 ns (p2_16)** / **−2.892 ns (p2_16b)**;
+  violation scale ~8.7k (p2_16) vs ~50k (p2_16b) table rows — the 66
+  MHz run works ~6× harder, as expected. p2_15 ref for this step:
+  10 h 40 min; p2_16 est. 1–5 h.
+- Machine: 195 G RAM avail, 1.2 T disk, 0 watchdog restarts. No new
+  gate events beyond the accepted G1-27.
+
+**Status:** **RUNNING (10:2x 11/2).** p2_16: step 37
+ResizerTimingPostCTS → … → stop 44 (G1; G1-27 deviation accepted,
+G1-34 satisfied 72k ≪ 506k). p2_16b: step 37 → end (66 MHz). ETA:
+G1 stop 44 11/2 late evening → 11/3, final metrics after G2 ~11/3–
+11/4. Next hard gate: **GRT (p2_16 step 39)** — the congestion
+checkpoint for the accepted 28.54.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
