@@ -1090,12 +1090,38 @@ is the accepted deviation, not a new failure. Resumes:
   `-threads 26`).
 - Monitors: 600572 (p2_16, G1 gates), 600558 (p2_16b).
 
-**Status:** **RUNNING (since 18:2x, decision a).** p2_16: step 31
-→ stop 44 (G1; G1-27 deviation accepted). p2_16b: step 30 → end
-(66 MHz). F3 gate-sim PASS (15:02). ETA: G1 stop 44 ~10–22 h
-(11/2 noon → 11/3 morning), final metrics after G2 ~11/3–11/4
-(see 18:1x line). 30-min cadence continues. Machine at stop: 230 G
-RAM, 1.2 T disk free.
+**06:00 (11/2) status (cadence resumed):** both runs alive, in CTS.
+- p2_16: resumed 18:21 → 31 (orphan, killed attempt) / 32
+  RepairDesignPostGPL 18:21→19:34 (1 h 13) / 33 instant / 34
+  DetailedPlacement →20:06 (32 min) / **35 CTS running since 20:06**
+  (9.5 h; openroad 76576, ~100 % CPU, log 46 MB and growing ~10 MB/min
+  in the "Balancing latency for clock clk_pad" phase, 865k+
+  "matched with" sink lines).
+- p2_16b: 30 (orphan) / 31 STAMidPNR →18:38 / 32 RepairDesignPostGPL
+  →19:53 (1 h 15) / 33 / 34 DetailedPlacement →20:25 / **35 CTS
+  running since 20:25** (9.7 h; log 243 MB, +4.6 MB/min, already in
+  delaybuf matching on clk_pad — further along than p2_16).
+- CTS pace context: p2_15's CTS (506k DFF sinks, 4 h 13 min total)
+  contains **10.3M "matched with" lines** — the spam is normal flow
+  logging, not pathology; both current runs are actively iterating.
+  Note: p2_16's CTS sink count is ~465k, NOT ≪ p2_15 as the G1 plan
+  expected — the 393,216 latch GATE pins + 19,968 ICGs + 51,883 DFFs
+  dominate (same misestimation class as the dfrbpq band).
+- Gates: no new GATE lines since 18:21 (18 OK, 22 OK, 27 accepted
+  deviation). Next gate events: CTS sinks (p2_16 step 35 done),
+  STAMidPNR-2, GRT, step 44. RAM: 190 G avail (two CTS + caches),
+  disk 1.2 T free. Watchdog restarts: 0.
+- ETA unchanged-ish: CTS likely done 08:00–10:00; then
+  ResizerTimingPostCTS (p2_15 ref 10 h 40, p2_16 est. 1–5 h), GRT
+  (est. 2–6 h), antennas, → **G1 stop step 44: 11/2 evening → 11/3
+  morning.**
+
+**Status:** **RUNNING (since 18:2x, decision a; 06:00 11/2: both in
+CTS, see 06:00 line).** p2_16: step 35 CTS → stop 44 (G1; G1-27
+deviation accepted). p2_16b: step 35 CTS → end (66 MHz). F3
+gate-sim PASS (15:02). ETA: CTS done ~08:00–10:00, G1 stop 44
+11/2 evening → 11/3 morning, final metrics after G2 ~11/3–11/4.
+RAM 190 G avail, disk 1.2 T free, 0 watchdog restarts.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
