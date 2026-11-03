@@ -1663,6 +1663,14 @@ Convergenz-Tracking (Iterations-Grenzen): Iter0-Ende 10,72 M →
 Iter1-Ende ~16:20–16:30 erwartet (erste Abnahme). Stop-Kriterium
 (Nicht-Abnahme 3 Iter nach Iter 20 / > 48 h) weit entfernt.
 
+**16:0x (11/3) Cadence:** DRT Iteration 1 40 % (15:58:
+833.509 Vios @ 36:30 Iter-Elapsed) — **Abnahme setzt ein**:
+10→40 %: 1.027 M/950k/909k/833k (rip-up/reroute aktiv, Trend
+innerhalb der Iteration fallend). Iter-1-Ende ~16:50. openroad
+77976 (2:39:08 elaps., 3965 % CPU, 4:09 h CPU-Time), 1 librelane,
+Watchdog 0 Restarts, Monitor clean, RAM 205 G free (Peak 39,3 GB),
+Disk 1,2 T.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
