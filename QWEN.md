@@ -1498,9 +1498,9 @@ Resizer kein Crash). **J3 DRT (Dir 47) seit ~13:19: Run 0
 FERTIG, 0 DRC-Violations** (11 Iterationen: 839.853 → 0;
 Wire 108,5 M µm, Vias 11,02 M; kein Stop); **post-DRT-
 Antennen-Repair: 7.289 Violations → 14.996 Dioden, Run 1
-läuft** (max 3 Repair-Zyklen, 48 Threads); J3-Ende ~22:00–01:00
-(state_out.json). Danach J4/J5 Signoff, J6 End-Checker,
-K1–K3, L nur dokumentieren.
+läuft** (Iter 1: 219k → ~100k, max 3 Repair-Zyklen, 48
+Threads); J3-Ende ~00:00–01:30 (state_out.json). Danach
+J4/J5 Signoff, J6 End-Checker, K1–K3, L nur dokumentieren.
 p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
@@ -1788,6 +1788,17 @@ check_antennas (2. Durchgang) → J3-Ende ~22:30–00:30.
 openroad 77976 (7:16:17 elaps., 3765 % CPU, 11:09 h CPU-Time),
 1 librelane, Watchdog 0 Restarts, Monitor clean, RAM 188 G free
 (Peak 57,1 GB), Disk 1,2 T. Kein Stop.
+
+**21:0x (11/3) Cadence:** drt-run-1 Iter 1 90 % (21:05:
+110.676 Vios @ 39:00 Iter-Elapsed; 50→90 %: 183k/169k/144k/
+134k/111k — Abnahme stabil, Endwert ~100k in ~5 min).
+Run-1-Iterations-Ende: Iter0 219.236 → Iter1 ~100k. Iter-
+Dauer ~35–45 min. Nach Run-0-Muster (Spritze −96 % in Iter 3)
+~3–5 weitere Iterationen → Konvergenz ~00:00–01:00, dann
+2. check_antennas → **J3-Ende ~00:00–01:30**. openroad 77976
+(7:45:40 elaps., 3785 % CPU, 12:05 h CPU-Time), 1 librelane,
+Watchdog 0 Restarts, Monitor clean, RAM 189 G free (Peak
+57,1 GB), Disk 1,2 T. Kein Stop.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
