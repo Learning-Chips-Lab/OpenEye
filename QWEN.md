@@ -1469,15 +1469,16 @@ Referenz-Resizer brauchte 5 h 10 min bei nur 1 % Hold-TNS-Cap;
 alten Dir-43-Werte (hold −2,0365) – Gate liest `latest_dir`, ab
 Dir 46 gelten die 40-MHz-Zahlen.
 
-**Status:** **J1 RUNNING (10:0x 11/3, Plan v3).** p2_16 Step 45
+**Status:** **J1 RUNNING (10:3x 11/3, Plan v3).** p2_16 Step 45
 (ResizerTimingPostGRT @ 25 ns): GRT-Parasitenschätzung DONE (5 min,
 0 Overflow), Setup-Repair DONE (final WNS −3.961 @ data_dma_o_pad[0],
-TNS −24.8), **Hold-Repair läuft** (Start WNS −3.679/TNS −7355,
-22.097 Endpoints, 100 % TNS, Iter 60: −3.088/−7299); dann
-detailed placement + run-to-end: **J2-Gate am Dir 46 (STAMidPNR-3),
-revidiert 11/4 tagsüber–abends**, J3 DRT (10–24 h), J4/J5 Signoff,
-J6 End-Checker, K1–K3 Evaluation, L nur dokumentieren. p2_15/
-p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
+TNS −24.8), **Hold-Repair läuft** (Iter 870: WNS −2.293/TNS −5604,
+22.097 Start-Endpoints, 565 Buffer, ~58 ns TNS/min, 100 % TNS);
+dann detailed placement + run-to-end: **J2-Gate am Dir 46
+(STAMidPNR-3), revidiert ~13:30–16:00 am 11/3**, J3 DRT (10–24 h),
+J4/J5 Signoff, J6 End-Checker, K1–K3 Evaluation, L nur
+dokumentieren. p2_15/p2_16b gestoppt, nie wieder resumieren.
+30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
 (36:50 elaps.; Resizer-Phase Single-Thread-dominiert → ~2–3 Cores,
@@ -1506,6 +1507,20 @@ RAM 209 G free, Disk 1,2 T free. Fortschritt:
   neu kalibriert. Kein Stop-Kriterium betroffen (Resizer läuft
   stabil, kein Crash; Core-Setup-Check kommt am J2; DRT-Limit
   48 h gilt erst ab J3).
+
+**10:3x (11/3) Cadence:** Hold-Repair stark, J2-Fenster wieder
+früher: Iteration 870 (10:05: 60), **WNS −2.293 / TNS −5604**
+(10:05: −3.088/−7299) → TNS-Rate ~58 ns/min (5,8× schneller als
+die 10:0x-Schätzung), 565 Buffer (10:05: 236), Fläche +0.2 %,
+schlechtester Endpoint `u_mac0/A_DIN[32]`. WNS ist seit ~Iter 820
+FLACH bei −2.293, TNS läuft weiter down — Resizer arbeitet den
+mittleren Verletzer-Schwanz ab, der Worst-Endpoint kommt ggf. am
+Ende; falls WNS am Ende < −0.1 bleibt: dokumentieren + weiter
+(v3: kein Stop auf Hold-Timing). openroad 77668 (1:08:57 elaps.,
+212 % CPU), 1 librelane, Watchdog 0 Restarts, Monitor clean,
+RAM 209 G, Disk 1,2 T. **J2 revidiert (3.): ~13:30–16:00 am 11/3**
+(−5604 ns ÷ ~58 ns/min ≈ 96 min bis TNS≈0 + Verlangsamung +
+dpl ~0,5–1 h); pro Cadence Trend-Kalibrierung.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
