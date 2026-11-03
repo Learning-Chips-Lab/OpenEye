@@ -1469,14 +1469,14 @@ Referenz-Resizer brauchte 5 h 10 min bei nur 1 % Hold-TNS-Cap;
 alten Dir-43-Werte (hold −2,0365) – Gate liest `latest_dir`, ab
 Dir 46 gelten die 40-MHz-Zahlen.
 
-**Status:** **J1 RUNNING (11:0x 11/3, Plan v3).** p2_16 Step 45
+**Status:** **J1 RUNNING (11:3x 11/3, Plan v3).** p2_16 Step 45
 (ResizerTimingPostGRT @ 25 ns): GRT-Parasitenschätzung DONE (5 min,
 0 Overflow), Setup-Repair DONE (final WNS −3.961 @ data_dma_o_pad[0],
-TNS −24.8), **Hold-Repair läuft** (Iter 1860: WNS −2.293 flach seit
-~1000 Iter, TNS −3639, 651 Buffer, ~65 ns/min); Worst-Endpoint
-`u_mac0/A_DIN[32]` vermutlich unfixierbar → J2-Erwartung:
-fast-corner Hold-WNS ≈ −2.3 (dokumentieren, v3: weiter); dann
-dpl + run-to-end: **J2-Gate am Dir 46 (STAMidPNR-3), revidiert
+TNS −24.8), **Hold-Repair läuft** (Iter 3930: WNS −2.293 flach seit
+~Iter 820, TNS −1871, ~57 ns/min; TNS erreicht in ~30 min den
+WNS-Boden → Konvergenzphase); Worst-Endpoint `u_mac0/A_DIN[32]`
+→ J2-Erwartung: fast-corner Hold-WNS ≈ −2.3 (dokumentieren, v3:
+weiter); dann dpl + run-to-end: **J2-Gate am Dir 46 (STAMidPNR-3),
 ~13:00–14:30**, J3 DRT (10–24 h), J4/J5 Signoff, J6 End-Checker,
 K1–K3 Evaluation, L nur dokumentieren. p2_15/p2_16b gestoppt, nie
 wieder resumieren. 30-min-Cadence läuft.
@@ -1537,6 +1537,19 @@ openroad 77668 (1:39:23, 228 % CPU), 1 librelane, Watchdog 0
 Restarts, Monitor clean, RAM 209 G, Disk 1,2 T. **J2 revidiert
 (4.): ~13:00–14:30** (−3639 ÷ 65 ≈ 56 min bis TNS≈WNS-Boden,
 dann Konvergenz-/Endphase + dpl 0,5–1 h).
+
+**11:3x (11/3) Cadence:** Hold-Repair: Iteration 3930 (11:04: 1860)
+→ ~67 Iter/min. **WNS −2.293 / TNS −1871** (11:04: −2.293/−3639)
+→ Rate ~57 ns/min (leicht abflachend). WNS seit 3100+ Iterationen
+flach bei −2.293 (`u_mac0/A_DIN[32]`). Hinweis: die "Buffers"-
+Spalte in der Iterations-Tabelle ist pro Iteration (oscilliert
+~495–650), NICHT kumulativ — kumulierter Buffer-Zuwachs wird am
+Ende per RSZ-0032/Summary gemessen (K1-Metrik). TNS erreicht in
+~30 min den WNS-Boden (−2,3) → danach Konvergenz-/Endphase des
+Resizers (keine improvement-fähigen Moves mehr) + dpl.
+openroad 77668 (2:09:39, 237 % CPU), 1 librelane, Watchdog 0
+Restarts, Monitor clean, RAM 208 G, Disk 1,2 T. **J2-Fenster
+bestätigt: ~13:00–14:30** (Endphase 12:10–13:00 + dpl 0,5–1 h).
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
