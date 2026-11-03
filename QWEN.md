@@ -1625,6 +1625,17 @@ Core-Setup ≫ −1 ns ✓. DRT-Tracking pro Cadence: DRT-0xxx-
 Iterationen + Violation-Count; Stop erst bei Nicht-Abnahme über
 3 Iterationen nach Iter 20 oder > 48 h.
 
+**14:0x (11/3) Cadence:** J3 DRT (Dir 47, seit ~13:19): Track
+Assignment DONE (3.998.074 + 1.078.762 vertikale Drähte),
+Routing-Prep DONE, **Detail-Routing: 0. Iteration, 20 %**
+(68.335 Vios @ 10 %, 169.365 @ 20 % — innerhalb der Iteration
+akkumulierend; Convergenz-Signal kommt am Iterations-Ende,
+wie geplant pro Cadence die Iterations-Grenzen tracken).
+openroad 77976 (40:50 elaps., 3779 % CPU = 48 Threads, 1:43 h
+CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
+RAM 210 G free (DRT-Peak 34,4 GB), Disk 1,2 T. Erwartung 10–24 h
+läuft.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
