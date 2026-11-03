@@ -1712,6 +1712,18 @@ Iterations-Total (Referenz: 10,72 M / 10,717 M). openroad
 Watchdog 0 Restarts, Monitor clean, RAM 205 G free (Peak 39,1 GB),
 Disk 1,2 T. Kein Stop.
 
+**18:3x (11/3) Cadence:** DRT **Iteration 2 ENDE (~18:15):
+10.687.693 Vios** → Abnahme setzt sichtbar ein (Iterations-
+Totale: 10.719.949 → 10.716.818 → 10.687.693; Δ: −3.131 →
+−29.125, beschleunigend). **Iteration 3 läuft seit ~18:16**
+(18:25: 30 %, in-Iteration 382k → 332k → 307k, Reroute-Set
+schrumpft schneller als in Iter 2). openroad 77976 (5:06:13
+elaps., 3968 % CPU, 8:10 h CPU-Time), 1 librelane, Watchdog 0
+Restarts, Monitor clean, RAM 207 G free (Peak 38,3 GB),
+Disk 1,2 T. DRT-Gesamt-Elapsed ~5 h (Limit 48 h). Frühwarn-
+Schwelle (Total muss ab ~Iter 5–10 sichtbar fallen) aktiv —
+aktuell Trend positiv, aber pro Cadence prüfen.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
