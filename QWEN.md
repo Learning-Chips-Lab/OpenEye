@@ -1477,9 +1477,10 @@ TNS −314, 7 Netto-Buffer, Fläche +0,7 %), **detailed placement
 läuft** (check_placement ~35 %); Worst-Endpoint
 `u_mac0/A_DIN[32]` → J2-Erwartung: fast-corner Hold-WNS ≈ −2.3
 (dokumentieren, v3: weiter); dann run-to-end: **J2-Gate am Dir 46
-(STAMidPNR-3), ~13:00–14:30**, J3 DRT (10–24 h), J4/J5 Signoff,
-J6 End-Checker, K1–K3 Evaluation, L nur dokumentieren. p2_15/
-p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
+(STAMidPNR-3), ~14:00–15:00** (check_placement läuft noch),
+J3 DRT (10–24 h), J4/J5 Signoff, J6 End-Checker, K1–K3
+Evaluation, L nur dokumentieren. p2_15/p2_16b gestoppt, nie
+wieder resumieren. 30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
 (36:50 elaps.; Resizer-Phase Single-Thread-dominiert → ~2–3 Cores,
@@ -1579,6 +1580,16 @@ I/O-bound). openroad 77668 (3:03:50, 220 % CPU), 1 librelane,
 Watchdog 0 Restarts, Monitor clean, RAM 208 G, Disk 1,2 T.
 **J2-Fenster: ~13:00–14:30** (check_placement ~12:50–13:40,
 write_views, dann Dir 46 STAMidPNR-3 STA).
+
+**13:0x (11/3) Cadence:** check_placement -verbose läuft noch
+(seit ~12:1x): matchet jetzt Clock-Buffer-Instanzen
+(clkbuf_2_* mit voller Hierarchie), I/O-bound — openroad 189 %
+CPU (Run-down von 237 %, erwartet in dieser Phase), 3:34 elaps.
+Dir 45 state_out noch nicht. openroad 77668, 1 librelane,
+Watchdog 0 Restarts, Monitor clean, RAM 208 G, Disk 1,2 T.
+**J2-Fenster leicht verschoben: ~14:00–15:00** (check_placement
+~13:30–14:00 Ende, write_views ~5–15 min, Dir 46 STAMidPNR-3
+STA ~30–60 min). Kein Stop-Kriterium betroffen.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
