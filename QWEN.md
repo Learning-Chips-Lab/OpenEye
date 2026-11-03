@@ -1551,6 +1551,17 @@ openroad 77668 (2:09:39, 237 % CPU), 1 librelane, Watchdog 0
 Restarts, Monitor clean, RAM 208 G, Disk 1,2 T. **J2-Fenster
 bestätigt: ~13:00–14:30** (Endphase 12:10–13:00 + dpl 0,5–1 h).
 
+**12:0x (11/3) Cadence:** Hold-Repair nähert sich dem Boden:
+Iteration 9700 (11:47: 5250 → ~250 Iter/min, Iterationen werden
+schneller, Restarbeit schrumpft). **WNS −2.293 / TNS −449**
+(11:47: −2.293/−1268) → ~47 ns/min; TNS seit Iter 9690 STATIONÄR
+(−449.228) → Boden (−2,3) in ~10 min. Danach Konvergenz-Ende
+des Resizers (keine improvement-fähigen Moves) → Expected-Ende
+Hold-Repair ~12:15–12:35, dpl ~0,5–1 h → **dir 46 (J2-Gate)
+~12:45–13:30**. Fläche +0.6 %. openroad 77668 (2:39:28, 237 %
+CPU), 1 librelane, Watchdog 0 Restarts, Monitor clean, RAM 208 G,
+Disk 1,2 T.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
