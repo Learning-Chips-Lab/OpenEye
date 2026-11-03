@@ -170,7 +170,7 @@ final STA checks everything at 25 ns.
   no RTL drift). New monitor 1088971; its gates use `latest_dir`
   (highest ordinal), so G1-44 will read the NEW dir 46 STAMidPNR-3
   while G1-38 stays on dir 39 (GRT not re-run).
-- [ ] **J2 gate after the new `STAMidPNR-3` (dir 46, expected 5–8 h
+- [x] **J2 gate after the new `STAMidPNR-3` (dir 46, expected 5–8 h
   after launch):** read `wns/tns.max/min.rpt` + `min.rpt`/`max.rpt`
   (every corner the run reports). Expected: setup WNS ≥ 0 incl. output pads
   (≈ +1 ns), hold WNS ≥ −0.1 ns, hold-buffer count (RSZ-0032) in the
@@ -179,6 +179,25 @@ final STA checks everything at 25 ns.
   document count/WNS/TNS + endpoint classes, continue anyway.
   Stop only if the resizer crashed or setup in the CORE (not pads)
   got worse than −1 ns (then hold buffers broke setup: stop + report).
+  **VERDICT 2026-11-03 13:3x (dir 46 DONE 13:19:22, STA 16 min 35 s;
+  step 45 DONE 13:02:47 = 3 h 37 min 20 s total, vs 5 h 10 min 50-MHz):
+  NO STOP, continue to J3.** Dir 46 reports only the nom_typ corner
+  (same as dir 44): setup WNS/TNS **−0.000008 ns (−8 ps), 1 violator**
+  = FF→latch `weight_data_SPad … g_word[51].g_bit[17].u_lat` (Time-
+  Borrowing, wie dir 44 −7 ps; Core erfüllt 40 MHz, Output-Pads
+  nominal clean). Hold WNS/TNS **−2.021 / −208.4, 143 violators**
+  (ALLE reg→RM-Makro-Inputs): wght_buffer(u_mac0) 70, iact_layer_
+  buffer BUFFER_A[1/2/3] 57, iact_stream_constructor BUFFER[0] 10,
+  psum_buffer 6; schlechteste `u_mac0/A_DIN[24..33]` @ −1.97…−2.02.
+  Resizer-Intern (worst über alle Corners): hold WNS −2.293 (fast
+  Corner, TNS −314), setup WNS −3.961 @ data_dma_o_pad[0] (slow
+  Corner = PAD-Familie, Core-Schwanz sub-ns, TNS −24.8 auf 296.490
+  Endpoints). Hold < −0.1 → DOKUMENTIEREN + WEITER (v3-Regel).
+  Hold-Mechanik: nur 7 NETTO-Hold-Buffer + 12 strategische Upsizes
+  auf gemeinsamen Makro-Drivern (TNS −7355 → −314, −95,7 %);
+  Worst-Endpoint unfixierbar (Setup/Hold-Konflikt). Fläche +0,7 %
+  (≤ 3 % ✓). Hold bleibt das offene Thema für L (Makro-A_CLK-
+  Skew); Signoff-STA (J4) zeigt das finale Bild pro Corner.
 - [ ] **J3 DetailedRouting (dir 47):** track `[INFO DRT-…]` iteration
   lines and the violation count per iteration every 30 min. Expected:
   10–24 h, violations falling to 0 (or a few). The monitor's
@@ -1469,18 +1488,17 @@ Referenz-Resizer brauchte 5 h 10 min bei nur 1 % Hold-TNS-Cap;
 alten Dir-43-Werte (hold −2,0365) – Gate liest `latest_dir`, ab
 Dir 46 gelten die 40-MHz-Zahlen.
 
-**Status:** **J1 RUNNING (12:3x 11/3, Plan v3).** p2_16 Step 45
-(ResizerTimingPostGRT @ 25 ns): GRT-Parasitenschätzung DONE (5 min,
-0 Overflow), Setup-Repair DONE (final WNS −3.961 @ data_dma_o_pad[0],
-TNS −24.8), **Hold-Repair DONE** (22.090 Iter, final WNS −2.293 /
-TNS −314, 7 Netto-Buffer, Fläche +0,7 %), **detailed placement
-läuft** (check_placement ~35 %); Worst-Endpoint
-`u_mac0/A_DIN[32]` → J2-Erwartung: fast-corner Hold-WNS ≈ −2.3
-(dokumentieren, v3: weiter); dann run-to-end: **J2-Gate am Dir 46
-(STAMidPNR-3), ~14:00–15:00** (check_placement läuft noch),
-J3 DRT (10–24 h), J4/J5 Signoff, J6 End-Checker, K1–K3
-Evaluation, L nur dokumentieren. p2_15/p2_16b gestoppt, nie
-wieder resumieren. 30-min-Cadence läuft.
+**Status:** **J2 PASSED (13:3x 11/3, Plan v3) — J3 DRT läuft.**
+p2_16 Step 45 DONE (3 h 37 m): Setup-Repair (final −3.961 slow /
+−8 ps nom_typ @ Latch), Hold-Repair (22.090 Iter, final −2.293
+fast / −2.021 nom_typ, TNS −208, 143 reg→Makro-Verletzer,
+dokumentiert → v3: weiter), dpl + check_placement. **Dir 46
+STAMidPNR-3 DONE (16 min 35 s): kein Stop** (Core-Setup −8 ps,
+Resizer kein Crash). **J3 DRT (Dir 47) seit ~13:19** (400k
+Gruppen @ 13:29, 48 Threads); erwartung 10–24 h, Stop nur bei
+Nicht-Abnahme der Vios über 3 Iter nach Iter 20 oder > 48 h.
+Danach J4/J5 Signoff, J6 End-Checker, K1–K3, L nur dokumentieren.
+p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
 (36:50 elaps.; Resizer-Phase Single-Thread-dominiert → ~2–3 Cores,
@@ -1590,6 +1608,22 @@ Watchdog 0 Restarts, Monitor clean, RAM 208 G, Disk 1,2 T.
 **J2-Fenster leicht verschoben: ~14:00–15:00** (check_placement
 ~13:30–14:00 Ende, write_views ~5–15 min, Dir 46 STAMidPNR-3
 STA ~30–60 min). Kein Stop-Kriterium betroffen.
+
+**13:3x (11/3) Cadence — J2-Gate ERREICHT & BEWERTET (kein Stop):**
+Step 45 DONE 13:02:47 (3 h 37 min 20 s), check_placement/
+write_views bis 13:02, **Dir 46 STAMidPNR-3 DONE 13:19:22
+(16 min 35 s)**, **J3 DRT (Dir 47) läuft seit ~13:19** (13:29:
+400.000 Gruppen, openroad 77976 @ 4252 % CPU, RAM 234 G free).
+J2-Details (nom_typ; Resizer-Intern = worst alle Corners):
+setup WNS/TNS **−8 ps, 1 Verletzer** (FF→Latch Time-Borrowing,
+wie dir 44; Pads nominal clean; slow Corner: −3.961 @
+data_dma_o_pad[0] = PAD-Familie), hold WNS/TNS **−2.021/−208.4,
+143 Verletzer** (100 % reg→Makro: wght_buffer 70, iact_layer 57,
+iact_stream 10, psum 6; fast Corner: −2.293/−314). Hold < −0.1 →
+dokumentiert + WEITER (v3). Stop-Kriterien: Resizer-Kein-Crash ✓,
+Core-Setup ≫ −1 ns ✓. DRT-Tracking pro Cadence: DRT-0xxx-
+Iterationen + Violation-Count; Stop erst bei Nicht-Abnahme über
+3 Iterationen nach Iter 20 oder > 48 h.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
