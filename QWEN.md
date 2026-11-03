@@ -1494,9 +1494,10 @@ p2_16 Step 45 DONE (3 h 37 m): Setup-Repair (final −3.961 slow /
 fast / −2.021 nom_typ, TNS −208, 143 reg→Makro-Verletzer,
 dokumentiert → v3: weiter), dpl + check_placement. **Dir 46
 STAMidPNR-3 DONE (16 min 35 s): kein Stop** (Core-Setup −8 ps,
-Resizer kein Crash). **J3 DRT (Dir 47) seit ~13:19: Run 0 fertig
-(11 Iterationen, Plateau ~11,02 M Overlaps, kein Stop); post-
-DRT-Antennen-Repair: 7.289 Violations → 14.996 Dioden, Run 1
+Resizer kein Crash). **J3 DRT (Dir 47) seit ~13:19: Run 0
+FERTIG, 0 DRC-Violations** (11 Iterationen: 839.853 → 0;
+Wire 108,5 M µm, Vias 11,02 M; kein Stop); **post-DRT-
+Antennen-Repair: 7.289 Violations → 14.996 Dioden, Run 1
 läuft** (max 3 Repair-Zyklen, 48 Threads); J3-Ende ~22:00–01:00
 (state_out.json). Danach J4/J5 Signoff, J6 End-Checker,
 K1–K3, L nur dokumentieren.
@@ -1654,16 +1655,17 @@ openroad 77976 (1:40:15 elaps., 3932 % CPU, 2:17 h CPU-Time),
 (DRT-Peak 37,6 GB), Disk 1,2 T. Iter-0-Ende ~15:15–15:20, dann
 Iteration 1 = erster echter Convergenz-Wert.
 
-**15:3x (11/3) Cadence:** DRT **Iteration 0 ENDE (15:17):
-10.719.949 Violations** (Layer-Aufteilung: M2 5.242.916, M3
-365.897, M4 48.496, M5 14, TopMetal1 4) — dichte M2-Belastung,
-erwartet bei 10,5-mm-Chip. **Iteration 1 läuft seit ~15:21**
+**15:3x (11/3) Cadence:** DRT **Iteration 0 ENDE (15:17):**
+Up-via-Total 10.719.949 (M1 5.065 M, M2 5.243 M, M3 365.897,
+M4 48.496, M5 14, TopMetal1 4), Wire 109,0 M µm — **Korrektur
+19:3x: diese Layer-Tabellen sind Via-Zahlen, keine Violations**
+(konsistent mit GRT-Schätzung 11,06 M Vias). Convergenz-Signal
+= In-Iteration-DRC-Counts. **Iteration 1 läuft seit ~15:21**
 (15:29: 10 %, 1.027.003 Vios @ 8:10). openroad 77976 (2:09:42
 elaps., 3928 % CPU, 3:12 h CPU-Time), 1 librelane, Watchdog 0
 Restarts, Monitor clean, RAM 205 G free (Peak 39,0 GB), Disk 1,2 T.
-Convergenz-Tracking (Iterations-Grenzen): Iter0-Ende 10,72 M →
-Iter1-Ende ~16:20–16:30 erwartet (erste Abnahme). Stop-Kriterium
-(Nicht-Abnahme 3 Iter nach Iter 20 / > 48 h) weit entfernt.
+Stop-Kriterium (Nicht-Abnahme 3 Iter nach Iter 20 / > 48 h)
+weit entfernt.
 
 **16:0x (11/3) Cadence:** DRT Iteration 1 40 % (15:58:
 833.509 Vios @ 36:30 Iter-Elapsed) — **Abnahme setzt ein**:
@@ -1676,26 +1678,21 @@ Disk 1,2 T.
 **16:3x (11/3) Cadence:** DRT Iteration 1 80 % (16:27:
 600.252 Vios @ 1:09:03 Iter-Elapsed) — Abnahme stabil:
 833k(40 %) → 773k(50 %) → 720k(60 %) → 642k(70 %) → 600k(80 %).
-Iter-1-Ende ~16:55, dann Iterations-Grenzwert (Ref: Iter0-Ende
-10,72 M). openroad 77976 (3:08:29 elaps., 3979 % CPU, 5:05 h
+Iter-1-Ende ~16:55, dann Iterations-End-Vios (Ref: Iter0-Ende
+839.853 — die 10,72 M war Via-Zahl, Korrektur 19:3x). openroad 77976 (3:08:29 elaps., 3979 % CPU, 5:05 h
 CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
 RAM 205 G free (Peak 39,4 GB), Disk 1,2 T.
 
-**17:0x (11/3) Cadence:** DRT **Iteration 1 ENDE (16:49):
-10.716.818 Vios** (M1 5.065 M, M2 5.195 M, M3 406k, M4 49k)
-vs Iter0-Ende 10.719.949 → **−0,03 %, praktisch FLACH** am
-Iterations-Grenz-Wert (frühe Phase typisch: Iter 1 re-routet
-nur einen Teil der Vios-Nets, die in-Iteration-Zahl 600k @ 80 %
-zählt die aktuelle Reroute-Subset, nicht das Total).
-**Iteration 2 läuft seit ~16:50** (16:57: 10 % @ 461.076 —
-in-Iteration-Zielmenge um 55 % kleiner als Iter 1 @ 10 % →
-Reroute-Set schrumpft, gutes Zeichen). openroad 77976 (3:37:51
-elaps., 3978 % CPU, 6:00 h CPU-Time), 1 librelane, Watchdog 0
-Restarts, Monitor clean, RAM 206 G free (Peak 39,0 GB), Disk 1,2 T.
-**Kein Stop**: Stop-Kriterium greift erst bei Nicht-Abnahme über
-3 aufeinanderfolgende Iterationen NACH Iteration 20 (jetzt:
-Iter 2) oder > 48 h. Pro Cadence Grenzwerte tracken; ab ~Iter 5–10
-muss der Total-Trend sichtbar fallen, sonst frühwarnen.
+**17:0x (11/3) Cadence:** DRT **Iteration 1 ENDE (16:49):**
+**463.275 Violations** (100-%-Wert; Iter0-Ende 839.853 → −45 %;
+die nach der Iteration gedruckte Zahl 10.716.818 ist die
+**Via-Zahl** (Up-via-Summe), kein Convergenz-Maß — Korrektur
+19:3x). **Iteration 2 läuft seit ~16:50** (16:57: 10 % @
+461.076). openroad 77976 (3:37:51 elaps., 3978 % CPU, 6:00 h
+CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
+RAM 206 G free (Peak 39,0 GB), Disk 1,2 T. **Kein Stop**:
+Abnahme läuft (839k → 463k); Stop-Kriterium (3 flache Iter
+nach Iter 20 / > 48 h) weit entfernt.
 
 **17:3x (11/3) Cadence:** DRT Iteration 2 50 % (17:26:
 446.337 Vios @ 39:16 Iter-Elapsed; 10→50 %: 461k/458k/456k/
@@ -1709,22 +1706,21 @@ Disk 1,2 T. Kein Stop (Iter 2 von 20+).
 **18:0x (11/3) Cadence:** DRT Iteration 2 80 % (17:56:
 429.901 Vios @ 1:01:41 Iter-Elapsed; 50→80 %: 446k/441k/434k/
 430k, stetig fallend). Iter-2-Ende ~18:15 → dann 3.
-Iterations-Total (Referenz: 10,72 M / 10,717 M). openroad
+Iterations-End-Vios (Referenz: 839.853/463.275 — die 10,72 M/
+10,717 M = Via-Zahlen, Korrektur 19:3x). openroad
 77976 (4:36:49 elaps., 3997 % CPU, 7:16 h CPU-Time), 1 librelane,
 Watchdog 0 Restarts, Monitor clean, RAM 205 G free (Peak 39,1 GB),
 Disk 1,2 T. Kein Stop.
 
-**18:3x (11/3) Cadence:** DRT **Iteration 2 ENDE (~18:15):
-10.687.693 Vios** → Abnahme setzt sichtbar ein (Iterations-
-Totale: 10.719.949 → 10.716.818 → 10.687.693; Δ: −3.131 →
-−29.125, beschleunigend). **Iteration 3 läuft seit ~18:16**
-(18:25: 30 %, in-Iteration 382k → 332k → 307k, Reroute-Set
-schrumpft schneller als in Iter 2). openroad 77976 (5:06:13
-elaps., 3968 % CPU, 8:10 h CPU-Time), 1 librelane, Watchdog 0
-Restarts, Monitor clean, RAM 207 G free (Peak 38,3 GB),
-Disk 1,2 T. DRT-Gesamt-Elapsed ~5 h (Limit 48 h). Frühwarn-
-Schwelle (Total muss ab ~Iter 5–10 sichtbar fallen) aktiv —
-aktuell Trend positiv, aber pro Cadence prüfen.
+**18:3x (11/3) Cadence:** DRT **Iteration 2 ENDE (~18:15):**
+**414.375 Violations** (100-%-Wert; Abnahme 839.853 →
+463.275 → 414.375; die 10.687.693 aus der Folge-Tabelle =
+Via-Zahl — Korrektur 19:3x). **Iteration 3 läuft seit ~18:16**
+(18:25: 30 %, in-Iteration 382k → 332k → 307k). openroad
+77976 (5:06:13 elaps., 3968 % CPU, 8:10 h CPU-Time), 1
+librelane, Watchdog 0 Restarts, Monitor clean, RAM 207 G free
+(Peak 38,3 GB), Disk 1,2 T. DRT-Gesamt-Elapsed ~5 h (Limit
+48 h). Kein Stop.
 
 **19:0x (11/3) Cadence:** DRT Iteration 3 90 % (18:55:
 56.217 Vios @ 44:41 Iter-Elapsed) — in-Iteration starke Abnahme:
@@ -1735,31 +1731,36 @@ Iterations-Total. openroad 77976 (5:35:42 elaps., 3939 % CPU,
 clean, RAM 207 G free (Peak 37,9 GB), Disk 1,2 T. DRT-Gesamt-
 Elapsed ~5,5 h.
 
-**19:3x (11/3) Cadence:** DRT: ALLE 11 Optimisations-Iterationen
-FERTIG (0–5 optimization, 6–8 guides tiles, 9 stubborn tiles,
-10 guides tiles); läuft jetzt **finale Track Assignment**
-(19:27: 100.000 von ~400.000 Gruppen, DRT-0082). Iterations-
-Totale (Layer-Summen, nach jeder Iteration): Iter0 10.719.949 →
-Iter1 10.716.818 (−3.131) → Iter2 10.687.693 (−29.125) →
-Iter3 **11.021.597 (+333.904)** → Iter4 11.024.450 → Iter5
-11.024.640 → Iter6 11.024.651 → Iter7/8/9 11.024.653 (plateau)
-→ Iter10 11.024.674 → finale Tabelle 11.024.672. Iter-3-Sprung
-= Router schob Kongestion M2→M3/M4 (M3 407k→672k, M4 49k→67k),
-M1/M2 bleiben ~5,067 M/5,216 M Overlaps (Kern-Kongestion
-~10,28 M). **Bewertung: kein Stop** — Plateau ab Iter 3–4,
-Stop-Kriterium verlangt 3 flache Iterationen NACH Iteration 20
-(Lauf endete bei Iter 10 per DRT-eigener Konvergenz); Elapsed
-~6,1 h ≪ 48 h. Echte DRC-Bildd folgt bei J4 (TrDRC-Count) +
-J5 (Magic/KLayout) → voraussichtlich als NEW-Befund für K2
-(Kongestion, gleiche Familie wie p2_15-GRT-Pathologie). Dir 47
-schon: OpenEye_Asic.drc + drt-run-0/1 (partial), state_out.json
-noch offen. openroad 77976 (6:05 elaps., 3748 % CPU, 9:12 h
-CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
-RAM 198 G free, Disk 1,2 T.
+**19:3x (11/3) Cadence:** DRT Run 0: ALLE 11 Optimisations-
+Iterationen FERTIG (0–5 optimization, 6–8 guides tiles, 9
+stubborn tiles, 10 guides tiles), finale Track Assignment
+(19:27: 100k/400k Gruppen) läuft aus. **KORREKTUR der
+15:3x–18:3x-Lesart:** die nach jeder Iteration gedruckten
+Layer-Tabellen („Up-via summary": M1 5,06 M / M2 5,24 M / …)
+sind **Via-Zahlen**, keine Violations — ~10,7→11,0 M Vias
+stabil/normal (konsistent mit GRT-Schätzung 11,06 M Vias).
+Echte Convergenz = Iterations-End-Violations (100-%-Wert):
+Iter0 **839.853** → Iter1 463.275 (−45 %) → Iter2 414.375 →
+Iter3 **15.310** (−96 %) → Iter4 762 → Iter5 72 → Iter6 27 →
+Iter7 25 → Iter8 25 → Iter9 **1** → Iter10 **0 VIOLATIONS** —
+**Run 0 vollständig geroutet, DRC-clean**. **DRT-0198
+„Complete detail routing": FINAL Wire 108.517.079 µm**
+(M2 41,1 M / M3 45,3 M / M4 16,4 M / M5 5,8 M / TM1 3,8k /
+TM2 2,0k; Metal1 0 µm geroutet — M1 nur zellintern, 5,07 M
+Vias M1→M2), **Vias 11.024.672**; drt-run-0/OpenEye_Asic.drc
+= 0 Bytes (konsequent zu 0 Vios). **Bewertung: kein Stop** —
+Loop endete bei Iter 10/64 per DRT-eigener Konvergenz bei
+0 Vios (Stop-Kriterium = 3 flache Iter NACH Iter 20, nie
+relevant); Elapsed ~6,1 h ≪ 48 h. Unabhängige DRC-Bestätigung
+folgt trotzdem bei J4 (TrDRC) + J5 (Magic/KLayout). Dir 47:
+drt-run-0 (ODB 2,3 GB), state_out.json noch offen. openroad
+77976 (6:05 elaps., 3748 % CPU, 9:12 h CPU-Time), 1 librelane,
+Watchdog 0 Restarts, Monitor clean, RAM 198 G free, Disk 1,2 T.
 
 **20:0x (11/3) Cadence:** DRT-Architektur geklärt (drt.tcl):
 drt_run 0 = Haupt-DRT (-droute_end_iter 64, konvergiert bei
-Iter 10) → **post-DRT-Antennen-Repair-Loop** (max
+Iter 10 **mit 0 DRC-Violations** — s. Korrektur 19:3x) →
+**post-DRT-Antennen-Repair-Loop** (max
 DRT_ANTENNA_REPAIR_ITERS=3): check_antennas → repair_antennas
 → drt_run N. Run 0: drt-run-0/OpenEye_Asic.drc = **0 Bytes
 (leer)**, ODB 2,3 GB. **check_antennas: 7.289 Antennen-
