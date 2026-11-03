@@ -1695,6 +1695,15 @@ Restarts, Monitor clean, RAM 206 G free (Peak 39,0 GB), Disk 1,2 T.
 Iter 2) oder > 48 h. Pro Cadence Grenzwerte tracken; ab ~Iter 5–10
 muss der Total-Trend sichtbar fallen, sonst frühwarnen.
 
+**17:3x (11/3) Cadence:** DRT Iteration 2 50 % (17:26:
+446.337 Vios @ 39:16 Iter-Elapsed; 10→50 %: 461k/458k/456k/
+451k/446k — In-Iteration-Abnahme jetzt deutlich flacher als
+Iter 1 (−3 % vs −42 %), das entscheidende Signal bleibt der
+Iterations-Total am Ende (~18:10). openroad 77976 (4:07:25
+elaps., 3993 % CPU, 6:20 h CPU-Time), 1 librelane, Watchdog 0
+Restarts, Monitor clean, RAM 206 G free (Peak 39,1 GB),
+Disk 1,2 T. Kein Stop (Iter 2 von 20+).
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
