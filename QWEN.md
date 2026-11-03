@@ -1470,34 +1470,42 @@ alten Dir-43-Werte (hold −2,0365) – Gate liest `latest_dir`, ab
 Dir 46 gelten die 40-MHz-Zahlen.
 
 **Status:** **J1 RUNNING (10:0x 11/3, Plan v3).** p2_16 Step 45
-(ResizerTimingPostGRT @ 25 ns): interne GRT-Parasitenschätzung DONE
-(5 min, 0 Overflow), Setup-Repair DONE (1 %-Cap, RSZ-0062
-erwartet), **Hold-Repair läuft (22.097 verletzter Endpoints,
-100 % TNS)**; dann detailed placement + run-to-end: J2-Gate am
-Dir 46 (STAMidPNR-3, revidiert ~20:00–02:00), J3 DRT (10–24 h),
-J4/J5 Signoff, J6 End-Checker, K1–K3 Evaluation, L nur
-dokumentieren. p2_15/p2_16b gestoppt, nie wieder resumieren.
-30-min-Cadence läuft.
+(ResizerTimingPostGRT @ 25 ns): GRT-Parasitenschätzung DONE (5 min,
+0 Overflow), Setup-Repair DONE (final WNS −3.961 @ data_dma_o_pad[0],
+TNS −24.8), **Hold-Repair läuft** (Start WNS −3.679/TNS −7355,
+22.097 Endpoints, 100 % TNS, Iter 60: −3.088/−7299); dann
+detailed placement + run-to-end: **J2-Gate am Dir 46 (STAMidPNR-3),
+revidiert 11/4 tagsüber–abends**, J3 DRT (10–24 h), J4/J5 Signoff,
+J6 End-Checker, K1–K3 Evaluation, L nur dokumentieren. p2_15/
+p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
-(36:50 elaps., Resizer-Phase ist Single-Thread-dominiert → ~2–3
-Cores, erwartet), 1 librelane, Watchdog 0 Restarts, Monitor clean,
-RAM 209 G free, Disk 1,2 T free. Fortschritt: **Setup-Repair DONE
-(~09:58, ~25 min)**: Iteration-0-Tabelle (worst über ALLE Corners,
-`SETUP_VIOLATION_CORNERS=['*']`): WNS −3.679 / TNS −7355.149,
-schlechtester Endpoint `u_openeye.wght_buffer.…g_cfg2048x288.u_mac0/
-A_DIN[21]` (Makro-Input, kein Output-Pad), 299.386 verletzte
-Endpoints (Slow-Corner-Langschwanz, Ø −24 ps), 1 %-Cap repariert
-2.993, 43 Buffer + 586 Upsizes, Fläche +0.0 %, RSZ-0062 "Unable to
-repair all setup" (Warnung, erwartet bei TNS_PCT=1). **Hold-Repair
-läuft seit ~09:59: 22.097 Endpoints mit Hold-Verletzungen**
-(die gesamte reg→Makro-A_DIN/A_ADDR-Familie; Plan v3 erwartete
-gerade "Tausende bis ~20 k" Buffers — konsistent). J2-Zeitfenster
-revidiert: der 50-MHz-Resizer (1 % Hold-Cap) brauchte 5 h 10 min
-GESAMT; 100 % auf 22.097 Endpoints wird deutlich länger → J2
-(Dir 46) eher ~20:00–02:00; pro Cadence RSZ-Fortschritt (Buffer-
-Count, WNS-Trend) beobachten. Kein Stop-Kriterium betroffen
-(Resizer läuft, kein Crash; Core-Setup-Check kommt am J2).
+(36:50 elaps.; Resizer-Phase Single-Thread-dominiert → ~2–3 Cores,
+erwartet), 1 librelane, Watchdog 0 Restarts, Monitor clean,
+RAM 209 G free, Disk 1,2 T free. Fortschritt:
+- **Setup-Repair DONE (~09:58, ~25 min, 1380+ Iterationen):**
+  Start (alle Corners, `SETUP_VIOLATION_CORNERS=['*']`): WNS −3.679
+  / TNS −7355 (Makro-A_DIN), 299.386 verletzter Endpoints (Slow-
+  Corner-Langschwanz, Ø −24 ps); 1 %-Cap (2.993 Endpoints) →
+  FINALE: **WNS −3.961 / TNS −24.8, 296.490 Endpoints**, schlech-
+  ter Endpoint `data_dma_o_pad[0]` (Output-Pad-Familie wie erwartet),
+  586 Upsizes + 43 Buffer, Fläche +0.0 %, RSZ-0062 Warnung
+  (erwartet bei TNS_PCT=1). Die 586 gemeinsamen Upsizes haben den
+  TNS-Schwanz von −7355 auf −24.8 geknackt.
+- **Hold-Repair läuft seit ~09:59:** Start: **WNS −3.679 /
+  TNS −7355, 22.097 verletzter Endpoints** (gesamte reg→Makro-
+  A_DIN/A_ADDR-Familie; deutlich schlimmer als dir-44 nom_typ
+  −3.403/−806.7, weil hier der worst Corner zählt = fast Corner:
+  dort sind die Data-Paths am schnellsten → maximale Hold-
+  Verletzung; strukturell: Makro-A_CLK ~10.3 ns vs ~7.4 ns an
+  launchenden FFs + 0.58 ns Makro-hold). Iteration 60 (~10:05):
+  WNS −3.088 / TNS −7299, 236 Buffer, ~10 Iter/min, ~1 ns TNS/Iter.
+  **J2-Zeitfenster 2. Revision:** bei ~1 ns/Iter ≈ 7.000+ Iter
+  ≈ 12 h + Verlangsamungswachstum → **J2 (Dir 46) eher 11/4,
+  tagsüber bis abends**; Prognose wird pro Cadence am TNS-Trend
+  neu kalibriert. Kein Stop-Kriterium betroffen (Resizer läuft
+  stabil, kein Crash; Core-Setup-Check kommt am J2; DRT-Limit
+  48 h gilt erst ab J3).
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
