@@ -1469,16 +1469,17 @@ Referenz-Resizer brauchte 5 h 10 min bei nur 1 % Hold-TNS-Cap;
 alten Dir-43-Werte (hold −2,0365) – Gate liest `latest_dir`, ab
 Dir 46 gelten die 40-MHz-Zahlen.
 
-**Status:** **J1 RUNNING (10:3x 11/3, Plan v3).** p2_16 Step 45
+**Status:** **J1 RUNNING (11:0x 11/3, Plan v3).** p2_16 Step 45
 (ResizerTimingPostGRT @ 25 ns): GRT-Parasitenschätzung DONE (5 min,
 0 Overflow), Setup-Repair DONE (final WNS −3.961 @ data_dma_o_pad[0],
-TNS −24.8), **Hold-Repair läuft** (Iter 870: WNS −2.293/TNS −5604,
-22.097 Start-Endpoints, 565 Buffer, ~58 ns TNS/min, 100 % TNS);
-dann detailed placement + run-to-end: **J2-Gate am Dir 46
-(STAMidPNR-3), revidiert ~13:30–16:00 am 11/3**, J3 DRT (10–24 h),
-J4/J5 Signoff, J6 End-Checker, K1–K3 Evaluation, L nur
-dokumentieren. p2_15/p2_16b gestoppt, nie wieder resumieren.
-30-min-Cadence läuft.
+TNS −24.8), **Hold-Repair läuft** (Iter 1860: WNS −2.293 flach seit
+~1000 Iter, TNS −3639, 651 Buffer, ~65 ns/min); Worst-Endpoint
+`u_mac0/A_DIN[32]` vermutlich unfixierbar → J2-Erwartung:
+fast-corner Hold-WNS ≈ −2.3 (dokumentieren, v3: weiter); dann
+dpl + run-to-end: **J2-Gate am Dir 46 (STAMidPNR-3), revidiert
+~13:00–14:30**, J3 DRT (10–24 h), J4/J5 Signoff, J6 End-Checker,
+K1–K3 Evaluation, L nur dokumentieren. p2_15/p2_16b gestoppt, nie
+wieder resumieren. 30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
 (36:50 elaps.; Resizer-Phase Single-Thread-dominiert → ~2–3 Cores,
@@ -1521,6 +1522,21 @@ Ende; falls WNS am Ende < −0.1 bleibt: dokumentieren + weiter
 RAM 209 G, Disk 1,2 T. **J2 revidiert (3.): ~13:30–16:00 am 11/3**
 (−5604 ns ÷ ~58 ns/min ≈ 96 min bis TNS≈0 + Verlangsamung +
 dpl ~0,5–1 h); pro Cadence Trend-Kalibrierung.
+
+**11:0x (11/3) Cadence:** Hold-Repair: Iteration 1860 (10:34: 870)
+→ ~33 Iter/min (beschleunigt). **WNS −2.293 / TNS −3639**
+(10:34: −2.293/−5604) → Rate ~65 ns/min. 651 Buffer (10:34: 565),
+Fläche +0.3 %, Resized konstant 12. **WNS seit 1000+ Iterationen
+FLACH bei −2.293** (`u_mac0/A_DIN[32]`) — der Resizer knickt den
+TNS-Schwanz ab, der Worst-Endpoint ist vermutlich mit den
+verfügbaren Moves (Buffer/Upsize, max_buffer_percent 50) nicht
+weiter verbesserbar → **J2-Erwartung: fast-corner Hold-WNS bleibt
+≈ −2.3** (TNS deutlich kleiner); laut v3 J2: dann Count/WNS/TNS +
+Endpoint-Klassen dokumentieren und WEITERFAHREN (kein Stop).
+openroad 77668 (1:39:23, 228 % CPU), 1 librelane, Watchdog 0
+Restarts, Monitor clean, RAM 209 G, Disk 1,2 T. **J2 revidiert
+(4.): ~13:00–14:30** (−3639 ÷ 65 ≈ 56 min bis TNS≈WNS-Boden,
+dann Konvergenz-/Endphase + dpl 0,5–1 h).
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
