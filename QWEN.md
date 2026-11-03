@@ -1671,6 +1671,14 @@ innerhalb der Iteration fallend). Iter-1-Ende ~16:50. openroad
 Watchdog 0 Restarts, Monitor clean, RAM 205 G free (Peak 39,3 GB),
 Disk 1,2 T.
 
+**16:3x (11/3) Cadence:** DRT Iteration 1 80 % (16:27:
+600.252 Vios @ 1:09:03 Iter-Elapsed) — Abnahme stabil:
+833k(40 %) → 773k(50 %) → 720k(60 %) → 642k(70 %) → 600k(80 %).
+Iter-1-Ende ~16:55, dann Iterations-Grenzwert (Ref: Iter0-Ende
+10,72 M). openroad 77976 (3:08:29 elaps., 3979 % CPU, 5:05 h
+CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
+RAM 205 G free (Peak 39,4 GB), Disk 1,2 T.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
