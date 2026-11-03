@@ -1497,11 +1497,11 @@ STAMidPNR-3 DONE (16 min 35 s): kein Stop** (Core-Setup −8 ps,
 Resizer kein Crash). **J3 DRT (Dir 47) seit ~13:19: Run 0
 FERTIG, 0 DRC-Violations** (11 Iterationen: 839.853 → 0;
 Wire 108,5 M µm, Vias 11,02 M; kein Stop). **Post-DRT-
-Antennen-Repair: 7.289 → 14.996 Dioden, Run 1 FERTIG (0
-Vios), 2. check 2.593 Vios → Repair #2 + ggf. Run 2/3**
-(max 3 Zyklen, 48 Threads); J3-Ende ~00:00–02:00
-(state_out.json). Danach J4/J5 Signoff, J6 End-Checker,
-K1–K3, L nur dokumentieren.
+Antennen-Repair: 7.289 → 14.996 Dioden → Run 1 (0 Vios),
+2. check 2.593 → +2.110 Dioden → Run 2 läuft** (max 3
+Zyklen, 48 Threads); J3-Ende ~00:00–01:30 (state_out.json).
+Danach J4/J5 Signoff, J6 End-Checker, K1–K3, L nur
+dokumentieren.
 p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
@@ -1825,6 +1825,19 @@ erlaubt, i≤3). J3-Ende ~00:00–02:00. openroad 77976 (8:45:09
 elaps., 3727 % CPU, 13:14 h CPU-Time), 1 librelane, Watchdog
 0 Restarts, Monitor clean, RAM 192 G free (Peak 57,6 GB),
 Disk 1,2 T. Kein Stop.
+
+**22:3x (11/3) Cadence:** Antennen-Repair #2 bestätigt:
+**2.110 Dioden inserted** (GRT-0015; zu den 1.234 net +
+1.359 pin Violations von Check #2). **drt-run-2 läuft**
+(22:3x: Track Assignment 4:57, Routing-Prep 0:24, Iter 0
+10 % @ 5.058 Vios — deutlich kleiner als Run 1 @ 10 %:
+22k, da nur 2,110 Dioden-Nets statt 14.996). Konvergenz
+~23:30–00:00 erwartet, dann Check #3 (letzter erlaubt,
+i≤3) → ggf. kurzer Run 3 → write_views → **J3-Ende
+~00:00–01:30**. openroad 77976 (9:15:41 elaps., 3714 %
+CPU, 14:07 h CPU-Time), 1 librelane, Watchdog 0 Restarts,
+Monitor clean, RAM 189 G free (Peak 60,5 GB), Disk 1,2 T.
+Kein Stop.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
