@@ -1494,10 +1494,11 @@ p2_16 Step 45 DONE (3 h 37 m): Setup-Repair (final −3.961 slow /
 fast / −2.021 nom_typ, TNS −208, 143 reg→Makro-Verletzer,
 dokumentiert → v3: weiter), dpl + check_placement. **Dir 46
 STAMidPNR-3 DONE (16 min 35 s): kein Stop** (Core-Setup −8 ps,
-Resizer kein Crash). **J3 DRT (Dir 47) seit ~13:19** (400k
-Gruppen @ 13:29, 48 Threads); erwartung 10–24 h, Stop nur bei
-Nicht-Abnahme der Vios über 3 Iter nach Iter 20 oder > 48 h.
-Danach J4/J5 Signoff, J6 End-Checker, K1–K3, L nur dokumentieren.
+Resizer kein Crash). **J3 DRT (Dir 47) seit ~13:19: alle 11
+Iterationen fertig (Total-Plateau ~11,02 M Overlaps, kein Stop),
+finale Track Assignment läuft** (~100k/400k Gruppen @ 19:27,
+48 Threads); J3-Ende ~20:00–21:00 (state_out.json). Danach
+J4/J5 Signoff, J6 End-Checker, K1–K3, L nur dokumentieren.
 p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
@@ -1732,6 +1733,28 @@ Iterations-Total. openroad 77976 (5:35:42 elaps., 3939 % CPU,
 9:04 h CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor
 clean, RAM 207 G free (Peak 37,9 GB), Disk 1,2 T. DRT-Gesamt-
 Elapsed ~5,5 h.
+
+**19:3x (11/3) Cadence:** DRT: ALLE 11 Optimisations-Iterationen
+FERTIG (0–5 optimization, 6–8 guides tiles, 9 stubborn tiles,
+10 guides tiles); läuft jetzt **finale Track Assignment**
+(19:27: 100.000 von ~400.000 Gruppen, DRT-0082). Iterations-
+Totale (Layer-Summen, nach jeder Iteration): Iter0 10.719.949 →
+Iter1 10.716.818 (−3.131) → Iter2 10.687.693 (−29.125) →
+Iter3 **11.021.597 (+333.904)** → Iter4 11.024.450 → Iter5
+11.024.640 → Iter6 11.024.651 → Iter7/8/9 11.024.653 (plateau)
+→ Iter10 11.024.674 → finale Tabelle 11.024.672. Iter-3-Sprung
+= Router schob Kongestion M2→M3/M4 (M3 407k→672k, M4 49k→67k),
+M1/M2 bleiben ~5,067 M/5,216 M Overlaps (Kern-Kongestion
+~10,28 M). **Bewertung: kein Stop** — Plateau ab Iter 3–4,
+Stop-Kriterium verlangt 3 flache Iterationen NACH Iteration 20
+(Lauf endete bei Iter 10 per DRT-eigener Konvergenz); Elapsed
+~6,1 h ≪ 48 h. Echte DRC-Bildd folgt bei J4 (TrDRC-Count) +
+J5 (Magic/KLayout) → voraussichtlich als NEW-Befund für K2
+(Kongestion, gleiche Familie wie p2_15-GRT-Pathologie). Dir 47
+schon: OpenEye_Asic.drc + drt-run-0/1 (partial), state_out.json
+noch offen. openroad 77976 (6:05 elaps., 3748 % CPU, 9:12 h
+CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
+RAM 198 G free, Disk 1,2 T.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
