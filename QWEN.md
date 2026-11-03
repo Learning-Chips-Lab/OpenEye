@@ -1724,6 +1724,15 @@ Disk 1,2 T. DRT-Gesamt-Elapsed ~5 h (Limit 48 h). Frühwarn-
 Schwelle (Total muss ab ~Iter 5–10 sichtbar fallen) aktiv —
 aktuell Trend positiv, aber pro Cadence prüfen.
 
+**19:0x (11/3) Cadence:** DRT Iteration 3 90 % (18:55:
+56.217 Vios @ 44:41 Iter-Elapsed) — in-Iteration starke Abnahme:
+256k(40 %) → 215k(50 %) → 181k(60 %) → 132k(70 %) → 107k(80 %)
+→ 56k(90 %) (−85 % seit 10 %). Iter-3-Ende ~18:58 → dann 4.
+Iterations-Total. openroad 77976 (5:35:42 elaps., 3939 % CPU,
+9:04 h CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor
+clean, RAM 207 G free (Peak 37,9 GB), Disk 1,2 T. DRT-Gesamt-
+Elapsed ~5,5 h.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
