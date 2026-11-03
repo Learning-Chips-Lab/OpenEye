@@ -1469,17 +1469,17 @@ Referenz-Resizer brauchte 5 h 10 min bei nur 1 % Hold-TNS-Cap;
 alten Dir-43-Werte (hold −2,0365) – Gate liest `latest_dir`, ab
 Dir 46 gelten die 40-MHz-Zahlen.
 
-**Status:** **J1 RUNNING (11:3x 11/3, Plan v3).** p2_16 Step 45
+**Status:** **J1 RUNNING (12:3x 11/3, Plan v3).** p2_16 Step 45
 (ResizerTimingPostGRT @ 25 ns): GRT-Parasitenschätzung DONE (5 min,
 0 Overflow), Setup-Repair DONE (final WNS −3.961 @ data_dma_o_pad[0],
-TNS −24.8), **Hold-Repair läuft** (Iter 3930: WNS −2.293 flach seit
-~Iter 820, TNS −1871, ~57 ns/min; TNS erreicht in ~30 min den
-WNS-Boden → Konvergenzphase); Worst-Endpoint `u_mac0/A_DIN[32]`
-→ J2-Erwartung: fast-corner Hold-WNS ≈ −2.3 (dokumentieren, v3:
-weiter); dann dpl + run-to-end: **J2-Gate am Dir 46 (STAMidPNR-3),
-~13:00–14:30**, J3 DRT (10–24 h), J4/J5 Signoff, J6 End-Checker,
-K1–K3 Evaluation, L nur dokumentieren. p2_15/p2_16b gestoppt, nie
-wieder resumieren. 30-min-Cadence läuft.
+TNS −24.8), **Hold-Repair DONE** (22.090 Iter, final WNS −2.293 /
+TNS −314, 7 Netto-Buffer, Fläche +0,7 %), **detailed placement
+läuft** (check_placement ~35 %); Worst-Endpoint
+`u_mac0/A_DIN[32]` → J2-Erwartung: fast-corner Hold-WNS ≈ −2.3
+(dokumentieren, v3: weiter); dann run-to-end: **J2-Gate am Dir 46
+(STAMidPNR-3), ~13:00–14:30**, J3 DRT (10–24 h), J4/J5 Signoff,
+J6 End-Checker, K1–K3 Evaluation, L nur dokumentieren. p2_15/
+p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
 (36:50 elaps.; Resizer-Phase Single-Thread-dominiert → ~2–3 Cores,
@@ -1561,6 +1561,24 @@ Hold-Repair ~12:15–12:35, dpl ~0,5–1 h → **dir 46 (J2-Gate)
 ~12:45–13:30**. Fläche +0.6 %. openroad 77668 (2:39:28, 237 %
 CPU), 1 librelane, Watchdog 0 Restarts, Monitor clean, RAM 208 G,
 Disk 1,2 T.
+
+**12:3x (11/3) Cadence:** **Hold-Repair DONE (~12:1x, 22.090
+Iterationen):** FINAL **WNS −2.293 / TNS −314.068** (Start
+−3.679/−7355 → TNS −95,7 %, WNS −37,7 %), Fläche +0,7 %.
+Mechanik: nur **7 NETTO-Hold-Buffer** (RSZ-0032) + 12
+konstante Resize-Targets — der TNS-Schwanz wurde durch wenige
+strategische Upsizes auf gemeinsamen Drivern der Makro-
+A_DIN/A_ADDR-Fächer erledigt; Worst-Endpoint `u_mac0/A_DIN[32]`
+unfixierbar (Setup/Hold-Konflikt, Setup-TNS war selbst −24,8)
+→ **J2-Erwartung bestätigt: fast-corner Hold-WNS ≈ −2.3**
+(Count/TNS/Endpoint-Klassen am J2 dokumentieren, v3: weiter).
+Jetzt **detailed placement**: DPL DONE (Mirrored 562.439,
+HPWL 96,4 → 95,3 M µm, −1,2 %), läuft `check_placement -verbose`
+(Instance-Matching, Index ~1,12 M von ~3,2 M geschätzt,
+I/O-bound). openroad 77668 (3:03:50, 220 % CPU), 1 librelane,
+Watchdog 0 Restarts, Monitor clean, RAM 208 G, Disk 1,2 T.
+**J2-Fenster: ~13:00–14:30** (check_placement ~12:50–13:40,
+write_views, dann Dir 46 STAMidPNR-3 STA).
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
