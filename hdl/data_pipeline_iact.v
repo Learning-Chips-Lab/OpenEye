@@ -397,7 +397,7 @@ module data_pipeline_iact #(
         end
 
         // Wrap cycle_counter at SECOND_SPAD_DATA_CYCLE so it stays in range.
-        if (cycle_counter == $bits(cycle_counter)'(SECOND_SPAD_DATA_CYCLE - 1)) begin
+        if (cycle_counter == $bits(cycle_counter)'(SECOND_SPAD_DATA_CYCLE - 1) || (first_spad_max_i == 1)) begin
           cycle_counter <= 0;
         end
 
@@ -542,36 +542,18 @@ module data_pipeline_iact #(
         compute_sent               <= 1;  // flag: clear second_spad_words_o next enable cycle
         cycle_counter              <= 0;
 
-        // Uneven-line handling (only for non-FC layers where lines don't fill full words)
-        if (first_spad_max_i < 2) begin
-          uneven_counter <= uneven_counter + 1;
-          if (uneven_counter == iact_x_line_repetitions_i - 1) begin
-            uneven_counter <= 0;
-          end
-          if (uneven_counter == iact_x_line_repetitions_i - 1) begin
-            // Wrap: toggle the storage flag; next line starts at the opposite sub-word.
-            uneven_ending_storage <= 1 - uneven_ending_storage;
-            cycle_counter <= $bits(cycle_counter)'(1) - $bits(cycle_counter)'(uneven_ending_storage);
-            uneven_ending         <= 1 - uneven_ending_storage;
-          end else begin
-            // No wrap: continue with the current storage value.
-            cycle_counter <= $bits(cycle_counter)'(uneven_ending_storage);
-            uneven_ending <= uneven_ending_storage;
-          end
-        end
-
         // Fully reset uneven state on a second consecutive compute_i pulse.
         if (compute_sent) begin
           cycle_counter  <= 0;
           uneven_ending  <= 0;
           uneven_counter <= 0;
         end
-        if (!SPARSITY_EN) begin
-          first_spad_en_o    <= 0;
-          first_spad_data_o  <= 0;
-          first_spad_addr_o  <= 0;
-          first_spad_words_o <= 0;
-        end
+      end
+      if (!SPARSITY_EN) begin
+        first_spad_en_o    <= 0;
+        first_spad_data_o  <= 0;
+        first_spad_addr_o  <= 0;
+        first_spad_words_o <= 0;
       end
     end
   end

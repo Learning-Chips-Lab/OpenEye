@@ -365,6 +365,7 @@ class LayerParameters(object):
 
         elif "add" in layer.name:
             logger.debug("Adding Layer")
+            self.output_shape = layer.output.shape
             self.use_layer_on_hw = False
             return
 
@@ -664,7 +665,7 @@ class LayerParameters(object):
             # Default quantization: factor=1, 9 bits
             for f in range(self.filters):
                 self.quantize[f][0] = 1
-                self.quantize[f][1] = 7
+                self.quantize[f][1] = 6
 
         # Store input activation dimensions
         self.iact_size_x = self.input_shape[1]
@@ -1030,7 +1031,7 @@ class LayerParameters(object):
         self.iact_read_limit_4 = math.ceil(self.iact_size_y/self.strideY) - 1
         self.iact_read_inc_0 = 1
         self.iact_read_inc_1 = self.iact_repetitions_per_write * params.NUM_GLB_IACT
-        self.iact_read_inc_2 = (self.iact_size_y + self.padding_y * 2) * self.iact_read_inc_1
+        self.iact_read_inc_2 = math.ceil(self.iact_buffer_words_per_write/self.diff_iact_layer)
         if ((self.Y_Cluster_Packages == 1) & (params.Clusters_X == 1)):
             self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM * self.strideX
         else:

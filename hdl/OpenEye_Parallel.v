@@ -159,6 +159,7 @@ module OpenEye_Parallel #(
     parameter  ROUTER_MODES_PSUM   = 3,
     parameter  BANO_MODES          = 2,
     parameter  AF_MODES            = 4,
+    parameter  CYCLE_WIDTH         = 32,
     localparam IACT_MEM_ADDR_BITS  = $clog2(IACT_MEM_ADDR_WORDS),
     localparam PSUM_MEM_ADDR_BITS  = $clog2(PSUM_MEM_ADDR_WORDS),
     localparam PES                 = PE_COLUMNS * PE_ROWS,
@@ -192,10 +193,9 @@ module OpenEye_Parallel #(
     // Forwarded to every PE via bit 9 of the FIRST_PARAMS config stream.
     input                                                      raw_wght_i,
     input      [               $clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_i,
-    input      [                                         17:0] needed_cycles_i,
+    input      [                              CYCLE_WIDTH-1:0] needed_cycles_i,
     input      [                $clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_i,
     input      [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
-    input      [                                          3:0] needed_iact_cycles_i,
     input      [                    $clog2(PSUM_PER_PE+1)-1:0] filters_i,
     input      [                                         11:0] iact_size_x_i,
     input      [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_channels_per_pe_i,
@@ -251,7 +251,7 @@ module OpenEye_Parallel #(
   reg  [                             CLUSTERS*PES-1:0] compute_mask_reg;
   ///Register for the psum FSM
   reg                                                  data_write_enable;
-  reg  [                                         19:0] finished_cycles;
+  reg  [                              CYCLE_WIDTH-1:0] finished_cycles;
 
   ///Register, that configure the chip
   reg  [  ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_reg;
@@ -288,7 +288,7 @@ module OpenEye_Parallel #(
   reg                                                  data_mode_i_reg;
   reg                                                  gemm_mode_i_reg;
   reg                                                  raw_wght_i_reg;
-  reg  [                                         19:0] needed_cycles_i_reg;
+  reg  [                              CYCLE_WIDTH-1:0] needed_cycles_i_reg;
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i_reg;
   reg  [                    $clog2(PSUM_PER_PE+1)-1:0] filters_reg;
   reg  [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_channels_per_pe_i_reg;

@@ -40,7 +40,7 @@ def capture(monkeypatch, words, columns, count, *, repetition=0, tiles=1):
     asyncio.run(rtl.compare_stream_Dense(
         NS(clk_cycle=20, clk_cycle_unit="ns"), dut, 0, repetition,
         layer, params, NS(), dram, logging.INFO))
-    return dram.fmap[1]
+    return dram.fmap[1][0]
 
 
 @pytest.mark.parametrize("columns,values,wire_order", [

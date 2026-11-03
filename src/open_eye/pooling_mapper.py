@@ -119,7 +119,6 @@ class PoolingMapper(LayerMapper):
         # Uses pack_registers() utility from regmap_pack module
         from open_eye.generator import pack_registers
         words = pack_registers({
-        "wght_cycles_reg": layer_params.needed_wght_transmissions,
         "stride_x": layer_params.strideX,
         "stride_y": layer_params.strideY,
         "skipIact_reg": layer_params.skipIact,

@@ -44,8 +44,8 @@ def pool(dram, layer, layer_number):
                 for oy in range(layer.output.shape[1]):
                     for ix in range(layer.strides[1]):
                         for iy in range(layer.strides[0]):
-                            temp_number = temp_number + dram.fmap[layer_number][oc][ix][iy]
-                    dram.fmap[layer_number + 1][oc][ox][oy] = int(temp_number/ (layer.strides[0]*layer.strides[1]))
+                            temp_number = temp_number + dram.fmap[layer_number][0][oc][ix][iy]
+                    dram.fmap[layer_number + 1][0][oc][ox][oy] = int(temp_number/ (layer.strides[0]*layer.strides[1]))
 
     elif "Max" in str(layer):
         for oc in range(layer.output.shape[3]):
@@ -53,10 +53,10 @@ def pool(dram, layer, layer_number):
                 for oy in range(layer.output.shape[1]):
                     for ix in range(layer.strides[1]):
                         for iy in range(layer.strides[0]):
-                            if(dram.fmap[layer_number][oc][ix][iy] > temp_number):
-                                temp_number = dram.fmap[layer_number][oc][ix][iy]
+                            if(dram.fmap[layer_number][0][oc][ix][iy] > temp_number):
+                                temp_number = dram.fmap[layer_number][0][oc][ix][iy]
 
-                    dram.fmap[layer_number + 1][oc][ox][oy] = temp_number
+                    dram.fmap[layer_number + 1][0][oc][ox][oy] = temp_number
         
 
 def flat(dram, layer, layer_number):
@@ -80,7 +80,7 @@ def flat(dram, layer, layer_number):
     for ic in range(layer.input.shape[3]):
         for iy in range(layer.input.shape[1]):
             for ix in range(layer.input.shape[2]):
-                    dram.fmap[layer_number + 1][ic * layer.input.shape[2] * layer.input.shape[1]+ iy * layer.input.shape[2] + ix] = dram.fmap[layer_number][ic][ix][iy]
+                    dram.fmap[layer_number + 1][0][ic * layer.input.shape[2] * layer.input.shape[1]+ iy * layer.input.shape[2] + ix] = dram.fmap[layer_number][0][ic][ix][iy]
 
 def batchnorm_output(layer_parameters, divide_value, layer_name, dram):
     """Apply batch normalization and quantization to layer outputs.
@@ -108,13 +108,15 @@ def batchnorm_output(layer_parameters, divide_value, layer_name, dram):
     All operations are performed in-place on dram[layer_number + 1].
     """
     #if "Conv" in str(layer_parameters.layer_name):
+    
     try:
-        for f in range(len(dram.fmap[layer_name])):
-            for x in range(len(dram.fmap[layer_name][f])):
-                for y in range(len(dram.fmap[layer_name][f][x])):
-                    dram.fmap[layer_name][f][x][y] = math.floor((layer_parameters.quantize[f][0]*dram.fmap[layer_name][f][x][y])/(2**layer_parameters.quantize[f][1]))
+        for f in range(len(dram)):
+            for x in range(len(dram[f])):
+                for y in range(len(dram[f][x])):
+                    dram[f][x][y] = math.floor((layer_parameters.quantize[f][0]*dram[f][x][y])/(2**layer_parameters.quantize[f][1]))
+
     #elif "Dense" in str(layer_parameters.layer_name):
     except:
-        for f in range(len(dram.fmap[layer_name])):
-            dram.fmap[layer_name][f] = math.floor(dram.fmap[layer_name][f]/(2**layer_parameters.quantize[0][1]))
+        for f in range(len(dram)):
+            dram[f] = math.floor(dram[f]/(2**layer_parameters.quantize[0][1]))
 

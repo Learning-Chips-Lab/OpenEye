@@ -106,6 +106,10 @@ class DRAMContents(object):
             elif "pooling" in str(name):
                 # Pooling layer: no weights needed (placeholder)
                 dram_weights[name] = [0]
+            elif "input" in str(name):
+                dram_weights[name] = []
+            elif "add" in str(name):
+                dram_weights[name] = []
 
             # === BIAS INITIALIZATION ===
             # Create bias storage: one bias value per output channel/filter
@@ -122,39 +126,54 @@ class DRAMContents(object):
             elif "pooling" in str(name):
                 # Pooling layer: one bias per output channel (width dimension)
                 dram_bias[name] = [0 for m in range(layer_param.output_shape[2])]
+            elif "input" in str(name):
+                dram_bias[name] = []
+            elif "add" in str(name):
+                dram_bias[name] = []
 
             # === FEATURE MAP INITIALIZATION ===
             # Create input feature map storage for each layer
-
             if "conv" in str(name):
                 # Conv layer input: 3D tensor [channels][height][width]
-                dram_fmap[name] = [[[0 for l in range(layer_param.input_shape[2])]
+                dram_fmap[name] = [[[[0 for l in range(layer_param.input_shape[2])]
                                 for k in range(layer_param.input_shape[1])]
-                                for j in range(layer_param.input_shape[3])]
+                                for j in range(layer_param.input_shape[3])]]
             elif "dense" in str(name):
                 # Dense layer input: 1D vector [features]
-                dram_fmap[name] = [0 for j in range(layer_param.iact_size_x)]
+                dram_fmap[name] = [[0 for j in range(layer_param.iact_size_x)]]
             elif "flat" in str(name):
                 # Flatten layer input: 3D tensor (pre-flattening shape)
-                dram_fmap[name] = [[[0 for l in range(layer_param.input_shape[2])]
+                dram_fmap[name] = [[[[0 for l in range(layer_param.input_shape[2])]
                                 for k in range(layer_param.input_shape[1])]
-                                for j in range(layer_param.input_shape[3])]
+                                for j in range(layer_param.input_shape[3])]]
             elif "pooling" in str(name):
                 # Pooling layer input: 3D tensor [channels][height][width]
-                dram_fmap[name] = [[[0 for l in range(layer_param.input_shape[2])]
+                dram_fmap[name] = [[[[0 for l in range(layer_param.input_shape[2])]
                                 for k in range(layer_param.input_shape[1])]
-                                for j in range(layer_param.input_shape[3])]
+                                for j in range(layer_param.input_shape[3])]]
+            elif "input" in str(name):
+                # Pooling layer input: 3D tensor [channels][height][width]
+                dram_fmap[name] = [[[[0 for l in range(layer_parameters[rel_layers["Next_Layer"][name][0]].input_shape[2])]
+                                for k in range(layer_parameters[rel_layers["Next_Layer"][name][0]].input_shape[1])]
+                                for j in range(layer_parameters[rel_layers["Next_Layer"][name][0]].input_shape[3])]]
+            elif "add" in str(name):
+                # Pooling layer input: 3D tensor [channels][height][width]
+                dram_fmap[name] = [[[[0 for l in range(layer_parameters[rel_layers["Previous_Layer"][name][0]].output_shape[2])]
+                                for k in range(layer_parameters[rel_layers["Previous_Layer"][name][0]].output_shape[1])]
+                                for j in range(layer_parameters[rel_layers["Previous_Layer"][name][0]].output_shape[3])]
+                                for i in range(len(rel_layers["Previous_Layer"][name]))]
+                
 
         # Add output feature map storage for the final layer
             if (len(rel_layers["Next_Layer"][name]) == 0):
                 if "conv" in str(name):
                     # Conv output: 3D tensor [channels][height][width]
-                    dram_fmap["Output"] = [[[0 for l in range(layer_parameters[name].output_shape[2])]
+                    dram_fmap["Output"] = [[[[0 for l in range(layer_parameters[name].output_shape[2])]
                                         for k in range(layer_parameters[name].output_shape[1])]
-                                        for j in range(layer_parameters[name].output_shape[3])]
+                                        for j in range(layer_parameters[name].output_shape[3])]]
                 elif "dense" in str(name):
                     # Dense output: 1D vector [features]
-                    dram_fmap["Output"] = [0 for l in range(layer_parameters[name].filters)]
+                    dram_fmap["Output"] = [[0 for l in range(layer_parameters[name].filters)]]
 
         # Assign initialized structures to instance attributes
         self.fmap = dram_fmap
@@ -267,21 +286,21 @@ class DRAMContents(object):
                         for x in range(layer_param.input_shape[1]):
                             for y in range(layer_param.input_shape[2]):
                                 # Generate random INT8 activation values
-                                self.fmap[name][c][x][y] = np.random.randint(-128, 127)
-                                self.fmap[name][c][x][y] = np.random.randint(-32, 31)
+                                self.fmap[name][0][c][x][y] = np.random.randint(-128, 127)
+                                self.fmap[name][0][c][x][y] = np.random.randint(-32, 31)
                                 # Apply sparsity pattern if requested: zero elements where sum is even
                                 if (sparse_iacts & (((c+x+y) % 2) == 0)):
-                                    self.fmap[name][c][x][y] = 0
+                                    self.fmap[name][0][c][x][y] = 0
                                 else:
                                     # Replace zeros with random -1 or 1
-                                    if (self.fmap[name][c][x][y] == 0):
-                                        self.fmap[name][c][x][y] = int(np.random.choice([-1, 1]))
+                                    if (self.fmap[name][0][c][x][y] == 0):
+                                        self.fmap[name][0][c][x][y] = int(np.random.choice([-1, 1]))
                 elif "dense" in str(layer_param.layer_name):
                     # Initialize 1D input feature map for Dense layers
                     for c in range(layer_param.iact_size_x):
                         # Generate random INT8 activation values (no sparsity for Dense)
-                        self.fmap[name][c] = np.random.randint(-128, 127)
-                        self.fmap[name][c] = np.random.randint(-32, 31)
-                        self.fmap[name][c] = np.random.randint(-16, 15)
-                        if (self.fmap[name][c] == 0):
-                            self.fmap[name][c] = int(np.random.choice([-1, 1]))
+                        self.fmap[name][0][c] = np.random.randint(-128, 127)
+                        self.fmap[name][0][c] = np.random.randint(-32, 31)
+                        self.fmap[name][0][c] = np.random.randint(-16, 15)
+                        if (self.fmap[name][0][c] == 0):
+                            self.fmap[name][0][c] = int(np.random.choice([-1, 1]))

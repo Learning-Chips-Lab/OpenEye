@@ -79,7 +79,7 @@ def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inp
             # so this mode exercises the interlayer psum->iact write-back that
             # "Convolution_Single" never reaches.
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
-            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, filters), strides = strides))
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, 4), strides = strides))
         case "Conv_Pool_Conv":
             # Conv, 2x2 max-pool, conv: the smallest net whose pooling output is
             # written back into the iact buffer and read by a conv layer, as in
@@ -89,17 +89,16 @@ def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inp
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(math.ceil(inputsize_x/2), math.ceil(inputsize_y/2), filters), strides = strides))
         
         case "Residual_Block":
-            # 1. Startpunkt (Input) definieren
+            # 1. Input
             inputs = tf.keras.Input(shape=(inputsize_x, inputsize_y, channels), name="input_layer")
             
-            # 2. Gemeinsame erste Faltung (Shared Convolution)
-            # Nimmt die inputs entgegen.
+            # 2. First shared convolution
             shared_conv = tf.keras.layers.Conv2D(
                 filters, (kernelsize_x, kernelsize_y), 
                 padding="same", strides=1, name="shared_initial_conv2d"
             )(inputs)
             
-            # 3. Zwei Pfade entstehen aus 'shared_conv'
+            # 3. Two paths form the shared convolution
             
             # -- Pfad A (Hauptpfad) --
             path_a = tf.keras.layers.Conv2D(
@@ -225,9 +224,9 @@ def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inp
             model.add(tf.keras.layers.Flatten())
             model.add(tf.keras.layers.Dense(units=outputsize, use_bias = True))
         case "VGG-19":
-            alpha = 0.25
+            alpha = 1.0
             
-            # Block 1
+            """# Block 1
             model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same', input_shape=(inputsize_x, inputsize_y, channels)))
             model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same'))
             model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
@@ -235,10 +234,11 @@ def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inp
             # Block 2
             model.add(tf.keras.layers.Conv2D(int(128 * alpha), (3, 3), activation='relu', padding='same'))
             model.add(tf.keras.layers.Conv2D(int(128 * alpha), (3, 3), activation='relu', padding='same'))
-            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
+            model.add(tf.keras.layers.Conv2D(int(128 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))"""
 
             # Block 3
-            model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
+            model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same', input_shape=(inputsize_x, inputsize_y, channels)))
             model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
             model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))
             model.add(tf.keras.layers.Conv2D(int(256 * alpha), (3, 3), activation='relu', padding='same'))

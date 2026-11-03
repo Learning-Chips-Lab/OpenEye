@@ -141,7 +141,7 @@ class LayerMapper(object):
         self.layer_repetition = layer_repetition
 
         # Extract DRAM data for this layer
-        self.dram_fmap = dram_layer_content[0]      # Input feature maps
+        self.dram_fmap = dram_layer_content[0][0]   # Input feature maps
         self.dram_weights = dram_layer_content[1]   # Layer weights/kernels
         self.dram_bias = dram_layer_content[2]      # Biases/partial sums
 

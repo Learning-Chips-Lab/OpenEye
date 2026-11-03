@@ -54,7 +54,7 @@ class DenseMapper(LayerMapper):
 
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts):
         # Create specialized stream mappers for dense layer operations
-        input_mapper = DenseIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0], sparse_iacts)
+        input_mapper = DenseIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0][0], sparse_iacts)
         weight_mapper = DenseWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1], sparse_wghts)
         bias_mapper = DensePsumStreamMapper(params, layer_params, layer_repetition, dram_layer_content[2])
 
@@ -127,7 +127,6 @@ class DenseMapper(LayerMapper):
         # Uses pack_registers() utility from regmap_pack module
             from open_eye.generator import pack_registers
             words = pack_registers({
-            "wght_cycles_reg": 1,
             "stride_x": layer_params.strideX,
             "stride_y": layer_params.strideY,
             "skipIact_reg": layer_params.skipIact,

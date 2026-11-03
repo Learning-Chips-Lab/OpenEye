@@ -27,7 +27,9 @@ module psum_pipeline #(
     parameter PSUM_PER_PE = 32,
     parameter PSUM_CYCLES_ONE_WORD_ALL_CELLS = 2,
     parameter PSUM_OUTPUT_WORDS = 2,
-    parameter LOOP_LIMIT_SIZE = 12
+    parameter LOOP_LIMIT_SIZE = 12,
+    parameter TRANS_PSUM_WIDTH = 16,
+    parameter CYCLE_WIDTH = 16
 ) (
     input wire clk_i,
     input wire rst_n,
@@ -60,8 +62,8 @@ module psum_pipeline #(
     input wire [11:0] psum_x_with_add_up,
     input wire [15:0] psum_x_all_cluster,
     input wire [3:0] iteration_for_kernels,
-    input wire [17:0] needed_cycles,
-    input wire [15:0] trans_cycles_psum,
+    input wire [CYCLE_WIDTH-1:0] needed_cycles,
+    input wire [TRANS_PSUM_WIDTH-1:0] trans_cycles_psum,
     input wire [7:0] iact_size_y,
     input wire [11:0] iact_size_x,
     input wire       fully_connected_layer,
@@ -86,11 +88,11 @@ module psum_pipeline #(
     input wire [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_limit_2,
     input wire [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_limit_3,
     input wire [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_limit_4,
-    input wire [8-1:0] psum_cycle_addr_inc_0,
-    input wire [8-1:0] psum_cycle_addr_inc_1,
-    input wire [8-1:0] psum_cycle_addr_inc_2,
-    input wire [8-1:0] psum_cycle_addr_inc_3,
-    input wire [8-1:0] psum_cycle_addr_inc_4,
+    input wire [BUFFER_WIDTH-1:0] psum_cycle_addr_inc_0,
+    input wire [BUFFER_WIDTH-1:0] psum_cycle_addr_inc_1,
+    input wire [BUFFER_WIDTH-1:0] psum_cycle_addr_inc_2,
+    input wire [BUFFER_WIDTH-1:0] psum_cycle_addr_inc_3,
+    input wire [BUFFER_WIDTH-1:0] psum_cycle_addr_inc_4,
 
     output reg [(CLUSTERS*(NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_r,
     output reg [(CLUSTERS*(NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_w,
@@ -105,7 +107,7 @@ module psum_pipeline #(
     output reg last_data_o,
     output reg [3:0] fsm_psum_last_state,
     output reg [3:0] fsm_psum_current_state,
-    output reg [24-1:0] fsm_psum_cycle,
+    output reg [CYCLE_WIDTH-1:0] fsm_psum_cycle,
     output reg psum_transmitted,
     output reg psum_router_set_reg,
     output reg start_new_cycle,
@@ -150,7 +152,7 @@ module psum_pipeline #(
   reg [BUFFER_WIDTH-1:0] psum_cycle_addr_3;
   reg [BUFFER_WIDTH-1:0] psum_cycle_addr_4;
   reg [7:0] iact_channel_counter_reg;
-  reg [17:0] finished_cycles_psum;
+  reg [CYCLE_WIDTH-1:0] finished_cycles_psum;
   reg [BUFFER_WIDTH-1:0] psum_buffer_addr_storage;
   reg [BUFFER_WIDTH-1:0] psum_buffer_addr_array [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][((NUM_GLB_PSUM+1)/2)-1:0];
   reg [CLUSTER_COLUMNS-1:0][CLUSTER_ROWS-1:0][((NUM_GLB_PSUM+1)/2)-1:0] psum_buffer_en_w_int;

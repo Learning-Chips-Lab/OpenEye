@@ -397,7 +397,7 @@ def write_iact_file(layer_params, layer_name, dram):
     if "dense" in str(layer_params.layer_name):
         iact_ref = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/iact/iact_ref' + '_0.csv')
         for c in range(layer_params.iact_size_x):
-            iact_ref.write(str(int(dram.fmap[layer_name][c])))
+            iact_ref.write(str(int(dram.fmap[layer_name][0][c])))
             iact_ref.write("\n")
         iact_ref.close()
     elif "pooling" in str(layer_params.layer_name):
@@ -406,7 +406,7 @@ def write_iact_file(layer_params, layer_name, dram):
             iact_ref[c] = gtu.open_or_create_file('demo/layer_' + str(layer_name) + '/iact/iact_ref' + '_' +  str(c) + '.csv')
             for y in range(layer_params.input_shape[2]):
                 for x in range(layer_params.input_shape[1]):
-                    iact_ref[c].write(str(int(dram.fmap[layer_name][c][x][y])).rjust(5) + ";")
+                    iact_ref[c].write(str(int(dram.fmap[layer_name][0][c][x][y])).rjust(5) + ";")
                 iact_ref[c].write("\n")
             iact_ref[c].close()
     else:
@@ -417,7 +417,7 @@ def write_iact_file(layer_params, layer_name, dram):
                 for x in range(0 - math.floor(layer_params.kernel_size[0]/2),layer_params.input_shape[1] + math.ceil(layer_params.kernel_size[0]/2) - 1):
                     if(((x >= 0) & (x  < layer_params.input_shape[1])) & \
                         ((y >= 0) & (y < layer_params.input_shape[2]))):
-                        iact_ref[c].write(str(int(dram.fmap[layer_name][c][x][y])).rjust(5) + ";")
+                        iact_ref[c].write(str(int(dram.fmap[layer_name][0][c][x][y])).rjust(5) + ";")
                     else:
                         iact_ref[c].write(str(0).rjust(5) + ";")
                 iact_ref[c].write("\n")
@@ -495,7 +495,7 @@ def collect_results(layer_params, dram, serial):
                             (((y + j * layer_params.strideY) >= 0) & ((y + j * layer_params.strideY) < (layer_params.output_shape[1] * layer_params.strideY)))):
                                 calculated_results[c][i][j] = int(calculated_results[c][i][j] + \
                                                                 dram.weights[layer_params.layer_name][c][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)] * \
-                                                                dram.fmap[layer_params.layer_name][c][x + (i * layer_params.strideX)][y + (j * layer_params.strideY)])
+                                                                dram.fmap[layer_params.layer_name][0][c][x + (i * layer_params.strideX)][y + (j * layer_params.strideY)])
                             else:
                                 calculated_results[c][i][j] = int(calculated_results[c][i][j] + \
                                                                 dram.weights[layer_params.layer_name][c][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)])
@@ -524,10 +524,10 @@ def collect_results(layer_params, dram, serial):
                 for i in range(layer_params.output_shape[2]):
                     for j in range(layer_params.output_shape[1]):
                         block = [
-                            dram.fmap[layer_params.layer_name][f][2*j][2*i],
-                            dram.fmap[layer_params.layer_name][f][2*j][2*i+1],
-                            dram.fmap[layer_params.layer_name][f][2*j+1][2*i],
-                            dram.fmap[layer_params.layer_name][f][2*j+1][2*i+1]
+                            dram.fmap[layer_params.layer_name][0][f][2*j][2*i],
+                            dram.fmap[layer_params.layer_name][0][f][2*j][2*i+1],
+                            dram.fmap[layer_params.layer_name][0][f][2*j+1][2*i],
+                            dram.fmap[layer_params.layer_name][0][f][2*j+1][2*i+1]
                         ]
                         calculated_results[f][j][i] = int(max(block))
         else:#Is Average Pooling
@@ -540,12 +540,20 @@ def collect_results(layer_params, dram, serial):
                                     temp = temp + dram.fmap[layer_params.layer_name][f][x][y]
                         temp = temp//(layer_params.input_shape[1]*layer_params.input_shape[2])
                         calculated_results[f][j][i] = int(temp)
+    elif "add" in str(layer_params.layer_name):
+        calculated_results = [[[0 for i in range(layer_params.output_shape[2])] for j in range(layer_params.output_shape[1])]for k in range(layer_params.output_shape[3])]
+        for f in range(layer_params.output_shape[3]):
+            for i in range(layer_params.output_shape[2]):
+                for j in range(layer_params.output_shape[1]):
+                    calculated_results[f][j][i] = dram.fmap[layer_params.layer_name][0][f][j][i]
+    else:
+        calculated_results = []
 
     return calculated_results
 
 def calculate_dense_results_mp(x, layer_params, layer_name, dram, calculated_results,return_dict):
     for c in range(layer_params.iact_size_x):
-        calculated_results = int(calculated_results + dram.weights[layer_name][x][c] * dram.fmap[layer_name][c])
+        calculated_results = int(calculated_results + dram.weights[layer_name][x][c] * dram.fmap[layer_name][0][c])
     calculated_results = int(calculated_results + dram.bias[layer_name][x])
     return_dict[x] = calculated_results
 
@@ -752,7 +760,7 @@ def calculate_conv_results_mp(f, layer_name, layer_params, serial, dram, calcula
                                 (((y + i * layer_params.strideY) >= 0) & ((y + i * layer_params.strideY) < (layer_params.input_shape[2])))):
                                     calculated_results[j][i] = int(calculated_results[j][i] + \
                                                                     dram.weights[layer_name][c][f][y + math.floor((layer_params.kernel_size[1]-1)/2)][x + math.floor(layer_params.kernel_size[0]/2)] * \
-                                                                    dram.fmap[layer_name][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
+                                                                    dram.fmap[layer_name][0][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
                                 else:
                                     if (serial) :
                                         pass
@@ -877,11 +885,11 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
     """
     logger.info("Results are transmitted.")
     if "conv" in str(current_layer_params.layer_name):
-        if any(x in str(next_layer_params.layer_name) for x in ("conv", "pooling")):
+        if any(x in str(next_layer_params.layer_name) for x in ("conv", "pooling", "add")):
             for f in range(len(ref_output)):    
                 for x in range(len(ref_output[f])):
                     for y in range(len(ref_output[f][x])):
-                        dram[f][x][y] = ref_output[f][x][y]
+                        dram[f][x][y] += ref_output[f][x][y]
         else:
             if any(x in str(next_layer_params.layer_name) for x in ("dense")):
                 for f in range(len(ref_output)):  
@@ -891,7 +899,7 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
                             pos = pos + (4*x)
                             pos = pos + (current_layer_params.iact_size_x*4*y)
                             pos = pos + (current_layer_params.iact_size_x*current_layer_params.iact_size_y*4*math.floor(f/4))
-                            dram[pos] = ref_output[f][x][y]
+                            dram[pos] += ref_output[f][x][y]
     elif "pooling" in str(current_layer_params.layer_name):
         if "dense" in str(next_layer_params.layer_name):
             for f in range(len(ref_output)):
@@ -899,13 +907,18 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
                     for y in range(len(ref_output[f][x])):
                         pos = (f%4)+((f//4)*(4*len(ref_output[0])*len(ref_output[0][0])))
                         pos = pos+((x%2)*4)+((x//2)*4*2)+y*len(ref_output[0]*4)
-                        dram[pos] = ref_output[f][x][y]
+                        dram[pos] += ref_output[f][x][y]
         else:
             for f in range(len(ref_output)):    
                 for x in range(len(ref_output[f])):
                     for y in range(len(ref_output[f][x])):
-                        dram[f][x][y] = ref_output[f][x][y]
+                        dram[f][x][y] += ref_output[f][x][y]
     elif "dense" in str(current_layer_params.layer_name):
         for f in range(len(ref_output)):  
-            dram[f] = ref_output[f]
+            dram[f] += ref_output[f]
+    elif "add" in str(current_layer_params.layer_name):
+        for f in range(len(ref_output)):    
+            for x in range(len(ref_output[f])):
+                for y in range(len(ref_output[f][x])):
+                    dram[f][x][y] += ref_output[f][x][y]
     return dram

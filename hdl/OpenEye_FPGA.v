@@ -127,6 +127,11 @@ module OpenEye_FPGA #(
       parameter TRANS_BITWIDTH_IACT = 24,
       parameter TRANS_BITWIDTH_WGHT = 8,
       parameter STRIDE_ENABLED = 0,
+      parameter CYCLE_WIDTH = 32,
+      //PAGU WIDTH
+      parameter LIMIT_SIZE_IACT = 18,
+      parameter LIMIT_SIZE_WGHT = 12,
+      parameter LIMIT_SIZE_PSUM = 12,
   `else
     `include "parameters_FPGA.vh"
       // Defaultvalues
@@ -181,8 +186,7 @@ module OpenEye_FPGA #(
     parameter ROUTER_MODES_WGHT = 1,
     parameter ROUTER_MODES_PSUM = 3,
 
-
-    parameter BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR = BUFFER_WIDTH_IACT + 2,
+    parameter BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR = BUFFER_WIDTH_IACT + 5 - $clog2(CLUSTERS),
     parameter real FSM_IACT_RTR_CCLS_A = (CLUSTERS * NUM_GLB_IACT),
     parameter real FSM_IACT_RTR_CCLS_B = DMA_BITWIDTH / ROUTER_MODES_IACT,
     parameter real FSM_IACT_RTR_CCLS = FSM_IACT_RTR_CCLS_A / FSM_IACT_RTR_CCLS_B,
@@ -228,11 +232,6 @@ module OpenEye_FPGA #(
     parameter integer OFFSET_WIDTH = 8,
     parameter integer EXPONENT_WIDTH = 7,  
     parameter integer MANTISSA_WIDTH = 25,
-
-    //PAGU WIDTH
-    parameter LIMIT_SIZE_IACT = 18,
-    parameter LIMIT_SIZE_WGHT = 12,
-    parameter LIMIT_SIZE_PSUM = 12,
 
     localparam FINAL_DATA_IACT_BITWIDTH = SPARSITY_EN ? 4 + DATA_IACT_BITWIDTH : DATA_IACT_BITWIDTH,
     localparam FINAL_DATA_WGHT_BITWIDTH = SPARSITY_EN ? 4 + DATA_WGHT_BITWIDTH : DATA_WGHT_BITWIDTH,
@@ -352,16 +351,15 @@ reg [1023:0] fst_path;
   // -----------------------------------------------------------------------
   reg data_mode_reg;                              // 0 = fixed-point, 1 = floating-point computation mode passed to OpenEye_Parallel.
   reg [$clog2(DATA_PSUM_BITWIDTH)-1:0] fraction_bit_reg; // Position of the binary point in fixed-point psums (passed to OpenEye_Parallel).
-  wire [17:0] needed_cycles;                 // Total iact-delivery iterations required to complete this layer (from dma_storage).
+  wire [CYCLE_WIDTH-1:0] needed_cycles;                 // Total iact-delivery iterations required to complete this layer (from dma_storage).
   wire [$clog2(CLUSTER_COLUMNS+1)-1:0] needed_x_cls_reg;// Number of active cluster columns for this layer (from dma_storage).
   wire [$clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg; // Number of active cluster rows for this layer (from dma_storage).
-  wire [3:0] needed_iact_cycles_reg;             // Number of iact router broadcast cycles per spatial position (from dma_storage).
+  wire [6-1:0] needed_iact_cycles_reg;             // Number of iact router broadcast cycles per spatial position (from dma_storage).
   wire [$clog2(PSUM_PER_PE+1)-1:0] filters; // Output filters per PE batch; also the psum address stride (from dma_storage).
   wire [$clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_reg; // Weight address scratchpad length per PE (from dma_storage).
   reg [$clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_reg; // Batch-normalisation mode bits per psum GLB (set in GET_PARAMETERS, forwarded to OpenEye_Parallel).
   reg [$clog2(AF_MODES)-1:0] af_cluster_mode_reg;  // Activation-function mode (set in GET_PARAMETERS, forwarded to OpenEye_Parallel).
   wire [4:0] input_activations;                  // Number of non-zero activations per MAC cycle (from dma_storage).
-  wire [7:0] wght_cycles_reg;                    // DMA cycles needed to stream one complete set of weights (from dma_storage).
   wire [2:0] stride_x_dma;                       // Convolution stride in the x-direction (from dma_storage).
   wire [2:0] stride_y_dma;                       // Convolution stride in the y-direction (from dma_storage).
   wire [2:0] stride_x;                           // Convolution stride in the x-direction (from dma_storage).
@@ -392,11 +390,11 @@ reg [1023:0] fst_path;
   // -----------------------------------------------------------------------
   // Main FSM State and Cycle Counters
   // -----------------------------------------------------------------------
-  reg [32-1:0] fsm_cycle;                              // General-purpose per-state cycle counter; reset to 0 on every state transition.
+  reg [CYCLE_WIDTH-1:0] fsm_cycle;                              // General-purpose per-state cycle counter; reset to 0 on every state transition.
   wire [TRANS_IACT_WIDTH-1:0]       trans_cycles_iact; // Register for deciding, how many cycles are needed for transmissions for iact
   wire [TRANS_WGHT_WIDTH-1:0]       trans_cycles_wght; // Register for deciding, how many cycles are needed for transmissions for wght
   wire [TRANS_PSUM_WIDTH-1:0]       trans_cycles_psum; // Register for deciding, how many cycles are needed for transmissions for psum
-  wire [15:0]                       iact_glb_writing_cycles;
+  wire [24-1:0]                       iact_glb_writing_cycles;
   reg [$clog2(CLUSTER_COLUMNS)-1:0] fsm_x_cl;          // Current cluster column being processed during weight loading.
   reg [$clog2(CLUSTER_ROWS)-1:0] fsm_y_cl;             // Current cluster row being processed during weight loading.
   reg [((NUM_GLB_IACT > 1) ? $clog2(NUM_GLB_IACT) : 1)-1:0] fsm_iact_r; // Current iact GLB index during iact loading.
@@ -404,8 +402,7 @@ reg [1023:0] fst_path;
   reg [$clog2(NUM_GLB_PSUM)-1:0] fsm_psum_r;           // Current psum GLB index during psum output; used by PSUM FSM.
   reg [$clog2(NUM_GLB_PSUM)-1:0] fsm_psum_r_q;         // One-cycle delayed fsm_psum_r; compensates for the pipelined RAM read in PSUM_SEND_RESULTS.
   reg results_ready;                                   // Local flag (combinatorial inside always block): AND of all active psum_enable_o or psum_ready_o signals.
-  reg [19:0] finished_cycles_iact;                     // Count of completed iact delivery iterations; used as address base in MAXPOOLING_SEND.
-  reg [19:0] finished_cycles_psum;                     // Count of completed psum output passes; determines when last_data fires.
+  reg [CYCLE_WIDTH-1:0] finished_cycles_iact;                     // Count of completed iact delivery iterations; used as address base in MAXPOOLING_SEND.
   reg reset_cycle;                                     // Pulse that resets all iteration counters (current_cycle, iact_cycle_count, etc.) to 0.
   wire send_data_out;                                  // When 1: final results go directly to DMA output (PSUM_SEND_RESULTS). When 0: quantize and loop back as next-layer iact.
   wire [7:0] iact_x_line_repetitions;                  // How many times each iact x-line is reused across cluster columns (from dma_storage).
@@ -421,17 +418,17 @@ reg [1023:0] fst_path;
   wire [LIMIT_SIZE_IACT-1:0] iact_read_limit_2;
   wire [LIMIT_SIZE_IACT-1:0] iact_read_limit_3;
   wire [LIMIT_SIZE_IACT-1:0] iact_read_limit_4;
-  wire [BUFFER_WIDTH_IACT-1:0] iact_read_inc_0;
-  wire [BUFFER_WIDTH_IACT-1:0] iact_read_inc_1;
-  wire [BUFFER_WIDTH_IACT-1:0] iact_read_inc_2;
-  wire [BUFFER_WIDTH_IACT-1:0] iact_read_inc_3;
-  wire [BUFFER_WIDTH_IACT-1:0] iact_read_inc_4;
+  wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_read_inc_0;
+  wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_read_inc_1;
+  wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_read_inc_2;
+  wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_read_inc_3;
+  wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_read_inc_4;
   wire [LIMIT_SIZE_IACT-1:0] iact_write_limit_0;
   wire [LIMIT_SIZE_IACT-1:0] iact_write_limit_1;
   wire [LIMIT_SIZE_IACT-1:0] iact_write_limit_2;
-  wire [BUFFER_WIDTH_IACT-1:0] iact_write_inc_0;
-  wire [BUFFER_WIDTH_IACT-1:0] iact_write_inc_1;
-  wire [BUFFER_WIDTH_IACT-1:0] iact_write_inc_2;
+  wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_write_inc_0;
+  wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_write_inc_1;
+  wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_write_inc_2;
   wire [ 9:0] pagu_wght_limit;
   wire [4-1:0]psum_pagu_cs_limit_0;
   wire [4-1:0]psum_pagu_cs_limit_1;
@@ -446,11 +443,11 @@ reg [1023:0] fst_path;
   wire [LIMIT_SIZE_PSUM-1:0]psum_pagu_loop_limit_2;
   wire [LIMIT_SIZE_PSUM-1:0]psum_pagu_loop_limit_3;
   wire [LIMIT_SIZE_PSUM-1:0]psum_pagu_loop_limit_4;
-  wire [8-1:0]psum_pagu_addr_inc_0;
-  wire [8-1:0]psum_pagu_addr_inc_1;
-  wire [8-1:0]psum_pagu_addr_inc_2;
-  wire [8-1:0]psum_pagu_addr_inc_3;
-  wire [8-1:0]psum_pagu_addr_inc_4;
+  wire [BUFFER_WIDTH_PSUM-1:0]psum_pagu_addr_inc_0;
+  wire [BUFFER_WIDTH_PSUM-1:0]psum_pagu_addr_inc_1;
+  wire [BUFFER_WIDTH_PSUM-1:0]psum_pagu_addr_inc_2;
+  wire [BUFFER_WIDTH_PSUM-1:0]psum_pagu_addr_inc_3;
+  wire [BUFFER_WIDTH_PSUM-1:0]psum_pagu_addr_inc_4;
 
 
   // -----------------------------------------------------------------------
@@ -531,7 +528,6 @@ reg [1023:0] fst_path;
   wire [ 3:0] iact_channels_per_pe_next_layer;  // Channel count for the next layer (from dma_storage); used when routing psums back as iact.
   reg  [ 4:0] iact_channels_counter;             // Counts which channel batch [0..iact_channel_max_cycles-1] is currently being processed.
   wire [ 7:0] iact_channel_max_cycles;          // Total number of channel batches per layer pass (from dma_storage).
-  wire [10:0] iact_needed_cycles;               // Number of iact streaming cycles for one spatial position (from dma_storage).
   wire [15:0] psum_x_all_cluster;               // Psum X with multiple channels counting seperate
   wire [ 3:0] iact_x_per_cluster;
   wire [11:0] iact_x_add_up;
@@ -720,11 +716,11 @@ reg [1023:0] fst_path;
   //#######################
 
   // --- Iteration / cycle-tracking variables (Process 2: Cycle Counting) ---
-  reg [19:0] current_cycle;    // Counts iact-delivery iterations completed in WAIT_FOR_RESULTS / RECEIVE_PSUMS_TO_IACT; compared against needed_cycles.
-  reg [15:0] iact_cycle_count; // Tracks which weight-reuse iteration we are on [0..needed_wght_cycles-1]; advances after each full cluster-row sweep.
-  reg        single_iteration; // Level flag: high from the first clock of an iact delivery until iact_ready_o_oep_w goes all-ones again (delivery complete).
-  reg        single_iteration2;// Delayed version of single_iteration (one cycle); used to detect the falling edge of single_iteration.
-  reg        single_iteration3;// Single-cycle pulse on the rising edge of single_iteration; triggers current_cycle increment and router updates.
+  reg [CYCLE_WIDTH-1:0] current_cycle;    // Counts iact-delivery iterations completed in WAIT_FOR_RESULTS / RECEIVE_PSUMS_TO_IACT; compared against needed_cycles.
+  reg [           15:0] iact_cycle_count; // Tracks which weight-reuse iteration we are on [0..needed_wght_cycles-1]; advances after each full cluster-row sweep.
+  reg                   single_iteration; // Level flag: high from the first clock of an iact delivery until iact_ready_o_oep_w goes all-ones again (delivery complete).
+  reg                   single_iteration2;// Delayed version of single_iteration (one cycle); used to detect the falling edge of single_iteration.
+  reg                   single_iteration3;// Single-cycle pulse on the rising edge of single_iteration; triggers current_cycle increment and router updates.
 
   // --- Data-flow send-phase variables (Process 5: Data-Flow to OpenEye_Parallel) ---
   reg        sending_data;     // Level flag: high throughout the entire weight+iact send phase.
@@ -997,7 +993,6 @@ reg [1023:0] fst_path;
       end
     end
     
-    // 4. Reset Cycle auswerten
     if (reset_cycle) begin
       param_array_reg  <= 0;
       fsm_iact_params  <= 0;
@@ -1198,6 +1193,9 @@ end
           if (fsm_sending_cycle <= wghts_per_pe) begin
             wght_buffer_rd_addr <= wght_buffer_rd_addr + 1;
           end
+          if (fsm_sending_cycle > wghts_per_pe + 1) begin
+            fsm_sending_cycle <= fsm_sending_cycle;
+          end
           if (fsm_sending_cycle > 1) begin
             flat_help_var_send = 0;
             for (a = 0; a < CLUSTER_ROWS; a=a+1) begin
@@ -1215,15 +1213,15 @@ end
             end
           end
           if (fsm_sending_cycle > wghts_per_pe + 1) begin
-            fsm_sending_cycle <= fsm_sending_cycle;
             wght_buffer_en_r  <= 0;
             wght_enable_i_reg <= 0;
             if (current_cycle == 0) begin
               if (fully_connected_layer && (NUM_GLB_IACT < NUM_GLB_WGHT) &&
-                  (fc_readout_elapsed < fc_readout_required))
+                  (fc_readout_elapsed < fc_readout_required)) begin
                 fc_compute_pending <= 1;
-              else
+              end else begin
                 compute_reg <= 1;
+              end
             end
           end
         end
@@ -1411,9 +1409,9 @@ end
   reg [ 7:0] iact_channel_counter_reg;  // Registered copy of iact_channels_counter for cross-process use.
 
   // --- PSUM FSM state registers ---
-  reg [31:0] fsm_psum_cycle;            // Cycle counter within the current PSUM FSM state.
-  reg [ 3:0] fsm_psum_last_state;       // Previous PSUM FSM state; used for transition tracing in simulation.
-  reg [ 3:0] fsm_psum_current_state;    // Current PSUM FSM state (one of PSUM_IDLE … SEND_PSUM_TO_IACT).
+  reg [CYCLE_WIDTH-1:0] fsm_psum_cycle;            // Cycle counter within the current PSUM FSM state.
+  reg [            3:0] fsm_psum_last_state;       // Previous PSUM FSM state; used for transition tracing in simulation.
+  reg [            3:0] fsm_psum_current_state;    // Current PSUM FSM state (one of PSUM_IDLE … SEND_PSUM_TO_IACT).
   //assign debug_fsm_psum_state = fsm_psum_current_state; // Expose PSUM state on debug port.
 
   reg        psum_transmitted;           // Handshake flag: 1 once psum_ready_o from OpenEye_Parallel confirms receipt.
@@ -2642,7 +2640,9 @@ end
       .PSUM_PER_PE(PSUM_PER_PE),
       .PSUM_CYCLES_ONE_WORD_ALL_CELLS(PSUM_CYCLES_ONE_WORD_ALL_CELLS),
       .PSUM_OUTPUT_WORDS(PSUM_OUTPUT_WORDS),
-      .LOOP_LIMIT_SIZE(LIMIT_SIZE_PSUM)
+      .LOOP_LIMIT_SIZE(LIMIT_SIZE_PSUM),
+      .TRANS_PSUM_WIDTH(TRANS_PSUM_WIDTH),
+      .CYCLE_WIDTH(CYCLE_WIDTH)
   ) psum_pipeline_inst (
       .clk_i(clk_i),
       .rst_n(rst_n),
@@ -2894,6 +2894,7 @@ end
             .WORD_BITWIDTH     (TRANS_BITWIDTH_IACT * NUM_GLB_IACT),
             .ADDRWIDTH         (BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR),
             .LIMIT_SIZE_IACT   (LIMIT_SIZE_IACT)
+            
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
             .rst_ni                      (rst_n),
@@ -3035,7 +3036,7 @@ end
     //   write_addr - 2-bit address selecting which of the 4 config registers
     //                to write (decoded from fsm_cycle).
     //   dma_data_i - the 64-bit DMA word to decode.
-    // All output ports (wght_cycles_reg, iact_size_x, kernels_per_calc, etc.)
+    // All output ports (iact_size_x, kernels_per_calc, etc.)
     // are combinational functions of the stored register contents.
     // -------------------------------------------------------------------
     dma_storage  #(
@@ -3045,7 +3046,6 @@ end
         .rst_ni(rst_n),
         .write_en(write_dma_en),
         .dma_data_i(dma_data_i),
-        .wght_cycles_reg(wght_cycles_reg),
         .stride_x(stride_x_dma),
         .stride_y(stride_y_dma),
         .skipIact_reg(skipIact_reg),
@@ -3076,7 +3076,6 @@ end
         .psum_size_x(psum_size_x),
         .psum_size_y(psum_size_y),
         .psum_x_all_cluster(psum_x_all_cluster),
-        .iact_needed_cycles(iact_needed_cycles),
         .kernels_per_calc(kernels_per_calc),
         .y_lines_per_calc(y_lines_per_calc),
         .store_in_psum(store_in_psum),
@@ -3255,6 +3254,7 @@ end
         .ROUTER_MODES_WGHT(ROUTER_MODES_WGHT),
         .ROUTER_MODES_PSUM(ROUTER_MODES_PSUM),
 
+        .CYCLE_WIDTH  (CYCLE_WIDTH),
         .PARALLEL_MACS(PARALLEL_MACS)
 
     ) OpenEye_Parallel (
@@ -3293,7 +3293,6 @@ end
         .needed_cycles_i              (needed_cycles),
         .needed_x_cls_i               (needed_x_cls_reg),
         .needed_y_cls_i               (needed_y_cls_reg),
-        .needed_iact_cycles_i         (needed_iact_cycles_reg),
         .iact_size_x_i                (iact_size_x),
         .filters_i                    (filters),
         .iact_channels_per_pe_i       (iact_channels_per_pe),
@@ -3349,7 +3348,7 @@ end
           /*assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
                 iact_ready_o_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen];*/
           assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
-                (iact_ready_o_oep_w == (2**(CLUSTER_COLUMNS*CLUSTER_ROWS*NUM_GLB_IACT))-1);
+                (iact_ready_o_oep_w == (2**(CLUSTERS*NUM_GLB_IACT))-1);
           // TODO DenLeb: per-cluster ready below breaks input height > 1 (test_conv_tall_input), please check
           //assign IACT_CONVERTER_X[cc_gen].IACT_CONVERTER_Y[cr_gen].iact_ready_w[g_gen] =
           //      iact_ready_o_oep_w[cc_gen * CLUSTER_ROWS * NUM_GLB_IACT + cr_gen * NUM_GLB_IACT + g_gen];

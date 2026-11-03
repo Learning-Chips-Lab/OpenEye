@@ -1155,7 +1155,6 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
         bool: True when every word matches, False on any mismatch.
     """
     logger.info("Iact storages are checked.")
-
     try:
         shape = np.array(iact_ref).shape
     except Exception:
@@ -1613,9 +1612,9 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                                     if(logging.DEBUG >= login_level):
                                         storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
                                     try:
-                                        dram.fmap[dram_string][f][x][y] = int(dut.psum_data_o.value[lower_limit+oep.DATA_PSUM_BITWIDTH*(1-i):upper_limit-oep.DATA_PSUM_BITWIDTH*i])
-                                        if (dram.fmap[dram_string][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
-                                            dram.fmap[dram_string][f][x][y] = dram.fmap[dram_string][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
+                                        dram.fmap[dram_string][0][f][x][y] = int(dut.psum_data_o.value[lower_limit+oep.DATA_PSUM_BITWIDTH*(1-i):upper_limit-oep.DATA_PSUM_BITWIDTH*i])
+                                        if (dram.fmap[dram_string][0][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
+                                            dram.fmap[dram_string][0][f][x][y] = dram.fmap[dram_string][0][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
                                     except:
                                         pass
                 await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
@@ -1663,9 +1662,9 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                             storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
                         
                         try:
-                            dram.fmap[dram_string][f][x][y] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH*(i+1)-1:oep.DATA_PSUM_BITWIDTH*i])
-                            if (dram.fmap[dram_string][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)):
-                                dram.fmap[dram_string][f][x][y] = dram.fmap[dram_string][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
+                            dram.fmap[dram_string][0][f][x][y] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH*(i+1)-1:oep.DATA_PSUM_BITWIDTH*i])
+                            if (dram.fmap[dram_string][0][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)):
+                                dram.fmap[dram_string][0][f][x][y] = dram.fmap[dram_string][0][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
                         except:
                             pass
                         x = x + 1
@@ -1687,7 +1686,8 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                                     y = y + 1
                                     if(y >= layer_parameters.iact_size_y):
                                         y = 0
-                    elif (current_cycle % math.ceil(oep.PEs_X/words) == math.ceil(oep.PEs_X/words) - 1):
+                        #elif (current_cycle % math.ceil(oep.PEs_X/words) == math.ceil(oep.PEs_X/words) - 1):
+                    else:
                         if(x >= layer_parameters.iact_size_x):
                             x = 0
                             f = f + 1
@@ -1800,9 +1800,9 @@ async def compare_stream_Dw(ptp, dut, layer_number, model, layer_repetition, lay
                             if(logging.DEBUG >= login_level):
                                 storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
                             try:
-                                dram.fmap[layer_number + 1][f][x][y] = int(dut.psum_data_o.value[lower_limit+oep.DATA_PSUM_BITWIDTH*(1-i):upper_limit-oep.DATA_PSUM_BITWIDTH*i])
-                                if (dram.fmap[layer_number + 1][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
-                                    dram.fmap[layer_number + 1][f][x][y] = dram.fmap[layer_number + 1][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
+                                dram.fmap[layer_number + 1][0][f][x][y] = int(dut.psum_data_o.value[lower_limit+oep.DATA_PSUM_BITWIDTH*(1-i):upper_limit-oep.DATA_PSUM_BITWIDTH*i])
+                                if (dram.fmap[layer_number + 1][0][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
+                                    dram.fmap[layer_number + 1][0][f][x][y] = dram.fmap[layer_number + 1][0][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
                             except:
                                 pass
 
@@ -3088,8 +3088,8 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         f = offset + (beat % columns) * per_column + beat // columns
         value = _signed(word & ((1 << oep.DATA_PSUM_BITWIDTH) - 1),
                         oep.DATA_PSUM_BITWIDTH)
-        if f < len(dram.fmap[dram_string]):
-            dram.fmap[dram_string][f] = value
+        if f < len(dram.fmap[dram_string][0]):
+            dram.fmap[dram_string][0][f] = value
         else:
             assert value == 0, "Dense DMA padding output is nonzero"
         if logging.DEBUG >= login_level:

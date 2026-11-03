@@ -100,7 +100,7 @@ module iact_stream_constructor #(
     input      [                                    1:0] channel_div_trans,
     input      [                                  8-1:0] x_lines_i,
     input      [                                  8-1:0] needed_wght_cycles_i,
-    input      [                                  4-1:0] needed_iact_router_cycles_i,
+    input      [                                  6-1:0] needed_iact_router_cycles_i,
     input      [                                  6-1:0] wght_size_x_i,
     input      [                                  4-1:0] wght_size_y_i,
     input      [                                  3-1:0] stride_x_i,
@@ -197,7 +197,7 @@ module iact_stream_constructor #(
     reg [  7:0] x_line_counter;
     reg [ 4-1:0] iacts_in_one_trans;
 
-    reg [16-1:0] fsm_cycle;
+    reg [ADDRWIDTH-1:0] fsm_cycle;
     reg [ADDRWIDTH-1:0] wr_addr_0;
     reg [ADDRWIDTH-1:0] wr_addr_1;
     reg [ADDRWIDTH-1:0] wr_addr_2;
@@ -228,18 +228,13 @@ module iact_stream_constructor #(
   assign values_per_word = fully_connected_i ? 1 : iact_channels_per_pe_i;
   // Every bank holds the serial input window. Read neighboring pixels from
   // different banks, then skip those pixels when advancing to the next group.
-  assign rd_addr_inc_0_next = rd_addr_0 + rd_addr_inc_0 +
-      (single_channel ? NUM_GLB_IACT - 1 :
-      ((!fully_connected_i && (ram_inc_counter == values_per_word - 2)) ?
-       ((NUM_GLB_IACT - 1) * channel_div_trans) : 0));
-  assign rd_addr_inc_1_next = rd_addr_1 +
-      ((single_channel && !single_read_half) ? 0 : rd_addr_inc_1);
+  assign rd_addr_inc_0_next = rd_addr_0 + rd_addr_inc_0;
+  assign rd_addr_inc_1_next = rd_addr_1 + rd_addr_inc_1;
   assign rd_addr_inc_2_next = rd_addr_2 + rd_addr_inc_2;
   assign rd_addr_inc_3_next = rd_addr_3 + rd_addr_inc_3;
   // Single-channel RAM words hold two image rows. Move by whole row pairs,
   // keeping the remaining half-row for the next window's initial read.
-  assign rd_addr_inc_4_next = rd_addr_4 + (single_channel ?
-      ((({1'b0, stride_y_i} + single_output_half) >> 1) * conv_row_words) : rd_addr_inc_4);
+  assign rd_addr_inc_4_next = rd_addr_4 + rd_addr_inc_4;
 
     integer pec, per, b;
     always @(posedge clk_i, negedge rst_ni) begin
@@ -384,10 +379,10 @@ module iact_stream_constructor #(
             for (pec = 0; pec < PE_X; pec = pec + 1) begin
               for (per = 0; per < PE_Y; per = per + 1) begin
                 if ((((pec[3:0] * stride_x_i) + per[3:0] + fsm_row_offset) >=  (current_iact_cycle_mod_reg))
-                &    ((pec[3:0] * stride_x_i) + per[3:0] + fsm_row_offset)  <  (current_iact_cycle_mod_reg[3:0] + NUM_GLB_IACT)
+                &    ((pec[3:0] * stride_x_i) + per[3:0] + fsm_row_offset)  <  (current_iact_cycle_mod_reg + NUM_GLB_IACT)
                 ) begin
                   iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+: $clog2(NUM_GLB_IACT+1)] <=
-                      ((pec[3:0] * stride_x_i) + per[3:0]  + fsm_row_offset - (current_iact_cycle_mod_reg[3:0]));
+                      ((pec[3:0] * stride_x_i) + per[3:0]  + fsm_row_offset - (current_iact_cycle_mod_reg));
                 end else begin
                   iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+: $clog2(NUM_GLB_IACT+1)] <=
                       NUM_GLB_IACT;
@@ -421,7 +416,6 @@ module iact_stream_constructor #(
               ram_rd_addr            <= rd_addr_inc_0_next;
               rd_cycle_loop_cnt_0    <= rd_cycle_loop_cnt_0 + 1;
               if (rd_cycle_loop_cnt_0 == rd_loop_limit_0) begin
-                if (single_channel) single_read_half <= !single_read_half;
                 rd_cycle_loop_cnt_0  <= 0;
                 rd_addr_0            <= rd_addr_inc_1_next;
                 rd_addr_1            <= rd_addr_inc_1_next;
@@ -450,7 +444,6 @@ module iact_stream_constructor #(
                   rd_addr_3           <= rd_addr_inc_3_next;
                   rd_cycle_loop_cnt_3 <= rd_cycle_loop_cnt_3 + 1;
                   if (rd_cycle_loop_cnt_3 == rd_loop_limit_3) begin
-                    if (single_channel) single_output_half <= single_output_half ^ stride_y_i[0];
                     rd_cycle_loop_cnt_3 <= 0;
                     ram_rd_addr         <= rd_addr_inc_4_next;
                     rd_addr_0           <= rd_addr_inc_4_next;
@@ -570,16 +563,7 @@ reg enable_write_to_storage;
           single_write_row <= 0;
           single_write_half <= 0;
         end
-        if (single_channel && ram_wr_en) begin
-          ram_wr_addr_q <= single_write_row + single_write_column;
-          single_write_half_q <= single_write_half;
-          single_write_column <= single_write_column + 1;
-          if (single_write_column == conv_row_words - 1) begin
-            single_write_column <= 0;
-            single_write_half <= !single_write_half;
-            if (single_write_half) single_write_row <= single_write_row + conv_row_words;
-          end
-        end
+        
         if (fully_connected_i) begin
           ready_o <= 1;
           ram_wr_en <= 0;
