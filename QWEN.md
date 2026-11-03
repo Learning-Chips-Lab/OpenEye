@@ -1652,6 +1652,17 @@ openroad 77976 (1:40:15 elaps., 3932 % CPU, 2:17 h CPU-Time),
 (DRT-Peak 37,6 GB), Disk 1,2 T. Iter-0-Ende ~15:15–15:20, dann
 Iteration 1 = erster echter Convergenz-Wert.
 
+**15:3x (11/3) Cadence:** DRT **Iteration 0 ENDE (15:17):
+10.719.949 Violations** (Layer-Aufteilung: M2 5.242.916, M3
+365.897, M4 48.496, M5 14, TopMetal1 4) — dichte M2-Belastung,
+erwartet bei 10,5-mm-Chip. **Iteration 1 läuft seit ~15:21**
+(15:29: 10 %, 1.027.003 Vios @ 8:10). openroad 77976 (2:09:42
+elaps., 3928 % CPU, 3:12 h CPU-Time), 1 librelane, Watchdog 0
+Restarts, Monitor clean, RAM 205 G free (Peak 39,0 GB), Disk 1,2 T.
+Convergenz-Tracking (Iterations-Grenzen): Iter0-Ende 10,72 M →
+Iter1-Ende ~16:20–16:30 erwartet (erste Abnahme). Stop-Kriterium
+(Nicht-Abnahme 3 Iter nach Iter 20 / > 48 h) weit entfernt.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
