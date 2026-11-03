@@ -33,8 +33,10 @@
 #                               total overflow <= 0.01 % of demand,
 #                               report GRT-0102 extra-iteration count,
 #                               WARN on > 50 EST-0026
-#   openroad-resizertimingpostgrt  nom setup WNS within 1 ns of the
-#                               pre-GRT (stamidpnr-2) value, hold >= -0.5,
+#   openroad-resizertimingpostgrt  setup WNS (from post-GRT STA
+#                               stamidpnr-3 rpt files; the resizer
+#                               log prints no WNS) within 1 ns of
+#                               pre-GRT (stamidpnr-2), hold >= -0.5,
 #                               WARN on > 100 RSZ-2021
 #
 # The container shares the host PID namespace here, so the current
@@ -165,7 +167,16 @@ check_gates() {
     d=$(latest_dir openroad-resizertimingpostgrt)
     if [ -n "$d" ] && [ -f "$d/state_out.json" ]; then
         log="$d"/$(basename "$d" | cut -c4-).log
-        s=$(wns setup "$log"); h=$(wns hold "$log")
+        # The resizer log carries no final WNS (RSZ messages only) -> the
+        # timing truth is the post-GRT STA: wns.max.rpt (setup) /
+        # wns.min.rpt (hold) of the latest completed openroad-stamidpnr-3
+        # ("Writing metric timing__<k>__wns__corner:nom_typ...: <v>",
+        # first corner line; mid-PNR STAs here report nom_typ).
+        local d3 s="" h=""
+        d3=$(latest_dir openroad-stamidpnr-3)
+        if [ -n "$d3" ] && [ -f "$d3/state_out.json" ]; then
+            s=$(wns setup "$d3/wns.max.rpt"); h=$(wns hold "$d3/wns.min.rpt")
+        fi
         local rsz2021 pregrt
         rsz2021=$(grep -c "RSZ-2021" "$log" 2>/dev/null)
         pregrt=$(grep "^pregrt_setup=" "$GATE_STATE" 2>/dev/null | cut -d= -f2)

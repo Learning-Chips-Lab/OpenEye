@@ -1141,12 +1141,54 @@ is the accepted deviation, not a new failure. Resumes:
 - Machine: 195 G RAM avail, 1.2 T disk, 0 watchdog restarts. No new
   gate events beyond the accepted G1-27.
 
-**Status:** **RUNNING (10:2x 11/2).** p2_16: step 37
-ResizerTimingPostCTS → … → stop 44 (G1; G1-27 deviation accepted,
-G1-34 satisfied 72k ≪ 506k). p2_16b: step 37 → end (66 MHz). ETA:
-G1 stop 44 11/2 late evening → 11/3, final metrics after G2 ~11/3–
-11/4. Next hard gate: **GRT (p2_16 step 39)** — the congestion
-checkpoint for the accepted 28.54.
+**08:5x (11/3) status:**
+- **p2_16 G1-Run beendet 18:39:11 (11/2)** (watchdog exit 0 am Stop-
+  Step 43 ResizerTimingPostGRT, 5 h 10 m): 218 Setup- + 190 Hold-
+  Buffer eingesetzt; 351,257 Setup- + 22,217 Hold-Endpoints
+  gefunden; RSZ-0062 "Unable to repair all setup violations",
+  RSZ-0064 "Unable to repair all hold checks within margin".
+- **G1-38 GRT PASS (p2_16):** overflow 0/15,057,112 (0.00 %), keine
+  GRT-0115/0116, extra_iter=1, **41 min 46 s** (p2_15-Ref: 14 h 42 m,
+  99 Extra-Iterationen, overflow 1039.35) — die akzeptierte G1-27-
+  Abweichung (28.54 GPL-Overflow) war harmlos. p2_16b GRT auch OK:
+  0/15,058,918, extra_iter=1, 41 min 55 s.
+- **G1-37 hold FAIL −2.0365 (pre-GRT) — Ursache eingegrenzt:**
+  p2_16 STAMidPNR-2 violator_list: **583 hold reg-reg, 0 setup**;
+  alle FF-Q → RM-Makro-Eingänge (wght_buffer 212, BUFFER_A[0..3] 292,
+  IACT_CONVERTER_X 32, …), Range −2.00…−1.00 ns. p2_16b hat pre-GRT
+  den **bitidentischen** hold WNS (−2.036539439175264) bei anderer
+  Periode (15 vs 20 ns) → periode-unabhängig, strukturell:
+  Makro-A_CLK-Bäume vs clk_pad (Capture-Clock ~2 ns früh an den
+  Makro-Inputs). p2_16b post-GRT-Resizer: hold weiter
+  verschlechtert (−3.2791), weil Setup-Buffer dort Delay added.
+- **p2_16b 66-MHz-Verdict (STAMidPNR-3, post-GRT-Resizer):**
+  setup WNS **−7.8079** (TNS −237.83), hold **−3.2791** (nom_typ)
+  → fmax ≈ 44 MHz; 66 MHz ohne Designänderung nicht erreichbar.
+  Hold-Verletzer: 543 Zeilen, systematisch reg → Makro
+  A_DIN/A_ADDR (−3.28…−2.85). p2_16b DRT läuft seit 21:41 11/2
+  (11 h 15 m, 26 Threads ~100 %, no convergence message yet;
+  log 42 min flat = bekanntes Buffering-Pattern, CPU aktiv).
+- **G1-44 in flight:** p2_16 Post-GRT-Resizer-STA gestartet (~08:50,
+  STOP_STEP=STAMidPNR-3, ~20 min). Monitor-Regel gefixt: G1-44 liest
+  jetzt wns.max.rpt/wns.min.rpt des neuesten openroad-stamidpnr-3-
+  Verzeichnisses (Resizer-Logs enthalten KEIN WNS, nur RSZ-Nachrichten);
+  Monitore neu gestartet (1080677 p2_16, 1080678 p2_16b).
+  **G1-44 FAIL ist die Favoritin** (setup: GRT legte Delay auf
+  0.0-Slack-Pfade + Resizer gab auf; hold: strukturelle −2.0 bleibt)
+  → dann Stop-Kriterium laut Plan: Analyse + Vorschlag
+  (Hold-Fix per A_CLK/clk_pad-Latenz-Matching statt 22k Data-Buffer),
+  Entscheidung Nutzer.
+- Machine: 193 G RAM avail, 1.2 T disk, 0 watchdog restarts.
+  p2_16b weiter/stoppen: Entscheidung des Nutzers pending.
+
+**Status:** **G1-44 pending (08:5x 11/3).** p2_16: G1-Run done
+(Stop 43, 18:39 11/2), GRT PASS (0 overflow, 41 min 46 s), STA
+(STAMidPNR-3) läuft → G1-44-Verdict ~09:10; FAIL die Favoritin
+(hold −2.0 strukturell, reg→Makro-A_DIN). p2_16b: 66 MHz
+beantwortet (fmax ≈ 44 MHz: −7.8079/−3.2791), DRT 11 h —
+weiter/stoppen pending Nutzer. F3 gate-sim PASS (15:02 11/1).
+Nächster Meilenstein: G1-44-Verdict → G2 (p2_16 run-to-end) erst
+nach Entscheidung.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
