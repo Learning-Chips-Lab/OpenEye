@@ -118,6 +118,10 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh',
             txt_file.write(f"parameter TRANS_BITWIDTH_WGHT = {openeye_parameter.WGHT_Trans_Bitwidth},\n")
             txt_file.write(f"parameter TRANSMISSIONS = {TRANSMISSIONS},\n")
             txt_file.write(f"parameter STRIDE_ENABLED = {openeye_parameter.STRIDE_ENABLED},\n")
+            txt_file.write(f"parameter CYCLE_WIDTH = {openeye_parameter.CYCLE_WIDTH},\n")
+            txt_file.write(f"parameter LIMIT_SIZE_IACT = {openeye_parameter.LIMIT_SIZE_IACT},\n")
+            txt_file.write(f"parameter LIMIT_SIZE_WGHT = {openeye_parameter.LIMIT_SIZE_WGHT},\n")
+            txt_file.write(f"parameter LIMIT_SIZE_PSUM = {openeye_parameter.LIMIT_SIZE_PSUM},\n")
             
     else:
         with open(filename, 'w') as txt_file:

@@ -1,6 +1,5 @@
 dma_bitwidth: 64
 registers:
-  - {name: wght_cycles_reg, width: 8}
   - {name: stride_x, width: 3}
   - {name: stride_y, width: 3}
   - {name: skipIact_reg, width: 1}
@@ -12,11 +11,11 @@ registers:
   - {name: kernel_size_y, width: 4}
   - {name: x_lines_reg, width: 8}
   - {name: needed_wght_cycles, width: 8}
-  - {name: needed_cycles, width: 18}
+  - {name: needed_cycles, width: 32}
   - {name: trans_cycles_iact, width: 24}
   - {name: trans_cycles_wght, width: 24}
   - {name: trans_cycles_psum, width: 24}
-  - {name: iact_glb_writing_cycles, width: 16}
+  - {name: iact_glb_writing_cycles, width: 24}
   - {name: iact_converter_buffer_addr_max_cycles, width: 8}
   - {name: fc_size_reg, width: 14}
   - {name: iact_size_x, width: 12}
@@ -44,12 +43,12 @@ registers:
   - {name: filters, width: 6}
   - {name: needed_x_cls_reg, width: ceil(log2(int(CLUSTER_COLUMNS)+1))}
   - {name: needed_y_cls_reg, width: ceil(log2(int(CLUSTER_ROWS)+1))}
-  - {name: needed_iact_cycles_reg, width: 4}
+  - {name: needed_iact_cycles_reg, width: 6}
   - {name: wght_addr_len_reg, width: 5}
   - {name: iact_channels_per_pe, width: 4}
   - {name: channel_div_trans, width: 2}
   - {name: send_data_out, width: 1}
-  - {name: needed_iact_buffer_words, width: int(BUFFER_WIDTH_IACT)}
+  - {name: needed_iact_buffer_words, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
   - {name: iact_x_line_repetitions_reg, width: 8}
   - {name: buffer_cycles_for_x_iact, width: 8}
   - {name: start_param_array, width: int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)}
@@ -58,33 +57,33 @@ registers:
   - {name: upper_bound, width: 10}
   - {name: initial_upper_limit, width: 8}
   - {name: iteration_for_kernels, width: 4}
-  - {name: fsm_psum_limit, width: 17}
+  - {name: fsm_psum_limit, width: 24}
   - {name: cluster_per_conv_cycle, width: ceil(log2((int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS))+1))}
   - {name: iact_converter_max_cycles, width: 8}
   - {name: iact_x_pos_inc, width: 12}
-  - {name: iact_buffer_words_per_write, width: int(BUFFER_WIDTH_IACT)}
+  - {name: iact_buffer_words_per_write, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
   - {name: iact_words_per_compute, width: 8}
   - {name: pooling_mode, width: 1}
   - {name: gemm_mode, width: 1}
   - {name: used_wght_per_PE, width: int(BUFFER_WIDTH_WGHT)}
   - {name: psum_output_words, width: 24}
   - {name: overhang_discrepancy, width: 4}
-  - {name: iact_read_limit_0, width: 12}
-  - {name: iact_read_limit_1, width: 12}
-  - {name: iact_read_limit_2, width: 12}
-  - {name: iact_read_limit_3, width: 12}
-  - {name: iact_read_limit_4, width: 12}
-  - {name: iact_read_inc_0, width: int(BUFFER_WIDTH_IACT)}
-  - {name: iact_read_inc_1, width: int(BUFFER_WIDTH_IACT)}
-  - {name: iact_read_inc_2, width: int(BUFFER_WIDTH_IACT)}
-  - {name: iact_read_inc_3, width: int(BUFFER_WIDTH_IACT)}
-  - {name: iact_read_inc_4, width: int(BUFFER_WIDTH_IACT)}
-  - {name: iact_write_limit_0, width: 18}
-  - {name: iact_write_limit_1, width: 12}
-  - {name: iact_write_limit_2, width: 12}
-  - {name: iact_write_inc_0, width: int(BUFFER_WIDTH_IACT)}
-  - {name: iact_write_inc_1, width: int(BUFFER_WIDTH_IACT)}
-  - {name: iact_write_inc_2, width: int(BUFFER_WIDTH_IACT)}
+  - {name: iact_read_limit_0, width: int(LIMIT_SIZE_IACT)}
+  - {name: iact_read_limit_1, width: int(LIMIT_SIZE_IACT)}
+  - {name: iact_read_limit_2, width: int(LIMIT_SIZE_IACT)}
+  - {name: iact_read_limit_3, width: int(LIMIT_SIZE_IACT)}
+  - {name: iact_read_limit_4, width: int(LIMIT_SIZE_IACT)}
+  - {name: iact_read_inc_0, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
+  - {name: iact_read_inc_1, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
+  - {name: iact_read_inc_2, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
+  - {name: iact_read_inc_3, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
+  - {name: iact_read_inc_4, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
+  - {name: iact_write_limit_0, width: int(LIMIT_SIZE_IACT)}
+  - {name: iact_write_limit_1, width: int(LIMIT_SIZE_IACT)}
+  - {name: iact_write_limit_2, width: int(LIMIT_SIZE_IACT)}
+  - {name: iact_write_inc_0, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
+  - {name: iact_write_inc_1, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
+  - {name: iact_write_inc_2, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
   - {name: pagu_wght_limit, width: 10}
   - {name: psum_pagu_cs_limit_0, width: 4}
   - {name: psum_pagu_cs_limit_1, width: 4}
@@ -99,11 +98,11 @@ registers:
   - {name: psum_pagu_loop_limit_2, width: 12}
   - {name: psum_pagu_loop_limit_3, width: 12}
   - {name: psum_pagu_loop_limit_4, width: 12}
-  - {name: psum_pagu_addr_inc_0, width: 8}
-  - {name: psum_pagu_addr_inc_1, width: 8}
-  - {name: psum_pagu_addr_inc_2, width: 8}
-  - {name: psum_pagu_addr_inc_3, width: 8}
-  - {name: psum_pagu_addr_inc_4, width: 8}
+  - {name: psum_pagu_addr_inc_0, width: int(BUFFER_WIDTH_PSUM)}
+  - {name: psum_pagu_addr_inc_1, width: int(BUFFER_WIDTH_PSUM)}
+  - {name: psum_pagu_addr_inc_2, width: int(BUFFER_WIDTH_PSUM)}
+  - {name: psum_pagu_addr_inc_3, width: int(BUFFER_WIDTH_PSUM)}
+  - {name: psum_pagu_addr_inc_4, width: int(BUFFER_WIDTH_PSUM)}
   
 
 
