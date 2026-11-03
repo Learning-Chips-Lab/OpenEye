@@ -1645,6 +1645,13 @@ und Abnahme am Iterations-Ende). Iter-0-Start ~13:45 → Ende
 1:21 h CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor
 clean, RAM 208 G free (DRT-Peak 36,1 GB), Disk 1,2 T.
 
+**15:0x (11/3) Cadence:** DRT 0. Iteration 80 % (14:59:
+646.939 Vios @ 1:10:08 Iter-Elapsed; 60→80 %: 488k/591k/647k).
+openroad 77976 (1:40:15 elaps., 3932 % CPU, 2:17 h CPU-Time),
+1 librelane, Watchdog 0 Restarts, Monitor clean, RAM 206 G free
+(DRT-Peak 37,6 GB), Disk 1,2 T. Iter-0-Ende ~15:15–15:20, dann
+Iteration 1 = erster echter Convergenz-Wert.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
