@@ -10,38 +10,214 @@ Implement the OpenEye DNN accelerator as an ASIC on IHP SG13G2: full RTL→GDS
 backend via LibreLane 3.x in the iic-osic-tools container, using the real
 `RM_IHPSG13_1P` SRAM macros for the top-level staging buffers.
 
-## SESSION INSTRUCTIONS (user prompt: "Lies QWEN.md und setze es um.")
+## SESSION INSTRUCTIONS (user prompt: "Lies QWEN.md und führe es aus." — same as the older "… und setze es um.")
 
 These instructions are the user's standing orders for every session that
-starts with that prompt. They come from the user (2026-10-30 / 11-01).
+starts with that prompt. They come from the user (2026-10-30 / 11-01 /
+11-03).
 
-1. Read this whole file. The authoritative plan is **TODO PLAN v2**
-   directly below. Plan v1 and everything after it is history/reference.
-2. **p2_15 is stopped and must not be resumed** (cause in v2 section 0).
-3. Claude changed code on 2026-11-01 (commits "ASIC v2: floorplan v2,
-   latch-RF scratchpads, iact_sc SRAM" and its follow-ups). Read the diffs
-   (`git log -5`, `git show <commit>`) and v2 section 1 before working:
-   what Claude verified and what not is listed there.
-4. **Autonomy mode:** work phases F → G → P → H in this order on your own.
-   As soon as all checks of a phase pass, start the next phase without
-   asking — including fresh runs (p2_16, p2_16b). Phase I: document
-   only, do not start.
-5. Per task: (a) implement; (b) run the listed checks and compare the
-   numbers with the expected values in the plan (cell counts, 41 macros,
-   GRT overflow, WNS); (c) tick it off (`[x]`) in this file and record
-   results with numbers, timestamp and log path; (d) one small commit per
-   task. At the end of each phase: `git push utz12 dev_asic_sg13g2`.
-6. Monitoring: check running flows every 30 min (flow.log, monitor,
-   watchdog, `ps`, `free -g`, `df -h`) and note a short status line in
-   "Current state". Check the G1 gates actively (GlobalRouting: no
-   GRT-0115/0116, overflow ≈ 0, post-GRT timing at most 1 ns worse than
-   pre-GRT), ideally automated in `monitor_flow.sh`.
-7. Obey the stop criteria at the end of plan v2 strictly: stop, analyze,
-   write cause + proposal into "Current state", commit, push, wait for
-   the user. Never `--overwrite`, never restart blindly, never delete a
-   finished run dir.
+1. Read this whole file. The authoritative plan is **TODO PLAN v3**
+   directly below. Plan v2 (phases F–I) is done up to G1; its G2/P/H
+   parts are REPLACED by v3. Everything after v3 is history/reference.
+2. **User goal (11-03):** first get ONE complete layout (GDS + signoff
+   STA + DRC + LVS) of a slower, safe variant — p2_16 finished at 40 MHz
+   — and only then optimize. No new fresh runs, no 66 MHz, no RTL or
+   floorplan changes in this plan.
+3. p2_15 and p2_16b are stopped and must not be resumed (p2_16b step 45
+   is dual-writer state, see 11/3 commit 42a5c57).
+4. Claude changed code on 2026-11-03 (commit "plan v3: …"): watchdog
+   single-instance guard + `FORCE_RESUME_STEP`, overlay
+   `asic/rtl/sg13g2/openeye_overlay_40mhz_holdfix.json`. Read the diff
+   (`git log -3`, `git show <hash>`) before working.
+5. **Autonomy mode:** work phase J → K on your own; when the checks of a
+   task pass (or a deviation is explicitly allowed below), continue
+   without asking. Phase L: document only, do not start.
+6. Per task: check, compare with the expected values, tick `[x]`, record
+   numbers + timestamp + log path in "Current state", small commit. At
+   the end of each phase (and at least once a day): `git push utz12
+   dev_asic_sg13g2`.
+7. Monitoring: every 30 min (flow.log, monitor, watchdog, `ps` on host
+   AND in the container, `free -g`, `df -h`), one status line in
+   "Current state".
+8. Obey the v3 stop criteria strictly. Never `--overwrite`, never
+   restart blindly, never delete or modify existing step dirs, never
+   touch files inside them (mtime decides the resume state).
 
-## TODO PLAN v2 (2026-11-01, Claude) — START HERE
+## TODO PLAN v3 (2026-11-03, Claude) — START HERE
+
+### 0. Starting point (analysis by Claude, 11-03 09:00–09:30)
+
+p2_16 (50 MHz, floorplan v2, latch RF) finished G1 through step 44
+(`OpenROAD.STAMidPNR-3`, done 09:10 11/3). Floorplan v2 works: GRT 0
+overflow, 42 min. Post-GRT STA (dir 44, nom_typ):
+
+| metric | value | where |
+|---|---|---|
+| setup WNS / TNS | −2.226 / −5.75 ns | **only 7 output pads** (`data_dma_o_pad[*]`, `ready_dma_o_pad`, `last_data_o_pad`) |
+| core setup (reg/latch) | ≈ 0 (−7 ps on latch D = time borrowing) | the "351k violating endpoints" in the resizer log are latch D pins at 0 slack |
+| hold WNS / TNS | −3.403 / −806.7 ns | all reg → RM macro `A_DIN`/`A_ADDR` (wght_buffer, BUFFER_A, iact_sc) |
+
+Causes:
+- **Output pads:** clock insertion delay to the launching FF ~7.4 ns
+  (CTS put a ~60-deep `delaybuf_*_clk_pad` chain in front of the reg
+  tree for latency balancing), then a long weak net to the pad (slew
+  5.1 ns at `c2p`), 4.3 ns pad delay, against 6.4 ns output delay
+  (IO_DELAY 32 % × 20 ns).
+- **Hold:** macro `A_CLK` arrives at ~10.3 ns vs ~7.4 ns at the
+  launching FFs (+ 0.58 ns macro hold). The clock pad `u_clk_in` sits at
+  PAD_WEST index 34/36 (die corner).
+- **Hold repair was throttled by our own knob:**
+  `GRT_RESIZER_HOLD_REPAIR_TNS_PCT = 1` → `repair_timing -hold
+  -repair_tns 1.0` → only 190 hold buffers for 22,217 violating
+  endpoints (dir 43 log, RSZ-0064).
+- **Correction of the p2_16b verdict "fmax ≈ 44 MHz": wrong.** p2_16b's
+  −7.81 ns is the same output-pad path (`data_dma_o_pad[0]`); its core
+  reg/latch setup at 66 MHz is ≈ 0 (6 latch endpoints −2…−5 ps). The
+  core meets 66 MHz at the post-GRT stage; IO + clock tree do not.
+  Record this correction in "Current state".
+
+v3 fix for a first complete layout: re-run step 43 (post-GRT resizer)
+in p2_16 with hold repair at 100 % and CLOCK_PERIOD 25 ns (40 MHz),
+then run to the end. At 25 ns the output pads get ≈ +1.2 ns (required
+25 − 0.25 − 8.0 = 16.75 ns vs arrival 15.58 ns), and the hold buffers
+have setup room. Changing the period after CTS is a deliberate, accepted
+deviation from a clean flow: CTS/placement hardly depend on it, and the
+final STA checks everything at 25 ns.
+
+### 1. Claude's changes (11-03) — read before starting
+
+- `asic/scripts/watchdog.sh`:
+  - **single-instance guard:** `flock` on `asic/runs/.watchdog_<run>.lock`
+    (a second watchdog for the same run exits 1) and, before EVERY
+    launch, `pgrep -f "librelane.*--run-tag <run>( |$)"` inside the
+    container → refuses to launch if a chain is still alive (killing the
+    host `docker exec` does not kill the container process — that is the
+    likely origin of p2_16b's dual chain). Pattern tested 11-03 with a
+    fake process: matches `p2_16`, does not match `p2_16b`.
+  - **`FORCE_RESUME_STEP=<step id>`:** the first launch resumes there
+    instead of the resolver's choice; crash-restarts (n > 0) use the
+    resolver again (it picks the new incomplete dir). Syntax checked
+    (`bash -n`), not yet run end-to-end.
+- `asic/rtl/sg13g2/openeye_overlay_40mhz_holdfix.json` (gitignored
+  `*.json` → added with `git add -f`):
+  `CLOCK_PERIOD 25`, `GRT_RESIZER_HOLD_REPAIR_TNS_PCT 100`,
+  `GRT_RESIZER_HOLD_SLACK_MARGIN 0.1`, `OPENROAD_THREADS 48`,
+  `KLAYOUT_DRC_THREADS 48` (only one run on the machine now), and all
+  signoff checkers report-only (`ERROR_ON_TR_DRC`,
+  `_DISCONNECTED_PINS`, `_LONG_WIRE`, `_XOR_ERROR`, `_KLAYOUT_ANTENNA`,
+  `_KLAYOUT_DENSITY`, `_MAGIC_DRC`, `_KLAYOUT_DRC`,
+  `_ILLEGAL_OVERLAPS`, `_LVS_ERROR` = false) so the 3 known PDK-gap
+  failures do not stop the flow before LVS. **Consequence: "flow
+  finished" no longer means "clean" — you must evaluate every checker
+  report yourself (K2).** All names verified against the LibreLane 3.1
+  sources in the container; `DRY_RUN=1` staging verified (period 25,
+  hold pct 100, threads 48, 41 macros, IO_DELAY 32).
+  Setup/Hold checkers (steps 79/80) stay ERRORs on purpose.
+
+### Phase J — finish p2_16 at 40 MHz
+
+- [ ] **J0 pre-checks** (all must hold, else stop):
+  - nothing of p2_16/p2_16b runs: host `ps aux | grep -E
+    "watchdog|librelane|openroad"` and `docker exec iic-osic-tools_asic
+    pgrep -af "librelane|openroad"` (zombies `<defunct>` are OK);
+  - `asic/runs/openeye_p2_16/design/runs/p2_16/44-openroad-stamidpnr-3/state_out.json`
+    exists and is the newest `state_out.json` of that run dir
+    (`ls -t */state_out.json | head -1`);
+  - `df -h /home` ≥ 300 G free, `free -g` ≥ 150 G available;
+  - record the 50 MHz reference numbers of section 0 (dir 43/44 stay
+    untouched as the 50 MHz reference — never delete them).
+- [ ] **J1 launch** (from the repo root, host):
+  ```
+  FORCE_RESUME_STEP=OpenROAD.ResizerTimingPostGRT \
+  CONFIG_OVERLAY=asic/rtl/sg13g2/openeye_overlay_40mhz_holdfix.json \
+  setsid nohup asic/scripts/watchdog.sh p2_16 \
+      >> asic/runs/watchdog_p2_16.log 2>&1 < /dev/null &
+  ```
+  No `STOP_STEP` (runs to the end). Verify within 10 min:
+  watchdog log shows `FORCE_RESUME_STEP: OpenROAD.ResizerTimingPostGRT`;
+  flow.log has `=== launch … resume=OpenROAD.ResizerTimingPostGRT ===`;
+  new dir `45-openroad-resizertimingpostgrt`; staged
+  `design/openeye.json` has `CLOCK_PERIOD 25`; openroad runs with
+  `-threads 48`; **exactly one** librelane with `--run-tag p2_16` in the
+  container. Start a monitor for p2_16 as before (monitor_flow.sh);
+  its gate rules refer to dir names/steps — check it reads the NEW
+  dirs 45/46 (highest ordinal), not 43/44.
+- [ ] **J2 gate after the new `STAMidPNR-3` (dir 46, expected 5–8 h
+  after launch):** read `wns/tns.max/min.rpt` + `min.rpt`/`max.rpt`
+  (every corner the run reports). Expected: setup WNS ≥ 0 incl. output pads
+  (≈ +1 ns), hold WNS ≥ −0.1 ns, hold-buffer count (RSZ-0032) in the
+  thousands to ~20k, core area +≤ 3 %. **No stop on timing here** —
+  the user wants the layout finished. If hold is still < −0.1 ns:
+  document count/WNS/TNS + endpoint classes, continue anyway.
+  Stop only if the resizer crashed or setup in the CORE (not pads)
+  got worse than −1 ns (then hold buffers broke setup: stop + report).
+- [ ] **J3 DetailedRouting (dir 47):** track `[INFO DRT-…]` iteration
+  lines and the violation count per iteration every 30 min. Expected:
+  10–24 h, violations falling to 0 (or a few). The monitor's
+  "log flat" is NOT a stall as long as openroad has CPU time growing
+  (`ps -o time`). Stop criterion: violations not decreasing over 3
+  consecutive iterations after iteration 20, or > 48 h.
+- [ ] **J4 post-route + signoff STA:** RemoveRoutingObstructions,
+  CheckAntennas, TrDRC (count!), DisconnectedPins, WireLength, Fill,
+  RCX, **STAPostPNR**: record setup/hold WNS/TNS for EVERY corner at
+  25 ns, max slew/cap violation counts, power (`power.rpt`).
+- [ ] **J5 GDS + physical signoff:** Magic/KLayout StreamOut, XOR,
+  antenna, sealring, filler, density, **Magic DRC + KLayout DRC**,
+  SpiceExtraction, IllegalOverlap, **Netgen LVS**. Record counts per
+  check. Magic DRC on the full 10.5 mm chip may be the long pole: if it
+  runs > 24 h with CPU growing, keep it; > 48 h → stop criterion.
+- [ ] **J6 end checkers:** Setup/HoldViolations (79/80) are still
+  ERRORs. If one fails the flow ends there (watchdog: "failed with
+  step/checker errors", no restart — correct). Then run the remaining
+  steps once:
+  `FORCE_RESUME_STEP=Checker.MaxSlewViolations CONFIG_OVERLAY=…same… setsid nohup asic/scripts/watchdog.sh p2_16 >> asic/runs/watchdog_p2_16.log 2>&1 < /dev/null &`
+  (MaxSlew, MaxCap, ReportManufacturability). If that fails too:
+  document, do not retry.
+
+### Phase K — evaluation (start automatically after J6)
+
+- [ ] **K1 metrics table** (into "Current state" AND `asic/README.md`):
+  die/core area, utilization, stdcell count by class (latch dlhq, ICG,
+  DFF, hold/delay buffers, clock buffers), 41 macros, wire length,
+  per-step runtime, peak RAM; timing per corner at 25 ns (setup/hold
+  WNS/TNS, violator counts, worst endpoint classes); power; the 50 MHz
+  p2_16 dir-44 numbers for comparison.
+- [ ] **K2 checker classification:** every DRC/LVS/antenna/density/
+  XOR/overlap/disconnected-pin finding → "documented PDK gap"
+  (bondpad↔pad-port LVS, PSM-0069 pad vdd, sealring offset, SRAM
+  vddarray/vssarray) or **NEW** (with location/rule/count). Because the
+  overlay made them report-only, this classification IS the signoff.
+- [ ] **K3 deliverables:** paths of final GDS, netlist, SPEF, SDF (if
+  any), reports in `final/`; `git push utz12 dev_asic_sg13g2`. Then
+  stop and wait for the user (the optimization round is the user's
+  decision).
+
+### Phase L — next optimization round p2_17 (document only, DO NOT start)
+
+Write findings into "Current state" as input for the user/Claude:
+1. Clock pad `u_clk_in` from PAD_WEST index 34 to the middle of an edge.
+2. CTS: why the ~60-deep `delaybuf_*_clk_pad` chain (latency balancing
+   of the reg tree vs ICG/macro trees) and the late macro `A_CLK`
+   (+3 ns post-GRT, slews up to 2.3 ns on the macro clock nets);
+   candidate knobs to evaluate (check names in LibreLane 3.1 first).
+3. IO: output FFs close to the pads / buffered pad nets; a realistic
+   IO budget instead of 32 % of the period.
+4. All four `*_RESIZER_*_REPAIR_TNS_PCT` back to 100 (the 1 % caps were
+   a p2_15 runtime measure).
+5. 66 MHz again after 1–4: the core already meets it post-GRT.
+
+### Stop criteria v3 (stop, analyze, write cause + proposal into "Current state", commit, push, wait)
+
+- J0 check fails; the guard reports a live chain you did not start;
+  two librelane chains for one run at any time.
+- Watchdog gives up (max restarts) or a step crashes twice.
+- J2: core setup < −1 ns after the new resizer run.
+- J3/J5 runtime limits above; DRT violations not converging.
+- Disk < 200 G free or RAM available < 30 G.
+- Any LVS/DRC finding you cannot classify — that is not a stop, record it
+  as NEW and continue to K3.
+
+## TODO PLAN v2 (2026-11-01, Claude) — G1 DONE; G2/P/H REPLACED BY v3
 
 Plan v1 below (phases A–E) is DONE or SUPERSEDED by this plan. Everything
 after plan v1 is history. **Autonomy mode continues** (see SESSION

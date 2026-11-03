@@ -51,12 +51,44 @@ resolve_resume_step() {
         "${RUN_DIR_CTR}" 2>/dev/null | grep -vE '^\[INFO' | tail -1
 }
 
+# Single-instance guard (plan v3, 2026-11-03): p2_16b ran two parallel
+# librelane chains on the same run dir after the 11/1 18:21 resume (dual
+# writer on step 45). Two layers:
+#   1. host lock per run name -> a second watchdog for the same run exits;
+#   2. before EVERY launch: no librelane with this --run-tag may be alive in
+#      the container (killing the host-side `docker exec` does NOT kill the
+#      process inside the container -- an "orphan" keeps running).
+LOCK_FILE="asic/runs/.watchdog_${RUN_NAME}.lock"
+exec 9>"${LOCK_FILE}"
+if ! flock -n 9; then
+    echo "[watchdog] another watchdog for ${RUN_NAME} holds ${LOCK_FILE} -- exiting"
+    exit 1
+fi
+flow_alive_in_container() {
+    docker exec "${CONTAINER_NAME}" pgrep -f -- "librelane.*--run-tag ${RUN_NAME}( |\$)" >/dev/null 2>&1
+}
+
+# FORCE_RESUME_STEP (plan v3): resume the FIRST launch at this step instead
+# of the resolver's choice (e.g. re-run OpenROAD.ResizerTimingPostGRT with
+# new knobs although it already completed). Crash-restarts (n > 0) use the
+# resolver again -- it sees the new, incomplete dir and picks it.
+FORCE_RESUME_STEP="${FORCE_RESUME_STEP:-}"
+
 for ((n = 0; n <= MAX_RESTARTS; n++)); do
     if [ "$n" -gt 0 ]; then
         echo "[watchdog] restart ${n}/${MAX_RESTARTS} at $(date -Is)"
         sleep 60
     fi
-    resume_step="$(resolve_resume_step)"
+    if flow_alive_in_container; then
+        echo "[watchdog] a librelane --run-tag ${RUN_NAME} is still alive in the container -- refusing to launch a second chain (kill it first)"
+        exit 1
+    fi
+    if [ "$n" -eq 0 ] && [ -n "$FORCE_RESUME_STEP" ]; then
+        resume_step="$FORCE_RESUME_STEP"
+        echo "[watchdog] FORCE_RESUME_STEP: ${resume_step} (resolver bypassed for the first launch)"
+    else
+        resume_step="$(resolve_resume_step)"
+    fi
     if [ -n "$resume_step" ]; then
         echo "[watchdog] resuming at step: ${resume_step}"
     fi
