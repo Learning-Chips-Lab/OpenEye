@@ -137,7 +137,7 @@ final STA checks everything at 25 ns.
   free (≥ 300 G), RAM 244 G available (≥ 150 G). (d) 50 MHz
   reference recorded in "Current state" (09:2x line); dirs 43/44
   stay untouched.
-- [ ] **J1 launch** (from the repo root, host):
+- [x] **J1 launch** (from the repo root, host):
   ```
   FORCE_RESUME_STEP=OpenROAD.ResizerTimingPostGRT \
   CONFIG_OVERLAY=asic/rtl/sg13g2/openeye_overlay_40mhz_holdfix.json \
@@ -153,6 +153,23 @@ final STA checks everything at 25 ns.
   container. Start a monitor for p2_16 as before (monitor_flow.sh);
   its gate rules refer to dir names/steps — check it reads the NEW
   dirs 45/46 (highest ordinal), not 43/44.
+  **Done 2026-11-03 09:2x (launched 09:25:26, verified 09:27):**
+  watchdog 1088326, all six checks PASS — watchdog log:
+  `FORCE_RESUME_STEP: OpenROAD.ResizerTimingPostGRT (resolver
+  bypassed for the first launch)` + `resuming at step: …`; flow.log
+  separator `=== launch 2026-11-03T09:25:26+01:00
+  resume=OpenROAD.ResizerTimingPostGRT ===` (line 80236911); new
+  dir `45-openroad-resizertimingpostgrt` (created 09:25:27); staged
+  config verified: CLOCK_PERIOD 25,
+  GRT_RESIZER_HOLD_REPAIR_TNS_PCT 100, HOLD_SLACK_MARGIN 0.1,
+  OPENROAD_THREADS 48, KLAYOUT_DRC_THREADS 48; openroad 77668
+  `-threads 48`; exactly one librelane `--run-tag p2_16` (77651,
+  `-F OpenROAD.ResizerTimingPostGRT`, container pgrep count = 1).
+  Launcher: overlay applied (copy `design/config_overlay.json`);
+  git-state [WARN] head-only (00a6698 → 9b2b30b, no status diff →
+  no RTL drift). New monitor 1088971; its gates use `latest_dir`
+  (highest ordinal), so G1-44 will read the NEW dir 46 STAMidPNR-3
+  while G1-38 stays on dir 39 (GRT not re-run).
 - [ ] **J2 gate after the new `STAMidPNR-3` (dir 46, expected 5–8 h
   after launch):** read `wns/tns.max/min.rpt` + `min.rpt`/`max.rpt`
   (every corner the run reports). Expected: setup WNS ≥ 0 incl. output pads
