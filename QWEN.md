@@ -1178,17 +1178,39 @@ is the accepted deviation, not a new failure. Resumes:
   → dann Stop-Kriterium laut Plan: Analyse + Vorschlag
   (Hold-Fix per A_CLK/clk_pad-Latenz-Matching statt 22k Data-Buffer),
   Entscheidung Nutzer.
-- Machine: 193 G RAM avail, 1.2 T disk, 0 watchdog restarts.
-  p2_16b weiter/stoppen: Entscheidung des Nutzers pending.
+- **09:0x (11/3) p2_16b-Entscheidung: JETZT STOPPEN (Nutzer).**
+  Kill-Reihenfolge: watchdog (600571) → run_openeye (600779) →
+  Flow-Prozesse; alle p2_16b-Prozesse verifiziert tot (0 übrig),
+  p2_16b-Monitor gestoppt; p2_16-STA-Kette (1080464→1080588)
+  unverletzt. RAM nach Kill: 230 G avail (beide DRTs weg),
+  disk 1.2 T frei.
+  **Forensik Doppel-Lauf (neu, 09:0x):** p2_16b lief in ZWEI
+  parallelen Flow-Ketten (librelane 76364 Start ~18:22 11/1 und
+  600894 Start ~18:27 11/1; flow.log hat nur EINEN Launch-Eintrag
+  18:21:35 → erste Chance vor dem Log-Eintrag gestorben oder
+  Doppel-Beobachtung beim 18:21-Resume; p2_16 hatte das gleiche
+  Muster mit gekilltem ersten Versuch = Orphan-Verzeichnis).
+  Beide Ketten erreichten unabhängig voneinander Step 45 DRT und
+  liefen ab ~21:33/21:41 11/2 PARALLELE DRT-Prozesse (77335,
+  934106) auf demselben Verzeichnis 45 (beide drt.tcl, gleicher
+  metrics-Pfad) → **Dir 45 = Dual-Writer-Status, unzuverlässig**;
+  "11 h ohne Convergence" ist vermutlich Artefakt, keine echte
+  66-MHz-DRT-Eigenschaft (für die Frage "routbar ja/nein" gilt
+  der GRT-Konvergenz-Nachweis: overflow 0, extra_iter=1).
+  Unbetroffen: Steps 31–44 einreiberisch (state_out-Chain intakt,
+  dir 44 finalisiert 21:50 11/2) — das 66-MHz-Verdict (wns/tns/
+  violator + GRT) steht.
 
-**Status:** **G1-44 pending (08:5x 11/3).** p2_16: G1-Run done
-(Stop 43, 18:39 11/2), GRT PASS (0 overflow, 41 min 46 s), STA
-(STAMidPNR-3) läuft → G1-44-Verdict ~09:10; FAIL die Favoritin
-(hold −2.0 strukturell, reg→Makro-A_DIN). p2_16b: 66 MHz
-beantwortet (fmax ≈ 44 MHz: −7.8079/−3.2791), DRT 11 h —
-weiter/stoppen pending Nutzer. F3 gate-sim PASS (15:02 11/1).
-Nächster Meilenstein: G1-44-Verdict → G2 (p2_16 run-to-end) erst
-nach Entscheidung.
+**Status:** **G1-44 pending (09:0x 11/3).** p2_16: G1-Run done
+(Stop 43), GRT PASS (0 overflow, 41 min 46 s), STA (STAMidPNR-3)
+läuft seit 08:50 → G1-44-Verdict ~09:10–09:20; FAIL die
+Favoritin (hold −2.0 strukturell, reg→Makro-A_DIN). p2_16b:
+**GESTOPPT** (Nutzer-Entscheidung 09:0x) nach 66-MHz-Verdict
+(fmax ≈ 44 MHz: −7.8079/−3.2791); DRT-Status unzuverlässig
+(Dual-Writer, Forensik oben). F3 gate-sim PASS (15:02 11/1).
+Nächster Meilenstein: G1-44-Verdict → bei FAIL Stop-Kriterium:
+Analyse + Vorschlag (A_CLK/clk_pad-Latenz-Matching statt 22k
+Data-Buffer) an den Nutzer; G2 (p2_16 run-to-end) erst danach.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
