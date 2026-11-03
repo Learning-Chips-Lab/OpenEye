@@ -1679,6 +1679,22 @@ Iter-1-Ende ~16:55, dann Iterations-Grenzwert (Ref: Iter0-Ende
 CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
 RAM 205 G free (Peak 39,4 GB), Disk 1,2 T.
 
+**17:0x (11/3) Cadence:** DRT **Iteration 1 ENDE (16:49):
+10.716.818 Vios** (M1 5.065 M, M2 5.195 M, M3 406k, M4 49k)
+vs Iter0-Ende 10.719.949 → **−0,03 %, praktisch FLACH** am
+Iterations-Grenz-Wert (frühe Phase typisch: Iter 1 re-routet
+nur einen Teil der Vios-Nets, die in-Iteration-Zahl 600k @ 80 %
+zählt die aktuelle Reroute-Subset, nicht das Total).
+**Iteration 2 läuft seit ~16:50** (16:57: 10 % @ 461.076 —
+in-Iteration-Zielmenge um 55 % kleiner als Iter 1 @ 10 % →
+Reroute-Set schrumpft, gutes Zeichen). openroad 77976 (3:37:51
+elaps., 3978 % CPU, 6:00 h CPU-Time), 1 librelane, Watchdog 0
+Restarts, Monitor clean, RAM 206 G free (Peak 39,0 GB), Disk 1,2 T.
+**Kein Stop**: Stop-Kriterium greift erst bei Nicht-Abnahme über
+3 aufeinanderfolgende Iterationen NACH Iteration 20 (jetzt:
+Iter 2) oder > 48 h. Pro Cadence Grenzwerte tracken; ab ~Iter 5–10
+muss der Total-Trend sichtbar fallen, sonst frühwarnen.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
