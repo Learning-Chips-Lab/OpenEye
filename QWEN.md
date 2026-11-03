@@ -116,7 +116,7 @@ final STA checks everything at 25 ns.
 
 ### Phase J — finish p2_16 at 40 MHz
 
-- [ ] **J0 pre-checks** (all must hold, else stop):
+- [x] **J0 pre-checks** (all must hold, else stop):
   - nothing of p2_16/p2_16b runs: host `ps aux | grep -E
     "watchdog|librelane|openroad"` and `docker exec iic-osic-tools_asic
     pgrep -af "librelane|openroad"` (zombies `<defunct>` are OK);
@@ -126,6 +126,17 @@ final STA checks everything at 25 ns.
   - `df -h /home` ≥ 300 G free, `free -g` ≥ 150 G available;
   - record the 50 MHz reference numbers of section 0 (dir 43/44 stay
     untouched as the 50 MHz reference — never delete them).
+  **Done 2026-11-03 09:2x (all PASS):** (a) host ps: no
+  watchdog/librelane/openroad (only the system `watchdogd`); the
+  08:50 STA-run chain (watchdog 1080464 → openroad 1080588) exited
+  cleanly 09:10:21 ("finished without ERROR lines (stopped at
+  OpenROAD.STAMidPNR-3)"), its monitor (1080677) exited on the DONE
+  marker 09:12:07; container pgrep: `<defunct>` zombies only (OK).
+  (b) dir 44 `state_out.json` exists, mtime 09:09, newest of the
+  run (`ls -t */state_out.json | head -1` = dir 44). (c) disk 1.2 T
+  free (≥ 300 G), RAM 244 G available (≥ 150 G). (d) 50 MHz
+  reference recorded in "Current state" (09:2x line); dirs 43/44
+  stay untouched.
 - [ ] **J1 launch** (from the repo root, host):
   ```
   FORCE_RESUME_STEP=OpenROAD.ResizerTimingPostGRT \
@@ -1377,16 +1388,55 @@ is the accepted deviation, not a new failure. Resumes:
   dir 44 finalisiert 21:50 11/2) — das 66-MHz-Verdict (wns/tns/
   violator + GRT) steht.
 
-**Status:** **G1-44 pending (09:0x 11/3).** p2_16: G1-Run done
-(Stop 43), GRT PASS (0 overflow, 41 min 46 s), STA (STAMidPNR-3)
-läuft seit 08:50 → G1-44-Verdict ~09:10–09:20; FAIL die
-Favoritin (hold −2.0 strukturell, reg→Makro-A_DIN). p2_16b:
-**GESTOPPT** (Nutzer-Entscheidung 09:0x) nach 66-MHz-Verdict
-(fmax ≈ 44 MHz: −7.8079/−3.2791); DRT-Status unzuverlässig
-(Dual-Writer, Forensik oben). F3 gate-sim PASS (15:02 11/1).
-Nächster Meilenstein: G1-44-Verdict → bei FAIL Stop-Kriterium:
-Analyse + Vorschlag (A_CLK/clk_pad-Latenz-Matching statt 22k
-Data-Buffer) an den Nutzer; G2 (p2_16 run-to-end) erst danach.
+**09:2x (11/3) status — Plan v3 aktiv (d3d7d76), Phasen J→K autonom.**
+- **Plan v3 + Claude-Diff gelesen** (Session-Instruction 4): watchdog
+  Single-Instance-Guard (flock `asic/runs/.watchdog_<run>.lock` +
+  Container-pgrep `librelane.*--run-tag <run>( |$)` → Refusal) und
+  `FORCE_RESUME_STEP` (nur n=0-Launch, Crash-Restarts nehmen den
+  Resolver); Overlay `openeye_overlay_40mhz_holdfix.json`: 25 ns,
+  hold TNS_PCT 100, margin 0.1, 48 Threads, Signoff-Checker
+  report-only (→ K2-Klassifikation IST das Signoff; Setup/Hold-
+  Checker 79/80 bleiben ERROR). Nutzer-Ziel: ZUERST EINES komplette
+  Layout von p2_16 @ 40 MHz (GDS + signoff STA + DRC + LVS), dann
+  optimieren; keine frischen Runs, kein 66 MHz, keine RTL/Floorplan-
+  Änderungen.
+- **G1-44-Verdict (dir 44, Post-GRT-Resizer-STA, = 50-MHz-Referenz,
+  bleibt unangetastet):** setup WNS/TNS **−2.226/−5.75** (13
+  Verletzer — nur die 7 Output-Pads data_dma_o_pad[*]/ready_dma_o_
+  pad/last_data_o_pad; Core reg/latch ≈ 0, schlechtester −7 ps
+  Latch-D = Time-Borrowing), hold WNS/TNS **−3.403/−806.7** (496
+  Verletzer, alle reg→RM-Makro A_DIN/A_ADDR). Ursachen (v3 §0):
+  Output-Pads = ~7.4 ns Clock-Insertion (60-tiefe delaybuf-Kette) +
+  schwaches Pad-Net (Slew 5.1 ns) + 4.3 ns Pad-Delay vs 6.4 ns IO-
+  Constraint; Hold = Makro-A_CLK ~10.3 ns vs ~7.4 ns an den
+  launchenden FFs + 0.58 ns Makro-hold; Hold-Reparatur war von
+  unserem eigenen Knopf gedrosselt (GRT_RESIZER_HOLD_REPAIR_TNS_PCT
+  = 1 → 190 Buffer für 22,217 Endpoints, RSZ-0064). → G1-44
+  numerisch FAIL laut v2-Gate (setup ≥ −1.0, hold ≥ −0.5); durch
+  Plan v3 ersetzt (Entscheidung: 40 MHz + volle Hold-Reparatur,
+  run-to-end).
+- **Korrektur meines 08:5x p2_16b-Verdicts (v3 §0, Pflicht):**
+  "fmax ≈ 44 MHz, 66 MHz nicht erreichbar" war **falsch**: p2_16bs
+  setup WNS −7.8079 ist dieselbe Output-Pad-Pfad-Familie
+  (data_dma_o_pad …), das CORE reg/latch Setup bei 66 MHz ist ≈ 0
+  (6 Latch-Endpoints −2…−5 ps). Der Core erfüllt 66 MHz auf
+  Post-GRT-Niveau; IO + Clock-Tree tun es nicht. 66 MHz bleibt auf
+  IO/CTS-Ebene offen (L5: erneut nach den Fixes 1–4).
+- **J1 launch 09:2x** (Plan-Command, repo root, host):
+  `FORCE_RESUME_STEP=OpenROAD.ResizerTimingPostGRT
+  CONFIG_OVERLAY=asic/rtl/sg13g2/openeye_overlay_40mhz_holdfix.json
+  watchdog.sh p2_16`, KEIN STOP_STEP (läuft bis zum Ende).
+  Verifikation (10-min-Fenster): watchdog-Log FORCE_RESUME_STEP-
+  Zeile, flow.log-Launch-Trenner, neues Dir 45, gestufter Config
+  CLOCK_PERIOD 25, openroad `-threads 48`, genau EINE librelane
+  `--run-tag p2_16` im Container.
+
+**Status:** **J1 RUNNING (09:2x 11/3, Plan v3).** p2_16 re-runnt
+den Post-GRT-Resizer mit 40 MHz (25 ns) + 100 % Hold-Reparatur
+(48 Threads), dann run-to-end: J2-Gate am Dir 46 (STAMidPNR-3,
+~5–8 h), J3 DRT (10–24 h), J4/J5 Signoff, J6 End-Checker, K1–K3
+Evaluation, L nur dokumentieren. p2_15/p2_16b gestoppt, nie wieder
+resumieren. 30-min-Cadence läuft.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
