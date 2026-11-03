@@ -1469,13 +1469,35 @@ Referenz-Resizer brauchte 5 h 10 min bei nur 1 % Hold-TNS-Cap;
 alten Dir-43-Werte (hold −2,0365) – Gate liest `latest_dir`, ab
 Dir 46 gelten die 40-MHz-Zahlen.
 
-**Status:** **J1 RUNNING (09:3x 11/3, Plan v3).** p2_16 Step 45
+**Status:** **J1 RUNNING (10:0x 11/3, Plan v3).** p2_16 Step 45
 (ResizerTimingPostGRT @ 25 ns): interne GRT-Parasitenschätzung DONE
-(5 min, 0 Overflow), jetzt repair_timing Setup → Hold (100 % TNS,
-48 Threads); dann run-to-end: J2-Gate am Dir 46 (STAMidPNR-3),
-J3 DRT (10–24 h), J4/J5 Signoff, J6 End-Checker, K1–K3 Evaluation,
-L nur dokumentieren. p2_15/p2_16b gestoppt, nie wieder resumieren.
+(5 min, 0 Overflow), Setup-Repair DONE (1 %-Cap, RSZ-0062
+erwartet), **Hold-Repair läuft (22.097 verletzter Endpoints,
+100 % TNS)**; dann detailed placement + run-to-end: J2-Gate am
+Dir 46 (STAMidPNR-3, revidiert ~20:00–02:00), J3 DRT (10–24 h),
+J4/J5 Signoff, J6 End-Checker, K1–K3 Evaluation, L nur
+dokumentieren. p2_15/p2_16b gestoppt, nie wieder resumieren.
 30-min-Cadence läuft.
+
+**10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
+(36:50 elaps., Resizer-Phase ist Single-Thread-dominiert → ~2–3
+Cores, erwartet), 1 librelane, Watchdog 0 Restarts, Monitor clean,
+RAM 209 G free, Disk 1,2 T free. Fortschritt: **Setup-Repair DONE
+(~09:58, ~25 min)**: Iteration-0-Tabelle (worst über ALLE Corners,
+`SETUP_VIOLATION_CORNERS=['*']`): WNS −3.679 / TNS −7355.149,
+schlechtester Endpoint `u_openeye.wght_buffer.…g_cfg2048x288.u_mac0/
+A_DIN[21]` (Makro-Input, kein Output-Pad), 299.386 verletzte
+Endpoints (Slow-Corner-Langschwanz, Ø −24 ps), 1 %-Cap repariert
+2.993, 43 Buffer + 586 Upsizes, Fläche +0.0 %, RSZ-0062 "Unable to
+repair all setup" (Warnung, erwartet bei TNS_PCT=1). **Hold-Repair
+läuft seit ~09:59: 22.097 Endpoints mit Hold-Verletzungen**
+(die gesamte reg→Makro-A_DIN/A_ADDR-Familie; Plan v3 erwartete
+gerade "Tausende bis ~20 k" Buffers — konsistent). J2-Zeitfenster
+revidiert: der 50-MHz-Resizer (1 % Hold-Cap) brauchte 5 h 10 min
+GESAMT; 100 % auf 22.097 Endpoints wird deutlich länger → J2
+(Dir 46) eher ~20:00–02:00; pro Cadence RSZ-Fortschritt (Buffer-
+Count, WNS-Trend) beobachten. Kein Stop-Kriterium betroffen
+(Resizer läuft, kein Crash; Core-Setup-Check kommt am J2).
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
