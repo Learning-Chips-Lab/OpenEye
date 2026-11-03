@@ -1448,12 +1448,34 @@ is the accepted deviation, not a new failure. Resumes:
   CLOCK_PERIOD 25, openroad `-threads 48`, genau EINE librelane
   `--run-tag p2_16` im Container.
 
-**Status:** **J1 RUNNING (09:2x 11/3, Plan v3).** p2_16 re-runnt
-den Post-GRT-Resizer mit 40 MHz (25 ns) + 100 % Hold-Reparatur
-(48 Threads), dann run-to-end: J2-Gate am Dir 46 (STAMidPNR-3,
-~5–8 h), J3 DRT (10–24 h), J4/J5 Signoff, J6 End-Checker, K1–K3
-Evaluation, L nur dokumentieren. p2_15/p2_16b gestoppt, nie wieder
-resumieren. 30-min-Cadence läuft.
+**09:3x (11/3) Cadence:** J0+J1 committed (9b2b30b, 58bf542) und
+gepushed (`42a5c57..58bf542` utz12). Step 45 läuft gesund: openroad
+77668 bei ~99,6 % CPU (48 Threads), genau 1 librelane (77651),
+RAM 228 G free, Disk 1,2 T free, Monitor 1088971 clean, Watchdog
+0 Restarts. Skript-Folge von `rsz_timing_postgrt.tcl` (im Container
+geprüft): `estimate_parasitics -global_routing` →
+`repair_timing -setup` (TNS_PCT=1, ~keine Vios) →
+`repair_timing -hold` (TNS 100 %, margin 0,1 ns – der große Teil) →
+detailed placement → write. **GRT-Phase (09:32) DONE in 5 min 02 s**
+(das erklärt die GRT-Nachrichten im flow.log – sie gehören ZU
+diesem Step, erwartet; viel schneller als der 41-min-GRT-Step,
+weil `estimate_parasitics`-GRT; `GRT_RESIZER_RUN_GRT` nicht gesetzt
+→ keine zweite GRT am Ende): 0 Overflow, Total-Usage 18,98 %,
+Wirelength 137,4 M µm, 1,578,830 Nets geroutet, 11,058,153 Vias.
+Jetzt startet der Resizer (Setup → Hold). J2-Gate (Dir 46
+STAMidPNR-3) revidierte Erwartung: ~13:30–18:30 (der 50-MHz-
+Referenz-Resizer brauchte 5 h 10 min bei nur 1 % Hold-TNS-Cap;
+100 % wird länger + dpl). Monitor-Zeile G1-37 zeigt noch die
+alten Dir-43-Werte (hold −2,0365) – Gate liest `latest_dir`, ab
+Dir 46 gelten die 40-MHz-Zahlen.
+
+**Status:** **J1 RUNNING (09:3x 11/3, Plan v3).** p2_16 Step 45
+(ResizerTimingPostGRT @ 25 ns): interne GRT-Parasitenschätzung DONE
+(5 min, 0 Overflow), jetzt repair_timing Setup → Hold (100 % TNS,
+48 Threads); dann run-to-end: J2-Gate am Dir 46 (STAMidPNR-3),
+J3 DRT (10–24 h), J4/J5 Signoff, J6 End-Checker, K1–K3 Evaluation,
+L nur dokumentieren. p2_15/p2_16b gestoppt, nie wieder resumieren.
+30-min-Cadence läuft.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
