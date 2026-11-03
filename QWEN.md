@@ -1494,11 +1494,12 @@ p2_16 Step 45 DONE (3 h 37 m): Setup-Repair (final −3.961 slow /
 fast / −2.021 nom_typ, TNS −208, 143 reg→Makro-Verletzer,
 dokumentiert → v3: weiter), dpl + check_placement. **Dir 46
 STAMidPNR-3 DONE (16 min 35 s): kein Stop** (Core-Setup −8 ps,
-Resizer kein Crash). **J3 DRT (Dir 47) seit ~13:19: alle 11
-Iterationen fertig (Total-Plateau ~11,02 M Overlaps, kein Stop),
-finale Track Assignment läuft** (~100k/400k Gruppen @ 19:27,
-48 Threads); J3-Ende ~20:00–21:00 (state_out.json). Danach
-J4/J5 Signoff, J6 End-Checker, K1–K3, L nur dokumentieren.
+Resizer kein Crash). **J3 DRT (Dir 47) seit ~13:19: Run 0 fertig
+(11 Iterationen, Plateau ~11,02 M Overlaps, kein Stop); post-
+DRT-Antennen-Repair: 7.289 Violations → 14.996 Dioden, Run 1
+läuft** (max 3 Repair-Zyklen, 48 Threads); J3-Ende ~22:00–01:00
+(state_out.json). Danach J4/J5 Signoff, J6 End-Checker,
+K1–K3, L nur dokumentieren.
 p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
@@ -1755,6 +1756,25 @@ schon: OpenEye_Asic.drc + drt-run-0/1 (partial), state_out.json
 noch offen. openroad 77976 (6:05 elaps., 3748 % CPU, 9:12 h
 CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
 RAM 198 G free, Disk 1,2 T.
+
+**20:0x (11/3) Cadence:** DRT-Architektur geklärt (drt.tcl):
+drt_run 0 = Haupt-DRT (-droute_end_iter 64, konvergiert bei
+Iter 10) → **post-DRT-Antennen-Repair-Loop** (max
+DRT_ANTENNA_REPAIR_ITERS=3): check_antennas → repair_antennas
+→ drt_run N. Run 0: drt-run-0/OpenEye_Asic.drc = **0 Bytes
+(leer)**, ODB 2,3 GB. **check_antennas: 7.289 Antennen-
+Violations** (GRT-0012) → **repair_antennas Iter 1: 14.996
+Dioden inserted** (GRT-0015, sg13g2_antennanp, ratio_margin 10).
+**drt-run-1 läuft** (Track Assignment 4:56, Routing-Prep,
+0. Iteration 19:57: 30 % @ 73.208 Vios; 10/20/30 %: 22k/59k/
+73k — deutlich kleiner als Run 0, da Design bereits geroutet,
+nur Dioden-Nets + Re-Optimierung). Worst Case: 2 weitere
+Repair+Run-Zyklen (run 2/3). **J3-Ende revidiert: ~22:00–01:00**
+(war 20:00–21:00). Antennen-Befund → K2: dokumentierte
+Kategorie (Standard-PDK-Antennen-Repair, DIODE_CELL konfigu-
+riert), kein NEW-Flow-Defekt. openroad 77976 (6:38:30 elaps.,
+3745 % CPU, 10:08 h CPU-Time), 1 librelane, Watchdog 0 Restarts,
+Monitor clean, RAM 189 G free (DRT-Peak 56,8 GB), Disk 1,2 T.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
