@@ -1499,8 +1499,8 @@ FERTIG, 0 DRC-Violations** (11 Iterationen: 839.853 → 0;
 Wire 108,5 M µm, Vias 11,02 M; kein Stop). **Post-DRT-
 Antennen-Repair: 7.289 → 14.996 Dioden → Run 1 (0 Vios),
 2. check 2.593 → +2.110 Dioden → Run 2 (0 Vios), 3. check
-503 → Repair #3 (letzter) läuft, ggf. kurzer Run 3** (max 3
-Zyklen, 48 Threads); J3-Ende ~01:00–02:00 (state_out.json).
+503 → +396 Dioden (insg. 17.502) → Run 3 läuft** (letzter
+Zyklus, 48 Threads); J3-Ende ~01:00–01:30 (state_out.json).
 Danach J4/J5 Signoff, J6 End-Checker, K1–K3, L nur
 dokumentieren.
 p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
@@ -1873,6 +1873,19 @@ Antennen-Trend: 7.289 → 2.593 → 503. **J3-Ende ~01:00–02:00**.
 openroad 77976 (10:45:39 elaps., 3682 % CPU, 16:12 h CPU-Time),
 1 librelane, Watchdog 0 Restarts, Monitor clean, RAM 188 G
 free, Disk 1,2 T. Kein Stop.
+
+**00:3x (4/11) Cadence:** **Antennen-Repair #3 (letzter)
+abgeschlossen: 396 Dioden inserted** (GRT-0015; zu den 503
+Violations von Check #3). **drt-run-3 läuft** (00:3x: Track
+Assignment 4:56 + Prep 0:26, Iter 0 10 % @ 823 Vios — sehr
+kleines Reroute-Set, nur 396 Dioden-Nets). Antennen-Bilanz
+komplett: 7.289 → **14.996** Dioden; 2.593 → **2.110**; 503 →
+**396** = **17.502 Dioden gesamt**. Nach Run-Mustern
+Konvergenz ~01:00–01:30, dann write_views → **J3-Ende
+~01:00–01:30** (state_out.json). openroad 77976 (11:15:14
+elaps., 3676 % CPU, 17:05 h CPU-Time), 1 librelane, Watchdog
+0 Restarts, Monitor clean, RAM 185 G free (Peak 62,1 GB),
+Disk 1,2 T. Kein Stop.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
