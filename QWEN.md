@@ -1777,6 +1777,18 @@ riert), kein NEW-Flow-Defekt. openroad 77976 (6:38:30 elaps.,
 3745 % CPU, 10:08 h CPU-Time), 1 librelane, Watchdog 0 Restarts,
 Monitor clean, RAM 189 G free (DRT-Peak 56,8 GB), Disk 1,2 T.
 
+**20:3x (11/3) Cadence:** drt-run-1: Iter 0 ENDE 219.236 Vios
+(in-Iteration steigend 22k→219k = Erst-Verdrahtung der
+Dioden-Nets), **Iter 1 läuft** (20:35: 20 % @ 236.053, Abnahme
+setzt ein: 261k→236k). Via-Total 11.029.263 (+4,6k Vias für
+Dioden-Verbindungen). Iter-Dauer ~25–30 min (schneller als
+Run 0, kleineres Reroute-Set) → Run-1-Konvergenz nach
+Run-0-Muster (219k → ↓ in 2–4 Iter → 0) ~22:00–23:30, danach
+check_antennas (2. Durchgang) → J3-Ende ~22:30–00:30.
+openroad 77976 (7:16:17 elaps., 3765 % CPU, 11:09 h CPU-Time),
+1 librelane, Watchdog 0 Restarts, Monitor clean, RAM 188 G free
+(Peak 57,1 GB), Disk 1,2 T. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
