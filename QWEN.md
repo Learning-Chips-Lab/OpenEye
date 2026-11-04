@@ -2584,6 +2584,23 @@ V3/M4-Start. Rest nach M3: 9 Einträge. ETA Step 64:
 Disk 1,1 T, Monitor clean (22:32:59), 0 Restarts. Kein
 Stop.
 
+**23:0x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (5:00 h): **M3 fertig (20:02→22:55 = 2 h 53 min
+total, Outlier der Sequenz)** — jetzt via3_drw (seit
+22:55). Tempo-Referenz aktuell: M1 23, V1 18, M2 23, V2
+23, M3 173 min (50-GB-Subphase). Rest: 8 Einträge
+(M4, V4, M5, V5, TV1, TM1, TV2, TM2) — wenn M4/M5 wie
+M1/M2 laufen (~20–30 min) und Vias ~18–25 min: ~3 h →
+**ETA Step 64: ~02:00–04:00**; falls M4/M5 ähnliche
+50-GB-Subphasen wie M3 haben, entsprechend später.
+**RAM entspannt sich:** RSS 87,1→84,8 GB (M3-Subphase-
+Daten freigegeben), System avail 163 G. klayout 82368:
+106 % CPU, CPU-Time 5:19:48 (+31 min/30 min ≈ 103 %,
+stabil). Danach 65–71 → 72/73 Magic DRC (2–6 h) → 74–78
+→ Stopp 79 morgen (5/11) Nachmittag/Abend. Push
+up-to-date. RAM 163 G avail, Disk 1,1 T, Monitor clean
+(23:03:07), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
