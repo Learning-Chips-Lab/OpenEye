@@ -1499,9 +1499,10 @@ FERTIG, 0 DRC-Violations** (11 Iterationen: 839.853 → 0;
 Wire 108,5 M µm, Vias 11,02 M; kein Stop). **Post-DRT-
 Antennen-Repair: 7.289 → 14.996 Dioden → Run 1 (0 Vios),
 2. check 2.593 → +2.110 Dioden → Run 2 (0 Vios), 3. check
-503 → +396 Dioden (insg. 17.502) → Run 3 läuft (Iter 1:
-8,4k → ~3k Vios)** (letzter Zyklus, 48 Threads); J3-Ende
-~02:00–03:00 (state_out.json).
+503 → +396 Dioden (insg. 17.502) → Run 3 FERTIG (0 Vios)**;
+alle 4 Runs DRC-clean, write_views läuft (verbose
+Global-Connect-Phase ~02:20); J3-Ende ~02:25–02:40
+(state_out.json).
 Danach J4/J5 Signoff, J6 End-Checker, K1–K3, L nur
 dokumentieren.
 p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
@@ -1908,6 +1909,24 @@ Iter-Ende: Iter0 8.393 → Iter1 ~3k (−64 %). Nach Run-Mustern
 Spritze (−99 %) in Iter 2/3 → Konvergenz ~02:00–03:00, dann
 write_views → **J3-Ende ~02:00–03:00** (state_out.json).
 openroad 77976 (12:15:05 elaps., 3698 % CPU, 18:21 h
+CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
+RAM 185 G free, Disk 1,2 T. Kein Stop.
+
+**02:0x (4/11) Cadence:** **drt-run-3 FERTIG (01:46,
+DRT-0198): 0 DRC-Violations** (root OpenEye_Asic.drc = 0
+Bytes). Run-3-Kurve: 8.393 (Iter 0) → ~3k (Iter 1) → … → 0.
+FINAL: Wire **108.604.397 µm** (M2 41,05 M / M3 46,11 M /
+M4 16,47 M / M5 4,97 M / TM1 3,3k / TM2 1,2k), Vias
+**11.126.786**. **Alle 4 DRT-Runs DRC-clean.** Danach
+write_views läuft: set_global_connections mit
+PDN_MACRO_CONNECTIONS „.*“ × 2 → **eine Log-Zeile pro
+Instanz** (1,16 M stdcells + Resizer-Buffer/Dioden ≈ 2,4 M
+Zeilen, ~175 MB) — normal, aber extrem verbose (gleiche
+Familie wie p2_15 RepairAntennas-Phase). 02:05: ~123 MB /
+1,69 M Zeilen, Rate ~52 kB/s → ~15 min Rest →
+**write_views ~02:20**, danach write_db (ODB 2,3 GB) +
+Views → **J3-Ende ~02:25–02:40** (state_out.json).
+openroad 77976 (12:44:26 elaps., 3578 % CPU, 18:24 h
 CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
 RAM 185 G free, Disk 1,2 T. Kein Stop.
 
