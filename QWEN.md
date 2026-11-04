@@ -2199,6 +2199,34 @@ weiterhin pro Layer-Completion im flow.log ablesbar).
 RAM 213 G free, Disk 1,1 T free, Monitor clean (09:44:33),
 1 librelane Kette, 0 Restarts. Kein Stop.
 
+**11:0x (4/11) Cadence + GDS-Forensik:** Step 62 XOR:
+12/13 Layers weiterhin alle 0 Diff; Layer 134/0 (TopMetal2)
+~1 h 50 min (wie TopMetal1 126/0), klayout 79216 331 % CPU,
+CPU-Time 13:37:52 (stetig wachsend), RSS 8,6 GB = aktiv.
+GDS-Forensik (read-only, beide GDS): identisches
+Writer-Dialekt (0x0502/0x0606/0x0700 Cells,
+0x0d02/0x0e02/0x1003 Boundary, 0x0a00/0x1206 SREF),
+**43 (layer,datatype)-Paare** gesamt → 30 restlich nach
+134/0. Hierarchisches Flatten (1082 Cells, 20,2 M
+GDS-Instanzen, Fixed Point 8 Generationen) **exakt
+kalibriert** gegen XOR-Log (126/0: 350.270=350.270,
+134/0: 40.811=40.811). Schlüssfund: XOR-Kosten bestimmt
+nicht die Polygonzahl (1/0: 63 M/seite = Minuten),
+sondern **Repräsentations-Asymmetrie** (Magic gemergt vs
+KLayout klein): 126/0 55× = 1 h 50 min, 134/0 8,4× =
+60 min+. Restliche asymmetrische Layers: M3 30/0 (3,4×),
+M4 50/0 (2,7×), M5 67/0 (3,0×) → Langsamer-Kandidaten
+je 10–60 min; alle übrigen symmetrisch (M≈K, inkl. 6/0
+mit 267 M/seite) → schnell. Neue ETA XOR-Ende:
+**12:00–15:00** (134/0 binnen ~1 h). Step 63 =
+Checker.XOR (Metric-Check, Sekunden, ERROR_ON=False).
+Danach: 64/65 Antenna → 66 SealRing → 67 Filler →
+68/69 Density → 70/71 KLayout DRC → 72/73 Magic DRC
+(Langer-Pol 2–6 h+) → 74 Spice → 75 IllegalOverlap →
+76/77 LVS → 78 EQY → Stopp 79 = realistisch heute
+spät abends / morgen früh. RAM 236 G avail, Disk 1,1 T,
+Monitor clean (11:00:01), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
