@@ -2390,6 +2390,18 @@ EQY → Stopp 79 heute abend. Push up-to-date. RAM 234 G
 avail, Disk 1,1 T, Monitor clean (16:06:21), 0 Restarts.
 Kein Stop.
 
+**16:3x (4/11) Cadence:** Step 62 XOR: weiterhin
+**38 Layers fertig, alle 0 Diff**; 67/0 = M5 (letztes
+asymmetrisches Layer, 3,0×) bei ~30 min — im
+Geschätzten 30–90-min-Fenster. klayout 79216 aktiv:
+395 % CPU, CPU-Time 1-14:15:48 (+70 min/30 min ≈ 233 %,
+stabil), RSS 9,94 GB konstant. Nach M5: 5 Klein-Layers
+(67/2, 8/0, 8/2, 8/29, 99/31) in Minuten → XOR-Ende
+realistisch 17:15–18:30. Danach 63–78, Magic DRC
+Langer-Pol 2–6 h, Stopp 79 heute abend / morgen früh.
+Push up-to-date. RAM 235 G avail, Disk 1,1 T, Monitor
+clean (16:36:28), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
