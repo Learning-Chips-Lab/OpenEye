@@ -2615,6 +2615,21 @@ V4, M5, V5, TV1, TM1, TV2, TM2). ETA Step 64:
 avail, Disk 1,1 T, Monitor clean (23:33:14), 0 Restarts.
 Kein Stop.
 
+**00:0x (5/11) Cadence:** Step 64 KLayout-Antenna
+läuft (5:59 h): via3_drw (seit 22:55) jetzt bei ~69 min
+— deutlich langsamer als V1 (18) und V2 (23 min), aber
+CPU einwandfrei aktiv (6:18:23, +29 min/30 min ≈ 97 %,
+stabiles Tempo seit 19:00), RSS 84,8 GB konstant.
+V3 = Kopplung M3↔M4 (beide routing-lastig) → via-dichte
+Ratio-Basis, plausibel. Rest nach V3: 7 Einträge (M4,
+V4, M5, V5, TV1, TM1, TV2, TM2). ETA Step 64: ~02:00–
+06:00 (je nach M4-Verhalten: normal ~20–30 min oder
+50-GB-Subphase wie M3 ~2–3 h). Danach 65–71 → 72/73
+Magic DRC (2–6 h) → 74–78 → Stopp 79 morgen
+Nachmittag/Abend. Push up-to-date. RAM 163 G avail,
+Disk 1,1 T, Monitor clean (00:03:22), 0 Restarts. Kein
+Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
