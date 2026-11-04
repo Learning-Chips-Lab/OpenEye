@@ -2461,6 +2461,22 @@ Danach 65–78, Magic DRC Langer-Pol 2–6 h, Stopp 79.
 Push up-to-date. RAM 225 G avail, Disk 1,1 T, Monitor
 clean (18:31:59), 0 Restarts. Kein Stop.
 
+**19:0x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (1:00 h): Ratio-Sequenz schreitet fort —
+metal1_drw 18:35→18:58 (23 min, größtes Routing-Layer),
+jetzt via1_drw (seit 18:58). Rest der Sequenz: ~12
+weitere Metal/Via-Layer (M2–M5, V1–V5, TopVia/TopMetal);
+Via-Layer klein → schnell, Metal-Layer 5–25 min →
+ETA Step 64: **~20:00–22:00**. klayout 82368: 134 %
+CPU (Ratio-Phase quasi single-threaded, phasentypisch),
+CPU-Time 1:20:37 (+29 min/30 min ≈ 97 %), RSS 26,1 GB
+(wächst durch kumulative Antennen-Daten je Layer —
+beobachten, aber RAM 218 G avail gibt Spielraum).
+Danach 65–78, Magic DRC Langer-Pol 2–6 h, Stopp 79
+morgen früh realistisch. Push up-to-date. RAM 218 G
+avail, Disk 1,1 T, Monitor clean (19:02:06), 0 Restarts.
+Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
