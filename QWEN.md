@@ -2227,6 +2227,23 @@ Danach: 64/65 Antenna → 66 SealRing → 67 Filler →
 spät abends / morgen früh. RAM 236 G avail, Disk 1,1 T,
 Monitor clean (11:00:01), 0 Restarts. Kein Stop.
 
+**11:3x (4/11) Cadence:** Step 62 XOR im Schnelllauf:
+**22/43 Layers fertig, alle 0 Diff** (134/0 TopMetal2
+fertig + 10 Layers in 30 min: 134/2, 14/0, 16/0, 189/4,
+19/0, 235/4, 25/0, 28/0, 29/0). Jetzt 30/0 = M3 (erster
+asymmetrischer Rest-Layer): effektives Verhältnis nur
+1,6× (Magic 12,2 M / KLayout 20,1 M flach) → mild wie
+Metal2 (1,5×, war schnell), keine Stunde-Klasse.
+klayout 79216: 396 % CPU (letzte 30 min ~8,7 Kerne),
+CPU-Time 18:18 h, RSS 10 GB. Rest nach 30/0: 20 Layers,
+meist symmetrisch/klein (große symmetrische 5/0 22 M,
+6/0 267 M, 8/0 30–40 M, 8/2 28–38 M → schnell wie 1/0);
+M4 50/0 (~1,5–2×) + M5 67/0 (~2×) je ~10–30 min.
+Revidierte ETA XOR-Ende: **12:00–13:00**. GDS-Äquivalenz
+steht: 22/22 Layers deckungsgleich. RAM 234 G avail,
+Disk 1,1 T, Monitor clean (11:30:08), 0 Restarts. Kein
+Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
