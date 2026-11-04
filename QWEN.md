@@ -205,10 +205,22 @@ final STA checks everything at 25 ns.
   FINAL Wire **108.604.397 µm**, Vias **11.126.786**. State:
   `47-openroad-detailedrouting/state_out.json` (02:24). Kein Stop
   je relevant. Details: Cadence-Zeilen 13:3x–02:0x + 02:3x.
-- [ ] **J4 post-route + signoff STA:** RemoveRoutingObstructions,
-  CheckAntennas, TrDRC (count!), DisconnectedPins, WireLength, Fill,
-  RCX, **STAPostPNR**: record setup/hold WNS/TNS for EVERY corner at
-  25 ns, max slew/cap violation counts, power (`power.rpt`).
+- [x] **J4 post-route + signoff STA:** FERTIG 05:18 (4/11),
+  Step 58 STAPostPNR **31 min 40 s**. STAPostPNR @ 25 ns,
+  post-route, SPEF-basiert: **nom_typ setup 0 vio clean,
+  hold −0,025/−0,062/3** (praktisch clean); **nom_fast setup
+  clean, hold −0,341/−18,32/96** (68× wght_buffer u_mac0/2
+  A_DIN inkl. bekanntem u_mac0/A_DIN[32], 23× iact_layer_
+  buffer, 4× iact_stream, 1× stdcell-reg); **nom_slow setup
+  −1,451/−12,52/17** (Launch-FFs `_1374116_`/`_1391225_` →
+  ICG-GATE-Pins in psum_SPad-RAMs; frühere Pad-Familie
+  data_dma_o_pad[0] jetzt clean), hold clean. Power total
+  **0,334 W** (int 0,270/sw 0,060/leak 0,0038). Slew
+  fast 29/slow 1.488/typ 135, Fanout 5.444, Cap 437–459.
+  Vor-Sta-Steps: TrDRC PASS (0), Antennen-Rest 77 net + 78
+  pin, DisconnectedPins 292 (108 critical), WireLength
+  108,604,397 µm, Fill 5.191.641, RCX 1.596.560 Nets (~14
+  min). Details: Cadence-Zeilen 02:3x–05:4x.
 - [ ] **J5 GDS + physical signoff:** Magic/KLayout StreamOut, XOR,
   antenna, sealring, filler, density, **Magic DRC + KLayout DRC**,
   SpiceExtraction, IllegalOverlap, **Netgen LVS**. Record counts per
@@ -1489,7 +1501,7 @@ Referenz-Resizer brauchte 5 h 10 min bei nur 1 % Hold-TNS-Cap;
 alten Dir-43-Werte (hold −2,0365) – Gate liest `latest_dir`, ab
 Dir 46 gelten die 40-MHz-Zahlen.
 
-**Status:** **J3 DONE (02:24 4/11, 0 DRC-Violations) — J4 post-route läuft.**
+**Status:** **J4 DONE (05:18 4/11) — J5 GDS/Signoff läuft (Step 59).**
 p2_16 Step 45 DONE (3 h 37 m): Setup-Repair (final −3.961 slow /
 −8 ps nom_typ @ Latch), Hold-Repair (22.090 Iter, final −2.293
 fast / −2.021 nom_typ, TNS −208, 143 reg→Makro-Verletzer,
@@ -1499,15 +1511,18 @@ Resizer kein Crash). **J3 DRT (Dir 47) FERTIG 02:24 (4/11,
 13 h 05 min): 4 DRT-Runs alle 0 DRC-Violations** (Run0
 839.853→0, Run1 219.236→0, Run2 46.085→0, Run3 8.393→0);
 Antennen-Repair 3× = **17.502 Dioden**; FINAL Wire
-**108.604.397 µm**, Vias **11.126.786**. **J4 läuft (Steps
-48–57 ✓, 58 aktiv): TrDRC PASS (0), Antennen-Rest 77 net +
-78 pin, DisconnectedPins 292 (108 critical), WireLength ✓,
-FillInsertion FERTIG 04:30 (5,19 M Filler, Util 40,69 %),
-RCX FERTIG (~14 min, 1,6 M Nets); STAPostPNR (3 Corners @
-25 ns, erste Zahlen: nom_typ Hold WNS −0,026 ns!) →
-StreamOut/XOR/Magic+KLayout DRC/LVS → J6 End-Checker
-(HoldViolations expected ERROR) → K1–K3, L nur
-dokumentieren.
+**108.604.397 µm**, Vias **11.126.786**. **J4 FERTIG 05:18
+(Steps 48–58): TrDRC PASS (0), Antennen-Rest 77 net + 78 pin,
+DisconnectedPins 292 (108 critical), WireLength ✓, Fill 5,19 M
+Filler (Util 40,69 %), RCX 1,6 M Nets; STAPostPNR @ 25 ns
+post-route (SPEF): nom_typ setup 0 Vio + hold −0,025/3 Vio,
+nom_fast hold −0,341/96 Vio (Makro-A_DIN-Familie), nom_slow
+setup −1,451/17 Vio (ICG-GATE in psum_SPad-RAMs; frühere
+Pad-Familie jetzt clean), Power 0,334 W.** J5 läuft: Step 59
+Magic StreamOut (GDS, langer Pol) → KLayout StreamOut/XOR →
+Magic+KLayout DRC → Spice/LVS/EQY → J6 End-Checker
+(SetupViolations 80 / HoldViolations 81 = expected ERROR:
+slow −1,45 / fast −0,34) → K1–K3, L nur dokumentieren.
 p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
 
 **10:0x (11/3) Cadence:** Step 45 weiter gesund: openroad 77668
@@ -2022,6 +2037,27 @@ Struktur, konsistent mit J2). Setup-Worst-Slack-Section bei
 nom_typ startet gerade. Rest: Reports + SDF-Write →
 **Step 58 ~05:30–06:15 fertig**. RAM 203 G free, Disk 1,1 T
 free, Monitor clean, 0 Restarts. Kein Stop.
+
+**05:4x (4/11) Cadence:** **Step 58 STAPostPNR FERTIG (31 min
+40 s, state_out 05:18) — J4 abgehakt.** **J4-Timing @ 25 ns
+(post-route, SPEF):** nom_typ setup **0 Vio clean**, hold
+**−0,025/−0,062/3** (praktisch clean); nom_fast setup clean,
+hold **−0,341/−18,32/96** (68× wght_buffer u_mac0/2 A_DIN,
+inkl. bekanntes u_mac0/A_DIN[32]; 23× iact_layer_buffer; 4×
+iact_stream; 1× stdcell-reg); nom_slow setup **−1,451/−12,52/
+17** (Launch-FF `_1374116_` (+1× `_1391225_`) → ICG-GATE-Pins
+in psum_SPad-RAMs des PE-Arrays; frühere Pad-Familie
+data_dma_o_pad[0] jetzt clean), hold clean. Power **0,334 W**
+(int 0,270/sw 0,060/leak 0,0038); Slew fast 29/slow 1.488/typ
+135; Fanout 5.444; Cap 437–459; Skew worst: setup +2,915
+(slow), hold −3,348 (slow). **Step 59 Magic StreamOut (GDS)
+läuft** (seit ~05:19, magicdnull 99,6 % CPU; DEF-Read
+6.811.212 Subcell-Instances; 1 Warnung Pins 143 vs 137 —
+harmlos) — langer Pol (6,8 M Instanzen, Single-Thread).
+Danach KLayout StreamOut → Render → XOR → … → Magic/KLayout
+DRC → LVS → J6 (SetupViolations 80 / HoldViolations 81 =
+expected ERROR: slow −1,45 / fast −0,34). RAM 202 G free,
+Disk 1,1 T free, Monitor clean, 0 Restarts. Kein Stop.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
