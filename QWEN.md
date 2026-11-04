@@ -2493,6 +2493,23 @@ Morgen (5/11) Vormittag**. Push up-to-date. RAM 212 G
 avail, Disk 1,1 T, Monitor clean (19:32:14), 0 Restarts.
 Kein Stop.
 
+**20:0x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (1:59 h): Ratio-Sequenz-Tempo EINGEFAHREN auf
+~20–23 min/Eintrag: M1 23, V1 18, M2 23, V2 23 min;
+jetzt M3 (seit 20:02). Rest: 10 Einträge (M3 aktuell,
+V3, M4, V4, M5, V5, TV1, TM1, TV2, TM2) × ~22 min ≈
+3,5–4 h → **ETA Step 64: ~23:30–01:00** (TopMetal-Layer
+könnte schneller sein). RAM-Trend entspannter als
+geschätzt: 32,2→33,3 GB (+~1 GB/Eintrag) → Endwert
+~43–45 GB, unkritisch. klayout 82368: 117 % CPU,
+CPU-Time 2:19:11 (+29 min/30 min ≈ 97 %,
+single-threaded-Phase). Danach 65–71 (Antenna-Check,
+SealRing, Filler, Density, KLayout DRC) → 72/73 Magic
+DRC (Langer-Pol 2–6 h) → 74–78 → Stopp 79 **morgen
+(5/11) Vormittag**. Push up-to-date. RAM 211 G avail,
+Disk 1,1 T, Monitor clean (20:02:21), 0 Restarts. Kein
+Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
