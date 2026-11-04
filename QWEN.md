@@ -2343,6 +2343,21 @@ XOR-Ende: 15:30–18:00. Push up-to-date. RAM 235 G avail,
 Disk 1,1 T, Monitor clean (14:35:57), 0 Restarts. Kein
 Stop.
 
+**15:0x (4/11) Cadence:** Step 62 XOR: weiterhin
+**31 Layers fertig, alle 0 Diff**; 50/0 = M4 jetzt bei
+~87 min. Beobachtung: M4 ist pro Polygon langsamer als
+M3 (~21 min/Mio vs. ~3,4 min/Mio) — M4s Routing-Geometrie
+ist komplexer (dünner/mehr überschneidend), reine
+Zahlenlogik gilt nicht; M3-Verlauf (110 min) als Anker:
+M4 vermutlich 90–130 min total. klayout 79216 aktiv:
+374 % CPU, CPU-Time 1:06:26:55 (+69 min/30 min ≈ 230 %,
+stabil), RSS 9,76 GB konstant. 2-h-Grenze 15:40 wird beim
+nächsten Check erreicht → dann CPU-Time-Delta-Feincheck
+(5-min-Fenster) + ggf. Tile-Progress-Auswertung. Rest
+nach M4: 13 Layers. ETA XOR-Ende: 16:00–19:00. Push
+up-to-date. RAM 235 G avail, Disk 1,1 T, Monitor clean
+(15:06:05), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
