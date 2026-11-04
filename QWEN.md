@@ -2446,6 +2446,21 @@ IllegalOverlap → 76/77 LVS → 78 EQY → Stopp 79 (nom_slow
 17 Vio). Push up-to-date. RAM 239 G avail, Disk 1,1 T,
 Monitor clean (18:01:50), 0 Restarts. Kein Stop.
 
+**18:3x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (seit ~18:06, ~30 min): DRC-Regelwerk 7.1
+Antenna geladen, Regel Ant.a + Ant.c durch (~18:32–
+18:35), jetzt **kumulative Antenna-Ratio-Berechnung**
+(Evaluating metal1_drw ratio → dann M2..TopMetal
+sequentiell). klayout 82368: 167 % CPU (1.7 Kerne,
+phasentypisch: Ratio-Phase ist sequenziell), CPU-Time
+51 min, RSS 18,6 GB (DRC-Datenbank-Last, normal).
+Kontext: 19,344 Antennen-Zellen wurden DRT/GRT-repariert
+(17,502 DRT + 1,842 GRT) — hier kommt die
+Rest-Prüfung. ETA Step 64: ~30 min–3 h (Layer-Sequenz).
+Danach 65–78, Magic DRC Langer-Pol 2–6 h, Stopp 79.
+Push up-to-date. RAM 225 G avail, Disk 1,1 T, Monitor
+clean (18:31:59), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
