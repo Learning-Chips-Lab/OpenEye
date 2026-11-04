@@ -2154,6 +2154,20 @@ noch aus). Keine neuen Step-Dirs (63+). RAM 213 G free,
 Disk 1,1 T free, Monitor clean (08:19:10), 1 librelane
 Kette, 0 Restarts. Kein Stop.
 
+**08:4x (4/11) Cadence:** Step 62 XOR weiterhin auf Layer
+126/0 (~95 min): klayout 79216 arbeitet stabil — CPU-Time
+3:59:54 → 5:10:16 in 29 min (~240 %, keine Degradation,
+kein Lastabwurf), RSS 9,07 GB konstant. Nicht pathologisch,
+einfach langsam (350k dünne Rectangles × 6.4k gemergte
+Magic-Polygonen, 441 Tiles à 500 µm). Eskalationsgrenze
+09:15 wird beim nächsten Check (~09:18) direkt erreicht —
+dann Analyse: CPU-Time-Wachstum + Tiles; Plan-v3-Stopkriterien
+beziehen XOR nicht ein, also: weiterlaufen lassen bei
+nachgewiesenem Fortschritt, ETA nur nach oben korrigieren.
+Keine neuen Step-Dirs (63+). RAM 213 G free, Disk 1,1 T
+free, Monitor clean (08:44:17), 1 librelane Kette, 0
+Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
