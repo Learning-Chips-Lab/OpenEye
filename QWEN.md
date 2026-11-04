@@ -2477,6 +2477,22 @@ morgen früh realistisch. Push up-to-date. RAM 218 G
 avail, Disk 1,1 T, Monitor clean (19:02:06), 0 Restarts.
 Kein Stop.
 
+**19:3x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (1:29 h): Ratio-Sequenz-Temporeferenz: M1 23 min
+(18:35→18:58), V1 18 min (18:58→19:16), M2 seit 19:16
+(~18 min+). Rest: 11 Einträge (V2, M3, V3, M4, V4, M5,
+V5, TV1, TM1, TV2, TM2) — zu ~15–20 min/Eintrag ≈ 3–4 h
+→ **ETA Step 64: ~22:30–23:30**. RSS-Trend: 26,1→32,2
+GB (+~2 GB/Eintrag, kumulative Daten) → Endwert ~55–65
+GB erwartet, RAM 212 G avail = unkritisch, aber im
+Folge-Check weiter beobachten. klayout 82368: 122 %
+CPU, CPU-Time 1:49:53 (+29 min/30 min ≈ 97 %,
+single-threaded-Phase). Konsequenz für Stopp-79-ETA:
+Magic DRC (2–6 h) schließt sich an → **Stopp realistisch
+Morgen (5/11) Vormittag**. Push up-to-date. RAM 212 G
+avail, Disk 1,1 T, Monitor clean (19:32:14), 0 Restarts.
+Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
