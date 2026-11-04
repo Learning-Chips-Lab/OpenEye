@@ -2059,6 +2059,22 @@ DRC → LVS → J6 (SetupViolations 80 / HoldViolations 81 =
 expected ERROR: slow −1,45 / fast −0,34). RAM 202 G free,
 Disk 1,1 T free, Monitor clean, 0 Restarts. Kein Stop.
 
+**06:1x (4/11) Cadence:** Step 59 Magic StreamOut: Phase 1
+fertig (06:01) — DB-Read (.mag 4,3 GB) + Copy aller
+Leaf-Cells (PDK-Stdcells/Makros/bondpad) → GDS 595 MB
+(567 MiB). Phase 2 „Generating output for cell
+OpenEye_Asic“ läuft seit ~06:01: Top-Cell mit 6,8 M
+Instanz-Refs + 108,6 M µm Wire/Vias — Magic printet nur an
+Cell-Grenzen, daher Log stumm; GDS-Noch-Write =
+Berechnungs-/Pufferphase. magicdnull 79137: 99,6 % CPU,
+CPU-Time wächst (57:41), RSS 13 GB stabil = arbeitet,
+kein Stall. Nächster Check: CPU-Time-Wachstum + GDS-
+Größe verifizieren; erst bei stagnierender CPU-Time
+untersuchen. KLayout StreamOut (Step 60) ist das
+Primär-GDS des Flows (PRIMARY_GDSII_STREAMOUT_TOOL=klayout);
+Magic-GDS dient u. a. dem XOR. RAM 207 G free, Disk 1,1 T
+free, Monitor clean, 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
