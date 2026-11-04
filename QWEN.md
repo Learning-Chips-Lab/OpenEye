@@ -2510,6 +2510,19 @@ DRC (Langer-Pol 2–6 h) → 74–78 → Stopp 79 **morgen
 Disk 1,1 T, Monitor clean (20:02:21), 0 Restarts. Kein
 Stop.
 
+**20:3x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (2:28 h): M3 (seit 20:02, ~31 min) — minimal über
+dem ~20–23-min-Tempo, aber M3 ist das große
+Routing-Layer (erwartet, keine Anomalie). Rest nach M3:
+9 Einträge (V3, M4, V4, M5, V5, TV1, TM1, TV2, TM2) →
+ETA Step 64 unverändert **~23:30–01:00**. RAM-Trend
+weiter unkritisch: 33,3→35,4 GB (+~1–2 GB/Eintrag).
+klayout 82368: 113 % CPU, CPU-Time 2:48:29 (+29 min/30
+min ≈ 97 %, stabil). Danach 65–71 → 72/73 Magic DRC
+(Langer-Pol 2–6 h) → 74–78 → Stopp 79 morgen (5/11)
+Vormittag. Push up-to-date. RAM 210 G avail, Disk 1,1
+T, Monitor clean (20:32:29), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
