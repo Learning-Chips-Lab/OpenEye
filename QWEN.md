@@ -2523,6 +2523,23 @@ min ≈ 97 %, stabil). Danach 65–71 → 72/73 Magic DRC
 Vormittag. Push up-to-date. RAM 210 G avail, Disk 1,1
 T, Monitor clean (20:32:29), 0 Restarts. Kein Stop.
 
+**21:0x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (2:58 h): M3 (seit 20:02) jetzt bei **~61 min** —
+deutlich über dem ~20–23-min-Eintragstempo, aber
+einwandfrei aktiv (CPU-Time +29 min/30 min ≈ 97 %, RSS
+35,4 GB konstant). Erklärender Kontext: M3 ist das
+größte Routing-Metal-Layer mit den meisten
+Antennen-relevanten Via-Kopplungen (die Ratio-Rechnung
+skaliert über Via-Verbindungen, nicht nur Metal-Fläche);
+M1 (Flächen-größtes) brauchte 23 min, M3 ist der
+via-dichteste. Keine Eskalation (kein Stall, kein
+Crash, kein Plan-v3-Stopkriterium). Beobachtung: falls
+M3 > 2 h (22:02) → Feincheck; wenn M3 > 90 min total →
+ETA Step 64 nach oben auf ~01:00–03:00, Stopp-79-ETA
+morgen Mittag. Rest nach M3: 9 Einträge. Push
+up-to-date. RAM 210 G avail, Disk 1,1 T, Monitor clean
+(21:02:37), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
