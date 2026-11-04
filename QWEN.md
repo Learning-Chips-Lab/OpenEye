@@ -1499,8 +1499,9 @@ FERTIG, 0 DRC-Violations** (11 Iterationen: 839.853 → 0;
 Wire 108,5 M µm, Vias 11,02 M; kein Stop). **Post-DRT-
 Antennen-Repair: 7.289 → 14.996 Dioden → Run 1 (0 Vios),
 2. check 2.593 → +2.110 Dioden → Run 2 (0 Vios), 3. check
-503 → +396 Dioden (insg. 17.502) → Run 3 läuft** (letzter
-Zyklus, 48 Threads); J3-Ende ~01:00–01:30 (state_out.json).
+503 → +396 Dioden (insg. 17.502) → Run 3 läuft (Iter 0:
+8.393 Vios)** (letzter Zyklus, 48 Threads); J3-Ende
+~01:30–02:30 (state_out.json).
 Danach J4/J5 Signoff, J6 End-Checker, K1–K3, L nur
 dokumentieren.
 p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
@@ -1886,6 +1887,19 @@ Konvergenz ~01:00–01:30, dann write_views → **J3-Ende
 elaps., 3676 % CPU, 17:05 h CPU-Time), 1 librelane, Watchdog
 0 Restarts, Monitor clean, RAM 185 G free (Peak 62,1 GB),
 Disk 1,2 T. Kein Stop.
+
+**01:0x (4/11) Cadence:** **drt-run-3 (letzte Re-Route):
+Iter 0 ENDE 8.393 Vios, Iter 1 gestartet** (01:0x; Iter-0-
+Dauer ~25 min; Wire 108.606.676 µm, Vias 11.123.957 — M1
+5,09 M / M2 5,24 M / M3 722k / M4 74k). Kleines Reroute-Set
+(396 Dioden-Nets) → nach Run-Mustern ~2–4 weitere
+Iterationen (Konvergenz ~01:30–02:30), dann write_views →
+**J3-Ende ~01:30–02:30** (state_out.json). dir 47:
+OpenEye_Asic.drc = 0 Bytes (aus Run 2, 0 Vios), drt-run-
+0/1/2/3 vorhanden, state_out noch offen. openroad 77976
+(11:44:39 elaps., 3686 % CPU, 18:01 h CPU-Time), 1 librelane,
+Watchdog 0 Restarts, Monitor clean, RAM 185 G free, Disk
+1,2 T. Kein Stop.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
