@@ -2284,6 +2284,24 @@ Layers (große symmetrische 5/0 22 M, 6/0 267 M, 8/0, 8/2
 XOR-Ende: 13:00–16:00. RAM 235 G avail, Disk 1,1 T,
 Monitor clean (12:35:25), 0 Restarts. Kein Stop.
 
+**13:0x (4/11) Cadence:** Step 62 XOR: weiterhin
+**22/43 Layers fertig, alle 0 Diff**; 30/0 = M3 jetzt bei
+~95 min (TopMetal1 brauchte 110 min, also in der gleichen
+Zeitklasse — das Kostenmodell „nur Asymmetrie" gilt so
+nicht: 10/0 mit 3,6× war in Minuten fertig, M3 mit 1,64×
+läuft >90 min; der Kosten-Treiber ist offenbar die
+geometrische Komplexität/dicke Polygonüberlagerung, nicht
+das Zahlenverhältnis). klayout 79216 aktiv: 356 % CPU,
+CPU-Time 22:00:27 (+69 min/30 min ≈ 230 %, stabil), RSS
+10 GB. Push wieder sauber (up-to-date). Eskalation: falls
+M3 > 2 h 30 min (14:05) → CPU-Time-Delta über 5 min
+fein prüfen (Tile-Stall-Check). Rest nach M3: 20 Layers;
+M4 50/0 + M5 67/0 sind klein (flach < 1,5 M) und M4 ~2×,
+M5 ~2–3× → je 10–60 min; große symmetrische 5/0 22 M,
+6/0 267 M, 8/0, 8/2 → Minuten-Klasse. ETA XOR-Ende:
+**14:00–17:00**. RAM 235 G avail, Disk 1,1 T, Monitor
+clean (13:05:33), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
