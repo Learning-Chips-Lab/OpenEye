@@ -2091,6 +2091,22 @@ CPU-Time stagniert → strace/Analyse; GDS-Writes
 beginnen → Phase 2 fast durch. RAM 207 G free, Disk 1,1 T
 free, Monitor clean, 0 Restarts. Kein Stop.
 
+**06:5x (4/11) Ad-hoc (User-Anfrage):** **Beide GDS fertig.**
+Step 59 Magic StreamOut **FERTIG, 1 h 35 min 56 s** (05:19→
+06:55): `OpenEye_Asic.magic.gds` **2,96 GB** (Phase 2 =
+~53 min Top-Cell, dann Write). Step 60 KLayout StreamOut
+**FERTIG, nur 2 min 40 s**: `OpenEye_Asic.klayout.gds`
+**1,61 GB** = **Primär-GDS des Flows** (K3-Lieferant). Step
+61 KLayout Render läuft (seit 06:57). Rest J5: 62/63 XOR →
+64/65 Antenna → 66 SealRing → 67 Filler → 68/69 Density →
+70/71 DRC → **72/73 Magic+KLayout DRC (langer Pol)** → 74
+Spice → 75 IllegalOverlap → 76/77 LVS → 78 EQY → J6:
+79/80 Setup/HoldViolations (SetupViolations 79 schlägt
+vermutlich vor HoldViolations 80: slow −1,451/17 Vio —
+Zahlen bereits 05:4x dokumentiert) → 81/82 MaxSlew/MaxCap →
+83 ReportManufacturability. RAM 212 G free, Disk 1,1 T
+free, Monitor clean, 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
