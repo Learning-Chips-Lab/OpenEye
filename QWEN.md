@@ -2540,6 +2540,19 @@ morgen Mittag. Rest nach M3: 9 Einträge. Push
 up-to-date. RAM 210 G avail, Disk 1,1 T, Monitor clean
 (21:02:37), 0 Restarts. Kein Stop.
 
+**21:3x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (3:27 h): M3 (seit 20:02) jetzt bei **~90 min** —
+90-min-Eskalationsgrenze erreicht, **Feincheck
+erledigt: CPU-Time 3:47:17 → 3:49:47 in 2:30 = 100 %
+einer Kern aktiv, kein Stall**. M3 (via-dichtestes
+Routing-Layer) ist in der Ratio-Phase einfach langsam;
+das 30-min-Makrotempo (~97 %) bleibt stabil. Erwartet:
+M3 total ~2–2,5 h. **ETA Step 64 nach oben: ~01:00–03:00**,
+Stopp-79-ETA: morgen (5/11) Mittag bis Nachmittag.
+RSS 35,4→35,8 GB (konstant). Rest nach M3: 9 Einträge.
+Push up-to-date. RAM 210 G avail, Disk 1,1 T, Monitor
+clean (21:27:43), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
