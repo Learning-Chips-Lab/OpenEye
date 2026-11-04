@@ -2329,6 +2329,20 @@ stabil), RSS 9,76 GB konstant. Rest nach M4: 50/2, 51/0,
 RAM 235 G avail, Disk 1,1 T, Monitor clean (14:05:49), 0
 Restarts. Kein Stop.
 
+**14:3x (4/11) Cadence:** Step 62 XOR: weiterhin
+**31 Layers fertig, alle 0 Diff**; 50/0 = M4 jetzt bei
+~57 min (1,85×, 1,44 M/2,66 M flach) — M3-Vergleich: 1,64×
+mit ~7× mehr Polygonen brauchte ~110 min, M4 also in der
+gleichen Zeitklasse, vermutlich 60–120 min total. klayout
+79216 aktiv: 382 % CPU, CPU-Time 1:05:17:54 (+69 min/30
+min ≈ 230 %, stabil), RSS 9,76 GB konstant. Eskalation:
+falls M4 > 2 h (15:40) → CPU-Time-Delta-Feincheck. Rest
+nach M4: 13 Layers (6/0 267 M/seite symmetrisch, 66/0 2,7
+M symmetrisch, M5 67/0 ~2–3×, 10 Klein-Layers). ETA
+XOR-Ende: 15:30–18:00. Push up-to-date. RAM 235 G avail,
+Disk 1,1 T, Monitor clean (14:35:57), 0 Restarts. Kein
+Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
