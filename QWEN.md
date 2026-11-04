@@ -2553,6 +2553,20 @@ RSS 35,4→35,8 GB (konstant). Rest nach M3: 9 Einträge.
 Push up-to-date. RAM 210 G avail, Disk 1,1 T, Monitor
 clean (21:27:43), 0 Restarts. Kein Stop.
 
+**22:0x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (3:59 h): M3 (seit 20:02) jetzt bei **~2 h 02 min**
+— 2-h-Beobachtungsgrenze erreicht; CPU einwandfrei
+aktiv (CPU-Time 4:19:04, +29 min/30 min ≈ 97 %, stabiles
+Makrotempo seit 19:00), RSS 35,8→37,3 GB (milder
+Anstieg, unkritisch). Innerhalb der 2–2,5-h-Schätzung,
+M3-Fertig vermutlich 22:15–23:00. Falls M3 > 3 h (23:02)
+→ tieferer Phase-Check (welcher Sub-Schritt der
+Ratio-Berechnung). Rest nach M3: 9 Einträge. ETA Step
+64: ~01:00–03:30. Stopp-79-ETA: morgen (5/11)
+Mittag/Nachmittag. Push up-to-date. RAM 208 G avail,
+Disk 1,1 T, Monitor clean (22:02:52), 0 Restarts. Kein
+Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
