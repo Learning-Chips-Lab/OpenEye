@@ -2107,6 +2107,20 @@ Zahlen bereits 05:4x dokumentiert) → 81/82 MaxSlew/MaxCap →
 83 ReportManufacturability. RAM 212 G free, Disk 1,1 T
 free, Monitor clean, 0 Restarts. Kein Stop.
 
+**07:1x (4/11) Cadence:** Step 61 Render ✓ (~1 min).
+Step 62 XOR läuft (seit ~06:58, klayout 496 % CPU):
+**Layer 126/~130, ~0,02 s/Layer → in Minuten fertig**
+(XOR: KLayout-GDS vs DEF-Netlist; ERROR_ON_XOR_ERROR=False
+→ Findings werden nur geloggt). Stopp-Analyse (User-Frage,
+06:5x): alle ERROR_ON_* = False → Flow läuft durch das
+ganze physische Signoff (bis EQY 78); **deterministischer
+Stopp an Step 79 SetupViolations** (SETUP_VIOLATION_
+CORNERS=['*'] aus openeye.json → nom_slow 17 Setup-Vio
+> 0; HoldViolations 80 würde ebenfalls erroren: fast 96 +
+typ 3). J6-Plan: 81–83 danach einmalig via FORCE_RESUME_
+STEP nachführen. RAM 213 G free, Disk 1,1 T free, Monitor
+clean, 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
