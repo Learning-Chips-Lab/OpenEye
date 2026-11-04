@@ -2075,6 +2075,22 @@ Primär-GDS des Flows (PRIMARY_GDSII_STREAMOUT_TOOL=klayout);
 Magic-GDS dient u. a. dem XOR. RAM 207 G free, Disk 1,1 T
 free, Monitor clean, 0 Restarts. Kein Stop.
 
+**06:4x (4/11) Cadence:** Step 59 Phase 2 (Top-Cell
+OpenEye_Asic) läuft seit ~46 min: GDS unverändert
+(595,111,936 B, mtime 06:01, 0 Byte/15 s), keine Temp-/
+Neu-Dateien seit 06:05; /proc-FD-Check: GDS ist
+write-geöffnet (fd 3), Magic schreibt nur noch nicht →
+reine Berechnungsphase (6,8 M Instanz-Refs + ~20 M
+Wire/Via-Elemente, Single-Thread; Größenordnung plausibel:
+~1–2 h Phase möglich). magicdnull 79137: 99,6 % CPU,
+CPU-Time wächst weiter (57:41 → **1:27:58**), RSS 13 GB
+stabil = arbeitet, kein Stall. Kein Stop-Kriterium
+relevant (48-h-Limit gilt nur für Magic DRC, nicht
+StreamOut). Eskalation im nächsten Check (07:1x):
+CPU-Time stagniert → strace/Analyse; GDS-Writes
+beginnen → Phase 2 fast durch. RAM 207 G free, Disk 1,1 T
+free, Monitor clean, 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
