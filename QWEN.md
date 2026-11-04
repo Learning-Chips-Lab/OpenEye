@@ -1500,12 +1500,13 @@ Resizer kein Crash). **J3 DRT (Dir 47) FERTIG 02:24 (4/11,
 839.853→0, Run1 219.236→0, Run2 46.085→0, Run3 8.393→0);
 Antennen-Repair 3× = **17.502 Dioden**; FINAL Wire
 **108.604.397 µm**, Vias **11.126.786**. **J4 läuft (Steps
-48–55): TrDRC PASS (0), Antennen-Rest 77 net + 78 pin,
-DisconnectedPins 292 (108 critical), WireLength ✓,
-FillInsertion FERTIG 04:30 (5,19 M Filler, Util 40,69 %)
-**; RCX/SPEF läuft (seit 04:32) → dann STAPostPNR (J4)
-(3 Corners @ 25 ns) → StreamOut/XOR/Magic+KLayout DRC/LVS →
-J6 End-Checker (HoldViolations expected ERROR) → K1–K3, L nur
+48–57 ✓, 58 aktiv): TrDRC PASS (0), Antennen-Rest 77 net +
+78 pin, DisconnectedPins 292 (108 critical), WireLength ✓,
+FillInsertion FERTIG 04:30 (5,19 M Filler, Util 40,69 %),
+RCX FERTIG (~14 min, 1,6 M Nets); STAPostPNR (3 Corners @
+25 ns, erste Zahlen: nom_typ Hold WNS −0,026 ns!) →
+StreamOut/XOR/Magic+KLayout DRC/LVS → J6 End-Checker
+(HoldViolations expected ERROR) → K1–K3, L nur
 dokumentieren.
 p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
 
@@ -2004,6 +2005,23 @@ Extraktion auf 108,6 M µm Wire + 11,1 M Vias, ~30–90 min
 erwartet → dann STAPostPNR (J4, 3 Corners @ 25 ns). Disk
 1,1 T free (−100 GB seit 13:19: Logs/ODB/SPEF), RAM 211 G.
 Monitor clean, 0 Restarts. Kein Stop.
+
+**05:1x (4/11) Cadence:** **Step 57 RCX FERTIG (~14 min:**
+04:32:41→04:47:00, **1.596.560 Nets** SPEF nom_*). **Step 58
+STAPostPNR läuft** (seit 04:47:00, 3 Corners parallel; pro
+Corner 1 `sta`-Prozess, PIDs 79052/53/54, je Single-Thread
+99,7 % CPU, ~14 GB RAM, 26 min Elapsed; Logs je ~130 MB,
+laufen noch). **Erste Post-Route-Zahlen (nom_typ, @ 25 ns,
+SPEF-basiert): Hold WNS −0,0255 ns** (mid-PNR war −2,021 →
+SPEF-Wiredelays verbessern Hold, wie erwartet). nom_fast:
+Hold reg-reg auf der bekannten Makro-Familie
+(A_DIN/A_ADDR → iact_layer_buffer/wght_buffer/iact_stream,
+~−0,09…−0,12 ns) — kein neuer Typ. nom_slow: Clock-Analyse
+(Network-Latency 10,38 ns, Skew 3,54 ns — tiefe CTS-
+Struktur, konsistent mit J2). Setup-Worst-Slack-Section bei
+nom_typ startet gerade. Rest: Reports + SDF-Write →
+**Step 58 ~05:30–06:15 fertig**. RAM 203 G free, Disk 1,1 T
+free, Monitor clean, 0 Restarts. Kein Stop.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
