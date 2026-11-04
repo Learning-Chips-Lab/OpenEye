@@ -2371,6 +2371,25 @@ Klein-Layers). ETA XOR-Ende: 16:30–19:30. Push
 up-to-date. RAM 235 G avail, Disk 1,1 T, Monitor clean
 (15:31:11), 0 Restarts. Kein Stop.
 
+**16:0x (4/11) Cadence:** Step 62 XOR: **M4 50/0 mit
+0 Diff fertig** (~150 min total) + danach 6 Layers in
+~25 min (50/2, 50/25, 51/0, 6/0, 63/0, 66/0 — alle 0;
+6/0 mit 267 M/seite symmetrisch war Minuten, 66/0 2,7 M
+symmetrisch auch). **38 Layers fertig, alle 0 Diff**;
+jetzt 67/0 = M5 (348k vs. 1,05 M flach, 3,0×) — das
+LETZTE asymmetrische Layer; Absolutwerte kleinster der
+drei Schweren, Verhältnis am höchsten → realistisch
+30–90 min. Rest danach: 5 Klein-Layers (67/2, 8/0, 8/2,
+8/29, 99/31; 8/0+8/2 ~30–40 M symmetrisch → Minuten).
+Sehr produktives Fenster: CPU-Time 1:07:38 → 1:13:05 in
+29 min (~11 Kerne durchgemischt). ETA XOR-Ende:
+**17:00–18:30**. Danach 63 Checker.XOR (Sekunden) →
+Antenna/SealRing/Filler/Density → DRC ×4 (Magic-DRC
+Langer-Pol 2–6 h) → Spice → IllegalOverlap → LVS ×2 →
+EQY → Stopp 79 heute abend. Push up-to-date. RAM 234 G
+avail, Disk 1,1 T, Monitor clean (16:06:21), 0 Restarts.
+Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
