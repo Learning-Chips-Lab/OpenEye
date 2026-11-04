@@ -2252,6 +2252,24 @@ Commits sicher lokal; Tages-Push war bereits erfüllt
 Flow selbst NICHT betroffen. RAM 234 G avail, Disk 1,1 T,
 Monitor clean (11:30:08), 0 Restarts. Kein Stop.
 
+**12:0x (4/11) Cadence:** Step 62 XOR: weiterhin
+**22/43 Layers fertig, alle 0 Diff**; 30/0 = M3 läuft
+seit ~11:3x (~35 min) — langsamer als geschätzt, aber
+erklärt sich: größtes Rest-Routing-Layer (Magic 12,2 M /
+KLayout 20,1 M flach) mit der höchsten verbliebenen
+Asymmetrie (1,64×). Vergleich: die 4 großen symmetrischen
+Layers 14/0+189/4+19/0+29/0 (~35 M flach gesamt) brauchten
+~20 min zusammen. klayout 79216: 5:08 h elapsed, 380 %
+CPU, CPU-Time 19:34 h (+76 min in 33 min ≈ 230 %, stabil),
+RSS 10 GB. Rest nach M3: 20 Layers (5/0 22 M, 6/0 267 M,
+8/0 30–40 M, 8/2 28–38 M symmetrisch → ~5 min/Layer;
+M4 50/0 + M5 67/0 mit ~1,5–2× → je 10–30 min). Revidierte
+ETA XOR-Ende: **13:00–16:00** (M3-bedingt nach hinten).
+Push-Retry 12:0x: weiterhin „Permission denied
+(publickey)" → bleibt auf der Beobachtungsliste (Key-Anfrage
+an GitHub, 4. Fehlschlag). RAM 235 G avail, Disk 1,1 T,
+Monitor clean (12:05:17), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
