@@ -2358,6 +2358,19 @@ nach M4: 13 Layers. ETA XOR-Ende: 16:00–19:00. Push
 up-to-date. RAM 235 G avail, Disk 1,1 T, Monitor clean
 (15:06:05), 0 Restarts. Kein Stop.
 
+**15:3x (4/11) Cadence:** Step 62 XOR: weiterhin
+**31 Layers fertig, alle 0 Diff**; 50/0 = M4 jetzt bei
+~117 min — **2-h-Eskalation ausgelöst und erledigt:**
+CPU-Time-Feincheck (3-min-Fenster 15:36:17→15:39:17):
+1-07:33:30 → 1-07:38:53 = **+5:23 ≈ 1,8 Kerne aktiv,
+kein Stall** (30-min-Schnitt ~222 %). M4 ist einfach
+geometrisch langsam, kein Pathologie. Erwartet: M4-Fertig
+~16:00–16:30. Rest nach M4: 13 Layers (6/0 267 M/seite
+symmetrisch, 66/0 2,7 M symmetrisch, M5 67/0 ~2–3×, 10
+Klein-Layers). ETA XOR-Ende: 16:30–19:30. Push
+up-to-date. RAM 235 G avail, Disk 1,1 T, Monitor clean
+(15:31:11), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
