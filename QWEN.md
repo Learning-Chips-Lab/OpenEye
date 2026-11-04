@@ -2121,6 +2121,25 @@ typ 3). J6-Plan: 81–83 danach einmalig via FORCE_RESUME_
 STEP nachführen. RAM 213 G free, Disk 1,1 T free, Monitor
 clean, 0 Restarts. Kein Stop.
 
+**07:4x (4/11) Cadence:** Step 62 XOR (GDS-vs-GDS: Magic
+2,96 GB vs KLayout 1,61 GB, 56 Threads, 500-µm-Tiles):
+**7 Layers fertig, alle 0 Differenzen** (1/0, 10/0, 10/2,
+10/25, 10/29, 111/0, 125/0 — beide GDS deckungsgleich
+bisher). Layer 126/0 läuft seit ~07:14 (~32 min): erstes
+schweres Routing-Layer (Magic 6.383 vs KLayout 350.270
+Polygonen — Repräsentations-Asymmetrie, XOR-Diff wird
+groß ausfallen, K2-Klassifikation). RDB-Write erst nach
+Layer-Ende (deshalb flow.log-Pause + kein xor.xml).
+XOR ist neuer J5-Langer-Pol: ~5–8 weitere
+Routing/Via-Layers (M2–M5, Vias) → XOR-Ende schätzbar
+~10:00–12:00. ERROR_ON_XOR_ERROR=False → läuft durch.
+klayout 79216 (337 % CPU, 2:42 h CPU-Time, 8,8 GB RAM).
+Danach 63 XOR (2.) → 64/65 Antenna → 66 SealRing → 67
+Filler → 68/69 Density → 70/71 DRC → 72/73 Magic+KLayout
+DRC → 74 Spice → 75 IllegalOverlap → 76/77 LVS → 78 EQY →
+Stopp 79. RAM 213 G free, Disk 1,1 T free, Monitor clean,
+0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
