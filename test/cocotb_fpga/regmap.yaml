@@ -5,6 +5,7 @@ registers:
   - {name: skipIact_reg, width: 1}
   - {name: skipWght_reg, width: 1}
   - {name: skipPsum_reg, width: 1}
+  - {name: dw_mode, width: 1}
   - {name: psum_q, width: 4}
   - {name: kernel_per_pe_cluster_reg, width: 4}
   - {name: kernel_size_x, width: 6}

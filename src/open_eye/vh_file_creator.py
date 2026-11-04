@@ -122,6 +122,7 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh',
             txt_file.write(f"parameter LIMIT_SIZE_IACT = {openeye_parameter.LIMIT_SIZE_IACT},\n")
             txt_file.write(f"parameter LIMIT_SIZE_WGHT = {openeye_parameter.LIMIT_SIZE_WGHT},\n")
             txt_file.write(f"parameter LIMIT_SIZE_PSUM = {openeye_parameter.LIMIT_SIZE_PSUM},\n")
+            txt_file.write(f"parameter DEPTHWISE_ENABLED = {openeye_parameter.DEPTHWISE_ENABLED},\n")
             
     else:
         with open(filename, 'w') as txt_file:

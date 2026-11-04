@@ -264,6 +264,11 @@ class OpenEyeParameters(object):
         except:
             self.LIMIT_SIZE_PSUM = 16        # Width of psum limit
 
+        try:
+            self.DEPTHWISE_ENABLED = int(os.getenv("DEPTHWISE_ENABLED"))
+        except:
+            self.DEPTHWISE_ENABLED = 16        # Enable DW Conv Calculations
+
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode
 

@@ -956,88 +956,152 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         return spad_storage
 
 class DwWghtStreamMapper(WghtStreamMapper):
-    """Weight stream mapper specialized for depthwise convolution layers.
-
-    This class extends WghtStreamMapper with depthwise convolution-specific weight
-    mapping logic. Depthwise convolution applies a separate kernel to each input channel
-    independently, requiring different weight distribution patterns than standard Conv2D.
-
-    Key differences from base class:
-    - One kernel per input channel instead of full cross-channel kernels
-    - Simpler weight indexing (no filter dimension)
-    - Support for single-cluster computation modes
-    - Different kernel row assignment strategy
-
-    Attributes:
-        Inherited from WghtStreamMapper
-
-    """
-
-    def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
-        """Initialize the depthwise convolution weight stream mapper.
-
-        Args:
-            params: OpenEye hardware parameters
-            layer_params: Depthwise convolution layer parameters
-            layer_repetition (int): Current repetition index
-            dram_layer_content: Weight tensor from DRAM [channels][kernel_h][kernel_w]
-            sparse_data (int): Enable sparse encoding (1) or use dense format (0)
-
+        """This class extends WghtStreamMapper with Conv2D-specific weight mapping logic.
+        Standard convolutions use full kernels across all input-output channel pairs,
+        with weights distributed across PEs based on spatial and channel partitioning.
+    
+        Key differences from base class:
+        - Supports multi-kernel-per-PE-cluster configurations
+        - Handles channel offset calculations for different clusters
+        - Accounts for single-cluster vs. multi-cluster computation modes
+    
+        Attributes:
+            Inherited from WghtStreamMapper
+    
         """
-        super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
-
-    def write_wght_data_storage(self, cl_x, cl_y, router):
-
-        layer_repetition = self.layer_repetition
-        layer_params = self.layer_params
-        params = self.params
-        dram = self.dram_weights
-
-        spad_storage = [[[0 for _ in range(2)] for _ in range(self.params.PARALLEL_MACS)] for _ in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS))]
-        overhead_counter = 0
-        kernel_x = 0
-
-        match layer_params.single_cluster_computation:
-            case 1:
-                channel = (cl_x  + cl_y * params.Clusters_X) + ((layer_repetition * params.Clusters))
-            case 2:
-                channel = cl_y + (layer_repetition * params.Clusters_Y)
-            case _:
-                channel = (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)
-
-                    
-        if(layer_params.filters == 1):
-            values_per_wght_data = 1
-        else:
-            values_per_wght_data = self.params.PARALLEL_MACS
-        for words_in_storage in range(int(self.params.Wghts_per_PE/self.params.PARALLEL_MACS)):
-            Mtrx_Row = (cl_y % layer_params.used_Y_cluster) * params.PEs_Y + router
-            if(Mtrx_Row < (layer_params.kernel_size[1] * int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))):
-                for spad_val_number in range(values_per_wght_data): 
-                    if(channel != int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)):
-                        spad_storage[words_in_storage][spad_val_number][0] = dram[channel][Mtrx_Row][kernel_x]
-                        spad_storage[words_in_storage][spad_val_number][1] = overhead_counter
-                        overhead_counter = overhead_counter + 1
-                        kernel_x = kernel_x + 1
-                        overhead_counter = 0
-                        if(kernel_x == layer_params.kernel_size[0]):
-                            kernel_x = 0
-                            channel = channel + 1
-            if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/self.params.PARALLEL_MACS)):
-                break
-        return spad_storage
-        
-    def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
-
-        layer_params = self.layer_params
-        params = self.params
-
-        spad_storage = [0 for _ in range(self.params.Wghts_Addr_per_PE)]
-
-        for words_in_storage in range(math.ceil(params.Wghts_Addr_per_PE)):
-            if(words_in_storage != (self.layer_params.used_wght_addr_per_PE - 1)):
-                spad_storage[words_in_storage] = \
-                    int(words_in_storage * math.ceil(layer_params.used_wght_per_PE/layer_params.kernel_size[0]/self.params.PARALLEL_MACS/ int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)))
-            else:
-                break
-        return spad_storage
+    
+        def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
+            """Initialize the Conv2D weight stream mapper.
+    
+            Args:
+                params: OpenEye hardware parameters
+                layer_params: Conv2D layer parameters
+                layer_repetition (int): Current repetition index
+                dram_layer_content: Weight tensor from DRAM
+                sparse_data (int): Enable sparse encoding (1) or use dense format (0)
+    
+            """
+            super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
+    
+        def write_wght_data_storage(self, cl_x, cl_y, router):
+            """Populate Conv2D weight data SPAD from DRAM for a specific PE.
+    
+            This overridden method handles Conv2D-specific weight distribution patterns,
+            including multi-kernel configurations and cluster-based channel partitioning.
+    
+            Conv2D weights are 4D: [input_channels][output_filters][kernel_h][kernel_w]
+            They are distributed across PEs based on:
+            - Kernel spatial position (kernel_h, kernel_w)
+            - Input channel assignment
+            - Output filter assignment
+            - Cluster location and computation mode
+    
+            Args:
+                cl_x (int): Cluster X coordinate
+                cl_y (int): Cluster Y coordinate
+                router (int): Router/PE ID within the cluster
+    
+            Returns:
+                list: Weight data SPAD as 3D array [words][parallel_macs][value, overhead]
+    
+            """
+            layer_repetition = self.layer_repetition
+            layer_params = self.layer_params
+            params = self.params
+            dram = self.dram_weights
+    
+            # Initialize SPAD storage with 2 parallel MACs (Conv2D specific)
+            spad_storage = [[[0 for _ in range(2)] for _ in range(params.PARALLEL_MACS)] for _ in range(int(self.params.Wghts_per_PE/params.PARALLEL_MACS))]
+            overhead_counter = 0
+            kernel_x = 0
+    
+            # Calculate channel partitioning for this router/PE
+            amount_of_channels = ((math.ceil((router+1) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)) - \
+                (math.ceil(router * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)))
+            amount_of_iacts = amount_of_channels * layer_params.kernel_size[1]
+    
+            # Calculate starting channel index for this transmission and router
+            channel = (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + \
+            math.ceil((math.ceil((router%layer_params.kernel_per_pe_cluster) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)))
+            channel_offset = channel
+    
+            # Calculate filter assignment accounting for different kernel computations per PE
+            filters_per_calculation = layer_params.used_channels
+    
+            # Determine starting filter for this repetition
+            start_current_repetition = int((math.floor(layer_repetition/layer_params.iact_transmissions_pe) % layer_params.needed_wght_transmissions) * filters_per_calculation)
+    
+            # Adjust filter start based on cluster allocation
+            amount_of_used_clusters = math.ceil((layer_params.used_Y_cluster*math.ceil(layer_params.iact_x_add_up/layer_params.strideX))/ params.PEs_X)
+            channel_offset_in_calculation = (params.Clusters_X * cl_y + cl_x) // amount_of_used_clusters
+            start_current_repetition = start_current_repetition + channel_offset_in_calculation
+            # Handle different cluster computation modes
+            amount_of_words = math.ceil(layer_params.used_wght_per_PE/params.PARALLEL_MACS)
+            # Populate SPAD with weights
+            spad_position = 0
+            for words_in_storage in range(amount_of_words):
+                # Calculate kernel row based on cluster Y and router assignment
+                kernel_row = ((cl_y % (layer_params.used_Y_cluster)) * params.PEs_Y + (router%layer_params.kernel_size[0]))
+                for spad_val_number in range(params.PARALLEL_MACS):
+                    # Check if still within valid channel range
+                    if(channel != 1 + int(layer_params.input_shape[3]/layer_params.iact_transmissions_pe) + (layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe)):
+                        try:
+                            # Load weight from DRAM: dram[channel][filter][kernel_row][kernel_x]
+                            spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][0] = dram[channel][kernel_x][kernel_row]
+                            if (spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][0] == 0):
+                                overhead_counter = overhead_counter + 1
+                            else:
+                                spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][1] = overhead_counter
+                                spad_position = spad_position + 1
+                                overhead_counter = 0
+                        except:
+                            # Out of bounds, use zero
+                            spad_storage[spad_position//params.PARALLEL_MACS][spad_position%params.PARALLEL_MACS][0] = 0
+                            spad_position = spad_position + 1
+    
+                        # Advance to next filter (with stride for different kernels)
+    
+                        channel = channel + 1
+                        spad_position = spad_position + (spad_position%params.PARALLEL_MACS)
+    
+                        # Wrap to next kernel X when channels exhausted
+                        if(channel == layer_params.used_channels + channel_offset):
+                            channel = channel_offset
+                            kernel_x = kernel_x + 1
+    
+                # Stop when SPAD is full
+                if (words_in_storage == math.ceil(layer_params.used_wght_per_PE/params.PARALLEL_MACS)):
+                    break
+            return spad_storage
+            
+        def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
+            """Generate address SPAD pointers for Conv2D weight data access.
+    
+            This overridden method creates address pointers specific to Conv2D access patterns,
+            accounting for the ratio of weights to input activations per PE.
+    
+            Args:
+                cl_x (int): Cluster X coordinate (unused)
+                cl_y (int): Cluster Y coordinate (unused)
+                router (int): Router/PE ID (unused)
+                data_spad: Weight data SPAD (unused)
+    
+            Returns:
+                list: Address SPAD containing integer pointers to weight regions
+    
+            """
+            layer_params = self.layer_params
+            params = self.params
+            spad_storage = [0 for _ in range(params.Wghts_Addr_per_PE)]
+            temp_value = 0
+            data_spad_position = 0
+            # Generate address pointers based on Conv2D access stride
+            for words_in_storage in range(math.ceil(params.Wghts_Addr_per_PE)):
+                # Generate all addresses or all but last depending on configuration
+                if((words_in_storage != (self.layer_params.used_wght_addr_per_PE - 1)) | (self.layer_params.used_wght_addr_per_PE == self.params.Wghts_Addr_per_PE)):
+                    # Calculate address stride based on weights per input activation
+                    spad_storage[words_in_storage] = \
+                        int(words_in_storage * math.ceil(layer_params.used_wght_per_PE/2/int(layer_params.used_iact_per_PE)))
+                else:
+                    break
+            return spad_storage

@@ -521,7 +521,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                             assert fc_write_check.done(), "FC activation RAM writes incomplete"
                             await fc_write_check
                         if("depthwise" in str(layer_parameters[layer_name].layer_name)):
-                            await cocotb.start_soon(rtl_test_utils.compare_stream_Dw(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_name], openeye_parameter, layer_es, dram, log_level, rel_layers))
+                            await cocotb.start_soon(rtl_test_utils.compare_stream_Dw(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_name], openeye_parameter, layer_es, dram, log_level, output_order, rel_layers))
                         elif("conv" in str(layer_parameters[layer_name].layer_name)):
                             await cocotb.start_soon(rtl_test_utils.compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters[layer_name], openeye_parameter, layer_es, dram, log_level, output_order, rel_layers))
                         elif("dense" in str(layer_parameters[layer_name].layer_name)):

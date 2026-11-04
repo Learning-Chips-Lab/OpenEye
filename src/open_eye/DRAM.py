@@ -87,14 +87,14 @@ class DRAMContents(object):
                 # Shape: [input_channels][kernel_height][kernel_width]
                 dram_weights[name] = [[[0 for l in range(layer_param.kernel_size[0])]
                                     for k in range(layer_param.kernel_size[1])]
-                                    for j in range(layer_param.input_shape[3])]
+                                    for j in range(layer_param.channels)]
             elif "conv" in str(name):
                 # Standard Conv2D: full kernel for each input-output channel pair
                 # Shape: [input_channels][output_filters][kernel_height][kernel_width]
                 dram_weights[name] = [[[[0 for m in range(layer_param.kernel_size[0])]
                                     for l in range(layer_param.kernel_size[1])]
                                     for k in range(layer_param.filters)]
-                                    for j in range(layer_param.input_shape[3])]
+                                    for j in range(layer_param.channels)]
             elif "dense" in str(name):
                 # Fully connected layer: weight matrix
                 # Shape: [filters][input_features]
@@ -116,7 +116,7 @@ class DRAMContents(object):
 
             if "depthwise" in str(name):
                 # Depthwise Conv: one bias per kernel (typically matches kernel height)
-                dram_bias[name] = [0 for k in range(layer_param.kernel_size[0])]
+                dram_bias[name] = [0 for k in range(layer_param.filters)]
             elif "conv" in str(name):
                 # Standard Conv2D: one bias per output filter
                 dram_bias[name] = [0 for m in range(layer_param.filters)]
@@ -135,9 +135,9 @@ class DRAMContents(object):
             # Create input feature map storage for each layer
             if "conv" in str(name):
                 # Conv layer input: 3D tensor [channels][height][width]
-                dram_fmap[name] = [[[[0 for l in range(layer_param.input_shape[2])]
-                                for k in range(layer_param.input_shape[1])]
-                                for j in range(layer_param.input_shape[3])]]
+                dram_fmap[name] = [[[[0 for l in range(layer_param.iact_size_y)]
+                                for k in range(layer_param.iact_size_x)]
+                                for j in range(layer_param.channels)]]
             elif "dense" in str(name):
                 # Dense layer input: 1D vector [features]
                 dram_fmap[name] = [[0 for j in range(layer_param.iact_size_x)]]
@@ -145,12 +145,12 @@ class DRAMContents(object):
                 # Flatten layer input: 3D tensor (pre-flattening shape)
                 dram_fmap[name] = [[[[0 for l in range(layer_param.input_shape[2])]
                                 for k in range(layer_param.input_shape[1])]
-                                for j in range(layer_param.input_shape[3])]]
+                                for j in range(layer_param.channels)]]
             elif "pooling" in str(name):
                 # Pooling layer input: 3D tensor [channels][height][width]
-                dram_fmap[name] = [[[[0 for l in range(layer_param.input_shape[2])]
-                                for k in range(layer_param.input_shape[1])]
-                                for j in range(layer_param.input_shape[3])]]
+                dram_fmap[name] = [[[[0 for l in range(layer_param.iact_size_y)]
+                                for k in range(layer_param.iact_size_x)]
+                                for j in range(layer_param.channels)]]
             elif "input" in str(name):
                 # Pooling layer input: 3D tensor [channels][height][width]
                 dram_fmap[name] = [[[[0 for l in range(layer_parameters[rel_layers["Next_Layer"][name][0]].input_shape[2])]
@@ -170,7 +170,7 @@ class DRAMContents(object):
                     # Conv output: 3D tensor [channels][height][width]
                     dram_fmap["Output"] = [[[[0 for l in range(layer_parameters[name].output_shape[2])]
                                         for k in range(layer_parameters[name].output_shape[1])]
-                                        for j in range(layer_parameters[name].output_shape[3])]]
+                                        for j in range(layer_parameters[name].filters)]]
                 elif "dense" in str(name):
                     # Dense output: 1D vector [features]
                     dram_fmap["Output"] = [[0 for l in range(layer_parameters[name].filters)]]
@@ -258,7 +258,7 @@ class DRAMContents(object):
                 # Load depthwise convolution biases
                 if (layer_param.kernel_size[0] != 1):
                     # Multiple bias values (one per kernel row)
-                    for x in range(layer_param.kernel_size[0]):
+                    for x in range(layer_param.filters):
                         self.bias[name][x] = int(math.floor(float(model[layer_parameters[name].layer_number_in_model].weights[1][x])))
                 else:
                     # Single bias value for 1x1 kernels

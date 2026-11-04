@@ -90,8 +90,6 @@
 ///   ROUTER_MODES_IACT      - Amount of bits in the Router for IACT
 ///   ROUTER_MODES_WGHT      - Amount of bits in the Router for WGHT
 ///   ROUTER_MODES_PSUM      - Amount of bits in the Router for PSUM
-///   BANO_MODES             - Amount of Modes in Batch Normalization
-///   AF_MODES               - Amount of Modes in AutoFunction CLuster
 ///   CLUSTERS               - Amount of clusters
 ///   PES                    - Amount of process elements
 /// 
@@ -116,8 +114,6 @@
 ///   router_mode_wght_i      - Configure Router Wght
 ///   router_mode_psum_i      - Configure Router Psum
 ///
-///   bano_cluster_mode_i     - Chooses mode for the batch normalization
-///   af_cluster_mode_i       - Chooses mode for the activation function
 ///   delay_psum_glb_i        - Chooses the needed delay for the psum data
 ///   fraction_bit_i          - Fraction bit for fixed point arithmetic
 ///
@@ -136,6 +132,7 @@ module OpenEye_Parallel #(
     parameter  PARALLEL_MACS       = 2,
 `endif
     ///Set parameters
+    parameter  DEPTHWISE_ENABLED   = 0,
     parameter  IS_TOPLEVEL         = 1,
     parameter  SERIAL              = 0,
     parameter  SPARSITY_EN         = 1,  // 1=sparse mode (default), 0=dense mode
@@ -157,8 +154,6 @@ module OpenEye_Parallel #(
     parameter  ROUTER_MODES_IACT   = 6,
     parameter  ROUTER_MODES_WGHT   = 1,
     parameter  ROUTER_MODES_PSUM   = 3,
-    parameter  BANO_MODES          = 2,
-    parameter  AF_MODES            = 4,
     parameter  CYCLE_WIDTH         = 32,
     localparam IACT_MEM_ADDR_BITS  = $clog2(IACT_MEM_ADDR_WORDS),
     localparam PSUM_MEM_ADDR_BITS  = $clog2(PSUM_MEM_ADDR_WORDS),
@@ -200,8 +195,6 @@ module OpenEye_Parallel #(
     input      [                                         11:0] iact_size_x_i,
     input      [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_channels_per_pe_i,
     input      [               $clog2(WGHT_ADDR_PER_PE+1)-1:0] wght_addr_len_i,
-    input      [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i,
-    input      [                         $clog2(AF_MODES)-1:0] af_cluster_mode_i,
     input      [                             NUM_GLB_PSUM-1:0] pooling_cluster_mode_i,
     input      [                                          3:0] delay_psum_glb_i,
     input      [                    $clog2(IACT_PER_PE+1)-1:0] input_activations_i,
@@ -216,7 +209,8 @@ module OpenEye_Parallel #(
     input      [  ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_i,
     input      [                                        8-1:0] needed_psum_storage_cycles_i,
     input      [                                        8-1:0] needed_iact_channel_cycles_i,
-    input                                                      psum_transmitted_i
+    input                                                      psum_transmitted_i,
+    input                                                      dw_mode
 );
   ///#######################
   ///Reset synchronization
@@ -244,8 +238,6 @@ module OpenEye_Parallel #(
   ///Register, that occupy hyperparameters
   reg                                                  data_mode_reg;
   reg                                                  gemm_mode_reg;
-  reg  [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_reg;
-  reg  [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_reg;
   reg  [                                          3:0] delay_psum_glb_reg;
   reg  [                             CLUSTERS*PES-1:0] compute_cluster_i_reg;
   reg  [                             CLUSTERS*PES-1:0] compute_mask_reg;
@@ -274,8 +266,6 @@ module OpenEye_Parallel #(
   wire                                                 status_reg_enable_i_w;
   wire                                                 data_mode_i_w;
   wire                                                 gemm_mode_i_w;
-  wire [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i_w;
-  wire [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i_w;
   wire [          ((PE_ROWS > 1) ? $clog2(PE_ROWS) : 1)-1:0] kernel_per_pe_cluster_i_w;
   wire [                             CLUSTERS*PES-1:0] compute_mask_i_w;
   reg  [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_reg;
@@ -292,8 +282,6 @@ module OpenEye_Parallel #(
   reg  [                   $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i_reg;
   reg  [                    $clog2(PSUM_PER_PE+1)-1:0] filters_reg;
   reg  [               $clog2(IACT_ADDR_PER_PE+1)-1:0] iact_channels_per_pe_i_reg;
-  reg  [          $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i_reg;
-  reg  [            $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i_reg;
   reg  [          ((PE_ROWS > 1) ? $clog2(PE_ROWS) : 1)-1:0] kernel_per_pe_cluster_i_reg;
   reg  [                                          3:0] iact_x_line_repetitions_reg;
   reg  [                             CLUSTERS*PES-1:0] compute_mask_i_reg;
@@ -397,8 +385,6 @@ module OpenEye_Parallel #(
       start_new_cycle                <= 0;
       data_mode_reg                  <= 0;
       gemm_mode_reg                  <= 0;
-      bano_cluster_mode_reg          <= 0;
-      af_cluster_mode_reg            <= 0;
       delay_psum_glb_reg             <= 0;
       compute_mask_reg               <= 0;
       fsm_current_state              <= MAIN_IDLE;
@@ -415,8 +401,6 @@ module OpenEye_Parallel #(
       needed_y_cls_i_reg             <= 0;
       filters_reg                    <= 0;
       iact_channels_per_pe_i_reg     <= 0;
-      bano_cluster_mode_i_reg        <= 0;
-      af_cluster_mode_i_reg          <= 0;
       kernel_per_pe_cluster_i_reg    <= 0;
       router_mode_wght_reg           <= 0;
       router_mode_iact_reg           <= 0;
@@ -437,8 +421,6 @@ module OpenEye_Parallel #(
       needed_y_cls_i_reg          <= needed_y_cls_i;
       filters_reg                 <= filters_i;
       iact_channels_per_pe_i_reg  <= iact_channels_per_pe_i;
-      bano_cluster_mode_i_reg     <= bano_cluster_mode_i;
-      af_cluster_mode_i_reg       <= {NUM_GLB_PSUM{af_cluster_mode_i}};
       kernel_per_pe_cluster_i_reg <= kernel_per_pe_cluster_i;
       iact_x_line_repetitions_reg <= iact_x_line_repetitions_i;
       compute_mask_i_reg          <= compute_mask_i;
@@ -451,8 +433,6 @@ module OpenEye_Parallel #(
         cycle_break_counter         <= 0;
         data_mode_reg               <= data_mode_i_w;
         gemm_mode_reg               <= gemm_mode_i_w;
-        bano_cluster_mode_reg       <= bano_cluster_mode_i_w;
-        af_cluster_mode_reg         <= af_cluster_mode_i_w;
         delay_psum_glb_reg          <= delay_psum_glb_i;
         kernel_per_pe_cluster_i_reg <= kernel_per_pe_cluster_i_w;
         compute_mask_reg            <= compute_mask_i_w;
@@ -648,6 +628,7 @@ module OpenEye_Parallel #(
         OpenEye_Cluster #(
             .SERIAL            (SERIAL),
             .PARALLEL_MACS     (PARALLEL_MACS),
+            .DEPTHWISE_ENABLED(DEPTHWISE_ENABLED),
             .CLUSTER_COLUMNS   (CLUSTER_COLUMNS),
             .CLUSTER_ROWS      (CLUSTER_ROWS),
             .SPARSITY_EN       (SPARSITY_EN),
@@ -775,11 +756,10 @@ module OpenEye_Parallel #(
             .ext_mem_psum_enable_o(psum_enable_o_cluster_w),
             .ext_mem_psum_ready_i (psum_ready_i_cluster_w),
 
-            .bano_cluster_mode_i(bano_cluster_mode_reg),
-            .af_cluster_mode_i  (af_cluster_mode_reg),
             .delay_psum_glb_i   (delay_psum_glb_reg),
             .enable_stream_i    (enable_stream_reg),
-            .data_stream_i      (data_stream_reg)
+            .data_stream_i      (data_stream_reg),
+            .dw_mode            (dw_mode)
         );
 
       end
@@ -805,8 +785,6 @@ module OpenEye_Parallel #(
       assign status_reg_enable_i_w     = status_reg_enable_i_reg;
       assign data_mode_i_w             = data_mode_i_reg;
       assign gemm_mode_i_w             = gemm_mode_i_reg;
-      assign bano_cluster_mode_i_w     = bano_cluster_mode_i_reg;
-      assign af_cluster_mode_i_w       = af_cluster_mode_i_reg;
       assign kernel_per_pe_cluster_i_w = kernel_per_pe_cluster_i_reg;
       assign compute_mask_i_w          = compute_mask_i_reg;
 
@@ -821,8 +799,6 @@ module OpenEye_Parallel #(
       assign status_reg_enable_i_w     = status_reg_enable_i;
       assign data_mode_i_w             = data_mode_i;
       assign gemm_mode_i_w             = gemm_mode_i;
-      assign bano_cluster_mode_i_w     = bano_cluster_mode_i;
-      assign af_cluster_mode_i_w       = {NUM_GLB_PSUM{af_cluster_mode_i}};
       assign kernel_per_pe_cluster_i_w = kernel_per_pe_cluster_i;
       assign compute_mask_i_w          = compute_mask_i;
     end

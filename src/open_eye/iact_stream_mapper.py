@@ -968,18 +968,12 @@ class DenseIactStreamMapper(IactStreamMapper):
         return spad_storage
     
 class DwIactStreamMapper(IactStreamMapper):
-    """Specialized mapper for depthwise convolution layer input activations.
+    """Specialized mapper for standard DWConv2D layer input activations.
 
-    This class handles activation mapping for depthwise convolutions, where each
-    input channel is convolved with its own kernel independently (no cross-channel
-    mixing). The activation distribution differs from standard Conv2D in how
-    channels are assigned to routers and clusters.
-
-    Key Differences from Standard Conv:
-    - Each channel processed independently (channel-wise parallelism)
-    - Different channel-to-cluster assignment strategy
-    - Modified create_pe_data_iact_stream without overhead bits
-    - Channel distribution across Y-clusters for depthwise operations
+    This class extends IactStreamMapper with Conv2D-specific logic for mapping
+    activations. The key difference from the base class is how channels are
+    distributed across routers - DWConv2D uses kernel_per_pe_cluster to group
+    multiple input channels per router for efficient filter parallelism.
 
     Attributes:
         Inherited from IactStreamMapper
@@ -987,11 +981,11 @@ class DwIactStreamMapper(IactStreamMapper):
     """
 
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_data):
-        """Initialize depthwise convolution activation stream mapper.
+        """Initialize Conv2D activation stream mapper.
 
         Args:
             params: OpenEye hardware parameters
-            layer_params: Depthwise convolution layer-specific parameters
+            layer_params: DWConv2D layer-specific parameters
             layer_repetition (int): Current repetition index
             dram_layer_content: Input feature map data from DRAM
             sparse_data (int): 1 for sparse encoding, 0 for dense
@@ -999,131 +993,139 @@ class DwIactStreamMapper(IactStreamMapper):
         """
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, sparse_data)
 
-    def write_iact_addr_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
-        layer_params = self.layer_params
-        params = self.params
-        spad_storage = [0 for _ in range(self.params.Iacts_Addr_per_PE)]
-        for words_in_storage in range(params.Iacts_Addr_per_PE):
-            if(words_in_storage < (math.ceil(layer_params.used_iact_per_PE/layer_params.kernel_size[0]))):
-                spad_storage[words_in_storage] = (layer_params.kernel_size[0] * (words_in_storage + 1))
-        return spad_storage
-    
-    def write_iact_data_glb(self, cl_x, cl_y, router):
-        storage = []
-        for cycle in range(self.layer_params.needed_refreshes_mx[self.layer_repetition][1],self.layer_params.needed_refreshes_mx[self.layer_repetition][2]):
-            for iact_cycle in range(self.layer_params.needed_Iact_writes):
-                if ((cl_y - cycle) % self.layer_params.used_Y_cluster == 0) :
-                    spad = self.write_iact_pe(cl_x, cl_y, router, cycle, iact_cycle)
-                    if (self.sparse_data == 1):
-                        storage.append(self.set_sparse_stream(spad))
-                    else:
-                        storage.append(spad)
-        return storage
-        
-    def create_complete_iact_stream(self, spad_storage):
-        params = self.params
-        stream = [[[[] for c in range(params.NUM_GLB_IACT)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
-        for cl_x in range(params.Clusters_X):
-            for cl_y in range(params.Clusters_Y):
-                for router in range(params.NUM_GLB_IACT):
-                    current_spad = spad_storage[cl_x][cl_y][router]
-                    for cycle in range(len(current_spad)):
-                        stream[cl_x][cl_y][router].extend(self.create_pe_data_iact_stream(current_spad[cycle]))
-        return stream
-
-    def create_pe_data_iact_stream(self, spad):
-        layer_params = self.layer_params
-        params = self.params
-
-        data_per_trans = math.floor(params.IACT_Trans_Bitwidth/params.IACT_Bitwidth)
-        line_counter = 0
-        stream = []
-        for spad_data_trans in range(math.ceil(params.Iacts_per_PE/data_per_trans)):
-            temp_trans = 0
-            for data_in_trans in range(data_per_trans):
-                try:
-                    number_of_value = (data_in_trans + spad_data_trans * data_per_trans)
-                    value = gtu.to_twos_complement_string(spad[1][number_of_value][0], self.params.IACT_Bitwidth)
-                    temp_trans = temp_trans + (int(value,2) << (data_in_trans * params.IACT_Bitwidth))
-                except:
-                    pass
-            stream.append(temp_trans)
-            line_counter = line_counter + 1
-            if (line_counter == math.ceil(layer_params.used_iact_per_PE/data_per_trans)):
-                break
-        return stream
-    
     def write_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
-        params = self.params
+        """Generate DWConv2D-specific activation data SPAD storage.
+
+        Overrides base class to implement Conv2D-specific channel distribution.
+        The key difference is that channels are grouped per router based on
+        kernel_per_pe_cluster, allowing multiple input channels to be processed
+        in parallel for filter operations.
+
+        Channel Distribution:
+        - Each router handles a subset of input channels
+        - Channels are divided by (iact_transmissions_pe * kernel_per_pe_cluster)
+        - Router index determines which channel subset this PE loads
+
+        Args:
+            cl_x (int): Cluster X-coordinate
+            cl_y (int): Cluster Y-coordinate
+            router (int): GLB router index (determines channel subset)
+            cycle (int): Current refresh/computation cycle
+            iact_cycle (int): Current activation write cycle
+
+        Returns:
+            list: SPAD storage as [[value, overhead_counter], ...] for each PE position
+
+        """
         layer_params = self.layer_params
+        params = self.params
+        layer_repetition = self.layer_repetition
         dram_fmap = self.dram_fmap
 
-        iact_temp_pos_x = 0
-        iact_temp_pos_y = 0
         overhead_counter = 0
+        line_counter = 0
         spad_storage = [[0 for _ in range(2)] for _ in range(params.Iacts_per_PE)]
 
-        for words_in_storage in range(math.ceil(params.Iacts_per_PE)):
-            if (words_in_storage < layer_params.used_iact_per_PE):
+        # === CONV2D-SPECIFIC: Calculate channel range for this router ===
+        # Each router handles a subset of input channels based on kernel_per_pe_cluster
+        amount_of_channels = ((math.ceil((router+1) * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)) - \
+            (math.ceil(router * layer_params.input_shape[3]/layer_params.iact_transmissions_pe/layer_params.kernel_per_pe_cluster)))
+
+        # Total activations = channels assigned to this router * kernel height
+        amout_of_iacts = amount_of_channels * layer_params.kernel_size[1]
+        for words_in_storage in range(amout_of_iacts):
+            if(words_in_storage < layer_params.used_iact_per_PE):
                 match layer_params.single_cluster_computation:
                     case 1:
-                        iact_temp_pos_x = int((((words_in_storage) % layer_params.kernel_size[1]) + \
-                        ((cycle * params.PEs_X * layer_params.strideX))) % \
-                        ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
-                        (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
-                        (router * params.NUM_GLB_IACT))
-
-                        iact_temp_pos_y = int(iact_cycle + (layer_params.strideY * math.floor( \
-                        ((cycle *params.PEs_X) * layer_params.strideX)/ \
-                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideY)))) - \
+                        iact_temp_pos_x = \
+                        int((math.floor((cycle * params.PEs_X) * layer_params.strideX) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
+                        math.floor(router/layer_params.kernel_per_pe_cluster) + \
+                        iact_cycle * math.floor(params.NUM_GLB_IACT/layer_params.kernel_per_pe_cluster)) - \
                         (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
-
                         
-                        channel = (cl_x  + cl_y * params.Clusters_X) + \
-                        ((self.layer_repetition * params.Clusters))
+                        iact_temp_pos_y = \
+                        int((words_in_storage % layer_params.kernel_size[1]) + \
+                        (layer_params.strideY * \
+                        math.floor(((cycle * params.PEs_X) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))
+
+                        # === DWCONV2D-SPECIFIC CHANNEL CALCULATION ===
+                        # Channel includes router modulo term for kernel_per_pe_cluster distribution
+                        # This differs from base class: channels grouped per router for filter parallelism
+                        channel = (math.ceil(((router%layer_params.kernel_per_pe_cluster) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))/layer_params.kernel_per_pe_cluster)) + \
+                        math.floor(words_in_storage/layer_params.kernel_size[0]) + \
+                        ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
                     case 2:
-                        iact_temp_pos_x = int(((cl_x * params.PEs_X * layer_params.strideX) + \
-                        ((words_in_storage) % layer_params.kernel_size[1]) + \
-                        (cycle * params.PEs_X * layer_params.strideX * params.Clusters_X)) % \
-                        ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
-                        (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
-                        (router * params.NUM_GLB_IACT))
-
-                        iact_temp_pos_y = \
-                        int(iact_cycle + (layer_params.strideY * math.floor( \
-                        (((cl_x * params.PEs_X) + \
-                        (cycle * params.PEs_X * params.Clusters_X)) * \
-                        layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideY)))) - \
+                        iact_temp_pos_x = \
+                        int((math.floor(((cl_x * params.PEs_X) + (cycle * params.PEs_X * params.Clusters_X)) * layer_params.strideX) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
+                        math.floor(router/layer_params.kernel_per_pe_cluster) + \
+                        iact_cycle * math.floor(params.NUM_GLB_IACT/layer_params.kernel_per_pe_cluster)) - \
                         (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
                         
-                        channel = cl_y + ((self.layer_repetition * params.Clusters_Y))
+                        iact_temp_pos_y = \
+                        int((words_in_storage % layer_params.kernel_size[1]) + \
+                        (layer_params.strideY * \
+                        math.floor(((cycle * params.PEs_X * params.Clusters_X) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))      
+
+                        channel = (math.ceil(((router%layer_params.kernel_per_pe_cluster) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))/layer_params.kernel_per_pe_cluster)) + \
+                        math.floor(words_in_storage/layer_params.kernel_size[0]) + \
+                        ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
                     case _:
-                        iact_temp_pos_x = int(((cl_x * params.PEs_X * layer_params.strideX) + \
-                        ((cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X * layer_params.strideX) + \
-                        ((words_in_storage) % layer_params.kernel_size[1]) ) % \
-                        ((layer_params.output_shape[2]+layer_params.add_up) * layer_params.strideX) - \
-                        (math.ceil((layer_params.kernel_size[1]-1)/2)) + \
-                        (router * params.NUM_GLB_IACT))
-
-                        iact_temp_pos_y = \
-                        int(iact_cycle + (layer_params.strideY * math.floor( \
-                        ((((cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
-                        ((cl_y % layer_params.used_Y_cluster) * params.Clusters_X * params.PEs_X) + \
-                        (cl_x * params.PEs_X) + \
-                        cycle * params.PEs_X * params.Clusters) * \
-                        layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideY)))) - \
+                        iact_temp_pos_x = \
+                        int((math.floor(((cl_x * params.PEs_X) + \
+                        (math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
+                        cycle * params.PEs_X * math.floor(params.Clusters/layer_params.used_Y_cluster)) * layer_params.strideX) % \
+                        ((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)) + \
+                        math.floor(router/layer_params.kernel_per_pe_cluster) + \
+                        iact_cycle * math.floor(params.NUM_GLB_IACT/layer_params.kernel_per_pe_cluster)) - \
                         (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
                         
-                        channel = math.floor(words_in_storage/layer_params.kernel_size[0]) + ((self.layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
+                        iact_temp_pos_y = \
+                        int((words_in_storage % layer_params.kernel_size[1]) + \
+                        (layer_params.strideY * \
+                        math.floor((((math.floor(cl_y / layer_params.used_Y_cluster) * params.PEs_X * params.Clusters_X) + \
+                        (cl_x * params.PEs_X) + \
+                        cycle * params.PEs_X * math.floor(params.Clusters/self.layer_params.used_Y_cluster)) * layer_params.strideX)/((layer_params.output_shape[2]+layer_params.add_up)*layer_params.strideX)))) - \
+                        (math.ceil((layer_params.kernel_size[1]-1)/2))                             #Zero Padding
 
-                if(((iact_temp_pos_x >= 0) & (iact_temp_pos_x < (layer_params.output_shape[1] * layer_params.strideX))) & \
-                ((iact_temp_pos_y) >= 0) & (iact_temp_pos_y < (layer_params.output_shape[2] * layer_params.strideY)) & \
-                    (channel < layer_params.output_shape[3])):
-                    spad_storage[words_in_storage][0]= dram_fmap[channel][iact_temp_pos_x][iact_temp_pos_y]
-                else:
-                    spad_storage[words_in_storage][0]= 1
-                spad_storage[words_in_storage][1] = overhead_counter
-                overhead_counter = overhead_counter + 1
+                        channel = (math.ceil(((router%layer_params.kernel_per_pe_cluster) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))/layer_params.kernel_per_pe_cluster))+ \
+                        math.floor(words_in_storage/layer_params.kernel_size[0]) + \
+                        ((layer_repetition % layer_params.iact_transmissions_pe) * math.ceil(layer_params.input_shape[3]/layer_params.iact_transmissions_pe))
+
+
+                if((((math.floor(cycle/ self.layer_params.used_Y_cluster) * params.Clusters_Y *  params.Clusters_X * params.PEs_X) + \
+                    ((math.floor(cl_y/ self.layer_params.used_Y_cluster) *  params.Clusters_X * params.PEs_X)) + (cl_x * params.PEs_X)) < \
+                   (layer_params.output_shape[1] * (layer_params.output_shape[2]+layer_params.add_up))) | (layer_params.single_cluster_computation != 0)):
+                    if(((iact_temp_pos_x >= 0) & (iact_temp_pos_x < (layer_params.output_shape[1] * layer_params.strideX))) & \
+                    ((iact_temp_pos_y) >= 0) & (iact_temp_pos_y < (layer_params.output_shape[2] * layer_params.strideY))):
+                        try:
+                            spad_storage[words_in_storage][0] = dram_fmap[channel][iact_temp_pos_x][iact_temp_pos_y]
+                        except:
+                            spad_storage[words_in_storage][0] = 0
+
+                    else:
+                        spad_storage[words_in_storage][0] = 1
+                    spad_storage[words_in_storage][1] = overhead_counter
+                    overhead_counter = overhead_counter + 1
+
+        return spad_storage
+        
+    def write_iact_addr_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
+
+        layer_params = self.layer_params
+        params = self.params
+        line_counter = 0
+        spad_storage = [0 for _ in range(self.params.Iacts_Addr_per_PE)]
+        if (layer_params.kernel_size[0] == 1):
+            spad_storage[0] = layer_params.used_channels
+        else:
+            for words_in_storage in range(params.Iacts_Addr_per_PE):
+                if(words_in_storage < (math.ceil(layer_params.used_iact_per_PE/layer_params.kernel_size[0]))):
+                    spad_storage[words_in_storage] = (layer_params.kernel_size[0] * (words_in_storage + 1))
+                line_counter = line_counter + 1
 
         return spad_storage
     

@@ -24,9 +24,7 @@
 ///      * Partial Sum (PSUM) storage for intermediate results
 ///
 /// 3. Post-Processing Pipeline:
-///    - Batch Normalization (bano_cluster)
 ///    - Delay handling (delay_cluster)
-///    - Activation Functions (af_cluster)
 ///
 /// Dataflow:
 /// 1. Input Stage:
@@ -76,8 +74,6 @@
 ///   PSUM_MEM_ADDR_WORDS    - Number of words in PSUM GLB
 ///   IACT_MEM_ADDR_BITS     - Width of words in IACT GLB
 ///   PSUM_MEM_ADDR_BITS     - Width of words in PSUM GLB
-///   BANO_MODES             - Amount of Modes in Batch Normalization
-///   AF_MODES               - Amount of Modes in AutoFunction CLuster
 /// 
 /// Ports:
 ///   iact_choose_i           - Specify the iact MUX and DEMUX for DATA, ENABLE, READY
@@ -100,8 +96,6 @@
 ///   ext_mem_psum_data_o     - Partial sum data to top modul
 ///   ext_mem_psum_enable_o   - Enable partial sum data transfer to top modul
 ///   ext_mem_psum_ready_i    - Ready signal for partial sum data transfer from top modul
-///   bano_cluster_mode_i     - Chooses mode for the batch normalization
-///   af_cluster_mode_i       - Chooses mode for the activation function
 ///   delay_psum_glb_i        - Chooses the needed delay for the psum data
 ///
 
@@ -131,8 +125,7 @@ module OpenEye_Cluster #(
     parameter IACT_MEM_ADDR_BITS  = $clog2(IACT_MEM_ADDR_WORDS),
     parameter PSUM_MEM_ADDR_WORDS = 384,
     parameter PSUM_MEM_ADDR_BITS  = $clog2(PSUM_MEM_ADDR_WORDS),
-    parameter BANO_MODES          = 2,
-    parameter AF_MODES            = 4
+    parameter DEPTHWISE_ENABLED   = 0
 ) (
     input                                  clk_i,
     input                                  rst_ni,
@@ -231,9 +224,8 @@ module OpenEye_Cluster #(
     input                                         enable_stream_i,
     input [                                 11:0] data_stream_i,
 
-    input [  $clog2(BANO_MODES)*NUM_GLB_PSUM-1:0] bano_cluster_mode_i,
-    input [    $clog2(AF_MODES)*NUM_GLB_PSUM-1:0] af_cluster_mode_i,
-    input [                                  3:0] delay_psum_glb_i
+    input [                                  3:0] delay_psum_glb_i,
+    input                                         dw_mode
 );
   ///#######################
   ///Reset synchronization
@@ -276,11 +268,12 @@ module OpenEye_Cluster #(
   /////////////////////////////////////////
 
   PE_cluster #(
-      .IS_TOPLEVEL(0),
-      .SERIAL     (SERIAL),
-      .PARALLEL_MACS(PARALLEL_MACS),
-      .TOP_CLUSTER(TOP_CLUSTER),
-      .SPARSITY_EN(SPARSITY_EN),
+      .IS_TOPLEVEL      (0),
+      .SERIAL           (SERIAL),
+      .PARALLEL_MACS    (PARALLEL_MACS),
+      .TOP_CLUSTER      (TOP_CLUSTER),
+      .SPARSITY_EN      (SPARSITY_EN),
+      .DEPTHWISE_ENABLED(DEPTHWISE_ENABLED),
 
       .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
       .DATA_WGHT_BITWIDTH(DATA_WGHT_BITWIDTH),
@@ -335,7 +328,8 @@ module OpenEye_Cluster #(
       .pe_router_psum_data_o  (pe_router_psum_data_out),
       .pe_router_psum_enable_o(pe_router_psum_enable_out),
       .enable_stream_i        (enable_stream_i),
-      .data_stream_i          (data_stream_i)
+      .data_stream_i          (data_stream_i),
+      .dw_mode                (dw_mode)
 
   );
 

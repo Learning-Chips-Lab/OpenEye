@@ -164,6 +164,7 @@ module PE_cluster #(
     parameter  TOP_CLUSTER            = 1,
     // Approach 3: set to 1 to add horizontal iact pass-through ports for systolic GEMM
     parameter  SYSTOLIC_GEMM_EN       = 0,
+    parameter  DEPTHWISE_ENABLED      = 0,
     parameter  DATA_IACT_BITWIDTH     = 8,
     parameter  DATA_PSUM_BITWIDTH     = 20,
     parameter  DATA_WGHT_BITWIDTH     = 8,
@@ -228,7 +229,8 @@ module PE_cluster #(
     output [                      PE_ROWS-1:0]   iact_pass_ready_o,
     output [   DATA_IACT_BITWIDTH*PE_ROWS-1:0]   iact_pass_data_o,
     output [                      PE_ROWS-1:0]   iact_pass_enable_o,
-    input  [                      PE_ROWS-1:0]   iact_pass_ready_i
+    input  [                      PE_ROWS-1:0]   iact_pass_ready_i,
+    input                                        dw_mode
 );
 
   ///#######################
@@ -312,6 +314,7 @@ module PE_cluster #(
             .SERIAL                (SERIAL),
             .PARALLEL_MACS         (PARALLEL_MACS),
             .SPARSITY_EN           (SPARSITY_EN),
+            .DEPTHWISE_ENABLED     (DEPTHWISE_ENABLED),
             .SYSTOLIC_GEMM_EN      (SYSTOLIC_GEMM_EN),
             .DATA_IACT_BITWIDTH    (DATA_IACT_BITWIDTH),
             .DATA_WGHT_BITWIDTH    (DATA_WGHT_BITWIDTH),
@@ -326,27 +329,28 @@ module PE_cluster #(
             .TRANS_BITWIDTH_IACT   (TRANS_BITWIDTH_IACT),
             .NUM_GLB_IACT          (NUM_GLB_IACT)
         ) pe (
-            .clk_i(clk_i),
-            .rst_ni(rst_nw),
-            .iact_select_i(iact_sel_w),
-            .compute_i(compute_i[i+j*PE_COLUMNS]),
+            .clk_i             (clk_i),
+            .rst_ni            (rst_nw),
+            .iact_select_i     (iact_sel_w),
+            .compute_i         (compute_i[i+j*PE_COLUMNS]),
+            .dw_mode           (dw_mode),
 
-            .iact_data_i  (pe_iact_data),
-            .iact_enable_i(pe_iact_enable),
-            .iact_ready_o (iact_ready_o_w),
+            .iact_data_i       (pe_iact_data),
+            .iact_enable_i     (pe_iact_enable),
+            .iact_ready_o      (iact_ready_o_w),
 
-            .wght_data_i  (pe_wght_data[(j+1)*TRANS_BITWIDTH_WGHT-1:j*TRANS_BITWIDTH_WGHT]),
-            .wght_enable_i(pe_wght_enable[j]),
-            .wght_ready_o (wght_ready_o_w),
+            .wght_data_i       (pe_wght_data[(j+1)*TRANS_BITWIDTH_WGHT-1:j*TRANS_BITWIDTH_WGHT]),
+            .wght_enable_i     (pe_wght_enable[j]),
+            .wght_ready_o      (wght_ready_o_w),
 
-            .psum_data_i    (psum_data_i_w),
-            .psum_enable_i  (psum_enable_i_w),
-            .psum_ready_o   (psum_ready_o_w),
-            .psum_data_o    (psum_data_o_w),
-            .psum_enable_o  (psum_enable_o_w),
-            .psum_ready_i   (psum_ready_i_w),
-            .enable_stream_i(enable_stream_i),
-            .data_stream_i  (data_stream_i),
+            .psum_data_i       (psum_data_i_w),
+            .psum_enable_i     (psum_enable_i_w),
+            .psum_ready_o      (psum_ready_o_w),
+            .psum_data_o       (psum_data_o_w),
+            .psum_enable_o     (psum_enable_o_w),
+            .psum_ready_i      (psum_ready_i_w),
+            .enable_stream_i   (enable_stream_i),
+            .data_stream_i     (data_stream_i),
             // Approach 3 systolic pass-through
             .iact_pass_data_i  (iact_pass_data_i_w),
             .iact_pass_enable_i(iact_pass_enable_i_w),

@@ -132,6 +132,7 @@ module OpenEye_FPGA #(
       parameter LIMIT_SIZE_IACT = 18,
       parameter LIMIT_SIZE_WGHT = 12,
       parameter LIMIT_SIZE_PSUM = 12,
+      parameter DEPTHWISE_ENABLED = 0,
   `else
     `include "parameters_FPGA.vh"
       // Defaultvalues
@@ -162,6 +163,7 @@ module OpenEye_FPGA #(
     parameter TRANS_BITWIDTH_PSUM = DATA_PSUM_BITWIDTH * (SERIAL == 1 ? 1 : PARALLEL_MACS),
     parameter PSUM_BUFFER_WIDTH = NUM_GLB_PSUM == 1 ? DATA_PSUM_BITWIDTH : DATA_PSUM_BITWIDTH * 2,
     parameter DATA_IACT_OVERHEAD  = 4,
+    parameter CHANNEL_CYCLE_WIDTH = 12,
 
     parameter PES = NUM_GLB_PSUM * NUM_GLB_WGHT,
 
@@ -526,8 +528,8 @@ reg [1023:0] fst_path;
   wire [ 1:0] channel_div_trans;
   wire [ 3:0] iact_channels_per_pe;             // Channels assigned to one PE (from dma_storage).
   wire [ 3:0] iact_channels_per_pe_next_layer;  // Channel count for the next layer (from dma_storage); used when routing psums back as iact.
-  reg  [ 4:0] iact_channels_counter;             // Counts which channel batch [0..iact_channel_max_cycles-1] is currently being processed.
-  wire [ 7:0] iact_channel_max_cycles;          // Total number of channel batches per layer pass (from dma_storage).
+  reg  [CHANNEL_CYCLE_WIDTH-1:0] iact_channels_counter;             // Counts which channel batch [0..iact_channel_max_cycles-1] is currently being processed.
+  wire [CHANNEL_CYCLE_WIDTH-1:0] iact_channel_max_cycles;          // Total number of channel batches per layer pass (from dma_storage).
   wire [15:0] psum_x_all_cluster;               // Psum X with multiple channels counting seperate
   wire [ 3:0] iact_x_per_cluster;
   wire [11:0] iact_x_add_up;
@@ -543,6 +545,7 @@ reg [1023:0] fst_path;
   wire [BRANCHES_CLOG == 0 ? 0 : BRANCHES_CLOG-1:0] choose_iact_buffer_input;                                // Value choose_iact_buffer should take when the host is loading new activations (from dma_storage).
   wire [BRANCHES_CLOG == 0 ? 0 : BRANCHES_CLOG-1:0] choose_iact_buffer_output;                               // Value choose_iact_buffer should take when psums are being written back as activations (from dma_storage).
   wire fully_connected_layer;                                   // When 1: layer is a fully-connected (FC) layer; modifies iact packing and weight/psum addressing (from dma_storage).
+  wire dw_mode;                                                 // When 1: layer is a depthwise convolution (DW) layer; modifies pe calculations.
   wire pooling;                                             // When 1: skip compute; instead run a 2×2 max-pool on the iact buffer (from dma_storage).
   reg [           BUFFER_WIDTH_IACT-1:0] iact_buffer_addr_reg      [IACT_RAM_CELLS-1:0]; // Per-cell read/write address; advanced by the sliding-window logic in CONVERT_IACT.
   reg [           BUFFER_WIDTH_IACT-1:0] buffer_addr_temp_reg; // Saved address snapshot used to restart a cell's address in MAXPOOLING_SEND.
@@ -3051,6 +3054,7 @@ end
         .skipIact_reg(skipIact_reg),
         .skipWght_reg(skipWght_reg),
         .skipPsum_reg(skipPsum_reg),
+        .dw_mode(dw_mode),
         .psum_q(psum_q),
         .kernel_per_pe_cluster_reg(kernel_per_pe_cluster_reg),
         .kernel_size_x(kernel_size_x),
@@ -3255,13 +3259,15 @@ end
         .ROUTER_MODES_PSUM(ROUTER_MODES_PSUM),
 
         .CYCLE_WIDTH  (CYCLE_WIDTH),
-        .PARALLEL_MACS(PARALLEL_MACS)
+        .PARALLEL_MACS(PARALLEL_MACS),
+        .DEPTHWISE_ENABLED(DEPTHWISE_ENABLED)
 
     ) OpenEye_Parallel (
         //Clock and Reset Ports
         .clk_i    (clk_i),
         .rst_ni   (rst_n),
         .compute_i(compute_reg),
+        .dw_mode  (dw_mode),
 
         //Ports for GLBs and PEs
         .iact_choose_i(iact_choose_i_oep_w),
@@ -3297,8 +3303,6 @@ end
         .filters_i                    (filters),
         .iact_channels_per_pe_i       (iact_channels_per_pe),
         .wght_addr_len_i              (wght_addr_len_reg),
-        .bano_cluster_mode_i          (bano_cluster_mode_reg),
-        .af_cluster_mode_i            (af_cluster_mode_reg),
         .pooling_cluster_mode_i       ({NUM_GLB_PSUM{1'd0}}),
         .kernel_per_pe_cluster_i      (kernel_per_pe_cluster_reg[
                                        ((NUM_GLB_WGHT > 1) ? $clog2(NUM_GLB_WGHT) : 1)-1:0]),

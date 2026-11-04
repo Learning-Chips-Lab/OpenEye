@@ -465,6 +465,7 @@ module PE #(
     parameter integer DATA_PSUM_BITWIDTH = 20,
     parameter IS_TOPLEVEL = 1,
     parameter SERIAL      = 1,
+    parameter DEPTHWISE_ENABLED = 1,
 
     parameter integer USE_DSP          = 0,  // 0=standard multiplier+adder (default), 1=DSP48 slice optimization
     // Approach 3: when 1, expose horizontal iact pass-through ports for systolic GEMM dataflow
@@ -527,6 +528,7 @@ module PE #(
     input                                             compute_i,
     input                                             enable_stream_i,
     input      [                                11:0] data_stream_i,
+    input                                             dw_mode,
     // Approach 3: horizontal iact pass-through for systolic GEMM
     // Active only when SYSTOLIC_GEMM_EN=1; otherwise tied to 0 / ignored
     input      [         DATA_IACT_BITWIDTH-1:0]      iact_pass_data_i,
