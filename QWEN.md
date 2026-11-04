@@ -2415,6 +2415,20 @@ abend / morgen früh. Push up-to-date. RAM 235 G avail,
 Disk 1,1 T, Monitor clean (17:06:36), 0 Restarts. Kein
 Stop.
 
+**17:3x (4/11) Cadence:** Step 62 XOR: weiterhin
+**38 Layers fertig, alle 0 Diff**; 67/0 = M5 jetzt bei
+~90 min — minimal über dem 30–90-min-Fenster, aber
+einwandfrei aktiv: 381 % CPU, CPU-Time 1-16:34:13 (+69
+min/30 min ≈ 230 %, stabil), RSS 9,94 GB konstant.
+Vergleich der drei Schweren: M3 1,64×/32 M = 110 min,
+M4 1,85×/4,1 M = 150 min, M5 3,0×/1,4 M = 90 min+ —
+M5 total vermutlich 120–150 min. Rest nach M5: 5
+Klein-Layers (67/2, 8/0, 8/2, 8/29, 99/31) in Minuten →
+XOR-Ende realistisch 18:15–19:30. Danach 63–78, Magic
+DRC Langer-Pol 2–6 h, Stopp 79 heute abend / morgen
+früh. Push up-to-date. RAM 234 G avail, Disk 1,1 T,
+Monitor clean (17:36:44), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
