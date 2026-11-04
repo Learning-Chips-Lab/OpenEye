@@ -2240,9 +2240,17 @@ meist symmetrisch/klein (große symmetrische 5/0 22 M,
 6/0 267 M, 8/0 30–40 M, 8/2 28–38 M → schnell wie 1/0);
 M4 50/0 (~1,5–2×) + M5 67/0 (~2×) je ~10–30 min.
 Revidierte ETA XOR-Ende: **12:00–13:00**. GDS-Äquivalenz
-steht: 22/22 Layers deckungsgleich. RAM 234 G avail,
-Disk 1,1 T, Monitor clean (11:30:08), 0 Restarts. Kein
-Stop.
+steht: 22/22 Layers deckungsgleich. **Push-Problem (neu):**
+git push utz12 ~11:3x abwärts "Permission denied
+(publickey)" — Key SHA256:NO9IoscV… wird offeriert, von
+GitHub abgelehnt (lief bis 11:0x noch; Key/ssh-seitig
+intakt, kein HTTPS-Credential-Helper konfiguriert, Retry
+nach 20 s ebenfalls abgelehnt) → vermutlich transienter
+GitHub-Glitch/Throttling (geteilter Host est-srv02).
+Commits sicher lokal; Tages-Push war bereits erfüllt
+(11:0x, c72e617). Bei Folge-Checks erneut versuchen.
+Flow selbst NICHT betroffen. RAM 234 G avail, Disk 1,1 T,
+Monitor clean (11:30:08), 0 Restarts. Kein Stop.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
