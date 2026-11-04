@@ -1502,8 +1502,8 @@ Antennen-Repair 3× = **17.502 Dioden**; FINAL Wire
 **108.604.397 µm**, Vias **11.126.786**. **J4 läuft (Steps
 48–55): TrDRC PASS (0), Antennen-Rest 77 net + 78 pin,
 DisconnectedPins 292 (108 critical), WireLength ✓,
-FillInsertion: 5,19 M Filler, verbose-Phase 84 % (~04:50
-Phase-Ende, Step ~05:00–05:30)**; weiter: RCX (SPEF) → STAPostPNR
+FillInsertion FERTIG 04:30 (5,19 M Filler, Util 40,69 %)
+**; RCX/SPEF läuft (seit 04:32) → dann STAPostPNR (J4)
 (3 Corners @ 25 ns) → StreamOut/XOR/Magic+KLayout DRC/LVS →
 J6 End-Checker (HoldViolations expected ERROR) → K1–K3, L nur
 dokumentieren.
@@ -1985,6 +1985,25 @@ fertig**, dann CellFrequencyTables + RCX (SPEF). openroad
 78851 (1:42:18 elaps., 1,5 % CPU, 1:35 CPU-Time = I/O-Loop),
 1 librelane (CPU-Time 2:59:47, wächst), Monitor clean,
 RAM 198 G free, Disk 1,2 T. Kein Stop.
+
+**04:4x (4/11) Cadence:** **Step 55 FillInsertion FERTIG
+04:30 (2 h 03 min 3 s)** — 5.191.641 Filler; finale
+Instanz-Summe **6.811.212** (verbose-Phase = exakt
+13.622.424 Zeilen = 2×6,81 M, Schätzung 03:0x aufgegangen).
+**K1-Metriken (State 55):** Die 110,25 mm² (10,5×10,5),
+Core 97,16 mm², **Utilization 40,69 %** (stdcell 34,57 %);
+stdcell **1.618.560** (sequentiell 445.099, kombin.
+662.230, ICG 19.968, Inverter 34.251, timing_repair_buffer
+328.124, clock_buffer 106.906, clock_inv 2.638, hold_buffer
+7, setup_buffer 43, antenna_cell **19.344** (= 1.842 GRT +
+17.502 DRT-Dioden ✓), fill_cell 5.191.641), Makros 41
+(9,09 mm²), Pads 827 (68 in / 67 out / 8 pwr / 684 spacer).
+Step 56 CellFrequencyTables ✓ (1:42). **Step 57 RCX läuft**
+(seit 04:32:41, 48 Threads, SPEF für nom_*) — Parasiten-
+Extraktion auf 108,6 M µm Wire + 11,1 M Vias, ~30–90 min
+erwartet → dann STAPostPNR (J4, 3 Corners @ 25 ns). Disk
+1,1 T free (−100 GB seit 13:19: Logs/ODB/SPEF), RAM 211 G.
+Monitor clean, 0 Restarts. Kein Stop.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
