@@ -2601,6 +2601,20 @@ stabil). Danach 65–71 → 72/73 Magic DRC (2–6 h) → 74–78
 up-to-date. RAM 163 G avail, Disk 1,1 T, Monitor clean
 (23:03:07), 0 Restarts. Kein Stop.
 
+**23:3x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (5:29 h): via3_drw (seit 22:55) bei ~40 min —
+langsamere Via-Phase als V1 (18 min) und V2 (23 min),
+aber plausibel: V3 ist das großflächigste Via-Layer
+(Kopplung M3↔M4, beides Routing-lastig). CPU einwandfrei
+aktiv (5:49:06, +29 min/30 min ≈ 97 %), RSS 84,8 GB
+konstant (kein neuer 50-GB-Spike, M4-Subphase-Risiko
+also nicht eingetreten). Rest nach V3: 7 Einträge (M4,
+V4, M5, V5, TV1, TM1, TV2, TM2). ETA Step 64:
+~02:00–05:00 (V3-Überschuss). Stopp-79-ETA: morgen
+(5/11) Nachmittag/Abend. Push up-to-date. RAM 163 G
+avail, Disk 1,1 T, Monitor clean (23:33:14), 0 Restarts.
+Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
