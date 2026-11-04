@@ -2270,6 +2270,20 @@ Push-Retry 12:0x: weiterhin „Permission denied
 an GitHub, 4. Fehlschlag). RAM 235 G avail, Disk 1,1 T,
 Monitor clean (12:05:17), 0 Restarts. Kein Stop.
 
+**12:3x (4/11) Cadence:** Step 62 XOR: weiterhin
+**22/43 Layers fertig, alle 0 Diff**; 30/0 = M3 bei ~65 min
+(größtes Rest-Routing-Layer, 1,64× Asymmetrie — langsamste
+Klasse der Verbliebenen, aber klayout 79216 aktiv: 367 %
+CPU, CPU-Time 20:50:48 = +76 min in 32 min ≈ 234 %, RSS
+10 GB stabil, kein Stall). **Push-Problem BEHOBEN:** Retry
+12:3x erfolgreich — `c72e617..bf74a74` auf utz12 (9d5da41,
+0da023f, bf74a74 nachgeholt); das 11:3x-Phänomen war
+tatsächlich transient (GitHub-Seite). Rest nach M3: 20
+Layers (große symmetrische 5/0 22 M, 6/0 267 M, 8/0, 8/2
+→ schnell; M4 50/0 + M5 67/0 → je 10–30 min). ETA
+XOR-Ende: 13:00–16:00. RAM 235 G avail, Disk 1,1 T,
+Monitor clean (12:35:25), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
