@@ -198,12 +198,13 @@ final STA checks everything at 25 ns.
   Worst-Endpoint unfixierbar (Setup/Hold-Konflikt). Fläche +0,7 %
   (≤ 3 % ✓). Hold bleibt das offene Thema für L (Makro-A_CLK-
   Skew); Signoff-STA (J4) zeigt das finale Bild pro Corner.
-- [ ] **J3 DetailedRouting (dir 47):** track `[INFO DRT-…]` iteration
-  lines and the violation count per iteration every 30 min. Expected:
-  10–24 h, violations falling to 0 (or a few). The monitor's
-  "log flat" is NOT a stall as long as openroad has CPU time growing
-  (`ps -o time`). Stop criterion: violations not decreasing over 3
-  consecutive iterations after iteration 20, or > 48 h.
+- [x] **J3 DetailedRouting (dir 47):** DONE 02:24 (4/11), Laufzeit
+  **13 h 05 min** (13:19→02:24). 4 DRT-Runs, alle → **0 DRC-Violations**
+  (Run0 839.853→0; Run1 219.236→0; Run2 46.085→0; Run3 8.393→0),
+  Antennen-Repair 3× (14.996+2.110+396 = **17.502 Dioden**),
+  FINAL Wire **108.604.397 µm**, Vias **11.126.786**. State:
+  `47-openroad-detailedrouting/state_out.json` (02:24). Kein Stop
+  je relevant. Details: Cadence-Zeilen 13:3x–02:0x + 02:3x.
 - [ ] **J4 post-route + signoff STA:** RemoveRoutingObstructions,
   CheckAntennas, TrDRC (count!), DisconnectedPins, WireLength, Fill,
   RCX, **STAPostPNR**: record setup/hold WNS/TNS for EVERY corner at
@@ -1488,22 +1489,22 @@ Referenz-Resizer brauchte 5 h 10 min bei nur 1 % Hold-TNS-Cap;
 alten Dir-43-Werte (hold −2,0365) – Gate liest `latest_dir`, ab
 Dir 46 gelten die 40-MHz-Zahlen.
 
-**Status:** **J2 PASSED (13:3x 11/3, Plan v3) — J3 DRT läuft.**
+**Status:** **J3 DONE (02:24 4/11, 0 DRC-Violations) — J4 post-route läuft.**
 p2_16 Step 45 DONE (3 h 37 m): Setup-Repair (final −3.961 slow /
 −8 ps nom_typ @ Latch), Hold-Repair (22.090 Iter, final −2.293
 fast / −2.021 nom_typ, TNS −208, 143 reg→Makro-Verletzer,
 dokumentiert → v3: weiter), dpl + check_placement. **Dir 46
 STAMidPNR-3 DONE (16 min 35 s): kein Stop** (Core-Setup −8 ps,
-Resizer kein Crash). **J3 DRT (Dir 47) seit ~13:19: Run 0
-FERTIG, 0 DRC-Violations** (11 Iterationen: 839.853 → 0;
-Wire 108,5 M µm, Vias 11,02 M; kein Stop). **Post-DRT-
-Antennen-Repair: 7.289 → 14.996 Dioden → Run 1 (0 Vios),
-2. check 2.593 → +2.110 Dioden → Run 2 (0 Vios), 3. check
-503 → +396 Dioden (insg. 17.502) → Run 3 FERTIG (0 Vios)**;
-alle 4 Runs DRC-clean, write_views läuft (verbose
-Global-Connect-Phase ~02:20); J3-Ende ~02:25–02:40
-(state_out.json).
-Danach J4/J5 Signoff, J6 End-Checker, K1–K3, L nur
+Resizer kein Crash). **J3 DRT (Dir 47) FERTIG 02:24 (4/11,
+13 h 05 min): 4 DRT-Runs alle 0 DRC-Violations** (Run0
+839.853→0, Run1 219.236→0, Run2 46.085→0, Run3 8.393→0);
+Antennen-Repair 3× = **17.502 Dioden**; FINAL Wire
+**108.604.397 µm**, Vias **11.126.786**. **J4 läuft (Steps
+48–55): TrDRC PASS (0), Antennen-Rest 77 net + 78 pin,
+DisconnectedPins 292 (108 critical), WireLength ✓,
+FillInsertion läuft**; weiter: RCX (SPEF) → STAPostPNR
+(3 Corners @ 25 ns) → StreamOut/XOR/Magic+KLayout DRC/LVS →
+J6 End-Checker (HoldViolations expected ERROR) → K1–K3, L nur
 dokumentieren.
 p2_15/p2_16b gestoppt, nie wieder resumieren. 30-min-Cadence läuft.
 
@@ -1929,6 +1930,29 @@ Views → **J3-Ende ~02:25–02:40** (state_out.json).
 openroad 77976 (12:44:26 elaps., 3578 % CPU, 18:24 h
 CPU-Time), 1 librelane, Watchdog 0 Restarts, Monitor clean,
 RAM 185 G free, Disk 1,2 T. Kein Stop.
+
+**02:3x (4/11) Cadence:** **J3 FERTIG: dir 47 state_out.json
+@ 02:24, Step 47 = 13 h 05 min** (13:19→02:24; 4 DRT-Runs
+alle 0 DRC-Vios; 17.502 Dioden; Wire 108.604.397 µm; Vias
+11.126.786). QWEN.md J3 abgehakt. **J4 läuft (Steps 48–55):**
+48 RemoveRoutingObstructions ✓; **49 CheckAntennas-1: Rest
+77 net + 78 pin Antennen-Violations** (nach 3 Repair-Runden —
+dokumentierte Kategorie für K2); 50 **TrDRC: PASS (0 Vios**);
+51/52 **DisconnectedPins: 292 (108 critical), floating 0**
+(Makros: BUFFER_A, iact_layer_buffer …); 53/54
+**WireLength: 108.604.397 µm** (konsistent; max-wire 5.246 µm;
+GRT-Schätzung 138,1 M → 21 % besser als erwartet);
+**55 FillInsertion läuft** (write_views/Global-Connect-Phase).
+Flow = 83 Steps gesamt: weiter mit CellFrequencyTables →
+**RCX (SPEF)** → **STAPostPNR** (3 Corners @ 25 ns) → IRDrop →
+StreamOut ×2 (GDS) → XOR ×2 → Antenna ×2 → SealRing → Filler →
+Density ×2 → DRC ×2 → **MagicDRC + KLayoutDRC** → SpiceExtraction
+→ IllegalOverlap → **LVS ×2** → EQY → **Setup/HoldViolations
+(J6: expected ERROR)** → MaxSlew/MaxCap →
+ReportManufacturability. Ausblick: RCX+STA ~1–2 h, GDS/XOR/
+DRC ~2–4 h, Magic DRC = langer Pol (mehrere h möglich; > 48 h
+= Stop). openroad 78851 (fillinsertion), 1 librelane, Watchdog
+0 Restarts, Monitor clean, RAM 196 G free, Disk 1,2 T. Kein Stop.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
