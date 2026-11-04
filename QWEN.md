@@ -2567,6 +2567,23 @@ Mittag/Nachmittag. Push up-to-date. RAM 208 G avail,
 Disk 1,1 T, Monitor clean (22:02:52), 0 Restarts. Kein
 Stop.
 
+**22:3x (4/11) Cadence:** Step 64 KLayout-Antenna
+läuft (4:28 h): M3 (seit 20:02) jetzt bei ~2 h 31 min
+— CPU einwandfrei aktiv (4:48:19, +29 min/30 min ≈
+97 %). **Wichtig: RAM-Spike 37,3→87,1 GB (+50 GB in 30
+min)** beim Eintritt in eine M3-Ratio-Subphase
+(große Datenstruktur, vermutlich Via-Konnektivitäts-
+Graph) — **kurzfristige Messung (2-min-Fenster
+22:33:56→22:35:56): RSS exakt konstant 87,07 GB =
+One-shot-Allokation, kein anhaltendes Wachstum.** RAM
+avail 208→161 G = sicher (Stopkriterium < 30 G weit
+entfernt). Beobachtung im Folge-Check: RSS-Trend bei
+V3/M4-Start. Rest nach M3: 9 Einträge. ETA Step 64:
+~01:30–04:00 (M3-Überschuss). Stopp-79-ETA: morgen
+(5/11) Nachmittag. Push up-to-date. RAM 161 G avail,
+Disk 1,1 T, Monitor clean (22:32:59), 0 Restarts. Kein
+Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
