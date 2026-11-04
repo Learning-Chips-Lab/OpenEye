@@ -2140,6 +2140,20 @@ DRC → 74 Spice → 75 IllegalOverlap → 76/77 LVS → 78 EQY →
 Stopp 79. RAM 213 G free, Disk 1,1 T free, Monitor clean,
 0 Restarts. Kein Stop.
 
+**08:1x (4/11) Cadence:** Step 62 XOR weiterhin auf Layer
+126/0 (seit ~07:14, ~65 min) — erstes schweres
+Routing-Layer (350.270 vs 6.383 Polygonen). klayout 79216
+aktiv: 296 % CPU, CPU-Time 3:55:36 → 3:59:54 (in 2 min
+weitergewachsen), RSS stabil 9,07 GB = arbeitet, kein
+Stall. Die 7 fertigen Layers bleiben 0 Differenzen.
+Eskalation festgelegt: falls Layer 126/0 bis ~09:15 nicht
+fertig → Tile-Verhalten/Pathologie analysieren (500-µm-Tiles
+× 56 Threads). Revidierte ETA XOR-Ende: 12:00–18:00, falls
+jedes schwere Layer ~1 h braucht (M3/M4/M5/Vias stehen
+noch aus). Keine neuen Step-Dirs (63+). RAM 213 G free,
+Disk 1,1 T free, Monitor clean (08:19:10), 1 librelane
+Kette, 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
