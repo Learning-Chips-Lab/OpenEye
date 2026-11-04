@@ -2315,6 +2315,20 @@ CPU, CPU-Time 1:02 h, RSS 11,7 GB (5/0-lastig, normal).
 Push up-to-date. RAM 232 G avail, Disk 1,1 T, Monitor
 clean (13:35:41), 0 Restarts. Kein Stop.
 
+**14:0x (4/11) Cadence:** Step 62 XOR: **31 Layers
+fertig, alle 0 Diff** (5/0 Metal1 49,5 M/seite symmetrisch
+war schnell, 5/2 auch). Jetzt 50/0 = M4 seit ~13:40
+(~28 min): 1,44 M vs. 2,66 M flach (1,85×) — kleinere
+Absolutwerte als M3, ähnliches Verhältnis; M3 brauchte
+~110 min, M4 realistisch 30–90 min. klayout 79216 aktiv:
+392 % CPU, CPU-Time 1:04:08:33 (+64 min/28 min ≈ 228 %,
+stabil), RSS 9,76 GB konstant. Rest nach M4: 50/2, 51/0,
+6/0 (267 M/seite, symmetrisch), 63/0, 63/2, 63/31, 66/0
+(2,7 M, symmetrisch), 67/0 M5 (~2–3×), 67/2, 8/0, 8/2,
+8/29, 99/31. ETA XOR-Ende: 15:00–17:30. Push up-to-date.
+RAM 235 G avail, Disk 1,1 T, Monitor clean (14:05:49), 0
+Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
