@@ -1502,7 +1502,8 @@ Antennen-Repair 3× = **17.502 Dioden**; FINAL Wire
 **108.604.397 µm**, Vias **11.126.786**. **J4 läuft (Steps
 48–55): TrDRC PASS (0), Antennen-Rest 77 net + 78 pin,
 DisconnectedPins 292 (108 critical), WireLength ✓,
-FillInsertion: 5,19 M Filler, verbose-Phase bis ~06:00**; weiter: RCX (SPEF) → STAPostPNR
+FillInsertion: 5,19 M Filler, verbose-Phase 58 % (~04:20
+Phase-Ende, Step ~04:30–05:00)**; weiter: RCX (SPEF) → STAPostPNR
 (3 Corners @ 25 ns) → StreamOut/XOR/Magic+KLayout DRC/LVS →
 J6 End-Checker (HoldViolations expected ERROR) → K1–K3, L nur
 dokumentieren.
@@ -1965,6 +1966,15 @@ CPU-Time = reiner I/O-Log-Loop, **kein Stall** (librelane
 77651 CPU-Time wächst: 2:00:02). Danach CellFrequencyTables
 → RCX (SPEF) → STAPostPNR (J4, 3 Corners @ 25 ns).
 Monitor clean, RAM 197 G free, Disk 1,2 T. Kein Stop.
+
+**03:4x (4/11) Cadence:** FillInsertion verbose-Phase:
+**7,93 M / ~13,6 M Zeilen (58 %)**, Rate ~172 kB/s (~2,3k
+Zeilen/s, schneller als 03:10) → **~40 min Rest → Phase
+~04:20**, danach write_db (ODB ~6,8 M Instanzen) + Views →
+**Step 55 ~04:30–05:00 fertig**, dann CellFrequencyTables +
+RCX (SPEF). openroad 78851 (1:12:42 elaps., 1,8 % CPU,
+1:21 CPU-Time = I/O-Log-Loop), 1 librelane (CPU-Time 2:30:15,
+wächst), Monitor clean, RAM 197 G free, Disk 1,2 T. Kein Stop.
 
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
