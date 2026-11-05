@@ -67,6 +67,7 @@ module iact_stream_constructor #(
     parameter  WORD_BITWIDTH       = 72,   // Total word width
     parameter  ADDRWIDTH           = 13,   // Address width
     parameter  LIMIT_SIZE_IACT     = 18,
+    parameter  CHANNEL_CYCLE_WIDTH = 12,
     localparam CLUSTERS            = CLUSTER_ROWS * CLUSTER_COLUMNS,
     localparam PES                 = PE_X * PE_Y,
     localparam IACT_WORDS_IN_RAM   = RAM_CELLS_WORDWIDTH / DATA_IACT_BITWIDTH,
@@ -94,7 +95,7 @@ module iact_stream_constructor #(
     output reg [                       NUM_GLB_IACT-1:0] iact_enable_o,
     output reg [       (PES*$clog2(NUM_GLB_IACT+1))-1:0] iact_choose_o,
     input      [             $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
-    input      [                                  8-1:0] needed_iact_channel_cycles_i,
+    input      [                CHANNEL_CYCLE_WIDTH-1:0] needed_iact_channel_cycles_i,
     input signed [                               12-1:0] iact_x_add_up,
     input signed [                                4-1:0] iact_channels_per_pe_i,
     input      [                                    1:0] channel_div_trans,
@@ -232,6 +233,7 @@ module iact_stream_constructor #(
   assign rd_addr_inc_1_next = rd_addr_1 + rd_addr_inc_1;
   assign rd_addr_inc_2_next = rd_addr_2 + rd_addr_inc_2;
   assign rd_addr_inc_3_next = rd_addr_3 + rd_addr_inc_3;
+  assign rd_addr_inc_4_next = rd_addr_4 + rd_addr_inc_4;
   // Single-channel RAM words hold two image rows. Move by whole row pairs,
   // keeping the remaining half-row for the next window's initial read.
   assign rd_addr_inc_4_next = rd_addr_4 + rd_addr_inc_4;
@@ -430,27 +432,29 @@ module iact_stream_constructor #(
               rd_cycle_loop_cnt_1 <= rd_cycle_loop_cnt_1 + 1;
               if (rd_cycle_loop_cnt_1 == rd_loop_limit_1) begin
                 rd_cycle_loop_cnt_1 <= 0;
-                ram_rd_addr         <= rd_addr_3;
-                rd_addr_0           <= rd_addr_3;
-                rd_addr_1           <= rd_addr_3;
-                rd_addr_2           <= rd_addr_3;
+                ram_rd_addr         <= rd_addr_inc_3_next;
+                rd_addr_0           <= rd_addr_inc_3_next;
+                rd_addr_1           <= rd_addr_inc_3_next;
+                rd_addr_2           <= rd_addr_inc_3_next;
+                rd_addr_3           <= rd_addr_inc_3_next;
                 rd_cycle_loop_cnt_2 <= rd_cycle_loop_cnt_2 + 1;
                 if (rd_cycle_loop_cnt_2 == rd_loop_limit_2) begin
                   rd_cycle_loop_cnt_2 <= 0;
-                  ram_rd_addr         <= rd_addr_inc_3_next;
-                  rd_addr_0           <= rd_addr_inc_3_next;
-                  rd_addr_1           <= rd_addr_inc_3_next;
-                  rd_addr_2           <= rd_addr_inc_3_next;
-                  rd_addr_3           <= rd_addr_inc_3_next;
+                  ram_rd_addr         <= rd_addr_inc_4_next;
+                  rd_addr_0           <= rd_addr_inc_4_next;
+                  rd_addr_1           <= rd_addr_inc_4_next;
+                  rd_addr_2           <= rd_addr_inc_4_next;
+                  rd_addr_3           <= rd_addr_inc_4_next;
+                  rd_addr_4           <= rd_addr_inc_4_next;
                   rd_cycle_loop_cnt_3 <= rd_cycle_loop_cnt_3 + 1;
                   if (rd_cycle_loop_cnt_3 == rd_loop_limit_3) begin
                     rd_cycle_loop_cnt_3 <= 0;
-                    ram_rd_addr         <= rd_addr_inc_4_next;
-                    rd_addr_0           <= rd_addr_inc_4_next;
-                    rd_addr_1           <= rd_addr_inc_4_next;
-                    rd_addr_2           <= rd_addr_inc_4_next;
-                    rd_addr_3           <= rd_addr_inc_4_next;
-                    rd_addr_4           <= rd_addr_inc_4_next;
+                    ram_rd_addr         <= 0;
+                    rd_addr_0           <= 0;
+                    rd_addr_1           <= 0;
+                    rd_addr_2           <= 0;
+                    rd_addr_3           <= 0;
+                    rd_addr_4           <= 0;
                   end
                 end
               end

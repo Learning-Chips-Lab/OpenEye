@@ -29,7 +29,8 @@ module psum_pipeline #(
     parameter PSUM_OUTPUT_WORDS = 2,
     parameter LOOP_LIMIT_SIZE = 12,
     parameter TRANS_PSUM_WIDTH = 16,
-    parameter CYCLE_WIDTH = 16
+    parameter CYCLE_WIDTH = 16,
+    parameter CHANNEL_CYCLE_WIDTH = 16
 ) (
     input wire clk_i,
     input wire rst_n,
@@ -56,7 +57,7 @@ module psum_pipeline #(
     input wire [7:0] needed_wght_cycles,
     input wire [$clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_reg,
     input wire [7:0] needed_psum_storage_cycles_reg,
-    input wire [7:0] iact_channel_max_cycles,
+    input wire [CHANNEL_CYCLE_WIDTH-1:0] iact_channel_max_cycles,
     input wire [3:0] iact_channels_per_pe_next_layer,
     input wire [5:0] filters,
     input wire [11:0] psum_x_with_add_up,

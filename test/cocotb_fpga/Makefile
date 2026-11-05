@@ -3,17 +3,34 @@
 # Icarus Verilog
 #SIM ?= icarus
 
-# Verilator
+# Verilator Configuration
 SIM ?= verilator
 COMPILE_ARGS += -Wall -Wno-fatal
-export WAVES=1
-EXTRA_ARGS += --trace --trace-fst --trace-structs
-
 COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE
 COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE_cluster
 
+WAVES ?= 1
+TRACE_DEPTH ?= 0
+
+ifeq ($(WAVES),1)
+    export WAVES=1
+    export COCOTB_TRACE=1
+    export IVERILOG_DUMPER=fst
+    EXTRA_ARGS += --trace --trace-fst --trace-structs
+	SIM_ARGS   += --trace-fst
+    ifneq ($(TRACE_DEPTH),0)
+        EXTRA_ARGS += --trace-depth $(TRACE_DEPTH)
+    endif
+else
+    unexport WAVES
+    unexport COCOTB_TRACE
+    unexport IVERILOG_DUMPER
+    unexport EXTRA_ARGS
+	unexport SIM_ARGS
+endif
+
 TOPLEVEL_LANG ?= verilog
-WAVEFORM=on
+#WAVEFORM=on
 
 HDL_PATH = $(abspath $(PWD)/../../hdl)
 VH_PATH = $(abspath $(PWD))
@@ -93,13 +110,13 @@ export LAYER=Depthwise_Convolution
 #export LAYER=MobileNetV1
 #export LAYER=MaxPooling
 #export LAYER=AveragePooling
-export NUM_FILTERS=4
+export NUM_FILTERS=8
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=4
-export INPUT_SIZE_Y=1
+export INPUT_SIZE_X=12
+export INPUT_SIZE_Y=2
 export STRIDE=1
-export INPUT_CHANNELS=4
+export INPUT_CHANNELS=8
 export OUTPUT_SIZE=10
 export USE_RANDOM_VALUES=1
 export USE_SPARSE_IACTS=0
@@ -151,6 +168,7 @@ export CYCLE_WIDTH = 32
 export LIMIT_SIZE_IACT = 18
 export LIMIT_SIZE_WGHT = 12
 export LIMIT_SIZE_PSUM = 12
+export CHANNEL_CYCLE_WIDTH = 12
 
 export STRIDE_ENABLED = 1
 export DEPTHWISE_ENABLED = 1

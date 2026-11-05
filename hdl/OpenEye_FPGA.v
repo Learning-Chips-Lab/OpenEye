@@ -195,14 +195,14 @@ module OpenEye_FPGA #(
     parameter real FSM_WGHT_RTR_CCLS_A = (CLUSTERS * NUM_GLB_WGHT),
     parameter real FSM_WGHT_RTR_CCLS_B = DMA_BITWIDTH / ROUTER_MODES_WGHT,
     parameter real FSM_WGHT_RTR_CCLS = FSM_WGHT_RTR_CCLS_A / FSM_WGHT_RTR_CCLS_B,
-    parameter real fsm_psum_rTR_CCLS_A = (CLUSTERS * NUM_GLB_PSUM),
-    parameter real fsm_psum_rTR_CCLS_B = DMA_BITWIDTH / ROUTER_MODES_PSUM,
-    parameter integer fsm_psum_rTR_CCLS_C = DMA_BITWIDTH - (DMA_BITWIDTH % ROUTER_MODES_PSUM),
-    parameter real fsm_psum_rTR_CCLS = fsm_psum_rTR_CCLS_A / fsm_psum_rTR_CCLS_B,
+    parameter real FSM_PSUM_RTR_CCLS_A = (CLUSTERS * NUM_GLB_PSUM),
+    parameter real FSM_PSUM_RTR_CCLS_B = DMA_BITWIDTH / ROUTER_MODES_PSUM,
+    parameter integer FSM_PSUM_RTR_CCLS_C = DMA_BITWIDTH - (DMA_BITWIDTH % ROUTER_MODES_PSUM),
+    parameter real FSM_PSUM_RTR_CCLS = FSM_PSUM_RTR_CCLS_A / FSM_PSUM_RTR_CCLS_B,
 
     parameter integer FSM_CEIL_IACT_RTR_CCLS = CLUSTERS == 1 ? 0 : $rtoi($ceil(FSM_IACT_RTR_CCLS)),
     parameter integer FSM_CEIL_WGHT_RTR_CCLS = CLUSTER_COLUMNS == 1 ? 0 : $rtoi($ceil(FSM_WGHT_RTR_CCLS)),
-    parameter integer FSM_CEIL_PSUM_RTR_CCLS = CLUSTER_ROWS == 1 ? 0 : $rtoi($ceil(fsm_psum_rTR_CCLS)),
+    parameter integer FSM_CEIL_PSUM_RTR_CCLS = CLUSTER_ROWS == 1 ? 0 : $rtoi($ceil(FSM_PSUM_RTR_CCLS)),
 
 
     //Number of Words per PE
@@ -2626,26 +2626,27 @@ end
     assign quantized_value_reg[quant_flat_gen] = quantized_value_flat[8*quant_flat_gen+:8];
   end
   psum_pipeline #(
-      .CLUSTER_ROWS(CLUSTER_ROWS),
-      .CLUSTER_COLUMNS(CLUSTER_COLUMNS),
-      .NUM_GLB_IACT(NUM_GLB_IACT),
-      .NUM_GLB_PSUM(NUM_GLB_PSUM),
-      .NUM_GLB_WGHT(NUM_GLB_WGHT),
-      .CLUSTERS(CLUSTERS),
-      .PARALLEL_MACS(PARALLEL_MACS),
-      .TRANS_WORDS(TRANS_WORDS),
-      .TRANS_BITWIDTH_PSUM(TRANS_BITWIDTH_PSUM),
-      .BUFFER_WIDTH(BUFFER_WIDTH_PSUM),
-      .DMA_BITWIDTH(DMA_BITWIDTH),
-      .ROUTER_MODES_PSUM(ROUTER_MODES_PSUM),
-      .QUANT_AMOUNT(QUANT_AMOUNT),
-      .DATA_PSUM_BITWIDTH(DATA_PSUM_BITWIDTH),
-      .PSUM_PER_PE(PSUM_PER_PE),
+      .CLUSTER_ROWS                  (CLUSTER_ROWS),
+      .CLUSTER_COLUMNS               (CLUSTER_COLUMNS),
+      .NUM_GLB_IACT                  (NUM_GLB_IACT),
+      .NUM_GLB_PSUM                  (NUM_GLB_PSUM),
+      .NUM_GLB_WGHT                  (NUM_GLB_WGHT),
+      .CLUSTERS                      (CLUSTERS),
+      .PARALLEL_MACS                 (PARALLEL_MACS),
+      .TRANS_WORDS                   (TRANS_WORDS),
+      .TRANS_BITWIDTH_PSUM           (TRANS_BITWIDTH_PSUM),
+      .BUFFER_WIDTH                  (BUFFER_WIDTH_PSUM),
+      .DMA_BITWIDTH                  (DMA_BITWIDTH),
+      .ROUTER_MODES_PSUM             (ROUTER_MODES_PSUM),
+      .QUANT_AMOUNT                  (QUANT_AMOUNT),
+      .DATA_PSUM_BITWIDTH            (DATA_PSUM_BITWIDTH),
+      .PSUM_PER_PE                   (PSUM_PER_PE),
       .PSUM_CYCLES_ONE_WORD_ALL_CELLS(PSUM_CYCLES_ONE_WORD_ALL_CELLS),
-      .PSUM_OUTPUT_WORDS(PSUM_OUTPUT_WORDS),
-      .LOOP_LIMIT_SIZE(LIMIT_SIZE_PSUM),
-      .TRANS_PSUM_WIDTH(TRANS_PSUM_WIDTH),
-      .CYCLE_WIDTH(CYCLE_WIDTH)
+      .PSUM_OUTPUT_WORDS             (PSUM_OUTPUT_WORDS),
+      .LOOP_LIMIT_SIZE               (LIMIT_SIZE_PSUM),
+      .TRANS_PSUM_WIDTH              (TRANS_PSUM_WIDTH),
+      .CYCLE_WIDTH                   (CYCLE_WIDTH),
+      .CHANNEL_CYCLE_WIDTH           (CHANNEL_CYCLE_WIDTH)
   ) psum_pipeline_inst (
       .clk_i(clk_i),
       .rst_n(rst_n),
@@ -2884,19 +2885,20 @@ end
         wire [                    NUM_GLB_IACT-1:0] iact_ready_w;
         wire [                    NUM_GLB_IACT-1:0] iact_enable_w;
         iact_stream_constructor #(
-            .CLUSTER_COLUMNS   (CLUSTER_COLUMNS),
-            .CLUSTER_ROWS      (CLUSTER_ROWS),
-            .CLUSTER_ROW_ID    (j_gen),
-            .SPARSITY_EN       (SPARSITY_EN),
-            .NUM_GLB_IACT      (NUM_GLB_IACT),
-            .PE_X              (NUM_GLB_PSUM),
-            .PE_Y              (NUM_GLB_WGHT),
-            .DATA_IACT_BITWIDTH(DATA_IACT_BITWIDTH),
-            .DATA_IACT_OVERHEAD(DATA_IACT_OVERHEAD),
-            .RAM_CELLS         (IACT_RAM_CELLS),
-            .WORD_BITWIDTH     (TRANS_BITWIDTH_IACT * NUM_GLB_IACT),
-            .ADDRWIDTH         (BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR),
-            .LIMIT_SIZE_IACT   (LIMIT_SIZE_IACT)
+            .CLUSTER_COLUMNS    (CLUSTER_COLUMNS),
+            .CLUSTER_ROWS       (CLUSTER_ROWS),
+            .CLUSTER_ROW_ID     (j_gen),
+            .SPARSITY_EN        (SPARSITY_EN),
+            .NUM_GLB_IACT       (NUM_GLB_IACT),
+            .PE_X               (NUM_GLB_PSUM),
+            .PE_Y               (NUM_GLB_WGHT),
+            .DATA_IACT_BITWIDTH (DATA_IACT_BITWIDTH),
+            .DATA_IACT_OVERHEAD (DATA_IACT_OVERHEAD),
+            .RAM_CELLS          (IACT_RAM_CELLS),
+            .WORD_BITWIDTH      (TRANS_BITWIDTH_IACT * NUM_GLB_IACT),
+            .ADDRWIDTH          (BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR),
+            .LIMIT_SIZE_IACT    (LIMIT_SIZE_IACT),
+            .CHANNEL_CYCLE_WIDTH(CHANNEL_CYCLE_WIDTH)
             
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
@@ -3174,7 +3176,8 @@ end
         .FSM_CEIL_IACT_RTR_CCLS(FSM_CEIL_IACT_RTR_CCLS),
         .FSM_CEIL_WGHT_RTR_CCLS(FSM_CEIL_WGHT_RTR_CCLS),
         .FSM_CEIL_PSUM_RTR_CCLS(FSM_CEIL_PSUM_RTR_CCLS),
-        .fsm_psum_rTR_CCLS_C   (fsm_psum_rTR_CCLS_C)
+        .FSM_PSUM_RTR_CCLS_C   (FSM_PSUM_RTR_CCLS_C),
+        .CHANNEL_CYCLE_WIDTH    (CHANNEL_CYCLE_WIDTH)
     ) router_configurator_inst (
         .clk_i                        (clk_i),
         .rst_n                        (rst_n),
@@ -3314,8 +3317,6 @@ end
         .router_mode_iact_i           (router_mode_iact),
         .router_mode_wght_i           (router_mode_wght),
         .router_mode_psum_i           (router_mode_psum),
-        .needed_psum_storage_cycles_i (needed_psum_storage_cycles_reg),
-        .needed_iact_channel_cycles_i (iact_channel_max_cycles),
         .psum_transmitted_i           (psum_transmitted)
     );
     // -------------------------------------------------------------------

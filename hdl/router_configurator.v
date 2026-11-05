@@ -57,7 +57,7 @@
 ///   FSM_CEIL_IACT_RTR_CCLS - Ceil of iact router config cycles
 ///   FSM_CEIL_WGHT_RTR_CCLS - Ceil of wght router config cycles
 ///   FSM_CEIL_PSUM_RTR_CCLS - Ceil of psum router config cycles
-///   fsm_psum_rTR_CCLS_C    - DMA bit width aligned to ROUTER_MODES_PSUM
+///   FSM_PSUM_RTR_CCLS_C    - DMA bit width aligned to ROUTER_MODES_PSUM
 ///
 /// Ports:
 ///   clk_i                          - System clock input
@@ -100,7 +100,8 @@ module router_configurator #(
     parameter integer FSM_CEIL_IACT_RTR_CCLS = 1,
     parameter integer FSM_CEIL_WGHT_RTR_CCLS = 1,
     parameter integer FSM_CEIL_PSUM_RTR_CCLS = 1,
-    parameter integer fsm_psum_rTR_CCLS_C    = DMA_BITWIDTH - (DMA_BITWIDTH % ROUTER_MODES_PSUM)
+    parameter integer FSM_PSUM_RTR_CCLS_C    = DMA_BITWIDTH - (DMA_BITWIDTH % ROUTER_MODES_PSUM),
+    parameter         CHANNEL_CYCLE_WIDTH = 12
 ) (
     // Clock and Reset
     input clk_i,
@@ -115,8 +116,8 @@ module router_configurator #(
     input [32-1:0] fsm_cycle_i,
     input [DMA_BITWIDTH-1:0] data_dma_i_reg_i,
     input single_iteration3_i,
-    input [$clog2(16+1)-1:0] iact_channels_counter_i,
-    input [7:0] iact_channel_max_cycles_i,
+    input [CHANNEL_CYCLE_WIDTH-1:0] iact_channels_counter_i,
+    input [CHANNEL_CYCLE_WIDTH-1:0] iact_channel_max_cycles_i,
     input [$clog2(CLUSTER_ROWS+1)-1:0] iact_router_counter_i,
     input [7:0] needed_psum_storage_cycles_i,
     input reset_cycle_i,
@@ -237,7 +238,7 @@ module router_configurator #(
                         router_mode_psum_o[cc * CLUSTER_ROWS * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                                             cr * NUM_GLB_PSUM * ROUTER_MODES_PSUM +
                                             g * ROUTER_MODES_PSUM +:ROUTER_MODES_PSUM] <=
-                        data_dma_i_reg_i[(cc*CLUSTER_ROWS*NUM_GLB_PSUM*ROUTER_MODES_PSUM+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM-(fsm_cycle_i-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*fsm_psum_rTR_CCLS_C)+:ROUTER_MODES_PSUM];
+                        data_dma_i_reg_i[(cc*CLUSTER_ROWS*NUM_GLB_PSUM*ROUTER_MODES_PSUM+cr*NUM_GLB_PSUM*ROUTER_MODES_PSUM+g*ROUTER_MODES_PSUM-(fsm_cycle_i-FSM_CEIL_IACT_RTR_CCLS-FSM_CEIL_WGHT_RTR_CCLS)*FSM_PSUM_RTR_CCLS_C)+:ROUTER_MODES_PSUM];
                       end
                     end
                   end

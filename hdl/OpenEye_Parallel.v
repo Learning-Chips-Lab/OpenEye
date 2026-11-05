@@ -207,8 +207,6 @@ module OpenEye_Parallel #(
     input      [  ROUTER_MODES_IACT*CLUSTERS*NUM_GLB_IACT-1:0] router_mode_iact_i,
     input      [  ROUTER_MODES_WGHT*CLUSTERS*NUM_GLB_WGHT-1:0] router_mode_wght_i,
     input      [  ROUTER_MODES_PSUM*CLUSTERS*NUM_GLB_PSUM-1:0] router_mode_psum_i,
-    input      [                                        8-1:0] needed_psum_storage_cycles_i,
-    input      [                                        8-1:0] needed_iact_channel_cycles_i,
     input                                                      psum_transmitted_i,
     input                                                      dw_mode
 );

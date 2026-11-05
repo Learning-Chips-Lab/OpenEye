@@ -269,6 +269,13 @@ class OpenEyeParameters(object):
         except:
             self.DEPTHWISE_ENABLED = 16        # Enable DW Conv Calculations
 
+        try:
+            self.CHANNEL_CYCLE_WIDTH = int(os.getenv("CHANNEL_CYCLE_WIDTH"))
+        except:
+            self.CHANNEL_CYCLE_WIDTH = 16       # Width of Channel counters
+
+            
+
         # === COMMUNICATION MODE ===
         self.SERIAL = serial           # Serial (DMA) vs parallel communication mode
 

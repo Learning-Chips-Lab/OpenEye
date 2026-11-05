@@ -346,7 +346,7 @@ class LayerParameters(object):
         # Detect layer type from name and call appropriate initialization method
         if "depthwise_conv2d" in layer.name:
             logger.debug("Depthwise Convolution Layer")
-            self.write_convdw_layer(layer, params)
+            self.write_convdw_layer(layer_parameters, layer, params)
 
         elif "conv2d" in layer.name:
             logger.debug("2D Convolution Layer")
@@ -905,20 +905,9 @@ class LayerParameters(object):
                 wght_factor = math.ceil((self.filters*self.used_iact_per_PE)/160)
             else:
                 wght_factor = math.ceil((self.filters*self.used_iact_per_PE)/params.Wghts_per_PE)
-            # Calculate weights and psums per PE based on computation mode
-            match self.single_cluster_computation:
-                case 1:
-                    # Single cluster: divide filters across all clusters
-                    self.used_wght_per_PE = math.ceil(self.filters/params.Clusters)*self.used_iact_per_PE
-                    self.used_psum_per_PE = int(self.used_wght_per_PE/self.used_iact_per_PE)
-                case 2:
-                    # Single X-cluster: divide across Y-clusters only
-                    self.used_wght_per_PE = math.ceil(self.filters/params.Clusters_Y)*self.used_iact_per_PE
-                    self.used_psum_per_PE = int(self.used_wght_per_PE/self.used_iact_per_PE)
-                case _:
-                    # Multi-cluster: use tiling factor
-                    self.used_wght_per_PE = math.ceil(self.filters/wght_factor)*self.used_iact_per_PE
-                    self.used_psum_per_PE = int(self.filters/wght_factor)
+            # Calculate weights and psums per PE
+            self.used_wght_per_PE = math.ceil(self.filters/wght_factor)*self.used_iact_per_PE
+            self.used_psum_per_PE = int(self.filters/wght_factor)
 
             # Calculate weight transmission iterations based on mode
             self.wght_transmissions_pe = math.ceil(self.channels/(self.used_channels*self.kernel_per_pe_cluster)) * math.ceil(self.filters *self.used_iact_per_PE / self.used_wght_per_PE / self.different_kernels_per_calculation)
@@ -1018,76 +1007,149 @@ class LayerParameters(object):
         self.iact_converter_buffer_addr_max_cycles = self.channel_div_trans * self.needed_Iact_writes
 
     def  get_pagu_values(self, params):
-        self.iact_read_limit_0 = (self.channel_div_trans*self.needed_Iact_writes) - 1
-        self.iact_read_limit_1 = math.ceil(self.diff_iact_layer) - 1
-        self.iact_read_limit_2 = self.needed_wght_cycles - 1
-        self.iact_read_limit_3 = self.iact_x_line_repetitions - 1
-        self.iact_read_limit_4 = math.ceil(self.iact_size_y/self.strideY) - 1
-        self.iact_read_inc_0 = 1
-        self.iact_read_inc_1 = self.iact_repetitions_per_write * params.NUM_GLB_IACT
-        self.iact_read_inc_2 = math.ceil(self.iact_buffer_words_per_write/self.diff_iact_layer)
-        if ((self.Y_Cluster_Packages == 1) & (params.Clusters_X == 1)):
-            self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM * self.strideX
+        if ("depthwise" in self.layer_name):
+            self.iact_read_limit_0 = (self.channel_div_trans*self.needed_Iact_writes) - 1
+            self.iact_read_limit_1 = math.ceil(self.diff_iact_layer) - 1
+            self.iact_read_limit_2 = self.iact_x_line_repetitions - 1
+            self.iact_read_limit_3 = math.ceil(self.iact_size_y/self.strideY) - 1
+            self.iact_read_limit_4 = 1 - 1
+            self.iact_read_inc_0 = 1
+            self.iact_read_inc_1 = self.iact_repetitions_per_write * params.NUM_GLB_IACT
+            self.iact_read_inc_2 = math.ceil(self.iact_buffer_words_per_write/self.diff_iact_layer)
+            if ((self.Y_Cluster_Packages == 1) & (params.Clusters_X == 1)):
+                self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM * self.strideX
+            else:
+                self.iact_read_inc_3 = self.channel_div_trans * self.needed_Iact_writes * params.NUM_GLB_IACT
+                if (((params.Clusters_X * self.Y_Cluster_Packages)-1) * (params.NUM_GLB_PSUM * self.strideX) < self.kernel_shape[0] - 1):
+                    self.iact_read_inc_3 = self.iact_read_inc_3 + (((params.Clusters_X * self.Y_Cluster_Packages)-1) * ((params.NUM_GLB_PSUM + 1) * self.strideX) - self.kernel_shape[0])
+            self.iact_read_inc_4 = self.iact_read_inc_1*self.strideY
+
+            if (self.used_channels == 1):
+                lines_in_words = ((self.iact_size_y+(self.padding_y*2)+1)/2)
+            else:
+                lines_in_words = (self.iact_size_y+(self.padding_y*2))
+            self.iact_write_limit_0 = self.iact_buffer_words_per_write - 1
+            self.iact_write_limit_1 = self.iact_x_line_repetitions - 1
+            self.iact_write_limit_2 = (self.kernel_size[0] + self.iact_size_y - 1) - 1
+            self.iact_write_limit_3 = 0
+            self.iact_write_limit_4 = 0
+            self.iact_write_inc_0 = lines_in_words * self.channel_div_trans * self.needed_Iact_writes * self.diff_iact_layer
+            self.iact_write_inc_0 = 1
+            self.iact_write_inc_1 = self.channel_div_trans * self.needed_Iact_writes
+            self.iact_write_inc_1 = self.iact_write_limit_2 * self.iact_buffer_words_per_write
+            self.iact_write_inc_2 = self.iact_buffer_words_per_write
+
+            self.pagu_wght_limit = int((self.iact_x_add_up%params.NUM_GLB_PSUM)+self.iact_x_add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
+
+            max_channels = min(self.different_kernels_per_calculation,4)
+            self.psum_pagu_cs_limit[0] = max_channels - 1
+            self.psum_pagu_cs_limit[1] = math.ceil(4/max_channels) - 1
+            self.psum_pagu_cs_limit[2] = 1 - 1
+            self.psum_pagu_cs_limit[3] = math.ceil(self.Y_Cluster_Packages*params.Clusters_X/self.different_kernels_per_calculation) - 1
+            self.psum_pagu_cs_limit[4] = self.iact_x_line_repetitions * self.psum_size_y - 1
+            self.psum_pagu_cs_limit[5] = math.floor(self.different_kernels_per_calculation/max_channels) - 1
+            if (self.different_kernels_per_calculation == 1):
+                self.psum_pagu_cs_inc[0] = 0
+                self.psum_pagu_cs_inc[1] = 0
+            else:
+                self.psum_pagu_cs_inc[0] = math.ceil(self.used_X_cluster/self.different_kernels_per_calculation)
+                self.psum_pagu_cs_inc[1] = 0
+            self.psum_pagu_cs_inc[2] = 0
+            self.psum_pagu_cs_inc[3] = 1
+            self.psum_pagu_cs_inc[4] = 0
+            self.psum_pagu_cs_inc[5] = max_channels*(self.used_Y_cluster*(math.floor(self.used_X_cluster/self.different_kernels_per_calculation)))
+
+            self.compact_and_pad_in_place(self.psum_pagu_cs_limit, self.psum_pagu_cs_inc)
+
+            self.psum_pagu_loop_limit[0] = max_channels - 1
+            self.psum_pagu_addr_inc[0] = 0
+
+            self.psum_pagu_loop_limit[1] = math.ceil(4/max_channels) - 1
+            self.psum_pagu_addr_inc[1] = 1
+
+            self.psum_pagu_loop_limit[2] =  math.ceil(self.used_X_cluster/self.different_kernels_per_calculation) - 1
+            self.psum_pagu_addr_inc[2] = 0
+
+            self.psum_pagu_loop_limit[3] = self.iact_x_line_repetitions * self.psum_size_y - 1
+            self.psum_pagu_addr_inc[3] = math.ceil(self.filters/self.different_kernels_per_calculation)
+
+            self.psum_pagu_loop_limit[4] = math.floor(self.different_kernels_per_calculation/max_channels) - 1
+            self.psum_pagu_addr_inc[4] = 0
+
+            self.psum_pagu_loop_limit[5] = math.ceil(self.filters/4) - 1
+            self.psum_pagu_addr_inc[5] = math.ceil(4/max_channels)
         else:
-            self.iact_read_inc_3 = self.channel_div_trans * self.needed_Iact_writes * params.NUM_GLB_IACT
-            if (((params.Clusters_X * self.Y_Cluster_Packages)-1) * (params.NUM_GLB_PSUM * self.strideX) < self.kernel_shape[0] - 1):
-                self.iact_read_inc_3 = self.iact_read_inc_3 + (((params.Clusters_X * self.Y_Cluster_Packages)-1) * ((params.NUM_GLB_PSUM + 1) * self.strideX) - self.kernel_shape[0])
-        self.iact_read_inc_4 = self.iact_read_inc_1*self.strideY
+            self.iact_read_limit_0 = (self.channel_div_trans*self.needed_Iact_writes) - 1
+            self.iact_read_limit_1 = math.ceil(self.diff_iact_layer) - 1
+            self.iact_read_limit_2 = self.needed_wght_cycles - 1
+            self.iact_read_limit_3 = self.iact_x_line_repetitions - 1
+            self.iact_read_limit_4 = math.ceil(self.iact_size_y/self.strideY) - 1
+            self.iact_read_inc_0 = 1
+            self.iact_read_inc_1 = self.iact_repetitions_per_write * params.NUM_GLB_IACT
+            self.iact_read_inc_2 = math.ceil(self.iact_buffer_words_per_write/self.diff_iact_layer)
+            if ((self.Y_Cluster_Packages == 1) & (params.Clusters_X == 1)):
+                self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM * self.strideX
+            else:
+                self.iact_read_inc_3 = self.channel_div_trans * self.needed_Iact_writes * params.NUM_GLB_IACT
+                if (((params.Clusters_X * self.Y_Cluster_Packages)-1) * (params.NUM_GLB_PSUM * self.strideX) < self.kernel_shape[0] - 1):
+                    self.iact_read_inc_3 = self.iact_read_inc_3 + (((params.Clusters_X * self.Y_Cluster_Packages)-1) * ((params.NUM_GLB_PSUM + 1) * self.strideX) - self.kernel_shape[0])
+            self.iact_read_inc_4 = self.iact_read_inc_1*self.strideY
 
-        if (self.used_channels == 1):
-            lines_in_words = ((self.iact_size_y+(self.padding_y*2)+1)/2)
-        else:
-            lines_in_words = (self.iact_size_y+(self.padding_y*2))
-        self.iact_write_limit_0 = self.iact_buffer_words_per_write - 1
-        self.iact_write_limit_1 = self.iact_x_line_repetitions - 1
-        self.iact_write_limit_2 = (self.kernel_size[0] + self.iact_size_y - 1) - 1
-        self.iact_write_limit_3 = 0
-        self.iact_write_limit_4 = 0
-        self.iact_write_inc_0 = lines_in_words * self.channel_div_trans * self.needed_Iact_writes * self.diff_iact_layer
-        self.iact_write_inc_0 = 1
-        self.iact_write_inc_1 = self.channel_div_trans * self.needed_Iact_writes
-        self.iact_write_inc_1 = self.iact_write_limit_2 * self.iact_buffer_words_per_write
-        self.iact_write_inc_2 = self.iact_buffer_words_per_write
+            if (self.used_channels == 1):
+                lines_in_words = ((self.iact_size_y+(self.padding_y*2)+1)/2)
+            else:
+                lines_in_words = (self.iact_size_y+(self.padding_y*2))
+            self.iact_write_limit_0 = self.iact_buffer_words_per_write - 1
+            self.iact_write_limit_1 = self.iact_x_line_repetitions - 1
+            self.iact_write_limit_2 = (self.kernel_size[0] + self.iact_size_y - 1) - 1
+            self.iact_write_limit_3 = 0
+            self.iact_write_limit_4 = 0
+            self.iact_write_inc_0 = lines_in_words * self.channel_div_trans * self.needed_Iact_writes * self.diff_iact_layer
+            self.iact_write_inc_0 = 1
+            self.iact_write_inc_1 = self.channel_div_trans * self.needed_Iact_writes
+            self.iact_write_inc_1 = self.iact_write_limit_2 * self.iact_buffer_words_per_write
+            self.iact_write_inc_2 = self.iact_buffer_words_per_write
 
-        self.pagu_wght_limit = int((self.iact_x_add_up%params.NUM_GLB_PSUM)+self.iact_x_add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
+            self.pagu_wght_limit = int((self.iact_x_add_up%params.NUM_GLB_PSUM)+self.iact_x_add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
 
-        max_channels = min(self.different_kernels_per_calculation,4)
-        self.psum_pagu_cs_limit[0] = max_channels - 1
-        self.psum_pagu_cs_limit[1] = math.ceil(4/max_channels) - 1
-        self.psum_pagu_cs_limit[2] = 1 - 1
-        self.psum_pagu_cs_limit[3] = math.ceil(self.Y_Cluster_Packages*params.Clusters_X/self.different_kernels_per_calculation) - 1
-        self.psum_pagu_cs_limit[4] = self.iact_x_line_repetitions * self.psum_size_y - 1
-        self.psum_pagu_cs_limit[5] = math.floor(self.different_kernels_per_calculation/max_channels) - 1
-        if (self.different_kernels_per_calculation == 1):
-            self.psum_pagu_cs_inc[0] = 0
-            self.psum_pagu_cs_inc[1] = 0
-        else:
-            self.psum_pagu_cs_inc[0] = math.ceil(self.used_X_cluster/self.different_kernels_per_calculation)
-            self.psum_pagu_cs_inc[1] = 0
-        self.psum_pagu_cs_inc[2] = 0
-        self.psum_pagu_cs_inc[3] = 1
-        self.psum_pagu_cs_inc[4] = 0
-        self.psum_pagu_cs_inc[5] = max_channels*(self.used_Y_cluster*(math.floor(self.used_X_cluster/self.different_kernels_per_calculation)))
+            max_channels = min(self.different_kernels_per_calculation,4)
+            self.psum_pagu_cs_limit[0] = max_channels - 1
+            self.psum_pagu_cs_limit[1] = math.ceil(4/max_channels) - 1
+            self.psum_pagu_cs_limit[2] = 1 - 1
+            self.psum_pagu_cs_limit[3] = math.ceil(self.Y_Cluster_Packages*params.Clusters_X/self.different_kernels_per_calculation) - 1
+            self.psum_pagu_cs_limit[4] = self.iact_x_line_repetitions * self.psum_size_y - 1
+            self.psum_pagu_cs_limit[5] = math.floor(self.different_kernels_per_calculation/max_channels) - 1
+            if (self.different_kernels_per_calculation == 1):
+                self.psum_pagu_cs_inc[0] = 0
+                self.psum_pagu_cs_inc[1] = 0
+            else:
+                self.psum_pagu_cs_inc[0] = math.ceil(self.used_X_cluster/self.different_kernels_per_calculation)
+                self.psum_pagu_cs_inc[1] = 0
+            self.psum_pagu_cs_inc[2] = 0
+            self.psum_pagu_cs_inc[3] = 1
+            self.psum_pagu_cs_inc[4] = 0
+            self.psum_pagu_cs_inc[5] = max_channels*(self.used_Y_cluster*(math.floor(self.used_X_cluster/self.different_kernels_per_calculation)))
 
-        self.compact_and_pad_in_place(self.psum_pagu_cs_limit, self.psum_pagu_cs_inc)
+            self.compact_and_pad_in_place(self.psum_pagu_cs_limit, self.psum_pagu_cs_inc)
 
-        self.psum_pagu_loop_limit[0] = max_channels - 1
-        self.psum_pagu_addr_inc[0] = 0
+            self.psum_pagu_loop_limit[0] = max_channels - 1
+            self.psum_pagu_addr_inc[0] = 0
 
-        self.psum_pagu_loop_limit[1] = math.ceil(4/max_channels) - 1
-        self.psum_pagu_addr_inc[1] = 1
+            self.psum_pagu_loop_limit[1] = math.ceil(4/max_channels) - 1
+            self.psum_pagu_addr_inc[1] = 1
 
-        self.psum_pagu_loop_limit[2] =  math.ceil(self.used_X_cluster/self.different_kernels_per_calculation) - 1
-        self.psum_pagu_addr_inc[2] = 0
+            self.psum_pagu_loop_limit[2] =  math.ceil(self.used_X_cluster/self.different_kernels_per_calculation) - 1
+            self.psum_pagu_addr_inc[2] = 0
 
-        self.psum_pagu_loop_limit[3] = self.iact_x_line_repetitions * self.psum_size_y - 1
-        self.psum_pagu_addr_inc[3] = math.ceil(self.filters/self.different_kernels_per_calculation)
+            self.psum_pagu_loop_limit[3] = self.iact_x_line_repetitions * self.psum_size_y - 1
+            self.psum_pagu_addr_inc[3] = math.ceil(self.filters/self.different_kernels_per_calculation)
 
-        self.psum_pagu_loop_limit[4] = math.floor(self.different_kernels_per_calculation/max_channels) - 1
-        self.psum_pagu_addr_inc[4] = 0
+            self.psum_pagu_loop_limit[4] = math.floor(self.different_kernels_per_calculation/max_channels) - 1
+            self.psum_pagu_addr_inc[4] = 0
 
-        self.psum_pagu_loop_limit[5] = math.ceil(self.filters/4) - 1
-        self.psum_pagu_addr_inc[5] = math.ceil(4/max_channels)
+            self.psum_pagu_loop_limit[5] = math.ceil(self.filters/4) - 1
+            self.psum_pagu_addr_inc[5] = math.ceil(4/max_channels)
+
         self.compact_and_pad_in_place(self.psum_pagu_loop_limit, self.psum_pagu_addr_inc)
 
     def compact_and_pad_in_place(self, primary_list: list, secondary_list: list) -> None:
@@ -1315,7 +1377,7 @@ class LayerParameters(object):
         self.get_pagu_values(params)
         self.output_logger()
 
-    def write_convdw_layer(self, layer, params):
+    def write_convdw_layer(self, layer_parameters, layer, params):
         """Compute all configuration parameters for a Conv2D layer.
 
         This is the main orchestrator method for Conv2D layers. It calls a sequence
@@ -1373,8 +1435,6 @@ class LayerParameters(object):
         if (len(self.rel_layers["Next_Layer"][self.layer_name]) != 0):
             # Store next layer's channel requirements for inter-layer optimization
             self.diff_iact_layer_next_layer = layer_parameters[self.rel_layers["Next_Layer"][self.layer_name][0]].used_channels
-            """if ("dense" in layer_parameters[self.rel_layers["Next_Layer"][self.layer_name][0]].layer_name ):
-                self.diff_iact_layer_next_layer = 4"""
 
         # Total activations per PE = kernel height * channels per iteration
         self.used_iact_per_PE = self.kernel_size[1] * self.used_channels
@@ -1464,7 +1524,7 @@ class LayerParameters(object):
 
 
         self.iteration_for_kernels = math.ceil(self.diff_iact_layer_next_layer / self.different_kernels_per_calculation)
-        self.needed_wght_cycles = math.ceil(self.filters/(self.used_psum_per_PE * self.different_kernels_per_calculation))
+        self.needed_wght_cycles = math.ceil(self.filters/(self.used_channels * self.different_kernels_per_calculation))
         if ((params.Clusters_X * params.NUM_GLB_PSUM) == 4):
             psum_cycles = 2
         else:
@@ -1505,6 +1565,7 @@ class LayerParameters(object):
         self.output_cycles = math.ceil(self.calc_Y/self.strideY) * self.iact_x_line_repetitions/ self.different_kernels_per_calculation
         self.psum_output_words = int((self.output_cycles * self.filters * params.Clusters * params.NUM_GLB_PSUM) / math.ceil(params.DMA_BITWIDTH/32))
         self.psum_x_all_cluster = self.different_kernels_per_calculation * self.iact_x_add_up
+        self.used_wght_per_PE = self.used_iact_per_PE
         # === Phase 9: Finalize calculations ===
         self.calculate_transmission_cycles(params)
         self.calculate_needed_refreshes_mx(params)

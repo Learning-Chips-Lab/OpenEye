@@ -465,11 +465,11 @@ def collect_results(layer_params, dram, serial):
                 for y in range(0 - math.floor(layer_params.kernel_size[1]/2),math.ceil(layer_params.kernel_size[1]/2)):
                     for c in range(layer_params.channels):
                         for x in range(0 - math.floor(layer_params.kernel_size[0]/2),math.ceil(layer_params.kernel_size[0]/2)):
-                            if((((x + i * layer_params.strideX) >= 0) & ((x + i * layer_params.strideX) < (layer_params.psum_size_x * layer_params.strideX))) & \
-                            (((y + j * layer_params.strideY) >= 0) & ((y + j * layer_params.strideY) < (layer_params.psum_size_y * layer_params.strideY)))):
+                            if((((x + j * layer_params.strideX) >= 0) & ((x + j * layer_params.strideX) < (layer_params.psum_size_x * layer_params.strideX))) & \
+                            (((y + i * layer_params.strideY) >= 0) & ((y + i * layer_params.strideY) < (layer_params.psum_size_y * layer_params.strideY)))):
                                 calculated_results[c][j][i] = int(calculated_results[c][j][i] + \
-                                                                dram.weights[layer_params.layer_name][c][x + math.floor(layer_params.kernel_size[0]/2)][y + math.floor((layer_params.kernel_size[1]-1)/2)] * \
-                                                                dram.fmap[layer_params.layer_name][0][c][x + (i * layer_params.strideX)][y + (j * layer_params.strideY)])
+                                                                dram.weights[layer_params.layer_name][c][y + math.floor((layer_params.kernel_size[1]-1)/2)][x + math.floor(layer_params.kernel_size[0]/2)] * \
+                                                                dram.fmap[layer_params.layer_name][0][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
         for j in range(layer_params.psum_size_x):
             for i in range(layer_params.psum_size_y):
                 for f in range(layer_params.filters):

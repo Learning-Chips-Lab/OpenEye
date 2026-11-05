@@ -39,7 +39,7 @@ registers:
   - {name: choose_iact_buffer_input, width: ceil(log2(int(BRANCHES)))}
   - {name: iact_channels_per_pe_next_layer, width: 4}
   - {name: needed_psum_storage_cycles_reg, width: 8}
-  - {name: iact_channel_max_cycles, width: 8}
+  - {name: iact_channel_max_cycles, width: int(CHANNEL_CYCLE_WIDTH)}
   - {name: input_activations, width: 5}
   - {name: filters, width: 6}
   - {name: needed_x_cls_reg, width: ceil(log2(int(CLUSTER_COLUMNS)+1))}
