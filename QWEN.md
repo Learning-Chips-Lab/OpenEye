@@ -2692,6 +2692,18 @@ läuft); Stopp-79-ETA: heute 08:00–16:00. Push
 up-to-date. RAM 159 G avail, Disk 1,1 T, Monitor clean
 (02:03:52), 0 Restarts. Kein Stop.
 
+**02:3x (5/11) Cadence:** Step 64 KLayout-Antenna
+läuft (8:30 h): metal4_drw (seit 01:45) jetzt bei
+~50 min — langsamer als M1/M2 (je 23 min), aber kein
+Spike (RSS 88,6 GB exakt konstant, CPU-Time 8:49:22,
++29 min/30 min ≈ 97 %, makro-stabil seit 19:00) → M4
+liegt in der M2/M3-Zwischenklasse, Fertig erwartet
+~02:50–03:40. Rest nach M4: 7 Einträge (V4, M5, V5,
+TV1, TM1, TV2, TM2). ETA Step 64: ~05:00–09:00.
+Stopp-79-ETA: heute 09:00–17:00. Push up-to-date. RAM
+159 G avail, Disk 1,1 T, Monitor clean (02:34:00), 0
+Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
