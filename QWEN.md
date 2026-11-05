@@ -2850,6 +2850,25 @@ Routing-Fläche, Verhalten offen. ETA Step 64:
 up-to-date. RAM 154 G avail, Disk 1,1 T, Monitor clean
 (07:35:15), 0 Restarts. Kein Stop.
 
+**08:0x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (13:59 h): via4_drw (seit 04:58)
+jetzt bei **~3 h 06 min** — V4 ist die bisher längste
+Via-Phase (V3 170, M3 173, M4 193 min). Einordnung:
+das gesamte M3/M4/V3/V4-Quadrant (dichte
+Routing-Region) läuft konstant ~170–195 min — V4 bei
+186 min passt in das Muster, V4-Fertig erwartet
+~08:10–08:40. V3-Analogie-Fenster (07:28–07:48) war
+zu eng; Korrektur: der Block, nicht das einzelne
+Layer, bestimmt das Tempo. CPU aktiv (CPU-Time
+14:17:21, +29 min/30 min ≈ 97 %, makro-stabil seit
+19:00 — über 13 h), RSS 94,2→95,1 GB (+0,9 GB/30 min,
+mild, unkritisch). Rest nach V4: 6 Einträge (M5, V5,
+TV1, TM1, TV2, TM2) — M5 dürfte kleiner sein (außer
+dem dichten Quadranten). ETA Step 64: ~09:30–17:00.
+Stopp-79-ETA: heute 17:00–24:00, im Schlechtestfall
+morgen früh. Push up-to-date. RAM 153 G avail, Disk
+1,1 T, Monitor clean (08:00:22), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
