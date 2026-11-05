@@ -2763,6 +2763,22 @@ Einträge (V4, M5, V5, TV1, TM1, TV2, TM2). ETA Step
 Push up-to-date. RAM 154 G avail, Disk 1,1 T, Monitor
 clean (04:34:30), 0 Restarts. Kein Stop.
 
+**05:0x (5/11) Cadence:** Step 64 KLayout-Antenna
+läuft (11:00 h): **M4 fertig (01:45→04:58 = 3 h 13 min
+total — dritter Langläufer nach M3 173 / V3 170 min,
+aber wie vorhergesagt im V3-Verlauf: Fertig kurz nach
+dem 2:51-Check)**. Jetzt via4_drw (seit 04:58, ~7 min).
+Sequenz-Referenz: M1 23, V1 18, M2 23, V2 23, M3 173,
+V3 170, M4 193, V4 7 min+. Rest: 6 Einträge (M5, V5,
+TV1, TM1, TV2, TM2) — M5 = letzte große
+Routing-Fläche, Verhalten offen (moderat ~20–30 min
+oder Langläufer ~2–3 h wie M3/M4). CPU aktiv
+(CPU-Time 11:18:42, +29 min/30 min ≈ 97 %), RSS
+94,2 GB stabil (Anstieg der M4-Spätphase gestoppt).
+ETA Step 64: ~07:30–13:00. Stopp-79-ETA: heute
+13:00–21:00. Push up-to-date. RAM 154 G avail, Disk
+1,1 T, Monitor clean (05:04:38), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
