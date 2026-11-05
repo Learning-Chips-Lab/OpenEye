@@ -2662,6 +2662,21 @@ Stopp 79 heute Nachmittag/Abend. Push up-to-date. RAM
 163 G avail, Disk 1,1 T, Monitor clean (00:58:36), 0
 Restarts. Kein Stop.
 
+**01:3x (5/11) Cadence:** Step 64 KLayout-Antenna
+läuft (7:29 h): via3_drw (seit 22:55) jetzt bei
+**~2 h 40 min** — weiter aktiv und stabil (CPU-Time
+7:48:54, +29 min/30 min ≈ 97 %), RSS 84,8→88,8 GB
+(+4 GB/30 min, leichter Anstieg, unkritisch bei
+159 G avail). Sequenz-Referenz: M1 23, V1 18, M2 23,
+V2 23, M3 173, V3 160+ min — M3/V3-Paar dominiert die
+Sequenz. V3-Fertig erwartet ~02:15–03:45. **ETA Step
+64 erweitert: ~05:45–11:00** (je nach M4/M5-Verhalten:
+moderat ~25 min bzw. 50-GB-Subphase ~3 h); Stopp-79-ETA:
+heute 08:00–19:00, im schlechtesten Fall morgigen
+Tag (6/11). Rest nach V3: 8 Einträge. Push up-to-date.
+RAM 159 G avail, Disk 1,1 T, Monitor clean (01:33:44),
+0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
