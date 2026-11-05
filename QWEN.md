@@ -2869,6 +2869,24 @@ Stopp-79-ETA: heute 17:00–24:00, im Schlechtestfall
 morgen früh. Push up-to-date. RAM 153 G avail, Disk
 1,1 T, Monitor clean (08:00:22), 0 Restarts. Kein Stop.
 
+**08:3x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (14:29 h): **V4 fertig
+(04:58→08:12 = 3 h 14 min total = 194 min — im
+Blockmuster 170–195 min, wie vorhergesagt)**. Jetzt
+metal5_drw = **M5 (seit 08:12, ~22 min)** — das letzte
+große Routing-Layer, Verhalten offen: Moderat ~20–30
+min (wie M1/M2) oder Langläufer ~2–3 h (wie
+M3/M4-Quadrant); M5 liegt außerhalb des dichten
+Quadranten, XOR-Analogie war moderat (98 min bei 3,0×
+Asymmetrie). RSS 95,1→94,9 GB (stabil, kein Spike),
+CPU aktiv (CPU-Time 14:46:47, +29 min/30 min ≈ 97 %).
+Sequenz-Referenz: M1 23, V1 18, M2 23, V2 23, M3 173,
+V3 170, M4 193, V4 194. Rest nach M5: 5 Einträge (V5,
+TV1, TM1, TV2, TM2) — klein. ETA Step 64: ~10:00–18:00.
+Stopp-79-ETA: heute 18:00–24:00, im Schlechtestfall
+morgen früh. Push up-to-date. RAM 153 G avail, Disk
+1,1 T, Monitor clean (08:30:29), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
