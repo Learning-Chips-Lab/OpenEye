@@ -2940,6 +2940,22 @@ Stopp-79-ETA: heute 20:00–24:00, im Schlechtestfall
 morgen früh. Push up-to-date. RAM 158 G avail, Disk
 1,1 T, Monitor clean (10:00:52), 0 Restarts. Kein Stop.
 
+**10:3x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (16:29 h): metal5_drw = M5
+(seit 08:12) jetzt bei **~2 h 22 min** — 2-h-Grenze
+(10:12) überschritten, **Feincheck erledigt: CPU
+16:46:02 → 16:48:31 in 2:30 = 100 % eines Kerns
+aktiv, RSS 89,22 GB konstant → kein Stall**. M5 ist
+der bisher langsamste Metal-Layer (M1 23, M2 23, M3
+173, M4 193 min) — entwickelt sich zum Langläufer;
+falls Blockmuster (170–195 min) hält: M5-Fertig
+erwartet ~11:02–11:27. Rest nach M5: 5 Einträge (V5,
+TV1, TM1, TV2, TM2) — klein. ETA Step 64:
+~12:00–20:00. Stopp-79-ETA: heute 20:00–24:00, im
+Schlechtestfall morgen früh. Push up-to-date. RAM
+159 G avail, Disk 1,1 T, Monitor clean (10:31:00), 0
+Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
