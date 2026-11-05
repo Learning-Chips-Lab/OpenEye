@@ -2887,6 +2887,22 @@ Stopp-79-ETA: heute 18:00–24:00, im Schlechtestfall
 morgen früh. Push up-to-date. RAM 153 G avail, Disk
 1,1 T, Monitor clean (08:30:29), 0 Restarts. Kein Stop.
 
+**09:0x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (14:58 h): metal5_drw = M5
+(seit 08:12) jetzt bei ~51 min — langsamer als M1/M2
+(je 23 min), aber in der moderaten Klasse (M4 war
+193 min); M5-Verhalten noch offen, 2-h-Grenze 10:12
+steht (dann ggf. Feincheck). CPU aktiv (CPU-Time
+15:16:14, +29 min/30 min ≈ 97 %, makro-stabil seit
+19:00 — über 14 h), RSS 94,9 GB exakt konstant, kein
+Spike. Sequenz-Referenz: M1 23, V1 18, M2 23, V2 23,
+M3 173, V3 170, M4 193, V4 194, M5 51 min+. Rest nach
+M5: 5 Einträge (V5, TV1, TM1, TV2, TM2) — klein.
+ETA Step 64: ~10:30–19:00. Stopp-79-ETA: heute
+19:00–24:00, im Schlechtestfall morgen früh. Push
+up-to-date. RAM 153 G avail, Disk 1,1 T, Monitor clean
+(09:00:37), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
