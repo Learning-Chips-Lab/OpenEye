@@ -2747,6 +2747,22 @@ Stopp-79-ETA: heute 12:00–20:00. Push up-to-date. RAM
 159 G avail, Disk 1,1 T, Monitor clean (03:59:21), 0
 Restarts. Kein Stop.
 
+**04:3x (5/11) Cadence:** Step 64 KLayout-Antenna
+läuft (10:30 h): metal4_drw (seit 01:45) jetzt bei
+**~2 h 51 min** — exakt V3-Verlauf (V3 war bei 2 h
+50 min total fertig) → M4-Fertig erwartet in den
+nächsten ~0–30 min (analog V3: 1 h 40 min nach dem
+2:40-Check). CPU einwandfrei aktiv (CPU-Time 10:49:23,
++29 min/30 min ≈ 97 %, makro-stabil seit 19:00).
+Beobachtung: RSS 88,6→94,1 GB (+5,5 GB/30 min,
+leichter Anstieg wie in der V3-Spätphase — vermutlich
+M4-Subphase baut Datenstruktur, kein 50-GB-Spike;
+System avail 154 G unkritisch). Rest nach M4: 7
+Einträge (V4, M5, V5, TV1, TM1, TV2, TM2). ETA Step
+64: ~07:00–12:00. Stopp-79-ETA: heute 12:00–20:00.
+Push up-to-date. RAM 154 G avail, Disk 1,1 T, Monitor
+clean (04:34:30), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
