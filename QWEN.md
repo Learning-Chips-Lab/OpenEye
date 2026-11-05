@@ -2819,6 +2819,23 @@ Stopp-79-ETA: heute 15:00–23:00. Push up-to-date. RAM
 154 G avail, Disk 1,1 T, Monitor clean (06:29:59), 0
 Restarts. Kein Stop.
 
+**07:0x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (12:58 h): via4_drw (seit 04:58)
+jetzt bei ~2 h 05 min — 2-h-Grenze (06:58)
+überschritten, **Feincheck erledigt: CPU 13:16:10 →
+13:18:40 in 2:30 = 100 % eines Kerns aktiv, RSS 94,16
+GB exakt konstant → kein Stall**. V4 ist wie V3 (170
+min) ein Via-Langläufer; V3-Analogie: Fertig ~2 h 30–
+50 min total, d.h. V4-Fertig erwartet ~07:30–08:00.
+Kein Plan-v3-Stopkriterium berührt. Sequenz-Referenz:
+M1 23, V1 18, M2 23, V2 23, M3 173, V3 170, M4 193,
+V4 125 min+. Rest nach V4: 6 Einträge (M5, V5, TV1,
+TM1, TV2, TM2) — M5 = letzte große Routing-Fläche.
+ETA Step 64: ~09:00–16:00. Stopp-79-ETA: heute
+16:00–24:00. Push up-to-date. RAM 154 G avail, Disk
+1,1 T, Monitor clean (07:00:06), 0 Restarts. Kein
+Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
