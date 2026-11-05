@@ -2956,6 +2956,28 @@ Schlechtestfall morgen früh. Push up-to-date. RAM
 159 G avail, Disk 1,1 T, Monitor clean (10:31:00), 0
 Restarts. Kein Stop.
 
+**11:0x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (17:01 h): metal5_drw = M5
+(seit 08:12) jetzt bei **~2 h 54 min = 174 min** —
+innerhalb des vorhergesagten Fensters (M5-Fertig
+~11:02–11:27 bei Blockmuster 170–195 min), d.h. M5
+ist in den nächsten ~0–20 min wahrscheinlich durch
+→ dann V5-Start. M5 = bisher langsamster
+Metal-Layer (M1 23, M2 23, M3 173, M4 193, M5 174
+min+). CPU aktiv (CPU-Time 17:17:47, +29 min/30 min
+≈ 97 %, makro-stabil seit 19:00 — über 17 h).
+**RSS-Einheit-Korrektur:** bisherige „89,2 GB"-Angabe
+war eine KB→GB-Fehlablesung (erste 3 Ziffern des
+KB-Werts); korrekt: klayout-RSS ~85,0→86,7 GB
+(aktuell 90.873.404 KB = 86,7 GB, +1,7 GB/30 min,
+mild, unkritisch) — kein Stopp-Relevanz, nur
+Label-Korrektur. RAM 157 G avail >> 30 G Stopkriterium.
+Rest nach M5: 5 Einträge (V5, TV1, TM1, TV2, TM2) —
+klein. ETA Step 64: ~11:30–20:00. Stopp-79-ETA: heute
+20:00–24:00, im Schlechtestfall morgen früh. Push
+up-to-date. Disk 1,1 T, Monitor clean (11:06:09), 0
+Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
