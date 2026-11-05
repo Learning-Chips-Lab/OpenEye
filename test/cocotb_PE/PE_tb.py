@@ -606,6 +606,7 @@ async def reset_all_signals(ptp, dut):
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.compute_i), 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.enable_stream_i), 0))
     cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.data_stream_i), 0))
+    cocotb.start_soon(rtl_test_utils.set_input(ptp,(dut.dw_mode), 0))
 
     # Hold reset for one cycle
     await Timer(clk_cycle, unit=clk_cycle_unit) # type: ignore
