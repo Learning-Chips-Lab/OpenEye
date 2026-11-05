@@ -2645,6 +2645,23 @@ Nachmittag/Abend. Push up-to-date. RAM 163 G avail,
 Disk 1,1 T, Monitor clean (00:33:29), 0 Restarts. Kein
 Stop.
 
+**01:0x (5/11) Cadence:** Step 64 KLayout-Antenna
+läuft (6:57 h): via3_drw (seit 22:55) jetzt bei
+**~2 h 08 min** — 2-h-Grenze überschritten,
+**Feincheck erledigt: CPU 7:17:05 → 7:19:35 in 2:30 =
+100 % eines Kerns aktiv, RSS 84,79 GB konstant → kein
+Stall**, V3 ist einfach eine lange Via-Ratio-Phase.
+Korrektur der Restliste: nach V3 sind es **8 Einträge**
+(M4, V4, M5, V5, TV1, TM1, TV2, TM2), nicht 7.
+Verdichtete Sequenz-Referenz: M1 23, V1 18, M2 23, V2
+23, M3 173, V3 128+ min — die M3/V3-Paare (große
+Routing-Flächen) sind die Ausreißer; M4/M5 und Vias
+darauf dürften moderater sein. ETA Step 64: ~03:00–
+08:00. Danach 65–71 → 72/73 Magic DRC (2–6 h) → 74–78 →
+Stopp 79 heute Nachmittag/Abend. Push up-to-date. RAM
+163 G avail, Disk 1,1 T, Monitor clean (00:58:36), 0
+Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
