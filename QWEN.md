@@ -2978,6 +2978,26 @@ klein. ETA Step 64: ~11:30–20:00. Stopp-79-ETA: heute
 up-to-date. Disk 1,1 T, Monitor clean (11:06:09), 0
 Restarts. Kein Stop.
 
+**11:3x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (17:31 h): metal5_drw = M5
+(seit 08:12) jetzt bei **~3 h 24 min = 204 min** —
+**über der Blockmuster-Obergrenze (195 min)**: M5
+ist damit der bisher längste Layer (M1 23, M2 23,
+M3 173, M4 193, V4 194, M5 204 min+) und hat das
+Fertig-Fenster (~11:02–11:27) verfehlt. Kein
+Stall: CPU aktiv (CPU-Time 17:47:23, +30 min/30 min
+≈ 98 % eines Kerns, makro-stabil seit 19:00 — über
+17 h), RSS 86,7→92,4 GB (+5,7 GB/30 min = neue
+Subphase/Allokation, mild, unkritisch). Kein
+Stopkriterium berührt (keine 2-h-Feincheck-Pflicht
+mehr, da 2-h-Grenze 10:12 bereits 10:34 gefeint
+wurde). Rest nach M5: 5 Einträge (V5, TV1, TM1,
+TV2, TM2) — klein. ETA Step 64: ~13:00–21:00
+(M5-Langlauf eingepreist). Stopp-79-ETA: heute
+21:00–24:00, im Schlechtestfall morgen früh. Push
+up-to-date. RAM 152 G avail, Disk 1,1 T, Monitor
+clean (11:36:16), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
