@@ -1361,7 +1361,7 @@ end
   //#######################
   reg                                                     iact_buffer_en_r   [IACT_RAM_CELLS-1:0]; // Per-cell read enable from FSM or converter.
   reg                                                     iact_buffer_en_w   [IACT_RAM_CELLS-1:0]; // Per-cell write enable from FSM or converter.
-  reg [                                 BUFFER_WIDTH_IACT-1:0] iact_buffer_addr   [IACT_RAM_CELLS-1:0]; // Per-cell address (half-width; MSB is buffer_select).
+  wire [                                 BUFFER_WIDTH_IACT-1:0] iact_buffer_addr   [IACT_RAM_CELLS-1:0]; // Per-cell address (half-width; MSB is buffer_select).
   reg [                        IACT_CELL_INPUT_WIDTH-1:0] iact_buffer_data_w;                      // Per-cell write data (64 bits).
   wire [ IACT_RAM_CELLS_WORD_BITWIDTH*IACT_RAM_CELLS-1:0] iact_buffer_data_r;                     // Active-half read data: unpacked from iact_buffer_data_r.
 
