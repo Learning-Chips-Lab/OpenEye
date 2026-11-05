@@ -8,7 +8,10 @@ Goal: close the first physical baseline of the chip. The baseline target is
 50 MHz (20 ns period). 100 MHz is a follow-up that needs PE-fabric
 re-pipelining (RTL change).
 
-**Status (2026-10-30, 18:00):** run `p2_15` is at `RepairAntennas` (run dir
+**Design report (2026-11-05):** [`asic/doc/p2_16_design_report.md`](doc/p2_16_design_report.md):
+p2_16 routed at 25 ns, module-level area/power/timing, layout snapshots.
+
+**Status (2026-10-30, 18:00, historical):** run `p2_15` is at `RepairAntennas` (run dir
 42). Synthesis, placement, CTS, resizer and global routing are done.
 Remaining: post-GRT resizer, detailed routing, 3-corner signoff STA, DRC,
 LVS, GDS. ETA for the signoff numbers: 10-31 evening to 10-32 morning (assumes

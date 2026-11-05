@@ -1,0 +1,44 @@
+{
+ "seed": {
+  "pad": 970,
+  "out-net": 72220,
+  "clock": 109538,
+  "inst": 416798
+ },
+ "seed_in": 369324,
+ "unassigned": 49,
+ "tot_area_um2": 47465541.807995476,
+ "tot_power_W": 0.30302863262839225,
+ "worst": {
+  "typ_max": [
+   0.0,
+   "u_openeye.OpenEye_Parallel.gen_x[0].gen_y[1].OpenEye_Cluster.pe_cluster.gen_X[2].gen_Y[0].pe.weight_data_SPad.ram.g_word[228].g_bit[1].u_lat.u_lat/D",
+   "clk_pad"
+  ],
+  "typ_min": [
+   -0.0255,
+   "u_openeye.wght_buffer.g_specific.impl.g_cfg2048x288.u_mac0/A_DIN[56]",
+   "clk_pad"
+  ],
+  "slow_max": [
+   -1.4514,
+   "u_openeye.OpenEye_Parallel.gen_x[0].gen_y[0].OpenEye_Cluster.pe_cluster.gen_X[1].gen_Y[0].pe.gen_serial_psum_spad.gen_psum_spad[1].psum_SPad.ram.g_word[29].u_icg.u_icg/GATE",
+   "clk_pad"
+  ],
+  "slow_min": [
+   0.1753,
+   "_1375155_/D",
+   "clk_pad"
+  ],
+  "fast_max": [
+   0.0,
+   "u_openeye.OpenEye_Parallel.gen_x[0].gen_y[1].OpenEye_Cluster.pe_cluster.gen_X[2].gen_Y[0].pe.weight_data_SPad.ram.g_word[229].g_bit[1].u_lat.u_lat/D",
+   "clk_pad"
+  ],
+  "fast_min": [
+   -0.3412,
+   "u_openeye.wght_buffer.g_specific.impl.g_cfg2048x288.u_mac0/A_DIN[56]",
+   "clk_pad"
+  ]
+ }
+}
