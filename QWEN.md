@@ -2998,6 +2998,27 @@ TV2, TM2) — klein. ETA Step 64: ~13:00–21:00
 up-to-date. RAM 152 G avail, Disk 1,1 T, Monitor
 clean (11:36:16), 0 Restarts. Kein Stop.
 
+**12:0x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (18:01 h): **M5 (metal5_drw)
+FERTIG — 08:12:43 → 11:43:50 = 3 h 31 min = 211 min
+total**, damit der bisher längste Layer (M1 23, M2 23,
+M3 173, M4 193, V4 194, M5 211 min). Seit 11:43:50
+läuft **topvia1_drw = TV1 (~22 min)** — Top-Layer,
+meist schneller als Core-Metals. **Sequenz-Korrektur:**
+in dieser Antennen-Sequenz gibt es **kein separates
+V5 (via5_drw)** — direkt M5 → TV1 (via5 wird hier
+nicht separat evaluated); Rest nach TV1 sind damit
+3 Einträge (TM1, TV2, TM2), nicht 4. CPU aktiv
+(CPU-Time 18:16:55, +29 min/30 min ≈ 98 % eines
+Kerns, makro-stabil seit 19:00 — über 18 h), RSS
+92,1 GB stabil. Sequenz-Referenz (finalisiert bis
+M5): M1 23, V1 18, M2 23, V2 23, M3 173, V3 170,
+M4 193, V4 194, M5 211, TV1 22 min+. ETA Step 64:
+~13:30–16:00 (Top-Layer eingepreist). Stopp-79-ETA:
+heute 20:00–24:00, im Schlechtestfall morgen früh.
+Push up-to-date. RAM 152 G avail, Disk 1,1 T, Monitor
+clean (12:01:23), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
