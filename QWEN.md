@@ -2677,6 +2677,21 @@ Tag (6/11). Rest nach V3: 8 Einträge. Push up-to-date.
 RAM 159 G avail, Disk 1,1 T, Monitor clean (01:33:44),
 0 Restarts. Kein Stop.
 
+**02:0x (5/11) Cadence:** Step 64 KLayout-Antenna
+läuft (8:01 h): **V3 fertig (22:55→01:45 = 2 h 50 min
+total, zweiter Ausreißer der Sequenz)** — jetzt
+metal4_drw (seit 01:45, ~20 min). Wichtig: **kein neuer
+50-GB-Spike beim M4-Start** (RSS 88,8→88,6 GB, stabil)
+→ M4 läuft vermutlich im moderaten Tempo.
+Sequenz-Referenz: M1 23, V1 18, M2 23, V2 23, M3 173,
+V3 170, M4 20 min+. Rest nach M4: 7 Einträge (V4, M5,
+V5, TV1, TM1, TV2, TM2). klayout 82368 aktiv: CPU-Time
+8:20:00 (+29 min/30 min ≈ 97 %, makro-stabil seit
+19:00). ETA Step 64: ~04:00–08:00 (wenn M5 wie M4
+läuft); Stopp-79-ETA: heute 08:00–16:00. Push
+up-to-date. RAM 159 G avail, Disk 1,1 T, Monitor clean
+(02:03:52), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
