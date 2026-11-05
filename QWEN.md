@@ -2923,6 +2923,23 @@ Stopp-79-ETA: heute 20:00–24:00, im Schlechtestfall
 morgen früh. Push up-to-date. RAM 120 G avail, Disk
 1,1 T, Monitor clean (09:30:45), 0 Restarts. Kein Stop.
 
+**10:0x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (15:57 h): metal5_drw = M5
+(seit 08:12) jetzt bei ~1 h 50 min — 2-h-Grenze
+(10:12) wird beim nächsten Check erreicht, dann ggf.
+Feincheck. CPU aktiv (CPU-Time 16:14:35, +29 min/30
+min ≈ 97 %, makro-stabil seit 19:00), klayout-RSS
+89,2 GB (mild). **System-RAM wieder erholt: 120→158 G
+avail** (used 131→92) — die host-seitige Schwankung
+vom 09:3x-Check ist abgeklungen, bestätigt: nicht
+klayout/librelane. Sequenz-Referenz: M1 23, V1 18,
+M2 23, V2 23, M3 173, V3 170, M4 193, V4 194, M5
+110 min+. Rest nach M5: 5 Einträge (V5, TV1, TM1,
+TV2, TM2) — klein. ETA Step 64: ~11:30–20:00.
+Stopp-79-ETA: heute 20:00–24:00, im Schlechtestfall
+morgen früh. Push up-to-date. RAM 158 G avail, Disk
+1,1 T, Monitor clean (10:00:52), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
