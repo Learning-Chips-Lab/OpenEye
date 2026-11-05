@@ -414,47 +414,52 @@ module iact_stream_constructor #(
               end
               //All Iacts per Computing Cycle are transmitted
               if (!single_channel || (ram_inc_counter != 8'hff)) current_iact_cycle_reg <= 0;
-              rd_addr_0              <= rd_addr_inc_0_next;
-              ram_rd_addr            <= rd_addr_inc_0_next;
+              ram_rd_addr            <= ram_rd_addr + 1;
               rd_cycle_loop_cnt_0    <= rd_cycle_loop_cnt_0 + 1;
               if (rd_cycle_loop_cnt_0 == rd_loop_limit_0) begin
                 rd_cycle_loop_cnt_0  <= 0;
-                rd_addr_0            <= rd_addr_inc_1_next;
-                rd_addr_1            <= rd_addr_inc_1_next;
-                ram_rd_addr          <= rd_addr_inc_1_next;
+                rd_addr_0            <= rd_addr_inc_0_next;
+                ram_rd_addr          <= rd_addr_inc_0_next;
               end
             end
             if (fsm_enc_cycle == iact_words_per_compute) begin
-              ram_rd_addr         <= rd_addr_inc_2_next;
-              rd_addr_0           <= rd_addr_inc_2_next;
-              rd_addr_1           <= rd_addr_inc_2_next;
-              rd_addr_2           <= rd_addr_inc_2_next;
+              ram_rd_addr         <= rd_addr_inc_1_next;
+              rd_addr_0           <= rd_addr_inc_1_next;
+              rd_addr_1           <= rd_addr_inc_1_next;
               rd_cycle_loop_cnt_1 <= rd_cycle_loop_cnt_1 + 1;
               if (rd_cycle_loop_cnt_1 == rd_loop_limit_1) begin
                 rd_cycle_loop_cnt_1 <= 0;
-                ram_rd_addr         <= rd_addr_inc_3_next;
-                rd_addr_0           <= rd_addr_inc_3_next;
-                rd_addr_1           <= rd_addr_inc_3_next;
-                rd_addr_2           <= rd_addr_inc_3_next;
-                rd_addr_3           <= rd_addr_inc_3_next;
+                ram_rd_addr         <= rd_addr_inc_2_next;
+                rd_addr_0           <= rd_addr_inc_2_next;
+                rd_addr_1           <= rd_addr_inc_2_next;
+                rd_addr_2           <= rd_addr_inc_2_next;
                 rd_cycle_loop_cnt_2 <= rd_cycle_loop_cnt_2 + 1;
                 if (rd_cycle_loop_cnt_2 == rd_loop_limit_2) begin
                   rd_cycle_loop_cnt_2 <= 0;
-                  ram_rd_addr         <= rd_addr_inc_4_next;
-                  rd_addr_0           <= rd_addr_inc_4_next;
-                  rd_addr_1           <= rd_addr_inc_4_next;
-                  rd_addr_2           <= rd_addr_inc_4_next;
-                  rd_addr_3           <= rd_addr_inc_4_next;
-                  rd_addr_4           <= rd_addr_inc_4_next;
+                  ram_rd_addr         <= rd_addr_inc_3_next;
+                  rd_addr_0           <= rd_addr_inc_3_next;
+                  rd_addr_1           <= rd_addr_inc_3_next;
+                  rd_addr_2           <= rd_addr_inc_3_next;
+                  rd_addr_3           <= rd_addr_inc_3_next;
                   rd_cycle_loop_cnt_3 <= rd_cycle_loop_cnt_3 + 1;
                   if (rd_cycle_loop_cnt_3 == rd_loop_limit_3) begin
                     rd_cycle_loop_cnt_3 <= 0;
-                    ram_rd_addr         <= 0;
-                    rd_addr_0           <= 0;
-                    rd_addr_1           <= 0;
-                    rd_addr_2           <= 0;
-                    rd_addr_3           <= 0;
-                    rd_addr_4           <= 0;
+                    ram_rd_addr         <= rd_addr_inc_4_next;
+                    rd_addr_0           <= rd_addr_inc_4_next;
+                    rd_addr_1           <= rd_addr_inc_4_next;
+                    rd_addr_2           <= rd_addr_inc_4_next;
+                    rd_addr_3           <= rd_addr_inc_4_next;
+                    rd_addr_4           <= rd_addr_inc_4_next;
+                    rd_cycle_loop_cnt_4 <= rd_cycle_loop_cnt_4;
+                    if (rd_cycle_loop_cnt_4 == rd_loop_limit_4) begin
+                      rd_cycle_loop_cnt_4 <= 0;
+                      ram_rd_addr         <= 0;
+                      rd_addr_0           <= 0;
+                      rd_addr_1           <= 0;
+                      rd_addr_2           <= 0;
+                      rd_addr_3           <= 0;
+                      rd_addr_4           <= 0;
+                    end
                   end
                 end
               end

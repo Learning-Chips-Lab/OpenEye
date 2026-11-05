@@ -1084,16 +1084,17 @@ class LayerParameters(object):
             self.iact_read_limit_2 = self.needed_wght_cycles - 1
             self.iact_read_limit_3 = self.iact_x_line_repetitions - 1
             self.iact_read_limit_4 = math.ceil(self.iact_size_y/self.strideY) - 1
-            self.iact_read_inc_0 = 1
-            self.iact_read_inc_1 = self.iact_repetitions_per_write * params.NUM_GLB_IACT
-            self.iact_read_inc_2 = math.ceil(self.iact_buffer_words_per_write/self.diff_iact_layer)
+            self.iact_read_inc_0 = self.iact_repetitions_per_write * params.NUM_GLB_IACT
+            self.iact_read_inc_1 = math.ceil(self.iact_buffer_words_per_write/self.diff_iact_layer)
+            self.iact_read_inc_2 = 0
             if ((self.Y_Cluster_Packages == 1) & (params.Clusters_X == 1)):
                 self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM * self.strideX
             else:
                 self.iact_read_inc_3 = self.channel_div_trans * self.needed_Iact_writes * params.NUM_GLB_IACT
                 if (((params.Clusters_X * self.Y_Cluster_Packages)-1) * (params.NUM_GLB_PSUM * self.strideX) < self.kernel_shape[0] - 1):
                     self.iact_read_inc_3 = self.iact_read_inc_3 + (((params.Clusters_X * self.Y_Cluster_Packages)-1) * ((params.NUM_GLB_PSUM + 1) * self.strideX) - self.kernel_shape[0])
-            self.iact_read_inc_4 = self.iact_read_inc_1*self.strideY
+            self.iact_read_inc_4 = self.iact_read_inc_0*self.strideY
+
 
             if (self.used_channels == 1):
                 lines_in_words = ((self.iact_size_y+(self.padding_y*2)+1)/2)
