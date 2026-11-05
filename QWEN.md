@@ -2903,6 +2903,26 @@ ETA Step 64: ~10:30–19:00. Stopp-79-ETA: heute
 up-to-date. RAM 153 G avail, Disk 1,1 T, Monitor clean
 (09:00:37), 0 Restarts. Kein Stop.
 
+**09:3x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (15:28 h): metal5_drw = M5
+(seit 08:12) jetzt bei ~1 h 21 min — 2-h-Grenze 10:12
+steht (dann ggf. Feincheck). CPU aktiv (CPU-Time
+15:45:18, +29 min/30 min ≈ 97 %, makro-stabil seit
+19:00). **Zwei RAM-Beobachtungen:** (a) klayout-RSS
+94,9→88,2 GB (−6,7 GB) = M5-Subphase-Daten
+freigegeben, wie bei M3→V3 (normal); (b) System
+avail 153→120 G (−33 G) — klayout und librelane
+verbrauchen *weniger*, Ursache also host-seitig
+(est-srv02, anderer Tenant/Kernel-Cache-Shift);
+120 G >> Stopkriterium 30 G, unkritisch, im Folge-
+Check weiter beobachten. Sequenz-Referenz: M1 23,
+V1 18, M2 23, V2 23, M3 173, V3 170, M4 193, V4 194,
+M5 81 min+. Rest nach M5: 5 Einträge (V5, TV1, TM1,
+TV2, TM2) — klein. ETA Step 64: ~11:00–20:00.
+Stopp-79-ETA: heute 20:00–24:00, im Schlechtestfall
+morgen früh. Push up-to-date. RAM 120 G avail, Disk
+1,1 T, Monitor clean (09:30:45), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
