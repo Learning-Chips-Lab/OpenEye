@@ -2805,6 +2805,20 @@ Step 64: ~08:00–14:00. Stopp-79-ETA: heute 14:00–22:00.
 Push up-to-date. RAM 154 G avail, Disk 1,1 T, Monitor
 clean (05:59:51), 0 Restarts. Kein Stop.
 
+**06:3x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (12:28 h): via4_drw (seit 04:58)
+jetzt bei ~1 h 35 min — 2-h-Grenze (06:58) wird beim
+nächsten Check (~07:03) erreicht → dann CPU-Time-
+Feincheck fällig, falls V4 noch läuft (V3-Analogie:
+V3 war bei 2 h 50 min total fertig, V4 könnte also
+noch ~0–75 min laufen). CPU aktiv (CPU-Time 12:46:47,
++29 min/30 min ≈ 97 %, makro-stabil seit 19:00), RSS
+94,2 GB exakt konstant. Rest: 6 Einträge (M5, V5, TV1,
+TM1, TV2, TM2). ETA Step 64: ~08:30–15:00.
+Stopp-79-ETA: heute 15:00–23:00. Push up-to-date. RAM
+154 G avail, Disk 1,1 T, Monitor clean (06:29:59), 0
+Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
