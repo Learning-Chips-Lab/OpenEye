@@ -2731,6 +2731,22 @@ Stopp-79-ETA: heute 11:00–19:00. Push up-to-date. RAM
 159 G avail, Disk 1,1 T, Monitor clean (03:34:15), 0
 Restarts. Kein Stop.
 
+**04:0x (5/11) Cadence:** Step 64 KLayout-Antenna
+läuft (9:58 h): metal4_drw (seit 01:45) jetzt bei
+~1 h 49 min — 2-h-Grenze (03:45) überschritten,
+**Feincheck erledigt: CPU 10:17:37 → 10:20:07 in 2:30
+= 100 % eines Kerns aktiv, RSS 88,6 GB exakt konstant
+→ kein Stall**. M4 ist wie M3 (173 min) und V3
+(170 min) ein Langläufer der Sequenz — vermutlich
+M4↔M3-Via-Verdichtung (Analogie: M3/V3-Paar). Kein
+Plan-v3-Stopkriterium berührt, weiterlaufen lassen.
+Sequenz-Referenz: M1 23, V1 18, M2 23, V2 23, M3 173,
+V3 170, M4 110 min+. Rest nach M4: 7 Einträge (V4,
+M5, V5, TV1, TM1, TV2, TM2). ETA Step 64: ~07:00–12:00.
+Stopp-79-ETA: heute 12:00–20:00. Push up-to-date. RAM
+159 G avail, Disk 1,1 T, Monitor clean (03:59:21), 0
+Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
