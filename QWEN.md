@@ -3019,6 +3019,26 @@ heute 20:00–24:00, im Schlechtestfall morgen früh.
 Push up-to-date. RAM 152 G avail, Disk 1,1 T, Monitor
 clean (12:01:23), 0 Restarts. Kein Stop.
 
+**12:3x (5/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (18:30 h): topvia1_drw = TV1
+(seit 11:43:50) jetzt bei **~52 min** — langsamer
+als die „schnelle Top-Layer"-Erwartung (ich hatte
+moderat ~20–40 min geschätzt), aber **kein Stall**:
+CPU aktiv (CPU-Time 18:46:39, +29 min/30 min ≈ 99 %
+eines Kerns, makro-stabil seit 19:00 — über 18 h),
+RSS 92,1 GB exakt konstant. TV1 = Topvia zwischen
+TM1 und M5, große Via-Schicht. M5 (metal5_drw)
+FERTIG bleibt: 211 min (bisher längster Layer).
+Rest nach TV1: 3 Einträge (TM1, TV2, TM2) — wenn
+die Top-Layer das TV1-Tempo (~50 min+) halten: je
+~50–100 min. Sequenz-Referenz: M1 23, V1 18, M2 23,
+V2 23, M3 173, V3 170, M4 193, V4 194, M5 211, TV1
+52 min+. ETA Step 64: ~14:30–19:00 (Top-Layer
+langsamer als erwartet). Stopp-79-ETA: heute
+22:00–24:00, im Schlechtestfall morgen früh. Push
+up-to-date. RAM 152 G avail, Disk 1,1 T, Monitor
+clean (12:31:30), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
