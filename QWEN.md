@@ -2717,6 +2717,20 @@ Stopp-79-ETA: heute 10:00–18:00. Push up-to-date. RAM
 159 G avail, Disk 1,1 T, Monitor clean (03:04:07), 0
 Restarts. Kein Stop.
 
+**03:3x (5/11) Cadence:** Step 64 KLayout-Antenna
+läuft (9:29 h): metal4_drw (seit 01:45) jetzt bei
+~109 min — 2-h-Grenze (03:45) in ~11 min, d.h. beim
+nächsten Check (~04:04) wird der CPU-Time-Feincheck
+fällig, falls M4 dann noch läuft (wie bei M3/V3:
+Feincheck 2:30-Fenster, Erwartung = aktiv, kein Stall).
+Aktuell einwandfrei: CPU-Time 9:48:15 (+29 min/30 min
+≈ 97 %, makro-stabil seit 19:00), RSS 88,6 GB exakt
+konstant, kein Spike. Rest nach M4: 7 Einträge (V4,
+M5, V5, TV1, TM1, TV2, TM2). ETA Step 64: ~06:00–11:00.
+Stopp-79-ETA: heute 11:00–19:00. Push up-to-date. RAM
+159 G avail, Disk 1,1 T, Monitor clean (03:34:15), 0
+Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
