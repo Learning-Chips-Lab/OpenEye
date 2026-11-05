@@ -1435,7 +1435,7 @@ end
   // --- Quantization output staging (SEND_PSUM_TO_IACT) ---
   // After quantization, the 8 output bytes (one per filter in the current group)
   // are held here for packing into the iact buffer.
-  reg [7:0] quantized_value_reg [TRANS_WORDS-1:0]; // Quantized output bytes [0..7]; one per parallel filter.
+  wire [7:0] quantized_value_reg [TRANS_WORDS-1:0]; // Quantized output bytes [0..7]; one per parallel filter.
 
   reg [7:0] current_filter; // Index of the filter group currently being quantized/output [0..filters-1].
   wire[24-1:0]psum_output_words; // Amoutn of Output words for streaming
