@@ -2779,6 +2779,20 @@ ETA Step 64: ~07:30–13:00. Stopp-79-ETA: heute
 13:00–21:00. Push up-to-date. RAM 154 G avail, Disk
 1,1 T, Monitor clean (05:04:38), 0 Restarts. Kein Stop.
 
+**05:3x (5/11) 30-min-Statuszyklus** (Label ab sofort
+statt „Cadence" — Vermeidung von Verwechslung mit dem
+EDA-Anbieter): Step 64 KLayout-Antenna läuft (11:29 h):
+via4_drw (seit 04:58) jetzt bei ~37 min — langsamer
+als V1 (18) / V2 (23), V3-Analogie (170 min) möglich
+(V4 = M4↔M5-Kopplung), Beobachtung: falls V4 > 2 h
+(06:58) → Feincheck. CPU aktiv (CPU-Time 11:48:09,
++29 min/30 min ≈ 97 %, makro-stabil seit 19:00), RSS
+94,2 GB exakt konstant. Rest: 6 Einträge (M5, V5, TV1,
+TM1, TV2, TM2). ETA Step 64: ~07:30–13:00.
+Stopp-79-ETA: heute 13:00–21:00. Push up-to-date. RAM
+154 G avail, Disk 1,1 T, Monitor clean (05:34:45), 0
+Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
