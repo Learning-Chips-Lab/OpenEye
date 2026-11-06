@@ -3847,6 +3847,84 @@ T, Monitor clean (08:26:58), 1 Watchdog-Restart
 (1/3). Kein Stop (noch 59 G avail > 30 G),
 Aber-Stop-Erwartung ~15–25 min.
 
+**08:4x (6/11) STOP — Plan v3 erfüllt („Step
+crasht zweimal“):** Filler-Restart Dir 68 ist
+um **08:33:09** ebenfalls gecrasht (flow.log:
+„Filler Generation: Interrupted (SIGKILL)“).
+process_stats Dir 68: Peak **memory_rss 247 GiB,
+VMS 389 GiB, Runtime 01:36:14** — **bytegleich
+mit Erstlauf Dir 67** (247 GiB/389 GiB,
+01:37:01) → **deterministischer OOM** auf dem
+251-GB-Shared-Host (Swap 31 G, 2 G belegt,
+nicht ausreichend). Der Watchdog hatte
+automatisch **Restart 2/3** (08:35:05)
+angestoßen (Filler als Dir 69, gestartet
+08:36:09). **Stop-Aktion 08:39–08:40 (von mir,
+nach v3):** Watchdog (Host-PID 1088326)
+beendet **bevor** Restart 3/3 anlaufen konnte
++ Flow gestoppt (librelane 85902 via SIGTERM,
+klayout 85919 via SIGKILL — ignorierte
+SIGTERM —, beide im Container). **System-Status
+nach Stop: keine aktiven librelane/klayout/
+magic/netgen-Prozesse** (nur 2 harmlose
+Zombies 25195/85919, RSS 0), kein
+Watchdog/run_openeye auf dem Host, kein
+Restart 3/3 erfolgt. RAM 234 G avail, Disk
+1,1 T. **Ursache (root-caused):**
+KLayout.Filler benötigt für die finale GDS
+(1,61 GB; 110,25 mm² Die; 6,81 M Instanzen inkl.
+5,19 M OpenROAD-Filler-Zellen + SealRing)
+**~247 GiB+ anon RSS** — mehr als der gesamte
+251-GB-Host (geteilt, Swap 31 G).
+Speicher-Kurve (beide Läufe identisch): ~95 GB
+nach ~65 min, dann Explosionsphase ~3,6–5
+GB/min → 247 GiB bei ~97 min. Deterministisch:
+gleiche Eingabe-GDS, gleiche KLayout-Version,
+gleicher Config → gleicher Peak. **Vorschlag
+(Optionen, User-Entscheidung, Warten):**
+(1) **Mehr Swap** (~300 G Swapfile, Host-Root,
+1,1 T Disk frei): Filler paged durch den Peak —
+aber CPU-bound-Prozess mit ~247 G auf Swap =
+sehr langsam (10–30 h+, kein
+Vollständigkeits-Garantie, thrash-Risiko auf
+Shared-Host). (2) **Größere Maschine
+(≥512 GB RAM)**: KLayout.Filler standalone
+neu starten (FORCE_RESUME_STEP) — sauberste
+Variante, Laufzeit ~2 h + GDS-Load.
+(3) **Filler-Config ändern** (Fill-Bereich/
+Layer-Untermengen/Filler-Set): ändert die
+GDS-Inhalts → DRC-Density/Antenna-Neucheck in
+K2, ungetestet, PDK-Flow-Wissen nötig.
+(4) **Filler überspringen** (dokumentierte
+Abweichung): Flow ab nächstem Step (Density
+Check) weiterlaufen lassen, GDS **ohne
+KLayout-Filler** liefern; OpenROAD-
+FillInsertion (Step 55) hat bereits 5,19 M
+Filler-Zellen platziert — KLayout-Filler ist
+der zweite, GDS-basierte Durchlauf;
+Klassifizierung in K2: „Filler: partiell
+(OpenROAD only), KLayout-Filler übersprungen
+(OOM)“ + erwartete Density-DRC-Findings als
+NEW recorden. Realistisch, wenn Ziel
+Flow-Abschluss + Signoff-Dokumentation ist
+(kein Produktions-Tapeout). (5) **p2_16
+Layout-Phase abbrechen**, falls nichts von
+1–4. **Erreichter Stand (unverändert,
+verfügbar):** Steps 01–66 fertig — GDS 1,61 GB
+(nach SealRing), XOR 0/43 (11/4 18:06),
+KLayout-Antenna **0/31 total: 0** (35 h 11 min
+04 s), STA per-corner @ 25 ns (J4-Zahlen),
+Power 0,334 W; Steps 67/68 = 2 OOM-Crashes
+(deterministisch), Step 69 = von mir nach
+~3–4 min (RSS ~13 GB) gestoppt, kein Crash.
+**Kein weiterer Lauf bis User-Entscheidung.**
+Neustart wäre nur manuell: Watchdog gestoppt,
+Restart 3/3 nicht mehr verfügbar; manuell via
+`FORCE_RESUME_STEP=KLayout.Filler …
+watchdog.sh p2_16` (analog J6-Rezept) — aber
+ohne Option 1–4 ist ein 3. OOM
+vorhergesagt.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
