@@ -3809,6 +3809,23 @@ Steps. Push up-to-date. Disk 1,1 T, Monitor clean
 (07:26:43), 1 Watchdog-Restart (1/3). Kein Stop
 (Tripwire nicht erreicht).
 
+**07:5x (6/11) 30-min-Statuszyklus:** Filler-Restart
+(Dir 68, PID 85838) läuft seit **1 h 02 min**: CPU
+99,6 % aktiv (CPU-Time 01:01:31 ≈ 100 % eines
+Kerns), RSS 65,1→77,4 GB (Ø ~0,5 GB/min seit
+07:31 — das kurze 4,4-GB/min-Burst 07:29–07:31
+ist abgeflaut). Der Lauf liegt damit **unter der
+Erstlauf-Trajektorie** (Erstlauf: 95,3 GB bei
+66 min; jetzt 77,4 GB bei 62 min) — die
+Explosionsphase (95→247 GB) hat noch nicht
+angesetzt; entscheidendes Fenster nächste
+~10–30 min (Erstlauf: Explosion ~70–80 min
+Fill-Laufzeit). RAM 169 G avail (>> 30 G
+Tripwire). Stop-Trigger: avail < 30 G oder 2.
+Crash dieses Steps. Push up-to-date. Disk 1,1 T,
+Monitor clean (07:56:51), 1 Watchdog-Restart
+(1/3). Kein Stop (Tripwire nicht erreicht).
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
