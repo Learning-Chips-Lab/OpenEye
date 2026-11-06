@@ -34,8 +34,8 @@ starts with that prompt. They come from the user (2026-10-30 / 11-01 /
    without asking. Phase L: document only, do not start.
 6. Per task: check, compare with the expected values, tick `[x]`, record
    numbers + timestamp + log path in "Current state", small commit. At
-   the end of each phase (and at least once a day): `git push utz12
-   dev_asic_sg13g2`.
+   the end of each phase (and at least once a day): `git push origin
+   dev_asic_sg13g2` (upstream since 2026-11-06, NOT the fork `utz12`).
 7. Monitoring: every 30 min (flow.log, monitor, watchdog, `ps` on host
    AND in the container, `free -g`, `df -h`), one status line in
    "Current state".
@@ -248,7 +248,7 @@ final STA checks everything at 25 ns.
   vddarray/vssarray) or **NEW** (with location/rule/count). Because the
   overlay made them report-only, this classification IS the signoff.
 - [ ] **K3 deliverables:** paths of final GDS, netlist, SPEF, SDF (if
-  any), reports in `final/`; `git push utz12 dev_asic_sg13g2`. Then
+  any), reports in `final/`; `git push origin dev_asic_sg13g2`. Then
   stop and wait for the user (the optimization round is the user's
   decision).
 
@@ -552,7 +552,7 @@ parallel that answers the next question with the same wall time:
   result classified against the 3 documented PDK gaps.
 - [ ] **H2** Gate-sim of the FINAL netlist (`final/nl/…`) with
   `run_verilator.sh` → PASS.
-- [ ] **H3** Summary in "Current state", commit, `git push utz12
+- [ ] **H3** Summary in "Current state", commit, `git push origin
   dev_asic_sg13g2`. Leave the IO-delay question (6.4 ns external
   clock-to-pad assumption) in "Blocked / open threads" for the user.
 
@@ -837,7 +837,7 @@ Work the phases in order. Ground rules for every task:
 - [ ] **C3** Ask the user to confirm the IO assumption (6.4 ns pad delay,
   external driver ≤ 6 ns clock-to-pad at 50 MHz) against the board/tester.
 - [ ] **C4** Write a short results summary in "Current state" + push to
-  `utz12`.
+  `origin`.
 
 ### Phase D — next physical iteration p2_16 (proposal; user decides scope)
 
@@ -4771,14 +4771,15 @@ override inherited environment.
 
 ## Blocked / open threads
 
-- **Push: RESOLVED 2026-10-30.** No write access to upstream
-  `Learning-Chips-Lab/OpenEye`; the work lives in the fork
-  `github.com/utz12/OpenEye`, branch `dev_asic_sg13g2` (pushed, HEAD
-  9654ac4). SSH: default key `~/.ssh/id_ed25519` on est-srv02 is
-  registered on GitHub (comment `est-srv02-github`), remote `utz12`
-  configured in the repo. Future pushes: `git push utz12 dev_asic_sg13g2`.
-  A PR into upstream can be created from the fork if ever needed
-  (https://github.com/utz12/OpenEye/pull/new/dev_asic_sg13g2).
+- **Push: MOVED TO UPSTREAM 2026-11-06.** The user now has write access
+  to `Learning-Chips-Lab/OpenEye`. Remote `origin` =
+  `git@github.com:Learning-Chips-Lab/OpenEye.git` (SSH, default key
+  `~/.ssh/id_ed25519` on est-srv02, GitHub account `utz12`); branch
+  `dev_asic_sg13g2` tracks `origin/dev_asic_sg13g2` (first push b78b111).
+  Push with `git push origin dev_asic_sg13g2` (or plain `git push`).
+  **Do NOT push to the remote `utz12` any more** (old fork, frozen at
+  338f6d9, will be removed). History: 2026-10-30 to 2026-11-06 the work
+  lived in the fork `github.com/utz12/OpenEye` (no upstream write access then).
 - PDK gaps (documented in `asic/README.md`): bondpad↔pad-port LVS mismatch,
   pad `vdd` pins unconnected (PSM-0069), sealring offset (bondpads outside
   sealring). Plus SRAM `vddarray`/`vssarray` have no PDK power net.
