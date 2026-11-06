@@ -3711,6 +3711,32 @@ ETA Step 64: ~05:00–05:30. Stopp-79-ETA: **heute
 Push up-to-date. Disk 1,1 T, Monitor clean
 (04:50:37), 0 Restarts. Kein Stop.
 
+**05:2x (6/11) 30-min-Statuszyklus:** **Step 64
+KLayout-Antenna FERTIG (05:16) — Total-Run 35 h 11
+min 04 s** (18:05:10 11/4 → 05:16:14 11/6).
+**Antenna-Report: alle 31 Regeln = 0 Verletzungen,
+total: 0** (Ant.a/c, Ant.b/e Metal1–5 + TopMetal1/2,
+Ant.d/f Via1–4 + TopVia1/2, Ant.g/h/i) — das
+finale GDS ist unter dem vollen KLayout-Antenna-
+Regelwerk sauber = **starkes positives
+Signoff-Item für K2**. Sequenz-Endwerte (alle
+Layer): M1 23, V1 18, M2 23, V2 23, M3 173, V3 170,
+M4 193, V4 194, M5 211, TV1 210, TM1 221, TV2 222,
+TM2 350 min (Rekord) + Basisschicht ~1 h 30 min +
+Cumulative/Rules-Phase ~1 h 20 min. **Steps 65 + 66
+Blitzschnell fertig:** 65 Checker-KLayoutAntenna
+0,001 s, 66 SealRing 38 s (OpenEye_Asic.gds 1,61 GB
+neu). **Step 67 klayout-filler läuft** (seit
+05:16:52, neuer klayout PID 85767, CPU 99,6 %, RSS
+17,3 GB). RAM 226 G avail (alter klayout 82368
+beendet, ~100 GB freigegeben). Sequenz danach:
+68/69 Density → 70/71 KLayout DRC → 72/73 Magic DRC
+(Langer-Pol 2–6 h) → 74–78 → Stopp 79. ETA Step 67:
+~07:20 (p2_15-Referenz Fill 2 h 03 min).
+Stopp-79-ETA: **heute (6/11) ~12:00–16:00**, im
+Schlechtestfall später. Push up-to-date. Disk 1,1
+T, Monitor clean (05:20:45), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
