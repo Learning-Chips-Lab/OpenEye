@@ -3691,6 +3691,26 @@ schreiben). Stopp-79-ETA: **heute (6/11)
 up-to-date. RAM 145 G avail, Disk 1,1 T, Monitor
 clean (04:20:30), 0 Restarts. Kein Stop.
 
+**04:5x (6/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (1-10:49 h), die
+**Cumulative-Ratio-Phase zieht sehr schnell durch**:
+Metal3 (04:18) → Metal4 (04:19/04:23) → Metal5
+(04:24) → Via3 (04:47) → Via4 (04:48/04:51) → jetzt
+**„Evaluating cumulative ratio after TopVia1“
+(04:53)** — je 1–3 min pro Layer; verbleiben
+vermutlich noch TopVia2, TopMetal1, TopMetal2 und
+das finale Ergebnis Schreiben. **Step 64 ist damit
+in den nächsten ~10–30 min wahrscheinlich durch**
+→ dann Step 65 Checker-Antenna. **Kein Stall**: CPU
+aktiv (CPU-Time 1-11:01:49 = 35:01:49, +29 min/29
+min ≈ 100 % eines Kerns, makro-stabil seit 19:00 —
+jetzt über 35 h), RSS 98,8 GB konstant. RAM 145 G
+avail. TM2 bleibt der Rekord-Layer (350 min).
+ETA Step 64: ~05:00–05:30. Stopp-79-ETA: **heute
+(6/11) ~12:00–16:00**, im Schlechtestfall später.
+Push up-to-date. Disk 1,1 T, Monitor clean
+(04:50:37), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
