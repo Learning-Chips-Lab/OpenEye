@@ -114,9 +114,9 @@ export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 #export LAYER=FC
 #export LAYER=MNIST
 #export LAYER=VGG-19
-#export LAYER=Convolution_Stack
+export LAYER=Convolution_Stack
 #export LAYER=Conv_Pool_Conv
-export LAYER=Convolution_Single
+#export LAYER=Convolution_Single
 #export LAYER=Depthwise_Convolution
 #export LAYER=MLP
 #export LAYER=MobileNetV1
@@ -128,7 +128,7 @@ export KERNEL_SIZE_Y=3
 export INPUT_SIZE_X=8
 export INPUT_SIZE_Y=2
 export STRIDE=1
-export INPUT_CHANNELS=8
+export INPUT_CHANNELS=4
 export OUTPUT_SIZE=10
 export USE_RANDOM_VALUES=1
 export USE_SPARSE_IACTS=0
@@ -151,12 +151,12 @@ export TRANS_BITWIDTH_WGHT=8
 export TRANS_BITWIDTH_PSUM=32
 
 #Set Number of Router Clusters per Instance
-export NUM_GLB_IACT=2
+export NUM_GLB_IACT=1
 export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
 #Set number of Clusters
-export CLUSTER_COLUMNS=2
+export CLUSTER_COLUMNS=1
 export CLUSTER_ROWS=1
 
 #Amoutn of Iact RAM STORAGES

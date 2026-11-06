@@ -587,8 +587,8 @@ reg [1023:0] fst_path;
   reg [10-1:0] iact_to_psum_x_pos_counter;
   reg [4-1:0] iact_to_psum_trans_counter;
   reg [$clog2(IACT_RAM_CELLS*(8/WRITEBACK_WORDS))-1:0] iact_to_psum_storage_counter;
-  reg [2*64*IACT_RAM_CELLS-1:0] iact_to_psum_shift_reg;
-  reg [2*64*IACT_RAM_CELLS-1:0] iact_to_psum_mux_reg;
+  reg [32*IACT_RAM_CELLS-1:0] iact_to_psum_shift_reg;
+  reg [32*IACT_RAM_CELLS-1:0] iact_to_psum_mux_reg;
   reg iact_to_psum_start_shifting;
 
   reg [CLUSTERS*NUM_GLB_IACT*TRANS_BITWIDTH_IACT - 1:0] iact_out_reg; // Legacy assembled iact output register (not driven in current path; kept for compatibility).
@@ -2322,7 +2322,7 @@ end
               end
             end
 
-            if (iact_to_psum_trans_counter == WRITEBACK_WORDS) begin
+            if (iact_to_psum_trans_counter == 2) begin
               iact_to_psum_trans_counter  <= 1;
               iact_to_psum_shift_reg      <= iact_to_psum_mux_reg;
               iact_to_psum_start_shifting <= 1;
@@ -2336,12 +2336,12 @@ end
               end
             end            
             for (a = 0; a < WRITEBACK_WORDS; a=a+1) begin
-              iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)+(DATA_IACT_BITWIDTH*(WRITEBACK_WORDS-1))+:DATA_IACT_BITWIDTH] <= quantized_value_reg[a];
+              iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*2)+(DATA_IACT_BITWIDTH*(2-1))+:DATA_IACT_BITWIDTH] <= quantized_value_reg[a];
             end
             for (a = 0; a < WRITEBACK_WORDS; a=a+1) begin
-              for (b = 0; b < WRITEBACK_WORDS-1; b=b+1) begin
-                iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)+(DATA_IACT_BITWIDTH*(WRITEBACK_WORDS-1)-((b+1)*DATA_IACT_BITWIDTH))+:DATA_IACT_BITWIDTH] <=
-                iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*WRITEBACK_WORDS)+(DATA_IACT_BITWIDTH*(WRITEBACK_WORDS-1)-(b*DATA_IACT_BITWIDTH))+:DATA_IACT_BITWIDTH];
+              for (b = 0; b < 2-1; b=b+1) begin
+                iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*2)+(DATA_IACT_BITWIDTH*(2-1)-((b+1)*DATA_IACT_BITWIDTH))+:DATA_IACT_BITWIDTH] <=
+                iact_to_psum_mux_reg[a*(DATA_IACT_BITWIDTH*2)+(DATA_IACT_BITWIDTH*(2-1)-(b*DATA_IACT_BITWIDTH))+:DATA_IACT_BITWIDTH];
               end
             end
           end

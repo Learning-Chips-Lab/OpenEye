@@ -1114,9 +1114,9 @@ class LayerParameters(object):
 
             self.pagu_wght_limit = int((self.iact_x_add_up%params.NUM_GLB_PSUM)+self.iact_x_add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
 
-            max_channels = min(self.different_kernels_per_calculation,4)
+            max_channels = min(self.different_kernels_per_calculation,2)
             self.psum_pagu_cs_limit[0] = max_channels - 1
-            self.psum_pagu_cs_limit[1] = math.ceil(4/max_channels) - 1
+            self.psum_pagu_cs_limit[1] = math.ceil(2/max_channels) - 1
             self.psum_pagu_cs_limit[2] = 1 - 1
             self.psum_pagu_cs_limit[3] = math.ceil(self.Y_Cluster_Packages*params.Clusters_X/self.different_kernels_per_calculation) - 1
             self.psum_pagu_cs_limit[4] = self.iact_x_line_repetitions * self.psum_size_y - 1
@@ -1137,7 +1137,7 @@ class LayerParameters(object):
             self.psum_pagu_loop_limit[0] = max_channels - 1
             self.psum_pagu_addr_inc[0] = 0
 
-            self.psum_pagu_loop_limit[1] = math.ceil(4/max_channels) - 1
+            self.psum_pagu_loop_limit[1] = math.ceil(2/max_channels) - 1
             self.psum_pagu_addr_inc[1] = 1
 
             self.psum_pagu_loop_limit[2] =  math.ceil(self.used_X_cluster/self.different_kernels_per_calculation) - 1
@@ -1149,8 +1149,8 @@ class LayerParameters(object):
             self.psum_pagu_loop_limit[4] = math.floor(self.different_kernels_per_calculation/max_channels) - 1
             self.psum_pagu_addr_inc[4] = 0
 
-            self.psum_pagu_loop_limit[5] = math.ceil(self.filters/4) - 1
-            self.psum_pagu_addr_inc[5] = math.ceil(4/max_channels)
+            self.psum_pagu_loop_limit[5] = math.ceil(self.filters/2) - 1
+            self.psum_pagu_addr_inc[5] = math.ceil(2/max_channels)
 
         self.compact_and_pad_in_place(self.psum_pagu_loop_limit, self.psum_pagu_addr_inc)
 
@@ -1240,6 +1240,7 @@ class LayerParameters(object):
         if (len(self.rel_layers["Next_Layer"][self.layer_name]) != 0):
             # Store next layer's channel requirements for inter-layer optimization
             self.diff_iact_layer_next_layer = layer_parameters[self.rel_layers["Next_Layer"][self.layer_name][0]].used_channels
+            self.diff_iact_layer_next_layer = 2
             """if ("dense" in layer_parameters[self.rel_layers["Next_Layer"][self.layer_name][0]].layer_name ):
                 self.diff_iact_layer_next_layer = 4"""
 
