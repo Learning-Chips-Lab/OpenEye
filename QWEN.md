@@ -3642,6 +3642,29 @@ TM2 350 min. ETA Step 64: ~03:30–05:30
 später. Push up-to-date. Disk 1,1 T, Monitor clean
 (03:25:16), 0 Restarts. Kein Stop.
 
+**03:5x (6/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (1-09:50 h), weiterhin in
+der finalen Aggregationsphase: **„Creating base
+layer with all individual ratios and diode flag“
+(seit 02:47:54, jetzt ~68 min)** — die Phase
+zieht sich länger als die erste Schätzung
+(~30–40 min), schreitet aber fort (RSS wächst
+langsam: 113,4→115,2 GB, +1,8 GB/30 min =
+Basisschicht wird weiter aufgebaut); danach
+schreibt der Step sein Ergebnis und Step 65
+Checker-Antenna startet. **Kein Stall**: CPU aktiv
+(CPU-Time 1-10:03:00 = 34:03:00, +29 min/30 min ≈
+99 % eines Kerns, makro-stabil seit 19:00 — jetzt
+über 34 h), RSS 115,2 GB. RAM 128 G avail (>> 30 G
+Stopkriterium). TM2 bleibt der Rekord-Layer (350
+min). Sequenz-Bilanz (komplett): M1 23, V1 18, M2
+23, V2 23, M3 173, V3 170, M4 193, V4 194, M5 211,
+TV1 210, TM1 221, TV2 222, TM2 350 min. ETA Step
+64: ~04:00–06:00 (Aggregation zieht sich).
+Stopp-79-ETA: **heute (6/11) ~12:00–16:00**, im
+Schlechtestfall später. Push up-to-date. Disk 1,1
+T, Monitor clean (03:55:24), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
