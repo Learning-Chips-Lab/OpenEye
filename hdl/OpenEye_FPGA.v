@@ -244,7 +244,7 @@ module OpenEye_FPGA #(
     localparam integer PSUM_RAM_CELLS_WORD_BITWIDTH = DATA_PSUM_BITWIDTH * 2,
 
     localparam IACT_WORDS_IN_RAM = IACT_RAM_CELLS_WORD_BITWIDTH / DATA_IACT_BITWIDTH,
-    localparam WORDS_PER_CYCLE   = 2,
+    localparam MAX_CHANNELS_IACT_GLB   = 2,
     localparam PSUM_TO_IACT_CYCLES = (CLUSTER_COLUMNS * NUM_GLB_PSUM) == 4 ? 2 : 1,
     localparam integer IACT_CYCLES_ONE_WORD_ALL_CELLS = ((IACT_RAM_CELLS * IACT_RAM_CELLS_WORD_BITWIDTH) + DMA_BITWIDTH - 1) / DMA_BITWIDTH,
     localparam IACT_CELL_INPUT_WIDTH = IACT_CYCLES_ONE_WORD_ALL_CELLS * DMA_BITWIDTH,
@@ -431,6 +431,7 @@ reg [1023:0] fst_path;
   wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_write_inc_0;
   wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_write_inc_1;
   wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_write_inc_2;
+  wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] iact_write_inc_3;
   wire [ 9:0] pagu_wght_limit;
   wire [4-1:0]psum_pagu_cs_limit_0;
   wire [4-1:0]psum_pagu_cs_limit_1;
@@ -470,7 +471,7 @@ reg [1023:0] fst_path;
   wire [9:0]   lower_bound;
   wire [9:0]   upper_bound;
   wire [4-1:0] overhang_discrepancy;       // Fractional part of (cells_per_line); accumulated to detect when an extra cell (+overhang) is needed.
-  reg [4-1:0]  overhang_counter;           // Running total of fractional increments; generates overhang pulse when >= WORDS_PER_CYCLE*4.
+  reg [4-1:0]  overhang_counter;           // Running total of fractional increments; generates overhang pulse when >= MAX_CHANNELS_IACT_GLB*4.
   reg          overhang;                   // Extra +1 added to upper_limit in the current step when overhang_counter wraps.
   reg          overhang_delay;             // One-cycle delayed version of overhang; applied to lower_limit one cycle after upper_limit.
 
@@ -525,7 +526,7 @@ reg [1023:0] fst_path;
   wire [11:0] iact_size_c;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
   wire [11:0] psum_size_x;       // Output map width in pixels (from dma_storage).
   wire [ 7:0] psum_size_y;       // Output map height in pixels (from dma_storage).
-  wire [ 1:0] channel_div_trans;
+  wire [ 2:0] channel_div_trans;
   wire [ 3:0] iact_channels_per_pe;             // Channels assigned to one PE (from dma_storage).
   wire [ 3:0] iact_channels_per_pe_next_layer;  // Channel count for the next layer (from dma_storage); used when routing psums back as iact.
   reg  [CHANNEL_CYCLE_WIDTH-1:0] iact_channels_counter;             // Counts which channel batch [0..iact_channel_max_cycles-1] is currently being processed.
@@ -1405,7 +1406,7 @@ end
   reg        [                                    1:0] iact_channel_sending_cycle2;
   reg        [(8*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window;
   reg        [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window_q;
-  reg        [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window_q2;
+  reg        [             (2*DATA_IACT_BITWIDTH)-1:0] iact_input_window_q2;
 
   reg fc_storage_valid_q, fc_storage_valid_q2;
 
@@ -1654,7 +1655,7 @@ end
       for (a = 0; a < CHANNELS_PER_WORD; a = a + 1) begin
         pooling_buffer_old_q[a] <= pooling_buffer_old[a];
       end
-      iact_input_window_q2 <= iact_input_window_q;
+      iact_input_window_q2 <= iact_input_window_q[15:0];
       fc_storage_valid_q <= 0;
       fc_storage_valid_q2 <= fc_storage_valid_q;
       case (fsm_current_state)
@@ -1759,7 +1760,7 @@ end
               // an already-terminal per-field register is a no-op), but
               // corrupting on the new pipelined shift-register one.
               if (fsm_cycle < TRANSMISSIONS) begin
-                  write_dma_en   <= 1;
+                write_dma_en   <= 1;
               end
               // Shifted from TRANSMISSIONS+1 to TRANSMISSIONS to match the
               // write_dma_en fix above: dma_storage now correctly
@@ -1904,7 +1905,7 @@ end
         //     normal: iact_size_y + kernel_size - 1 (rows the converter must scan).
         //     1-channel: half of the above (two rows packed per word).
         //     FC: fixed at 2.
-        //   / WORDS_PER_CYCLE (minimum cycles the converter holds each buffer line).
+        //   / MAX_CHANNELS_IACT_GLB (minimum cycles the converter holds each buffer line).
         // - Unpacks two weight words from the 64-bit DMA word:
         //     bits [TRANS_BITWIDTH_WGHT-1:0] -> row fsm_y_cl, GLB fsm_wght_r.
         //     bits [2*TRANS_BITWIDTH_WGHT-1:TRANS_BITWIDTH_WGHT] -> mirrored row
@@ -1963,7 +1964,7 @@ end
         // - Resets wght_buffer_wr_addr to 0.
         // - Computes limit_increase_reg: how many RAM cells the upper
         //   address limit advances per iact converter row.
-        //     normal: (iact_size_x * iact_channels_per_pe) / (WORDS_PER_CYCLE*4).
+        //     normal: (iact_size_x * iact_channels_per_pe) / (MAX_CHANNELS_IACT_GLB*4).
         //     1-channel: uses iact_size_x*2 (two rows packed together).
         //     FC: uses NUM_GLB_WGHT * iact_channels_per_pe / 8.
         // - Computes overhang_discrepancy: the remainder bytes that cause
@@ -2140,9 +2141,6 @@ end
             iact_channel_sending_cycle1 <= iact_channel_sending_cycle1 + 1;
             if (iact_channel_sending_cycle1 == 1 - 1) begin
               iact_channel_sending_cycle1 <= 0;
-              iact_channel_sending_cycle2 <= iact_channel_sending_cycle2 + 1;
-              if (iact_channel_sending_cycle2 == channel_div_trans - 1) begin
-                iact_channel_sending_cycle2 <= 0;
                 // The input sweep is serial: one channel pair of one pixel.
                 // Parallel activation ports are populated by the constructor.
                 current_x <= current_x + (fully_connected_layer ? 2 : 1);
@@ -2152,6 +2150,9 @@ end
                   if (current_y == y_bound) begin
                     current_y <= -padding_y;
                   end
+              iact_channel_sending_cycle2 <= iact_channel_sending_cycle2 + 1; //Remove?
+              if (iact_channel_sending_cycle2 == channel_div_trans - 1) begin
+                iact_channel_sending_cycle2 <= 0;
                 end
               end 
               iact_input_window_q <= 0;
@@ -2885,6 +2886,7 @@ end
         wire [                    NUM_GLB_IACT-1:0] iact_ready_w;
         wire [                    NUM_GLB_IACT-1:0] iact_enable_w;
         iact_stream_constructor #(
+            .IS_TOPLEVEL        (0),
             .CLUSTER_COLUMNS    (CLUSTER_COLUMNS),
             .CLUSTER_ROWS       (CLUSTER_ROWS),
             .CLUSTER_ROW_ID     (j_gen),
@@ -2903,7 +2905,7 @@ end
         ) iact_stream_constructor (
             .clk_i                       (clk_i),
             .rst_ni                      (rst_n),
-            .storage_i                   (iact_input_window_q2),
+            .storage_i                   (iact_input_window_q[15:0]),
             .fc_storage_valid_i          (fc_storage_valid_q2),
             .reset_cycle_i               (reset_cycle),
             .params                      (iact_converter_params_reg[i_gen][j_gen]),
@@ -2948,8 +2950,7 @@ end
             .wr_addr_inc_0               (iact_write_inc_0),
             .wr_addr_inc_1               (iact_write_inc_1),
             .wr_addr_inc_2               (iact_write_inc_2),
-            .padding_x                   (padding_x),
-            .padding_y                   (padding_y)
+            .wr_addr_inc_3               (iact_write_inc_3)
         );
       end
     end
@@ -3135,6 +3136,7 @@ end
         .iact_write_inc_0(iact_write_inc_0),
         .iact_write_inc_1(iact_write_inc_1),
         .iact_write_inc_2(iact_write_inc_2),
+        .iact_write_inc_3(iact_write_inc_3),
         .pagu_wght_limit(pagu_wght_limit),
         .psum_pagu_cs_limit_0(psum_pagu_cs_limit_0),
         .psum_pagu_cs_limit_1(psum_pagu_cs_limit_1),

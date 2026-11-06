@@ -214,6 +214,7 @@ class DWMapper(LayerMapper):
         "iact_write_inc_0" : layer_params.iact_write_inc_0,
         "iact_write_inc_1" : layer_params.iact_write_inc_1,
         "iact_write_inc_2" : layer_params.iact_write_inc_2,
+        "iact_write_inc_3" : layer_params.iact_write_inc_3,
         "pagu_wght_limit" : layer_params.pagu_wght_limit,
         "psum_pagu_cs_limit_0" : layer_params.psum_pagu_cs_limit[0],
         "psum_pagu_cs_limit_1" : layer_params.psum_pagu_cs_limit[1],

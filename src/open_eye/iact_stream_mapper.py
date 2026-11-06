@@ -183,15 +183,15 @@ class IactStreamMapper(object):
         values = np.transpose(np.array(self.dram_fmap), axes=[2, 1, 0])
         iact_size_y, iact_size_x, channels = values.shape
 
-        used_channels = self.layer_params.used_channels
+        cont_iact_channels_glb = self.layer_params.cont_iact_channels_glb
         flat_values = []
 
-        # Flatten values with channel-first grouping for used_channels
+        # Flatten values with channel-first grouping for cont_iact_channels_glb
         # Ordering: iterate over channel groups, then spatial positions, then channels in group
-        for c_base in range(0, channels, used_channels):
+        for c_base in range(0, channels, cont_iact_channels_glb):
             for y in range(iact_size_y):
                 for x in range(iact_size_x):
-                    for c_offset in range(used_channels):
+                    for c_offset in range(cont_iact_channels_glb):
                         c = c_base + c_offset
                         if c < channels:
                             flat_values.append(int(values[y, x, c]))

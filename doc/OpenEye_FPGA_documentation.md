@@ -276,7 +276,7 @@ In `OpenEye_FPGA`, the FIFO wires are initialized but the FIFO instance is not e
 | Parameter | Formula | Description |
 |---|---|---|
 | `IACT_WORDS_IN_RAM` | `RAM_CELLS_WORD_BITWIDTH / DATA_IACT_BITWIDTH` = 8 | INT8 pixels per 64-bit RAM word |
-| `WORDS_PER_CYCLE` | 2 | Iact conversion processes 2 words per cycle |
+| `MAX_CHANNELS_IACT_GLB` | 2 | Iact conversion processes 2 words per cycle |
 | `PSUM_TO_IACT_CYCLES` | 2 if `CLUSTER_COLUMNS×NUM_GLB_PSUM == 4`, else 1 | Cycles needed per spatial position for psum→iact routing |
 | `FSM_CEIL_IACT_RTR_CCLS` | `⌈(CLUSTERS×NUM_GLB_IACT) / (DMA_BITWIDTH/ROUTER_MODES_IACT)⌉` | DMA words needed for iact router config |
 | `FSM_CEIL_WGHT_RTR_CCLS` | `⌈(CLUSTERS×NUM_GLB_WGHT) / (DMA_BITWIDTH/ROUTER_MODES_WGHT)⌉` | DMA words needed for weight router config |

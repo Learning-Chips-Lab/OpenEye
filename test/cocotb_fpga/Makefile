@@ -1,36 +1,48 @@
-# Makefile
-
-# Icarus Verilog
-#SIM ?= icarus
-
-# Verilator Configuration
-SIM ?= verilator
-COMPILE_ARGS += -Wall -Wno-fatal
-COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE
-COMPILE_ARGS += -DUSE_INTERNAL_PARAMS_PE_cluster
-
-WAVES ?= 1
-TRACE_DEPTH ?= 0
-
-ifeq ($(WAVES),1)
-    export WAVES=1
-    export COCOTB_TRACE=1
-    export IVERILOG_DUMPER=fst
-    EXTRA_ARGS += --trace --trace-fst --trace-structs
-	SIM_ARGS   += --trace-fst
-    ifneq ($(TRACE_DEPTH),0)
-        EXTRA_ARGS += --trace-depth $(TRACE_DEPTH)
+# ==============================================================================
+# Simulation Configuration
+# ==============================================================================
+SIM ?= icarus
+#SIM ?= verilator
+TOPLEVEL_LANG ?= verilog
+WAVES=1
+# ==============================================================================
+# Simulator-Spezifische Tracing / Flag Anpassungen
+# ==============================================================================
+ifeq ($(SIM),icarus)
+    # Icarus-spezifische Argumente
+    COMPILE_ARGS += -g2012 -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster
+    
+    # Waves für Icarus (erzeugt VCD via cocotb)
+    ifeq ($(WAVES),1)
+        unexport WAVES
+        unexport COCOTB_TRACE
+        unexport IVERILOG_DUMPER
+        unexport EXTRA_ARGS
+        unexport SIM_ARGS
+        # Cocotb kümmert sich bei WAVES=1 automatisch um den Dump
+        # Keine manuellen Dumper-Sources an VERILOG_SOURCES anhängen!
     endif
-else
-    unexport WAVES
-    unexport COCOTB_TRACE
-    unexport IVERILOG_DUMPER
-    unexport EXTRA_ARGS
-	unexport SIM_ARGS
+
+else ifeq ($(SIM),verilator)
+    # Verilator-spezifische Argumente
+    COMPILE_ARGS += -Wall -Wno-fatal
+    EXTRA_ARGS += --trace-fst --trace-structs -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster
+    
+    ifeq ($(WAVES),1)
+        SIM_ARGS += --trace-fst
+    else
+        unexport WAVES
+        unexport COCOTB_TRACE
+        unexport IVERILOG_DUMPER
+        unexport EXTRA_ARGS
+        unexport SIM_ARGS
+    endif
 endif
 
-TOPLEVEL_LANG ?= verilog
-#WAVEFORM=on
+# ==============================================================================
+# Cocotb Include
+# ==============================================================================
+
 
 HDL_PATH = $(abspath $(PWD)/../../hdl)
 VH_PATH = $(abspath $(PWD))
@@ -104,16 +116,16 @@ export LOGGER_LEVEL=10    #Enables Logger Debug Mode
 #export LAYER=VGG-19
 #export LAYER=Convolution_Stack
 #export LAYER=Conv_Pool_Conv
-#export LAYER=Convolution_Single
-export LAYER=Depthwise_Convolution
+export LAYER=Convolution_Single
+#export LAYER=Depthwise_Convolution
 #export LAYER=MLP
 #export LAYER=MobileNetV1
 #export LAYER=MaxPooling
 #export LAYER=AveragePooling
-export NUM_FILTERS=8
+export NUM_FILTERS=4
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=12
+export INPUT_SIZE_X=8
 export INPUT_SIZE_Y=2
 export STRIDE=1
 export INPUT_CHANNELS=8
@@ -139,12 +151,12 @@ export TRANS_BITWIDTH_WGHT=8
 export TRANS_BITWIDTH_PSUM=32
 
 #Set Number of Router Clusters per Instance
-export NUM_GLB_IACT=1
+export NUM_GLB_IACT=2
 export NUM_GLB_WGHT=3
 export NUM_GLB_PSUM=4
 
 #Set number of Clusters
-export CLUSTER_COLUMNS=1
+export CLUSTER_COLUMNS=2
 export CLUSTER_ROWS=1
 
 #Amoutn of Iact RAM STORAGES

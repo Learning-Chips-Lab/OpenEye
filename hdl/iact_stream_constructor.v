@@ -52,6 +52,7 @@
 /// 4. Memory buffer manager
 ///
 module iact_stream_constructor #(
+    parameter  IS_TOPLEVEL         = 1,
     parameter  CALC_DATA_WIDTH     = 32,   // Calculation precision
     parameter  CLUSTER_COLUMNS     = 2,    // Number of PE cluster coloumns
     parameter  SPARSITY_EN         = 1,    // Enabled Sparsity Overhead
@@ -77,7 +78,7 @@ module iact_stream_constructor #(
     localparam IACT_CHOOSE_BITS    = $clog2(NUM_GLB_IACT+1),    
     localparam PARAMS_SIZE         = 32,
     localparam PARAM_LENGTH        = 8,
-    localparam WORDS_PER_CYCLE     = 2
+    localparam MAX_CHANNELS_IACT_GLB     = 2
 
 ) (
     input                                                clk_i,
@@ -87,8 +88,8 @@ module iact_stream_constructor #(
     input                                                enable_config,
     input                                                enable_store,
     input                                                enable_converter,
-    input                                                fc_storage_valid_i, // storage_i contains one FC activation pair
-    input      [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] storage_i,
+    input                                                fc_storage_valid_i,
+    input      [             (2*DATA_IACT_BITWIDTH)-1:0] storage_i,
     output reg                                           ready_o,
     input      [                       NUM_GLB_IACT-1:0] iact_ready_i,
     output reg [       NUM_GLB_IACT*BITS_PER_ROUTER-1:0] iact_data_o,
@@ -98,7 +99,7 @@ module iact_stream_constructor #(
     input      [                CHANNEL_CYCLE_WIDTH-1:0] needed_iact_channel_cycles_i,
     input signed [                               12-1:0] iact_x_add_up,
     input signed [                                4-1:0] iact_channels_per_pe_i,
-    input      [                                    1:0] channel_div_trans,
+    input      [                                    2:0] channel_div_trans,
     input      [                                  8-1:0] x_lines_i,
     input      [                                  8-1:0] needed_wght_cycles_i,
     input      [                                  6-1:0] needed_iact_router_cycles_i,
@@ -127,8 +128,7 @@ module iact_stream_constructor #(
     input      [                          ADDRWIDTH-1:0] wr_addr_inc_0,
     input      [                          ADDRWIDTH-1:0] wr_addr_inc_1,
     input      [                          ADDRWIDTH-1:0] wr_addr_inc_2,
-    input      [                                    3:0] padding_x,
-    input      [                                    3:0] padding_y
+    input      [                          ADDRWIDTH-1:0] wr_addr_inc_3
 );
   // Dense input arrives as consecutive pairs. Pairs rotate through PE rows,
   // then through cluster rows, matching DenseWghtStreamMapper.
@@ -185,6 +185,24 @@ module iact_stream_constructor #(
   localparam IDLE = 1'b0;
   localparam ENCODE = 1'b1;
 
+
+  reg [1023:0] fst_path;
+  `ifndef NO_TRACE
+    initial begin
+      if (IS_TOPLEVEL) begin
+        // Read the path from the command line argument
+        if ($value$plusargs("FST_PATH=%s", fst_path)) begin
+          $dumpfile(fst_path);
+          $dumpvars(0, iact_stream_constructor);
+        end else begin
+          // Fallback for when the argument is not provided
+          $dumpfile("iact_stream_constructor.fst");
+          $dumpvars(0, iact_stream_constructor);
+        end
+      end
+    end
+  `endif
+
   generate
     reg [12-1:0] fsm_enc_cycle;
 
@@ -202,6 +220,7 @@ module iact_stream_constructor #(
     reg [ADDRWIDTH-1:0] wr_addr_0;
     reg [ADDRWIDTH-1:0] wr_addr_1;
     reg [ADDRWIDTH-1:0] wr_addr_2;
+    reg [ADDRWIDTH-1:0] wr_addr_3;
     reg [ADDRWIDTH-1:0] rd_addr_0;
     reg [ADDRWIDTH-1:0] rd_addr_1;
     reg [ADDRWIDTH-1:0] rd_addr_2;
@@ -220,23 +239,31 @@ module iact_stream_constructor #(
     reg [LIMIT_SIZE_IACT-1:0] rd_cycle_loop_cnt_4;
     reg [12-1:0] x_pos_in_w_cycle;
     reg [ 8-1:0] router_cycle;
-  wire [ADDRWIDTH-1:0] rd_addr_inc_0_next;
-  wire [ADDRWIDTH-1:0] rd_addr_inc_1_next;
-  wire [ADDRWIDTH-1:0] rd_addr_inc_2_next;
-  wire [ADDRWIDTH-1:0] rd_addr_inc_3_next;
-  wire [ADDRWIDTH-1:0] rd_addr_inc_4_next;
-  wire [3:0]values_per_word;
-  assign values_per_word = fully_connected_i ? 1 : iact_channels_per_pe_i;
-  // Every bank holds the serial input window. Read neighboring pixels from
-  // different banks, then skip those pixels when advancing to the next group.
-  assign rd_addr_inc_0_next = rd_addr_0 + rd_addr_inc_0;
-  assign rd_addr_inc_1_next = rd_addr_1 + rd_addr_inc_1;
-  assign rd_addr_inc_2_next = rd_addr_2 + rd_addr_inc_2;
-  assign rd_addr_inc_3_next = rd_addr_3 + rd_addr_inc_3;
-  assign rd_addr_inc_4_next = rd_addr_4 + rd_addr_inc_4;
-  // Single-channel RAM words hold two image rows. Move by whole row pairs,
-  // keeping the remaining half-row for the next window's initial read.
-  assign rd_addr_inc_4_next = rd_addr_4 + rd_addr_inc_4;
+    wire [ADDRWIDTH-1:0] wr_addr_inc_0_next;
+    wire [ADDRWIDTH-1:0] wr_addr_inc_1_next;
+    wire [ADDRWIDTH-1:0] wr_addr_inc_2_next;
+    wire [ADDRWIDTH-1:0] wr_addr_inc_3_next;
+    wire [ADDRWIDTH-1:0] rd_addr_inc_0_next;
+    wire [ADDRWIDTH-1:0] rd_addr_inc_1_next;
+    wire [ADDRWIDTH-1:0] rd_addr_inc_2_next;
+    wire [ADDRWIDTH-1:0] rd_addr_inc_3_next;
+    wire [ADDRWIDTH-1:0] rd_addr_inc_4_next;
+    wire [3:0]values_per_word;
+    assign values_per_word = fully_connected_i ? 1 : iact_channels_per_pe_i;
+    // Every bank holds the serial input window. Read neighboring pixels from
+    // different banks, then skip those pixels when advancing to the next group.
+    assign wr_addr_inc_0_next = wr_addr_0 + wr_addr_inc_0;
+    assign wr_addr_inc_1_next = wr_addr_1 + wr_addr_inc_1;
+    assign wr_addr_inc_2_next = wr_addr_2 + wr_addr_inc_2;
+    assign wr_addr_inc_3_next = wr_addr_3 + wr_addr_inc_3;
+    assign rd_addr_inc_0_next = rd_addr_0 + rd_addr_inc_0;
+    assign rd_addr_inc_1_next = rd_addr_1 + rd_addr_inc_1;
+    assign rd_addr_inc_2_next = rd_addr_2 + rd_addr_inc_2;
+    assign rd_addr_inc_3_next = rd_addr_3 + rd_addr_inc_3;
+    assign rd_addr_inc_4_next = rd_addr_4 + rd_addr_inc_4;
+    // Single-channel RAM words hold two image rows. Move by whole row pairs,
+    // keeping the remaining half-row for the next window's initial read.
+    assign rd_addr_inc_4_next = rd_addr_4 + rd_addr_inc_4;
 
     integer pec, per, b;
     always @(posedge clk_i, negedge rst_ni) begin
@@ -397,7 +424,7 @@ module iact_stream_constructor #(
             end
             // Full Iact Cycle
             ram_inc_counter <= ram_inc_counter + 1;
-            if ((ram_inc_counter[7:0] + ram_inc_counter_offset >= values_per_word - 1) & (ram_inc_counter[7:0] + ram_inc_counter_offset != 0)) begin
+            if ((ram_inc_counter + ram_inc_counter_offset >= values_per_word - 1) & (ram_inc_counter + ram_inc_counter_offset != 0)) begin
               ram_inc_counter        <= 0;
               ram_inc_counter_offset <= 0;
             end
@@ -405,7 +432,7 @@ module iact_stream_constructor #(
             // next address one clock before advancing the PE selection so
             // the two-stage RAM read has completed when enable is asserted.
             if (single_channel ||
-                ((ram_inc_counter[7:0] + 1) % WORDS_PER_CYCLE[7:0] == WORDS_PER_CYCLE[7:0] - 1)) begin
+                ((ram_inc_counter + 1) % MAX_CHANNELS_IACT_GLB == MAX_CHANNELS_IACT_GLB - 1)) begin
               if ((single_channel && (ram_inc_counter != 8'hff)) || (ram_inc_counter == 0)) begin
                   current_iact_cycle_mod_reg <= current_iact_cycle_mod_reg + NUM_GLB_IACT;
                   if (current_iact_cycle_mod_reg == (needed_iact_router_cycles_i - 1) * NUM_GLB_IACT) begin
@@ -524,6 +551,7 @@ reg enable_write_to_storage;
         wr_addr_0                     <= 0;
         wr_addr_1                     <= 0;
         wr_addr_2                     <= 0;
+        wr_addr_3                     <= 0;
         iacts_in_one_trans            <= 0;
         router_cycle                  <= 0;
         fsm_current_state             <= FSM_INITIALIZE;
@@ -593,10 +621,10 @@ reg enable_write_to_storage;
                 fc_bank_addr[fc_store_physical_bank] <=
                     fc_bank_addr[fc_store_physical_bank] + 1;
               end
-              for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
+              mem_data_payload_reg[NUM_GLB_IACT - 1][w] <= storage_i[w*DATA_IACT_BITWIDTH+:DATA_IACT_BITWIDTH];
+              for (r = 0; r < NUM_GLB_IACT - 1; r = r + 1) begin
                 for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
-                  if (r == fc_store_physical_bank)
-                    mem_data_payload_reg[r][w] <= storage_i[w*DATA_IACT_BITWIDTH+:DATA_IACT_BITWIDTH];
+                  mem_data_payload_reg[r][w] <= mem_data_payload_reg[r+1][w];
                 end
               end
             end
@@ -641,11 +669,7 @@ reg enable_write_to_storage;
             ready_o                       <= 1;
           end
           GET_PARAMETER: begin
-            fsm_cycle           <= 0;
-            if (enable_config) begin
-              wr_addr_1      <= wr_addr_inc_1;
-              wr_addr_2      <= wr_addr_inc_2;
-            end
+            fsm_cycle                  <= 0;
             ram_wr_addr                <= 0;
             x_pos_in_w_cycle           <= 0;
             router_cycle               <= 0;
@@ -653,19 +677,19 @@ reg enable_write_to_storage;
             ram_wr_en_q                <= 0;
             iact_router_counter        <= 0;
             kernel_y_counter           <= 0;
-            iacts_in_one_trans         <= ((values_per_word+1) / WORDS_PER_CYCLE);
+            iacts_in_one_trans         <= ((values_per_word+1) / MAX_CHANNELS_IACT_GLB);
             if (fully_connected_i) begin
               iact_values_per_cluster_transmit <= iact_channels_per_pe_i * PE_Y;
             end else begin
               iact_values_per_cluster_transmit <= needed_iact_router_cycles_i * NUM_GLB_IACT;
             end
             if (enable_store) begin
-              ram_wr_addr         <= address_storage;
               fsm_current_state   <= WRITE_TO_MEMORY;
               wr_addr_0           <= 0;
               wr_addr_1           <= 0;
               wr_addr_2           <= 0;
-              wr_cycle_loop_cnt_0 <= ~0;
+              wr_addr_3           <= 0;
+              wr_cycle_loop_cnt_0 <= 0;
               x_pos_in_w_cycle    <= 0;
               x_range_lower_bound <= x_start;              
               if (0 == (iacts_in_one_trans - 1)) begin
@@ -680,73 +704,85 @@ reg enable_write_to_storage;
           end
 
           WRITE_TO_MEMORY: begin
-            if (ram_wr_en) begin
-              for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
-                for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
-                  mem_data_payload_reg[r][w] <= single_channel ? storage_i[7:0] : storage_i[w*8+:8];
-                end
-              end
-            end
-            if ((CLUSTER_ROWS != 1 & (CLUSTER_ROWS * PE_Y >= 2 * wght_size_x_i)) | CLUSTER_COLUMNS != 1) begin
-              router_cycle <= router_cycle + 1;
-              if (router_cycle == (channel_div_trans - 1)) begin
-                router_cycle <= 0;
-              end
-              if (router_cycle == 0) begin
-                enable_write_to_storage <= 0;
-                if (x_pos_in_w_cycle >= x_range_lower_bound) begin
-                  if (x_pos_in_w_cycle < x_range_lower_bound + iact_values_per_cluster_transmit) begin
-                    enable_write_to_storage <= 1;
+            if (((CLUSTER_ROWS != 1 & (CLUSTER_ROWS * PE_Y >= 2 * wght_size_x_i)) | CLUSTER_COLUMNS != 1) |
+            (NUM_GLB_IACT != 1)) begin
+              enable_write_to_storage <= 0;
+              if (x_pos_in_w_cycle >= x_range_lower_bound) begin
+                if (x_pos_in_w_cycle < x_range_lower_bound + iact_values_per_cluster_transmit) begin
+                  enable_write_to_storage <= 1;
+                end else begin
+                  if (next_x_value_add >= iact_x_add_up) begin
+                    x_range_lower_bound <= x_start;
                   end else begin
-                    if (next_x_value_add >= iact_x_add_up) begin
-                      x_range_lower_bound <= x_start;
-                    end else begin
-                      x_range_lower_bound <= next_x_value_add;
-                      if (x_pos_in_w_cycle <= next_x_value_add + iact_values_per_cluster_transmit) begin
-                        if (x_pos_in_w_cycle >= next_x_value_add) begin
-                          enable_write_to_storage <= 1;
-                        end
+                    x_range_lower_bound <= next_x_value_add;
+                    if (x_pos_in_w_cycle <= next_x_value_add + iact_values_per_cluster_transmit) begin
+                      if (x_pos_in_w_cycle >= next_x_value_add) begin
+                        enable_write_to_storage <= 1;
                       end
                     end
                   end
                 end
-                x_pos_in_w_cycle <= x_pos_in_w_cycle + 1;
-                if (x_pos_in_w_cycle == iact_x_add_up + wght_size_x - stride_x_i - 1) begin
-                  x_pos_in_w_cycle    <= 0;
-                  x_range_lower_bound <= x_start;
-                end
+              end
+              x_pos_in_w_cycle <= x_pos_in_w_cycle + 1;
+              if (x_pos_in_w_cycle == iact_x_add_up + wght_size_x - stride_x_i - 1) begin
+                x_pos_in_w_cycle    <= 0;
+                x_range_lower_bound <= x_start;
               end
             end else begin
               enable_write_to_storage <= 1;
             end
             ram_wr_en <= 0;
             if (enable_write_to_storage) begin
-              fsm_cycle   <= fsm_cycle + 1;
-              ram_wr_en   <= 1;
-              //Loops for wr_address
-              ram_wr_addr         <= wr_addr_0;
-              wr_addr_0           <= wr_addr_0 + wr_addr_inc_0;
+              for (w = 0; w < WORDS_PER_TRANS; w = w + 1) begin
+                for (r = 0; r < NUM_GLB_IACT; r = r + 1) begin
+                  if (router_cycle == r) begin
+                    mem_data_payload_reg[r][w] <= storage_i[w*DATA_IACT_BITWIDTH+:DATA_IACT_BITWIDTH];
+                  end
+                end
+              end
+              router_cycle <= router_cycle + 1;
+              if (router_cycle == NUM_GLB_IACT - 1) begin
+                router_cycle        <= 0;
+                ram_wr_en           <= 1;
+              end
+            end
+            if (ram_wr_en) begin
+              fsm_cycle           <= fsm_cycle + 1;
+              ram_wr_addr         <= wr_addr_inc_0_next;
+              wr_addr_0           <= wr_addr_inc_0_next;
               wr_cycle_loop_cnt_0 <= wr_cycle_loop_cnt_0 + 1;
               if (wr_cycle_loop_cnt_0 == wr_loop_limit_0) begin
                 wr_cycle_loop_cnt_0 <= 0;
-                wr_addr_0           <= wr_addr_1 + wr_addr_inc_0;
-                wr_addr_1           <= wr_addr_1 + wr_addr_inc_1;
-                ram_wr_addr         <= wr_addr_1;
+                wr_addr_0           <= wr_addr_inc_1_next;
+                wr_addr_1           <= wr_addr_inc_1_next;
+                ram_wr_addr         <= wr_addr_inc_1_next;
                 wr_cycle_loop_cnt_1 <= wr_cycle_loop_cnt_1 + 1;
                 if (wr_cycle_loop_cnt_1 == wr_loop_limit_1) begin
                   wr_cycle_loop_cnt_1 <= 0;
-                  wr_addr_0           <= wr_addr_2 + wr_addr_inc_0;
-                  wr_addr_1           <= wr_addr_2 + wr_addr_inc_1;
-                  wr_addr_2           <= wr_addr_2 + wr_addr_inc_2;
-                  ram_wr_addr         <= wr_addr_2;
-                  kernel_y_counter    <= 0;
+                  wr_addr_0           <= wr_addr_inc_2_next;
+                  wr_addr_1           <= wr_addr_inc_2_next;
+                  wr_addr_2           <= wr_addr_inc_2_next;
+                  ram_wr_addr         <= wr_addr_inc_2_next;
+                  wr_cycle_loop_cnt_2 <= wr_cycle_loop_cnt_2 + 1;
+                  if (wr_cycle_loop_cnt_2 == wr_loop_limit_2) begin
+                    wr_cycle_loop_cnt_2 <= 0;
+                    wr_addr_0           <= wr_addr_inc_3_next;
+                    wr_addr_1           <= wr_addr_inc_3_next;
+                    wr_addr_2           <= wr_addr_inc_3_next;
+                    wr_addr_3           <= wr_addr_inc_3_next;
+                    ram_wr_addr         <= wr_addr_inc_3_next;
+                    kernel_y_counter    <= 0;
+                  end
                 end
               end
             end
             if (fsm_cycle == needed_iact_buffer_words_i) begin
-              fsm_cycle         <= 0;
-              fsm_current_state <= GET_PARAMETER;
-              ram_wr_en         <= 0;
+              fsm_cycle           <= 0;
+              fsm_current_state   <= GET_PARAMETER;
+              ram_wr_en           <= 0;
+              wr_cycle_loop_cnt_0 <= 0;
+              wr_cycle_loop_cnt_1 <= 0;
+              wr_cycle_loop_cnt_2 <= 0;
             end
           end
 
@@ -783,8 +819,7 @@ reg enable_write_to_storage;
     for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin : BUFFER
       wire [BITS_PER_ROUTER-1:0]ram_data_i_w;
       wire [BITS_PER_ROUTER-1:0]ram_data_o_w;
-      wire [ADDRWIDTH-1:0] bank_addr = ram_wr_en_q ? ram_wr_addr_q :
-          (ram_rd_addr + (fully_connected_i ? 0 : r_gen * channel_div_trans));
+      wire [ADDRWIDTH-1:0] bank_addr = ram_wr_en ? ram_wr_addr :ram_rd_addr;
       wire [WORDS_PER_TRANS-1:0] write_mask;
       wire [BITS_PER_ROUTER-1:0] write_data;
       for (w_gen = 0; w_gen < WORDS_PER_TRANS; w_gen = w_gen + 1) begin : WRITE_LANE
@@ -803,7 +838,7 @@ reg enable_write_to_storage;
       ) iact_buffer_SP (
           .clk_i   (clk_i),
           .rd_en_i (ram_rd_en),
-          .wr_en_i (ram_wr_en_q & (!fully_connected_i | (fc_write_bank_q == r_gen))),
+          .wr_en_i (ram_wr_en & (!fully_connected_i | (fc_write_bank_q == r_gen))),
           .wr_mask_i(write_mask),
           .addr_i  (bank_addr),
           .data_i  (write_data),

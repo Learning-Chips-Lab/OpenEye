@@ -47,7 +47,7 @@ registers:
   - {name: needed_iact_cycles_reg, width: 6}
   - {name: wght_addr_len_reg, width: 5}
   - {name: iact_channels_per_pe, width: 4}
-  - {name: channel_div_trans, width: 2}
+  - {name: channel_div_trans, width: 3}
   - {name: send_data_out, width: 1}
   - {name: needed_iact_buffer_words, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
   - {name: iact_x_line_repetitions_reg, width: 8}
@@ -85,6 +85,7 @@ registers:
   - {name: iact_write_inc_0, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
   - {name: iact_write_inc_1, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
   - {name: iact_write_inc_2, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
+  - {name: iact_write_inc_3, width: int(BUFFER_WIDTH_IACT) + 5 - ceil(log2(int(CLUSTER_ROWS)*int(CLUSTER_COLUMNS)))}
   - {name: pagu_wght_limit, width: 10}
   - {name: psum_pagu_cs_limit_0, width: 4}
   - {name: psum_pagu_cs_limit_1, width: 4}

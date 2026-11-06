@@ -165,7 +165,7 @@ Derived / Computed Parameters
    * - ``IACT_WORDS_IN_RAM``
      - ``RAM_CELLS_WORD_BITWIDTH / DATA_IACT_BITWIDTH`` = 8
      - INT8 pixels per 64-bit RAM word
-   * - ``WORDS_PER_CYCLE``
+   * - ``MAX_CHANNELS_IACT_GLB``
      - 2
      - Iact conversion processes 2 words per cycle
    * - ``PSUM_TO_IACT_CYCLES``
