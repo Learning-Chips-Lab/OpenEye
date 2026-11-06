@@ -3763,6 +3763,35 @@ KLayout DRC → 72/73 Magic DRC (Langer-Pol 2–6 h) →
 Disk 1,1 T, Monitor clean (06:21:00), 0 Restarts.
 Push up-to-date. Kein Stop.
 
+**06:5x (6/11) 30-min-Statuszyklus:** **Step 67
+klayout-filler CRASH (Erstcrash dieses Steps) —
+OOM-Kill:** der Kernel-OOM-Killer hat klayout (PID
+85767) 06:53:45 beendet. Ursache: Filler-RSS
+explodierte von 95,3 GB (06:23) auf **Peak 247 GiB**
+(process_stats: memory_rss 247 GiB, VMS 389 GiB,
+Runtime 01:37:01) → global OOM auf dem 251-GB-
+Shared-Host (Swap 31 G, 2 G belegt, nicht
+ausreichend). **Watchdog-Auto-Restart 1/3** um
+06:55:50: Flow resumed, Filler läuft jetzt als
+**Dir 68** (seit 06:56:53, klayout PID 85838,
+1 librelane-Kette, sonst 0 Restarts). **Erstcrash
+→ noch KEIN Stopkriterium** (Stop bei 2. Crash
+dieses Steps oder wenn Watchdog aufgibt);
+**RAM-Tripwire bei jedem Check: avail < 30 G →
+Stop**. Zweiter OOM wahrscheinlich (~97 min nach
+Restart → ~08:35): deterministisch (gleiche
+1,61-GB-GDS, gleicher KLayout-Filler, Host
+bleibt 251 GB). Hinweis: dieses Step hat keine
+Vorreferenz — „Fill 2 h 03 min 03 s“ war das
+OpenROAD-FillInsertion (Step 55, 5.191.641
+Filler-Zellen), kein KLayout-Filler. Bei Stop:
+Ursache + Optionen für User dokumentieren (mehr
+Swap / größere Maschine / Filler-Config-Änderung /
+Filler-Übersprung mit dokumentierter
+Density-Lücke). RAM 245 G avail, Disk 1,1 T,
+Monitor clean (06:56:18), 1 Watchdog-Restart
+(1/3). Kein Stop (Erstcrash, Restart läuft).
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
