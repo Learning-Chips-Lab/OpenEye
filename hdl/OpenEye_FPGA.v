@@ -374,8 +374,8 @@ reg [1023:0] fst_path;
   wire [4-1:0] kernel_per_pe_cluster_reg;        // Number of filter kernels mapped to a single PE cluster (from dma_storage).
   wire [5:0] kernel_size_x;                      // Spatial kernel size (e.g. 3 for 3×3 conv); used to compute padding and iact_converter_max_cycles.
   wire [3:0] kernel_size_y;                      // Spatial kernel size (e.g. 3 for 3×3 conv); used to compute padding and iact_converter_max_cycles.
-  reg [3:0] padding_x;                           // Zero-padding amount = (kernel_sizeX-1)/2.
-  reg [3:0] padding_y;                           // Zero-padding amount = (kernel_sizeY-1)/2.
+  wire [3:0] padding_x;                           // Zero-padding amount = (kernel_sizeX-1)/2.
+  wire [3:0] padding_y;                           // Zero-padding amount = (kernel_sizeY-1)/2.
   reg [DMA_BITWIDTH-1 : 0] fifo_data_i;          // Data word written into the output varlenFIFO (currently driven to 0).
   reg fifo_read_i;                               // Read strobe for the output varlenFIFO (currently driven to 0).
   reg fifo_write_i;                              // Write strobe for the output varlenFIFO (currently driven to 0).
