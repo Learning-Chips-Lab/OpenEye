@@ -3826,6 +3826,27 @@ Crash dieses Steps. Push up-to-date. Disk 1,1 T,
 Monitor clean (07:56:51), 1 Watchdog-Restart
 (1/3). Kein Stop (Tripwire nicht erreicht).
 
+**08:2x (6/11) 30-min-Statuszyklus:** Filler-Restart
+(Dir 68, PID 85838) läuft seit **1 h 31 min**,
+**Explosionsphase hat ANGESETZT** (wie im
+Erstlauf): CPU 99,6 % aktiv (CPU-Time 01:30:57 ≈
+100 % eines Kerns), RSS 77,4→**186,7 GB**
+(+109 GB/30 min ≈ 3,6 GB/min). RAM 59 G avail —
+**Tripwire (avail < 30 G) erwartet ~08:36–08:45**
+zum aktuellen Tempo. Zweiter OOM-Vergleich:
+Erstlauf 247 GB bei 97 min; jetzt 186,7 GB bei
+91 min → **2. OOM erwartet ~08:40–08:50**
+(= Crash 2 dieses Steps = hartes Stopkriterium).
+Kurz-Feincheck in ~10 min, um den
+entscheidenden Moment (Tripwire-Oberlauf oder
+Crash 2) exakt zu erfassen; bei Trigger →
+Stop-Protokoll v3 (Flow + Watchdog stoppen,
+Ursache + Optionen für User dokumentieren,
+commit, push, warten). Push up-to-date. Disk 1,1
+T, Monitor clean (08:26:58), 1 Watchdog-Restart
+(1/3). Kein Stop (noch 59 G avail > 30 G),
+Aber-Stop-Erwartung ~15–25 min.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
