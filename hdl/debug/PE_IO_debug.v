@@ -83,7 +83,8 @@ module PE_IO_debug #(
     input                                             psum_ready_i,
     input                                             compute_i,
     input                                             enable_stream_i,
-    input      [                                11:0] data_stream_i
+    input      [                                11:0] data_stream_i,
+    input                                             dw_mode
 );
 
   // ============================================================================
@@ -239,7 +240,8 @@ module PE_IO_debug #(
     .psum_ready_i(psum_ready_i),
     .compute_i(compute_i),
     .enable_stream_i(enable_stream_i),
-    .data_stream_i(data_stream_i)
+    .data_stream_i(data_stream_i),
+    .dw_mode(dw_mode)
   );
 
 endmodule
