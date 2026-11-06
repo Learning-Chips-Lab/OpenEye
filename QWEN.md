@@ -3750,6 +3750,19 @@ Stopp 79. RAM 176 G avail (>> 30 G), Disk 1,1 T,
 Monitor clean (05:50:53), 0 Restarts. Push
 up-to-date. Kein Stop.
 
+**06:2x (6/11) 30-min-Statuszyklus:** Step 67
+klayout-filler läuft (seit 05:16:52, jetzt
+**1 h 07 min**): CPU 99,6 % aktiv (PID 85767,
+CPU-Time 01:06:47 ≈ 100 % eines Kerns), RSS
+67,9→95,3 GB (+27,4 GB/30 min, weiter wachsend —
+GDS geladen + Filler-Datenstrukturen, unkritisch).
+ETA Step 67: ~07:20 (p2_15-Referenz Fill 2 h 03 min
+03 s). Sequenz danach: 68/69 Density → 70/71
+KLayout DRC → 72/73 Magic DRC (Langer-Pol 2–6 h) →
+74–78 → Stopp 79. RAM 148 G avail (>> 30 G),
+Disk 1,1 T, Monitor clean (06:21:00), 0 Restarts.
+Push up-to-date. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
