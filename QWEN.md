@@ -3573,6 +3573,26 @@ Schlechtestfall später. Push up-to-date. RAM 150 G
 avail, Disk 1,1 T, Monitor clean (01:54:53), 0
 Restarts. Kein Stop.
 
+**02:2x (6/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (1-08:21 h): topmetal2_drw =
+TM2 (seit 22:37:29) jetzt bei **~3 h 49 min = 230
+min** — der allerletzte Eintrag und jetzt der
+**längste Layer dieses Runs** (TM2 230 > TV2 222 >
+TM1 221 > M5 211 > TV1 210 min); wenn er nach
+~230–240 min wie die anderen Top-Layer endet, ist
+Step 64 in den nächsten Minuten bis ~30 min durch
+(Fertig-Fenster ~02:47–03:07). **Kein Stall**: CPU
+aktiv (CPU-Time 1-08:34:41 = 32:34:41, +29 min/29
+min ≈ 99 % eines Kerns, makro-stabil seit 19:00 —
+jetzt über 32 h), RSS 94,0→95,4 GB (+1,4 GB/29 min,
+mild, neue Subphase/Allokation). Sequenz-Bilanz:
+M1 23, V1 18, M2 23, V2 23, M3 173, V3 170, M4 193,
+V4 194, M5 211, TV1 210, TM1 221, TV2 222, TM2 230
+min+. ETA Step 64: ~02:47–03:30. Stopp-79-ETA:
+**heute (6/11) ~11:00–15:00**, im Schlechtestfall
+später. Push up-to-date. RAM 149 G avail, Disk 1,1
+T, Monitor clean (02:25:01), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
