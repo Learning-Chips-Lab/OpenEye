@@ -3665,6 +3665,32 @@ Stopp-79-ETA: **heute (6/11) ~12:00–16:00**, im
 Schlechtestfall später. Push up-to-date. Disk 1,1
 T, Monitor clean (03:55:24), 0 Restarts. Kein Stop.
 
+**04:2x (6/11) 30-min-Statuszyklus:** Step 64
+KLayout-Antenna läuft (1-10:19 h), die
+**„Creating base layer“-Phase ist FERTIG (~1 h 30
+min, 02:47:54→~04:18)** — der Step ist jetzt in
+der **finalen Cumulative-Ratio-Phase** und läuft
+schnell durch: „Executing Ant.b/e_Metal3“ (04:18)
+→ „Evaluating cumulative ratio after Metal4“
+(04:19) → „Ant.b/e_Metal4“ (04:23) → „Evaluating
+cumulative ratio after Metal5“ (04:24) — je wenige
+Minuten pro Layer; danach schreibt der Step sein
+Ergebnis und Step 65 Checker-Antenna startet.
+**Kein Stall**: CPU aktiv (CPU-Time 1-10:32:23 =
+34:32:23, +29 min/30 min ≈ 99 % eines Kerns,
+makro-stabil seit 19:00 — jetzt über 34 h).
+**RAM-Erholung:** klayout-RSS 115,2→98,8 GB
+(Basisschicht freigegeben), RAM 128→145 G avail.
+TM2 bleibt der Rekord-Layer (350 min).
+Sequenz-Bilanz (komplett): M1 23, V1 18, M2 23, V2
+23, M3 173, V3 170, M4 193, V4 194, M5 211, TV1
+210, TM1 221, TV2 222, TM2 350 min. ETA Step 64:
+~04:30–05:30 (Cumulative-Phase + Ergebnis
+schreiben). Stopp-79-ETA: **heute (6/11)
+~12:00–16:00**, im Schlechtestfall später. Push
+up-to-date. RAM 145 G avail, Disk 1,1 T, Monitor
+clean (04:20:30), 0 Restarts. Kein Stop.
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
