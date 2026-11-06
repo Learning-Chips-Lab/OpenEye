@@ -3792,6 +3792,23 @@ Density-Lücke). RAM 245 G avail, Disk 1,1 T,
 Monitor clean (06:56:18), 1 Watchdog-Restart
 (1/3). Kein Stop (Erstcrash, Restart läuft).
 
+**07:2x (6/11) 30-min-Statuszyklus:** Filler-Restart
+(Dir 68) läuft seit 32 min: CPU 99,5 % aktiv
+(PID 85838, CPU-Time 00:32:06 ≈ 100 % eines Kerns),
+RSS 1,3→55,0 GB (~1,7 GB/min — vergleichbares
+Tempo wie erster Lauf: 37 min → 67,9 GB). RAM 191 G
+avail (>> 30 G Tripwire). Timeline-Referenz ersten
+Laufs: Explosionsphase (95→247 GB) setzte ~70 min
+Fill-Laufzeit ein → falls gleiches Muster,
+triggert die RAM-Tripwire (avail < 30 G) ~08:20–
+08:40 → dann Stop (Ursache + Optionen für User
+dokumentieren); wenn der Filler davor fertig
+wäre, wäre Step 68 durch (keine Vorreferenz für
+dieses Step). Stopkriterium: 2. Crash dieses
+Steps. Push up-to-date. Disk 1,1 T, Monitor clean
+(07:26:43), 1 Watchdog-Restart (1/3). Kein Stop
+(Tripwire nicht erreicht).
+
 ### p2_15 status + Phase A progress (2026-10-30, Autonomie-Modus)
 
 **19:10 status:** **Phase A complete (A1–A7), pushed to utz12 (f840180).**
