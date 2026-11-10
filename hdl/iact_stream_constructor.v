@@ -239,6 +239,10 @@ module iact_stream_constructor #(
     reg [LIMIT_SIZE_IACT-1:0] rd_cycle_loop_cnt_4;
     reg [12-1:0] x_pos_in_w_cycle;
     reg [ 8-1:0] router_cycle;
+    reg [3:0] extra_compute_cycles;
+    reg [3:0] extra_cycles;
+    reg [3:0] choose_offset;
+    reg [          4:0] pe_value;
     wire [ADDRWIDTH-1:0] wr_addr_inc_0_next;
     wire [ADDRWIDTH-1:0] wr_addr_inc_1_next;
     wire [ADDRWIDTH-1:0] wr_addr_inc_2_next;
@@ -249,6 +253,9 @@ module iact_stream_constructor #(
     wire [ADDRWIDTH-1:0] rd_addr_inc_3_next;
     wire [ADDRWIDTH-1:0] rd_addr_inc_4_next;
     wire [3:0]values_per_word;
+    wire [LIMIT_SIZE_IACT-1:0] rd_loop_limit_with_extra;
+    wire [              4-1:0] pe_value_offset;
+    wire [              8-1:0] compute_cycles;
     assign values_per_word = fully_connected_i ? 1 : iact_channels_per_pe_i;
     // Every bank holds the serial input window. Read neighboring pixels from
     // different banks, then skip those pixels when advancing to the next group.
@@ -261,6 +268,9 @@ module iact_stream_constructor #(
     assign rd_addr_inc_2_next = rd_addr_2 + rd_addr_inc_2;
     assign rd_addr_inc_3_next = rd_addr_3 + rd_addr_inc_3;
     assign rd_addr_inc_4_next = rd_addr_4 + rd_addr_inc_4;
+    assign rd_loop_limit_with_extra = NUM_GLB_IACT == 1 ? rd_loop_limit_0 : rd_loop_limit_0 + extra_cycles;
+    assign pe_value_offset = NUM_GLB_IACT == 1 ? fsm_row_offset : fsm_row_offset + choose_offset;
+    assign compute_cycles = NUM_GLB_IACT == 1 ? iact_words_per_compute : iact_words_per_compute + extra_compute_cycles;
     // Single-channel RAM words hold two image rows. Move by whole row pairs,
     // keeping the remaining half-row for the next window's initial read.
     assign rd_addr_inc_4_next = rd_addr_4 + rd_addr_inc_4;
@@ -291,6 +301,10 @@ module iact_stream_constructor #(
         rd_addr_2                  <= 0;
         rd_addr_3                  <= 0;
         rd_addr_4                  <= 0;
+        extra_compute_cycles                  <= 0;
+        extra_cycles               <= 0;
+        choose_offset              <= 0;
+        pe_value                    = 0;
       end else begin
         if (fully_connected_i) begin
           iact_enable_o <= 0;
@@ -311,8 +325,8 @@ module iact_stream_constructor #(
               if ((fsm_enc_cycle == 1) & (&iact_ready_i)) begin
                 fsm_enc_current_state <= ENCODE;
                 fsm_enc_cycle <= 0;
-                ram_rd_addr <= (NUM_GLB_IACT >= PE_Y) ? rd_addr_2 : fc_output_base_addr;
-                ram_rd_en <= 1;
+                ram_rd_addr   <= (NUM_GLB_IACT >= PE_Y) ? rd_addr_2 : fc_output_base_addr;
+                ram_rd_en     <= 1;
               end
             end
             ENCODE: begin
@@ -407,11 +421,12 @@ module iact_stream_constructor #(
             //Check, wether amount of channels is odd
             for (pec = 0; pec < PE_X; pec = pec + 1) begin
               for (per = 0; per < PE_Y; per = per + 1) begin
-                if ((((pec[3:0] * stride_x_i) + per[3:0] + fsm_row_offset) >=  (current_iact_cycle_mod_reg))
-                &    ((pec[3:0] * stride_x_i) + per[3:0] + fsm_row_offset)  <  (current_iact_cycle_mod_reg + NUM_GLB_IACT)
+                pe_value = (pec[3:0] * stride_x_i) + per[3:0];
+                if ((pe_value + pe_value_offset >=  (current_iact_cycle_mod_reg ))
+                &    pe_value + pe_value_offset <  (current_iact_cycle_mod_reg + NUM_GLB_IACT )
                 ) begin
                   iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+: $clog2(NUM_GLB_IACT+1)] <=
-                      ((pec[3:0] * stride_x_i) + per[3:0]  + fsm_row_offset - (current_iact_cycle_mod_reg));
+                      pe_value + pe_value_offset - current_iact_cycle_mod_reg;
                 end else begin
                   iact_choose_o[per*PE_X*$clog2(NUM_GLB_IACT+1)+pec*$clog2(NUM_GLB_IACT+1)+: $clog2(NUM_GLB_IACT+1)] <=
                       NUM_GLB_IACT;
@@ -422,6 +437,7 @@ module iact_stream_constructor #(
                 end
               end
             end
+            pe_value = 0;
             // Full Iact Cycle
             ram_inc_counter <= ram_inc_counter + 1;
             if ((ram_inc_counter + ram_inc_counter_offset >= values_per_word - 1) & (ram_inc_counter + ram_inc_counter_offset != 0)) begin
@@ -443,13 +459,13 @@ module iact_stream_constructor #(
               if (!single_channel || (ram_inc_counter != 8'hff)) current_iact_cycle_reg <= 0;
               ram_rd_addr            <= ram_rd_addr + 1;
               rd_cycle_loop_cnt_0    <= rd_cycle_loop_cnt_0 + 1;
-              if (rd_cycle_loop_cnt_0 == rd_loop_limit_0) begin
+              if (rd_cycle_loop_cnt_0 == rd_loop_limit_with_extra) begin
                 rd_cycle_loop_cnt_0  <= 0;
                 rd_addr_0            <= rd_addr_inc_0_next;
                 ram_rd_addr          <= rd_addr_inc_0_next;
               end
             end
-            if (fsm_enc_cycle == iact_words_per_compute) begin
+            if (fsm_enc_cycle == compute_cycles) begin
               ram_rd_addr         <= rd_addr_inc_1_next;
               rd_addr_0           <= rd_addr_inc_1_next;
               rd_addr_1           <= rd_addr_inc_1_next;
@@ -491,6 +507,9 @@ module iact_stream_constructor #(
                 end
               end
               fsm_enc_current_state      <= IDLE;
+              extra_compute_cycles                  <= 0;
+              extra_cycles               <= 0;
+              choose_offset              <= 0;
               rd_cycle_loop_cnt_0        <= 0;
               current_iact_cycle_mod_reg <= 0;
               ram_rd_en                  <= 0;

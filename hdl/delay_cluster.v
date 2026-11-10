@@ -162,7 +162,7 @@ module delay_cluster #(
     idx       = 21;
     data_o    = data_regs[idx*DATA_BITWIDTH +: DATA_BITWIDTH];
     enable_o  = enable_regs[idx];
-    ready_o   = ready_regs[idx];
+    ready_o   = ready_regs[0];
   end
 
 endmodule

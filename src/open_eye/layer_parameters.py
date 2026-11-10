@@ -1349,7 +1349,7 @@ class LayerParameters(object):
         if (self.buffer_cycles_for_x_iact == 1):
             full_temp = self.needed_Iact_writes * self.channel_div_trans
             dilation_pes = (self.kernel_shape[0]-self.strideX) - ((math.floor(params.Clusters/self.used_Y_cluster) - 1) * params.NUM_GLB_PSUM * self.strideX)
-            dilation_pes = max(0,dilation_pes)
+            dilation_pes = math.ceil(max(0,dilation_pes)/params.NUM_GLB_IACT)
             less_temp = full_temp - (dilation_pes * self.channel_div_trans)
             self.iact_repetitions_per_write = (self.iact_x_line_repetitions-1) * less_temp + full_temp
             self.iact_buffer_words_per_write =  self.iact_repetitions_per_write * ((self.iact_size_y + self.kernel_size[1]) - self.strideY) * self.diff_iact_layer
@@ -1849,9 +1849,9 @@ class LayerParameters(object):
             self.used_channels = 4
         self.diff_iact_layer_next_layer = layer_parameters[self.rel_layers["Next_Layer"][self.layer_name][0]].used_channels
         if (self.pooling_mode == 0):
-            self.iact_converter_buffer_addr_max_cycles = math.ceil((((self.iact_size_y*self.diff_iact_layer))/(self.strideY*4)))
+            self.iact_converter_buffer_addr_max_cycles = math.ceil((((self.iact_size_y*self.diff_iact_layer))/(self.strideY*2)))
         else:
-            self.iact_converter_buffer_addr_max_cycles = math.ceil(self.diff_iact_layer/4)
+            self.iact_converter_buffer_addr_max_cycles = math.ceil(self.diff_iact_layer/2)
 
         return
 

@@ -774,7 +774,11 @@ module psum_pipeline #(
             if (CLUSTERS != 1) begin 
               for (cc_psum = 0; cc_psum < TRANS_WORDS; cc_psum = cc_psum + 1) begin
                 if (cc_psum < WRITEBACK_WORDS)
-                  pre_quantized_value[cc_psum] <= psum_buffer_data_r[psum_cluster_select*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
+                  if (fsm_psum_cycle < fsm_psum_limit - 8) begin
+                    pre_quantized_value[cc_psum] <= psum_buffer_data_r[psum_cluster_select*TRANS_BITWIDTH_PSUM*NUM_GLB_PSUM+cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
+                  end else begin
+                    pre_quantized_value[cc_psum] <= 0;
+                  end
                 else
                   pre_quantized_value[cc_psum] <= 0;
               end
@@ -816,7 +820,11 @@ module psum_pipeline #(
             end else begin
               for (cc_psum = 0; cc_psum < TRANS_WORDS; cc_psum = cc_psum + 1) begin
                 if (cc_psum < WRITEBACK_WORDS)
-                  pre_quantized_value[cc_psum] <= psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
+                  if (fsm_psum_cycle < fsm_psum_limit - 8) begin
+                    pre_quantized_value[cc_psum] <= psum_buffer_data_r[cc_psum*TRANS_BITWIDTH_PSUM+:TRANS_BITWIDTH_PSUM];
+                  end else begin
+                    pre_quantized_value[cc_psum] <= 0;
+                  end
                 else
                   pre_quantized_value[cc_psum] <= 0;
               end
