@@ -6,25 +6,19 @@ SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 WAVES=1
 # ==============================================================================
-# Simulator-Spezifische Tracing / Flag Anpassungen
 # ==============================================================================
 ifeq ($(SIM),icarus)
-    # Icarus-spezifische Argumente
     COMPILE_ARGS += -g2012 -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster
     
-    # Waves für Icarus (erzeugt VCD via cocotb)
     ifeq ($(WAVES),1)
         unexport WAVES
         unexport COCOTB_TRACE
         unexport IVERILOG_DUMPER
         unexport EXTRA_ARGS
         unexport SIM_ARGS
-        # Cocotb kümmert sich bei WAVES=1 automatisch um den Dump
-        # Keine manuellen Dumper-Sources an VERILOG_SOURCES anhängen!
     endif
 
 else ifeq ($(SIM),verilator)
-    # Verilator-spezifische Argumente
     COMPILE_ARGS += -Wall -Wno-fatal
     EXTRA_ARGS += --trace-fst --trace-structs -DUSE_INTERNAL_PARAMS_PE -DUSE_INTERNAL_PARAMS_PE_cluster
     
@@ -125,8 +119,8 @@ export LAYER=Convolution_Stack
 export NUM_FILTERS=4
 export KERNEL_SIZE_X=3
 export KERNEL_SIZE_Y=3
-export INPUT_SIZE_X=8
-export INPUT_SIZE_Y=2
+export INPUT_SIZE_X=4
+export INPUT_SIZE_Y=4
 export STRIDE=1
 export INPUT_CHANNELS=4
 export OUTPUT_SIZE=10
