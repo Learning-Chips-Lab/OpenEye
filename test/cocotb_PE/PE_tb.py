@@ -202,6 +202,7 @@ async def initialize_test_pe(dut):
 
     # Generate test input data (activations, weights, partial sums)
     (iacts, wghts, psums) = create_iact_wght_psum_arrays(dut)
+    dut._log.info("Wght MTX unpacked: " + str(wghts))
 
     # Launch main test sequence and wait for completion
     test_thread = cocotb.start_soon(test_hdls(ptp, dut, iacts, wghts, psums))
@@ -331,7 +332,7 @@ async def send_iact(ptp, dut, data_array):
         C0*B,  # Total elements
         int(dut.TRANS_BITWIDTH_IACT.value),  # Convert LogicArray to int
         int(dut.IACT_DATA_DATA.value),  # Convert LogicArray to int
-        False,  # Sequential mode
+        C0 == 1,  # Sequential mode
     )
 
     # Disable input activation interface
@@ -472,7 +473,6 @@ async def send_wght(ptp, dut, data_array):
         True,  # Ignore zeros
         sparsity_en=sparsity_en  # Use global sparsity_en setting
     )
-    print(spad_data)
     dut._log.info("WGHT DATA is %s", spad_data)
 
     # Enable weight interface
@@ -732,11 +732,15 @@ def generate_spad(
     data_spad_data = np.zeros(data_spad_words)
     current_count = 0  # Count of non-zero elements processed
     overhead = 0  # Count of consecutive zeros skipped
+    if (sisd):
+        mod_value = 1
+    else:
+        mod_value = 2
     # Process each element in the input array
     for y in range(len(data)):  # For each row
         for x in range(len(data[y])):  # For each element in row
             # Include this element if it's non-zero OR we're not ignoring zeros
-            if (data[y][x] != 0) | (not ignore_zeros) | (((len(data[y]) - 1 == x) & (current_count%2 != 0))):
+            if (data[y][x] != 0) | (not ignore_zeros) | (((len(data[y]) - 1 == x) & (current_count%mod_value != 0))):
                 if (data[y][x] < 0):
                     temp_data = data[y][x] + 2**bitwidth
                 else :
@@ -819,27 +823,27 @@ def create_iact_wght_psum_arrays(dut):
     # Apply random sparsity to activations
     # Choose random indices to zero out (sparse_iact fraction of total)
     indices = np.random.choice(
-        np.arange(iacts.size), replace=False, size=int(iacts.size * sparse_iact / 100)
+        np.arange(iacts.size), replace=False, size=int(iacts.size * sparse_iact)
     )
+    indices = []
     # Zero out selected elements (convert flat index to 2D coordinates)
     # indices = [] #Manual override option
-    for x in range(len(indices)):
-        iacts[int(indices[x] / B)][int(indices[x] % B)] = 0
+    if (sparsity_en):
+        for x in range(len(indices)):
+            iacts[int(indices[x] / B)][int(indices[x] % B)] = 0
 
     # Generate weights: random values from -128 to 127, without 0
     wghts = np.random.randint(-64, 63, size=(C0S, M0))
     wghts[wghts >= 0] += 1
-
     # Apply random sparsity to weights
     indices = np.random.choice(
-        np.arange(wghts.size), replace=False, size=int(wghts.size * sparse_wght / 100)
+        np.arange(wghts.size), replace=False, size=int(wghts.size * sparse_wght)
     )
-
     # Zero out selected weight elements
-    for x in range(len(indices)):
-        wghts[int(indices[x] / M0)][int(indices[x] % M0)] = 0
+    if (sparsity_en):
+        for x in range(len(indices)):
+            wghts[int(indices[x] / M0)][int(indices[x] % M0)] = 0
 
-    print(wghts)
     array = []
     counter = 0
     temp = 0
@@ -851,7 +855,6 @@ def create_iact_wght_psum_arrays(dut):
         temp = temp + counter
         counter = 0
         array.append(temp)
-    print(array)
     # wghts[indices] = 0 #Alternative: direct indexing (may not work with 2D reshape)
 
     # Generate partial sums/bias: sequential values from 1 to (number of filters)

@@ -1343,9 +1343,8 @@ module PE #(
             // BLOCK 1b: WEIGHT VECTOR INCREMENT
             // ================================================================
             // Advance through weight data for current activation
-            if (wght_data_vec < (second_spad_words_wght - 1)) begin
-              wght_data_vec <= wght_data_vec + 1; // Increment weight index
-            end else begin
+            wght_data_vec <= wght_data_vec + 1; // Increment weight index
+            if (wght_data_vec >= (second_spad_words_wght - 1)) begin
               mux_iact_ready <= 1;                 // Signal ready for next activation
             end
 
@@ -1855,6 +1854,13 @@ module PE #(
               reused_data[mac_i]         <= 0;
             end
             values_valid <= 1; // Default: data is valid
+            for (mac_i = 0; mac_i < PARALLEL_MACS; mac_i=mac_i+1) begin
+              if (psum_spad_addr_r[mac_i] == psum_spad_addr_w[mac_i]) begin
+                // Port A read conflicts with Port A write
+                reuse_psum_spad[mac_i] <= 1;       // Enable forwarding
+                reused_data[mac_i]     <= adder_o_w[mac_i]; // Use adder 1 output
+              end
+            end
 
             // ---------------------------------------------------------------
             // Weight vector increment (sequential, no range computation)

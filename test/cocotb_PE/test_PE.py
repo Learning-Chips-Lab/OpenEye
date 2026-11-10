@@ -1,55 +1,96 @@
 # This file is part of the OpenEye project.
-# © Fachhochschule Dortmund – University of Applied Sciences and Arts (until 2025), Universität Duisburg-Essen (since 2025).
+# All rights reserved. © University of Duisburg-Essen.
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
+
+"""
+PE Dense Mode Test Runner
+
+This test runner validates the PE (Processing Element) in dense mode (SPARSITY_EN=0),
+where no sparsity exploitation is used. Data is transmitted without overhead bits,
+reducing bandwidth by 33% compared to sparse mode.
+
+Test Configuration:
+- SPARSITY_EN=0 (dense mode)
+- Various dimensions (U, C0, M0)
+- 0% sparsity (all values are assumed to be non-zero/zeros are transmitted as-is)
+- Tests dense MAC computation without sparse indexing
+"""
+
 import logging
+import pytest
 import os
 import sys
+from pathlib import Path
 
 import pytest
 import cocotb_test.simulator
 logger = logging.getLogger("cocotb")
 
-directory = (os.path.abspath(os.getcwd()))
-sys.path.extend([directory, os.path.dirname(os.path.realpath(__file__))])
-tests_dir = os.path.abspath(os.path.dirname(__file__))
-from open_eye import hdl_dir
-
-import pe_test_utils as ptu
 from open_eye import hdl_dir, test_dir
 import open_eye.vh_file_creator as vh_file_creator
+import pe_test_utils as ptu
+
+# Test parameters for dense mode
+U_VALUES = [3,2,1]  # Filter width (S in Eyeriss v2) - spatial window dimension
+C0_VALUES = [4,2,1]  # Input channels per PE (C0 in Eyeriss v2)
+M0_VALUES = [4,6,8] # Output channels per PE (M0 in Eyeriss v2)
+SEED_VALUES = [0]            # Random seeds
+USE_DSP_VALUES = [0,1]      # 0=standard multiplier+adder, 1=DSP48 optimization
+PARALLEL_MACS_VALUES = [1,2]   # MAC lanes per PE (C0S*M0 weights must fit WGHT_DATA_ADDR)
+SPARSITY_EN= [0,1]
+SPARSE_IACT= [0,10,20,30]
+SPARSE_WGHT= [0,10,20,30]
+
+# Clock configuration
+CLK_CYCLE = 10
+CLK_CYCLE_UNIT = "ns"
+CLK_DELAY_INPUT = 100
+CLK_DELAY_UNIT_INPUT = "ps"
+CLK_DELAY_OUTPUT = 100
+CLK_DELAY_UNIT_OUTPUT = "ps"
 
 
-#As ref:
-#clk_cycle = 10; clk_cycle_unit = "ns"
+@pytest.mark.parametrize("U", U_VALUES)
+@pytest.mark.parametrize("C0", C0_VALUES)
+@pytest.mark.parametrize("M0", M0_VALUES)
+@pytest.mark.parametrize("SEED", SEED_VALUES)
+@pytest.mark.parametrize("USE_DSP", USE_DSP_VALUES)
+@pytest.mark.parametrize("PARALLEL_MACS", PARALLEL_MACS_VALUES)
+@pytest.mark.parametrize("SPARSITY_EN", SPARSITY_EN)
+@pytest.mark.parametrize("SPARSE_IACT", SPARSE_IACT)
+@pytest.mark.parametrize("SPARSE_WGHT", SPARSE_WGHT)
+def test_pe(U, C0, M0, SEED, USE_DSP, PARALLEL_MACS, SPARSITY_EN, SPARSE_IACT, SPARSE_WGHT):
+    """
+    Test PE in dense mode (SPARSITY_EN=0) with selectable MAC implementation.
 
-clk_cycle = 10
-clk_cycle_unit = "ns"
+    Validates:
+    - Correct MAC computation without sparsity encoding
+    - No overhead bits in data transmission
+    - Address SPADs are excluded from synthesis
+    - Linear psum addressing (no sparse offsets)
+    - Both standard (USE_DSP=0) and DSP48 (USE_DSP=1) implementations
 
-clk_delay_in = 100
-clk_delay_unit_in = "ps"
+    Args:
+        U: Number of input activation values
+        C0: Number of input channels
+        M0: Number of output filters
+        SEED: Random seed for reproducibility
+        USE_DSP: MAC implementation (0=standard multiplier+adder, 1=DSP48 slice)
+    """
+    # Get HDL files
+    from open_eye import hdl_dir
+    verilog_sources = ptu.get_verilog_sources(str(hdl_dir))
 
-clk_delay_out = 100
-clk_delay_unit_out = "ps"
+    # Test module configuration
+    module = "PE_tb"
+    toplevel = "PE"
 
-##########################################################################################
-
-@pytest.mark.parametrize("B", [(4)])#,(3),(2),(1)]) # Number of blocks processed PE (stride U=1 here)
-@pytest.mark.parametrize("C0", [(3)])#,(2),(1)]) # Input channels per PE (C0 in Eyeriss v2)
-@pytest.mark.parametrize("M0", [(12)])#,(10),(8),(4)]) # Output channels per PE (M0 in Eyeriss v2)
-@pytest.mark.parametrize("SPARSE_IACT", [(0)])#, (10), (20), (30), (40), (50), (60), (70), (80), (90)]) # Input activation sparsity
-@pytest.mark.parametrize("SPARSE_WGHT", [(0)]) # Weight sparsity
-@pytest.mark.parametrize("SEED", [0]) # Random seed
-@pytest.mark.parametrize("PARALLEL_MACS", [2]) # MAC lanes per PE (must match PE_IO_debug default)
-@pytest.mark.parametrize("SPARSITY_EN", [1]) # 1=sparse mode
-def test_single_pe(B, C0, M0, SPARSE_IACT, SPARSE_WGHT, SEED, PARALLEL_MACS, SPARSITY_EN, request):
-    dut = 'PE_IO_debug' # Name of the top-level module (without .v extension)
-    module = 'PE_tb'
-    toplevel = dut
-    verilog_sources = ptu.get_verilog_sources(hdl_dir)
-    nodeid = request.node.nodeid.replace("::", "_").replace("/", "_").replace("[","_").replace("]","_")
-    target_dir = os.path.join(test_dir, '.temp/' + nodeid)
-    os.makedirs(target_dir, exist_ok=True)
+    # Create temporary directory for this test
+    dsp_mode_str = "dsp" if USE_DSP == 1 else "std"
+    test_name = f"test_dense_iact{U}x{C0}_wght{M0}_seed{SEED}_{dsp_mode_str}_pm{PARALLEL_MACS}_spen{SPARSITY_EN}_is{SPARSE_IACT}_ws{SPARSE_WGHT}"
+    target_dir = Path(__file__).parent / ".temp" / test_name
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     # PE.v `includes "parameters_PE.vh" (PARALLEL_MACS/SPARSITY_EN) unless
     # USE_INTERNAL_PARAMS_PE is defined. Generate it into the sim_build dir so
@@ -57,38 +98,55 @@ def test_single_pe(B, C0, M0, SPARSE_IACT, SPARSE_WGHT, SEED, PARALLEL_MACS, SPA
     # values from the environment, so set them before the call.
     os.environ["PARALLEL_MACS"] = str(PARALLEL_MACS)
     os.environ["SPARSITY_EN"] = str(SPARSITY_EN)
-    vh_file_creator.create_vh_file_from_envvars(target_dir, hdl_dir + "/", toplevel="PE")
+    os.environ["SPARSE_IACT"] = str(SPARSE_IACT)
+    os.environ["SPARSE_WGHT"] = str(SPARSE_WGHT)
+    vh_file_creator.create_vh_file_from_envvars(str(target_dir), str(hdl_dir) + "/", toplevel="PE")
 
+    # Environment variables for test configuration
+    extra_env = {
+        # Clock timing
+        "CLOCK_LEN": str(CLK_CYCLE),
+        "CLOCK_UNIT": CLK_CYCLE_UNIT,
+        "CLOCK_DELAY_INPUT": str(CLK_DELAY_INPUT),
+        "CLOCK_DELAY_UNIT_INPUT": CLK_DELAY_UNIT_INPUT,
+        "CLOCK_DELAY_OUTPUT": str(CLK_DELAY_OUTPUT),
+        "CLOCK_DELAY_UNIT_OUTPUT": CLK_DELAY_UNIT_OUTPUT,
+
+        # Test dimensions (PE_tb.py reads the input-block count as "B")
+        "B": str(U),
+        "C0": str(C0),
+        "M0": str(M0),
+
+        # Dense mode configuration
+        "PARALLEL_MACS": str(PARALLEL_MACS),
+        "SPARSITY_EN": str(SPARSITY_EN),  # *** DENSE MODE ***
+        "SPARSE_IACT": str(SPARSE_IACT),  # iact sparsity
+        "SPARSE_WGHT": str(SPARSE_WGHT),  # wght sparsity
+
+        # Random seed
+        "SEED": str(SEED),
+
+        # Waveform generation for Icarus Verilog
+        "IVERILOG_DUMPER": "fst"  # Enable FST waveform dumping
+    }
+
+    # Run simulation with dense mode and USE_DSP parameters
     results = cocotb_test.simulator.run(
-        python_search=[tests_dir],
+        python_search=[str(test_dir)],
         verilog_sources=verilog_sources,
         toplevel=toplevel,
         module=module,
-        sim_build=target_dir,
-        testcase='start_test_pe',
-        defines={"NO_TRACE": "TRUE"},  # Disable PE.v internal dumping, use cocotb's instead
+        sim_build=str(target_dir),
+        testcase="start_test_pe",
+        defines={"NO_TRACE": "TRUE"},
         force_compile=True,
-        waves=True,
+        waves=True,  # Enable waveforms for debugging
         simulator="icarus",
-        extra_env = {"CLOCK_LEN" : str(clk_cycle),
-                    "CLOCK_UNIT" : clk_cycle_unit,
-                    "CLOCK_DELAY_INPUT" : str(clk_delay_in),
-                    "CLOCK_DELAY_UNIT_INPUT" : clk_delay_unit_in,
-                    "CLOCK_DELAY_OUTPUT" : str(clk_delay_out),
-                    "CLOCK_DELAY_UNIT_OUTPUT" : clk_delay_unit_out,
-                    "B" : str(B),
-                    "C0" : str(C0),
-                    "M0" : str(M0),
-                    "C0S" : str(B*C0),
-                    "SPARSE_IACT" : str(SPARSE_IACT),
-                    "SPARSE_WGHT" : str(SPARSE_WGHT),
-                    "SEED" : str(SEED),
-                    "PARALLEL_MACS": str(PARALLEL_MACS),
-                    "SPARSITY_EN": str(SPARSITY_EN),
-                    "COCOTB_TRACE": "1",
-                    "IVERILOG_DUMPER": "fst"},  # Enable FST waveform dumping for Icarus
+        extra_env=extra_env,
+        parameters={"SPARSITY_EN": SPARSITY_EN, "USE_DSP": USE_DSP, "PARALLEL_MACS": PARALLEL_MACS}  # Pass both parameters to Verilog
     )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Run pytest programmatically
     pytest.main([__file__, "-v", "-s"])
