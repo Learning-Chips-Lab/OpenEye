@@ -860,10 +860,10 @@ module PE #(
     // Adder summand 1: select psum source with bypass logic
     // Priority: zero if not accumulating > adder bypass > SPad bypass > normal SPad read
     assign adder_summand_1[pmc] =
-                  !use_psum[pmc] ? 0 :                      // First accumulation: use 0
-                  (reuse_adder_data[pmc][pmc] ? adder_o_w[pmc] :   // Forward adder 1 output
-                  (reuse_psum_spad[pmc] ? reused_data[pmc] :    // Use bypassed SPad data
-                  psum_spad_data_o[pmc]));                 // Normal SPad read
+                  !use_psum[pmc] ? 0 :                           // First accumulation: use 0
+                  (reuse_adder_data[pmc][pmc] ? adder_o_w[pmc] : // Forward adder 1 output
+                  (reuse_psum_spad[pmc] ? reused_data[pmc] :     // Use bypassed SPad data
+                  psum_spad_data_o[pmc]));                       // Normal SPad read
   end
 
 
@@ -1959,6 +1959,19 @@ module PE #(
               psum_data_SPad_en_r[mac_i] <= computing;
               psum_data_SPad_en_w[mac_i] <= 1;
             end
+            if (values_valid) begin
+              for (mac_i = 0; mac_i < PARALLEL_MACS; mac_i=mac_i+1) begin
+                adder_en[mac_i] <= 1;
+                if (used_psum_memory[mac_i][(psum_spad_addr_r[mac_i])] == 1) begin
+                  use_psum[mac_i] <= 1;
+                end else begin
+                  use_psum[mac_i] <= 0;
+                  used_psum_memory[mac_i][(psum_spad_addr_r[mac_i])] <= 1;
+                end
+                psum_spad_addr_delay[mac_i] <= psum_spad_addr_r[mac_i];
+                psum_spad_addr_w[mac_i]     <= psum_spad_addr_delay[mac_i];
+              end
+            end
             if (computing) begin
               for (mac_i = 0; mac_i < PARALLEL_MACS; mac_i=mac_i+1) begin
                 psum_spad_addr_mem[mac_i] <= psum_spad_addr_mem[mac_i] + PARALLEL_MACS;
@@ -1971,7 +1984,6 @@ module PE #(
             end
             for (mac_i = 0; mac_i < PARALLEL_MACS; mac_i=mac_i+1) begin
               psum_spad_addr_delay[mac_i] <= psum_spad_addr_r[mac_i];
-              psum_spad_addr_w[mac_i]     <= mac_i[PSUM_ADDR_BITWIDTH-1:0] + PARALLEL_MACS_ADDR;
               adder_en[mac_i]             <= values_valid;
                 if (computing_2) begin
                   psum_spad_addr_w[mac_i] <= psum_spad_addr_delay[mac_i];
@@ -2003,9 +2015,9 @@ module PE #(
                 adder_en[mac_i]            <= 1;
                 psum_data_SPad_en_w[mac_i] <= 1;
                 psum_spad_addr_w[mac_i]    <= psum_spad_addr_r[mac_i];
-                psum_spad_addr_mem[mac_i] <= psum_spad_addr_r[mac_i] + 1;
+                psum_spad_addr_mem[mac_i]  <= psum_spad_addr_r[mac_i] + 1;
                 if (used_psum_memory[mac_i][(psum_spad_addr_r[mac_i])] == 1) begin
-                  use_psum[mac_i]                                  <= 1;
+                  use_psum[mac_i]                                    <= 1;
                   used_psum_memory[mac_i][(psum_spad_addr_r[mac_i])] <= 0;
                 end else begin
                   use_psum[mac_i] <= 0;
@@ -2020,7 +2032,7 @@ module PE #(
                 end
               end
             end
-            psum_select <= !computing_1;
+            psum_select <= !computing_1 & !computing;
           end
 
           // ==================================================================
@@ -2043,7 +2055,7 @@ module PE #(
               psum_spad_addr_mem[mac_i] <= psum_spad_addr_r[mac_i] + 1;
               adder_tree_en              <= 1;
               if (used_psum_memory[mac_i][(psum_spad_addr_r[mac_i])] == 1) begin
-                use_psum[mac_i]                                  <= 1;
+                use_psum[mac_i]                                    <= 1;
                 used_psum_memory[mac_i][(psum_spad_addr_r[mac_i])] <= 0;
               end else begin
                 use_psum[mac_i] <= 0;
