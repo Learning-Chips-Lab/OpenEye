@@ -738,14 +738,16 @@ def generate_spad(
         mod_value = 2
     # Process each element in the input array
     for y in range(len(data)):  # For each row
+        empty_row = True
         for x in range(len(data[y])):  # For each element in row
             # Include this element if it's non-zero OR we're not ignoring zeros
-            if (data[y][x] != 0) | (not ignore_zeros) | (((len(data[y]) - 1 == x) & (current_count%mod_value != 0))):
+            if ((data[y][x] != 0) | (not ignore_zeros) | (((len(data[y]) - 1 == x) & ((current_count%mod_value != 0) | empty_row)))):
                 if (data[y][x] < 0):
                     temp_data = data[y][x] + 2**bitwidth
                 else :
                     temp_data = data[y][x]
 
+                empty_row = False
                 if sisd:
                     # SISD mode: one value per word
                     if sparsity_en:
@@ -825,7 +827,6 @@ def create_iact_wght_psum_arrays(dut):
     indices = np.random.choice(
         np.arange(iacts.size), replace=False, size=int(iacts.size * sparse_iact)
     )
-    indices = []
     # Zero out selected elements (convert flat index to 2D coordinates)
     # indices = [] #Manual override option
     if (sparsity_en):

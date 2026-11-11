@@ -47,14 +47,14 @@ export CLOCK_DELAY_UNIT_OUTPUT=ps
 
 export LOGGER_LEVEL=0    #Enables Logger Debug Mode
 
-export B=2
-export C0=4
+export B=3
+export C0=2
 export M0=4
 export SEED = 0
 export PARALLEL_MACS = 2
 export SPARSITY_EN=1
 export SPARSE_IACT=0
-export SPARSE_WGHT=30
+export SPARSE_WGHT=60
 
 export
 run:

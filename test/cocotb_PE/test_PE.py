@@ -35,12 +35,12 @@ import pe_test_utils as ptu
 U_VALUES = [3,2,1]  # Filter width (S in Eyeriss v2) - spatial window dimension
 C0_VALUES = [4,2,1]  # Input channels per PE (C0 in Eyeriss v2)
 M0_VALUES = [4,6,8] # Output channels per PE (M0 in Eyeriss v2)
-SEED_VALUES = [0]            # Random seeds
+SEED_VALUES = [0,1,2,3,4,5,6,7,8,9]            # Random seeds
 USE_DSP_VALUES = [0,1]      # 0=standard multiplier+adder, 1=DSP48 optimization
 PARALLEL_MACS_VALUES = [1,2]   # MAC lanes per PE (C0S*M0 weights must fit WGHT_DATA_ADDR)
-SPARSITY_EN= [0,1]
-SPARSE_IACT= [0,10,20,30]
-SPARSE_WGHT= [0,10,20,30]
+SPARSITY_EN= [1]
+SPARSE_IACT= [0,10,20,30,40,50,60,70,80,90]
+SPARSE_WGHT= [0,10,20,30,40,50,60,70,80,90]
 
 # Clock configuration
 CLK_CYCLE = 10
