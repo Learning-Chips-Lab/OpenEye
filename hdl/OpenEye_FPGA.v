@@ -228,7 +228,7 @@ module OpenEye_FPGA #(
     parameter RING_BUF_POOL_ADDR = 8,
 
     //Channels per word
-    parameter CHANNELS_PER_WORD = 4,
+    parameter CHANNELS_PER_WORD = 2,
 
     //Quantization Width
     parameter integer OFFSET_WIDTH = 8,
@@ -1331,17 +1331,15 @@ end
   //   pooling_stage_1[0..7]- first pipeline compare level: 32→8 values.
   //   pooling_stage_2[0..3]- second level: 8→4 values.
   //   pooling_stage_3[0..1]- third level: 4→2 values.
-  //   pooling_stage_4      - final output: 2→1 maximum value.
   reg signed  [                   7:0] pooling_regs          [31:0];
   reg                                  pooling_buffer_enable;
   reg                                  set_pointer_start;
   reg signed  [DATA_IACT_BITWIDTH-1:0] pooling_buffer_new    [CHANNELS_PER_WORD-1:0];
   wire signed [DATA_IACT_BITWIDTH-1:0] pooling_buffer_old    [CHANNELS_PER_WORD-1:0];
   reg signed  [DATA_IACT_BITWIDTH-1:0] pooling_buffer_old_q  [CHANNELS_PER_WORD-1:0];
-  reg signed  [                   7:0] pooling_stage_1       [7:0];  // Pipeline stage 1: 32→8 max.
-  reg signed  [                   7:0] pooling_stage_2       [3:0];  // Pipeline stage 2: 8→4 max.
-  reg signed  [                   7:0] pooling_stage_3       [1:0];  // Pipeline stage 3: 4→2 max.
-  reg signed  [                   7:0] pooling_stage_4;         // Pipeline stage 4: 2→1 max (final result).
+  reg signed  [                   7:0] pooling_stage_1       [3:0];  // Pipeline stage 1: 32→8 max.
+  reg signed  [                   7:0] pooling_stage_2       [1:0];  // Pipeline stage 2: 8→4 max.
+  reg signed  [                   7:0] pooling_stage_3       ;  // Pipeline stage 3: 4→2 max.
   reg [IACT_RAM_CELLS_WORD_BITWIDTH*IACT_RAM_CELLS-1:0] iact_buffer_data_pool_temp;             // Temp reg from iact_buffer_data_r.
 
   // --- Per-filter quantization parameters (loaded in GET_QUANTIZE / GET_OFFSET) ---
@@ -1614,16 +1612,13 @@ end
       for (a = 0; a < 32; a = a + 1) begin
         pooling_regs[a] <= -128;
       end
-      for (a = 0; a < 8; a = a + 1) begin
+      for (a = 0; a < 4; a = a + 1) begin
         pooling_stage_1[a] <= 0;
       end
-      for (a = 0; a < 4; a = a + 1) begin
+      for (a = 0; a < 2; a = a + 1) begin
         pooling_stage_2[a] <= 0;
       end
-      for (a = 0; a < 2; a = a + 1) begin
-        pooling_stage_3[a] <= 0;
-      end
-      pooling_stage_4 <= 0;
+        pooling_stage_3 <= 0;
       quant_reg       <= 0;
 
       for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
@@ -1730,27 +1725,24 @@ end
           buffer_addr_temp_reg    <= 0;
           iact_buffer_data_w <= 0;
           if (AVERAGE_POOLING == 1) begin
-            for (a = 0; a < 8; a = a + 1) begin
+            for (a = 0; a < 4; a = a + 1) begin
               pooling_stage_1[a] <= 0;
             end
-            for (a = 0; a < 4; a = a + 1) begin
+            for (a = 0; a < 2; a = a + 1) begin
               pooling_stage_2[a] <= 0;
             end
           end else begin
             for (a = 0; a < 32; a = a + 1) begin
               pooling_regs[a] <= -128;
             end
-            for (a = 0; a < 8; a = a + 1) begin
+            for (a = 0; a < 4; a = a + 1) begin
               pooling_stage_1[a] <= -128;
             end
-            for (a = 0; a < 4; a = a + 1) begin
+            for (a = 0; a < 2; a = a + 1) begin
               pooling_stage_2[a] <= -128;
             end
-            for (a = 0; a < 2; a = a + 1) begin
-              pooling_stage_3[a] <= -128;
-            end
+              pooling_stage_3 <= -128;
           end
-          pooling_stage_4 <= -128;
           quant_reg       <= 0;
           write_dma_en    <= 0;
           if (enable_dma_i_reg) begin
@@ -2060,10 +2052,10 @@ end
             fsm_current_state     <= START_CONVERTER;
             buffer_addr_upper_limit <= initial_upper_limit;
             if (pooling) begin
-              fsm_cycle           <= 2;
-              fsm_current_state   <= MAXPOOLING_READ;
-              select_ram_counter  <= 0;
-              select_ram_counter2 <= 0;
+              fsm_cycle            <= 2;
+              fsm_current_state    <= MAXPOOLING_READ;
+              select_ram_counter   <= 0;
+              select_ram_counter2  <= 0;
               buffer_addr_temp_reg <= -1;
               iact_buffer_data_w   <= 0;
               // pooling_buffer_enable above pulses every layer's GET_QUANTIZE
@@ -2480,7 +2472,7 @@ end
           set_pointer_start <= 0;
 
           //Ending Condition
-          if ((iact_converter_cycles == (psum_size_x) & (AVERAGE_POOLING == 0)) |
+          if ((iact_converter_cycles == (iact_size_x) & (AVERAGE_POOLING == 0)) |
               ((iact_converter_cycles == (8 - 1) & (AVERAGE_POOLING == 1)))) begin
             fsm_cycle               <= 0;
             iact_converter_cycles   <= 0;
@@ -2490,7 +2482,7 @@ end
             
             if (AVERAGE_POOLING == 1) begin
 
-              for (a = 0; a < 4; a = a + 1) begin
+              for (a = 0; a < 2; a = a + 1) begin
                 pooling_stage_2[a] <= pooling_stage_2[a] >>> 4;
               end
             end
@@ -2502,41 +2494,52 @@ end
             end
           end else begin
             fsm_cycle <= fsm_cycle + 1;
+            if (fsm_cycle >= 3) begin
+              pooling_buffer_enable <= 1;
+              for (a = 0; a < 2; a = a + 1) begin
+                pooling_buffer_new[a] <= -128;
+              end
+            end
             if (fsm_cycle == 5) begin
               fsm_cycle             <= fsm_cycle;
               iact_converter_cycles <= iact_converter_cycles + 1;
-              pooling_buffer_enable <= 1;
+              if (pooling_mode == 0) begin 
+                for (a = 0; a < 2; a = a + 1) begin
+                  if (pooling_stage_2[a] > pooling_buffer_old[a]) begin
+                    pooling_buffer_new[a] <= pooling_stage_2[a];
+                  end else begin
+                    pooling_buffer_new[a] <= pooling_buffer_old[a];
+                  end
+                end
+              end
             end
-            iact_buffer_data_pool_temp <= iact_buffer_data_pool_temp >> IACT_RAM_CELLS_WORD_BITWIDTH;
+            iact_buffer_data_pool_temp <= iact_buffer_data_pool_temp >> 4*8;
             select_ram_counter         <= select_ram_counter - 1;
+
+
             if (select_ram_counter == 0) begin
-              select_ram_counter         <= IACT_RAM_CELLS - 1;
+              select_ram_counter         <= 2*IACT_RAM_CELLS - 1;
               iact_buffer_data_pool_temp <= iact_buffer_data_r;
               for (a = 0; a < IACT_RAM_CELLS; a = a + 1) begin
                 iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
               end
             end
-            for (word = 0; word < 4; word = word + 1) begin
+            for (word = 0; word < 2; word = word + 1) begin
               for (a = 0; a < 2; a = a + 1) begin
                 pooling_stage_1[(a*2)+(word%2)+((word/2)*4)] <= iact_buffer_data_pool_temp[DATA_IACT_BITWIDTH*(a+(word*2))+:DATA_IACT_BITWIDTH];
               end
             end
             if (pooling_mode == 0) begin 
-              for (a = 0; a < 4; a = a + 1) begin
+              for (a = 0; a < 2; a = a + 1) begin
                 if (pooling_stage_1[2*a] >= pooling_stage_1[2*a+1]) begin
                   pooling_stage_2[a] <= pooling_stage_1[2*a];
                 end else begin
                   pooling_stage_2[a] <= pooling_stage_1[2*a+1];
                 end
-                if (pooling_stage_2[a] > pooling_buffer_old[a]) begin
-                  pooling_buffer_new[a] <= pooling_stage_2[a];
-                end else begin
-                  pooling_buffer_new[a] <= pooling_buffer_old[a];
-                end
               end
             end else begin
               if (AVERAGE_POOLING == 1) begin
-                for (a = 0; a < 4; a = a + 1) begin
+                for (a = 0; a < 2; a = a + 1) begin
                   pooling_stage_2[a] <= pooling_stage_1[2*a] + pooling_stage_1[2*a+1] + pooling_stage_2[a];
                 end
                 for (a = 0; a < 32; a = a + 1) begin
@@ -2584,27 +2587,27 @@ end
             // final pass keeps pushing until a whole RAM row is complete, and
             // those pad pixels must be 0 (the layout the next layer expects),
             // not the -128 the running-max buffer starts from.
-            for (a = 0; a < 4; a = a + 1) begin
-              iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+((DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM)/2)+(8*a)+:8] <=
-                  (fsm_cycle < psum_size_x) ? pooling_buffer_old_q[a] : 8'd0;
+            for (a = 0; a < 2; a = a + 1) begin
+              iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+((DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM)/2)+(DATA_IACT_BITWIDTH*2)+(8*a)+:8] <=
+                  (fsm_cycle < iact_size_x) ? pooling_buffer_old_q[a] : 8'd0;
             end
-            iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+(DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM/2)-1:0] <= iact_buffer_data_w >> 32;
+            iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+(DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM/2)+(DATA_IACT_BITWIDTH*2)-1:0] <= iact_buffer_data_w >> 16;
           end
           if (AVERAGE_POOLING == 1) begin
-            for (a = 0; a < 4; a = a + 1) begin
+            for (a = 0; a < 2; a = a + 1) begin
               iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+((DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM)/2)+(8*a)+:8] <= pooling_stage_2[a];
             end
-            iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+(DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM/2)-1:0] <= iact_buffer_data_w >> 32;
+            iact_buffer_data_w[((IACT_RAM_CELLS-1)*IACT_WORDS_IN_RAM*DATA_IACT_BITWIDTH)+(DATA_IACT_BITWIDTH*IACT_WORDS_IN_RAM/2)-1:0] <= iact_buffer_data_w >> 16;
           end
           select_ram_counter2 <= select_ram_counter2 + 1;
-          if (select_ram_counter2 == 8 - 1) begin
+          if (select_ram_counter2 == 16 - 1) begin
             select_ram_counter2 <= 0;
             for (a = 0; a < IACT_RAM_CELLS; a = a + 1) begin
               iact_buffer_en_w[a]     <= 1;
               iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
             end
           end
-          if ((fsm_cycle >= (psum_size_x>>1) - 1) | 
+          if ((fsm_cycle >= psum_size_x - 1) | 
             AVERAGE_POOLING == 1) begin
             if (AVERAGE_POOLING == 1) begin
               for (a = 0; a < 4; a = a + 1) begin
@@ -2612,7 +2615,7 @@ end
               end
             end
             if (finished_cycles_iact == needed_cycles-1) begin
-              if (select_ram_counter2 == 8 - 1) begin
+              if (select_ram_counter2 == 16 - 1) begin
                 fsm_cycle             <= 0;
                 finished_cycles_iact  <= 0;
                 fsm_last_state        <= MAXPOOLING_SEND;
@@ -2775,7 +2778,7 @@ end
   wire [CHANNELS_PER_WORD*DATA_IACT_BITWIDTH-1:0]pooling_buffer_new_flat;
   wire [CHANNELS_PER_WORD*DATA_IACT_BITWIDTH-1:0]pooling_buffer_old_flat;
   wire [RING_BUF_POOL_ADDR-1:0] limit_i;
-  assign limit_i = ((psum_size_x+1)>>1)-1;
+  assign limit_i = psum_size_x-2;
   for (k_gen = 0; k_gen < CHANNELS_PER_WORD; k_gen=k_gen+1) begin : gen_ring_buffer_wires
     assign pooling_buffer_old[k_gen] = pooling_buffer_old_flat[(k_gen*DATA_IACT_BITWIDTH)+:DATA_IACT_BITWIDTH];
     assign pooling_buffer_new_flat[(k_gen*DATA_IACT_BITWIDTH)+:DATA_IACT_BITWIDTH] = pooling_buffer_new[k_gen];
@@ -2828,17 +2831,13 @@ end
   generate
     genvar i_trace;
     if (UNPACKED_TRACES_ENABLED) begin  : UNPACKED_TRACES
-      for (i_trace = 0; i_trace < 8; i_trace = i_trace + 1) begin : pooling_stage_1_traces
+      for (i_trace = 0; i_trace < 4; i_trace = i_trace + 1) begin : pooling_stage_1_traces
         wire [7:0] pooling_stage_1_trace; 
         assign pooling_stage_1_trace = pooling_stage_1[i_trace]; 
       end
-      for (i_trace = 0; i_trace < 4; i_trace = i_trace + 1) begin : pooling_stage_2_traces
+      for (i_trace = 0; i_trace < 2; i_trace = i_trace + 1) begin : pooling_stage_2_traces
         wire [7:0] pooling_stage_2_trace; 
         assign pooling_stage_2_trace = pooling_stage_2[i_trace]; 
-      end
-      for (i_trace = 0; i_trace < 2; i_trace = i_trace + 1) begin : pooling_stage_3_traces
-        wire [7:0] pooling_stage_3_trace; 
-        assign pooling_stage_3_trace = pooling_stage_3[i_trace]; 
       end
       for (i_trace = 0; i_trace < 32; i_trace = i_trace + 1) begin : pooling_stage_traces
         wire [7:0] pooling_stage_out_trace; 

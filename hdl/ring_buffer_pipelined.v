@@ -6,39 +6,24 @@
 `timescale 1ns / 1ps
 
 // -----------------------------------------------------------------------
-// ring_buffer_pipelined
-//
-// Pipelined circular buffer / ring counter utilizing a dual-port RAM IP
-// (RAM_DP) with registered output (Pipelined = 1).
-//
-// Operation & Latency:
-//   When ready_i is asserted:
-//     1. The current input data (data_i) is written to the RAM at wr_ptr.
-//     2. A read operation is triggered from the RAM at rd_ptr.
-//     3. Both wr_ptr and rd_ptr are advanced (wrapping around to 0 when
-//        limit_i is reached).
-//
-// Because RAM_DP is configured with Pipelined = 1 (1 cycle memory read +
-// 1 cycle output pipeline register), the corresponding read data arrives
-// at data_o with a fixed 2-cycle latency. The valid_o signal tracks this
-// latency shift register to qualify data_o.
+// ring_buffer_pipelined (1-Cycle Latency Version)
 // -----------------------------------------------------------------------
 module ring_buffer_pipelined #(
-    parameter ADDR_WIDTH = 8,        // Address bus width (log2 of maximum capacity)
+    parameter ADDR_WIDTH = 8,        // Address bus width
     parameter DATA_WIDTH = 8         // Data bus width in bits
 ) (
-    input  wire                   clk_i,
-    input  wire                   rst_n,    // Asynchronous, active-low reset (for pointers & handshake)
+    input  wire                  clk_i,
+    input  wire                  rst_n,      // Asynchronous, active-low reset
 
     // Dynamic configuration
-    input  wire [ADDR_WIDTH-1:0]  limit_i,  // Upper index boundary (wraps to 0 when reached)
-    input  wire                   set_pointer_start_i, // Resets the pointers
+    input  wire [ADDR_WIDTH-1:0] limit_i,    // Upper index boundary
+    input  wire                  set_pointer_start_i,
 
     // Handshake & Data Interface
-    input  wire                   ready_i,  // Trigger: store data_i and fetch next entry
-    input  wire [DATA_WIDTH-1:0]  data_i,   // Input data word to write
-    output wire [DATA_WIDTH-1:0]  data_o,   // Output data word from memory
-    output reg                    valid_o   // Output valid (asserted 2 cycles after ready_i)
+    input  wire                  ready_i,    // Trigger: store data_i and fetch next entry
+    input  wire [DATA_WIDTH-1:0] data_i,     // Input data word
+    output wire [DATA_WIDTH-1:0] data_o,     // Output data word from memory
+    output reg                   valid_o     // Output valid (asserted 1 cycle after ready_i)
 );
 
     // -------------------------------------------------------------------
@@ -50,15 +35,15 @@ module ring_buffer_pipelined #(
     // Write pointer tracking
     always @(posedge clk_i or negedge rst_n) begin
         if (!rst_n) begin
-            wr_ptr <= 0;
+            wr_ptr <= {ADDR_WIDTH{1'b0}};
         end else begin
             if (set_pointer_start_i) begin
-                wr_ptr <= 0;
-            end
-            if (ready_i) begin
-                wr_ptr <= wr_ptr + 1'b1;
-                if (wr_ptr == limit_i) begin
+                wr_ptr <= {ADDR_WIDTH{1'b0}};
+            end else if (ready_i) begin
+                if (wr_ptr >= limit_i) begin
                     wr_ptr <= {ADDR_WIDTH{1'b0}};
+                end else begin
+                    wr_ptr <= wr_ptr + 1'b1;
                 end
             end
         end
@@ -67,14 +52,16 @@ module ring_buffer_pipelined #(
     // Read pointer tracking
     always @(posedge clk_i or negedge rst_n) begin
         if (!rst_n) begin
-            rd_ptr <= 2;
+            rd_ptr <= {{ADDR_WIDTH-1{1'b0}}, 1'b1}; // Initialize to 1
         end else begin
             if (set_pointer_start_i) begin
-                rd_ptr <= 2;
-            end
-            if (ready_i) begin
+                rd_ptr <= {{ADDR_WIDTH-1{1'b0}}, 1'b1};
+                if (limit_i == 0) begin
+                    rd_ptr <= {ADDR_WIDTH{1'b0}};
+                end
+            end else if (ready_i) begin
                 rd_ptr <= rd_ptr + 1'b1;
-                if (rd_ptr == limit_i) begin
+                if (rd_ptr >= limit_i) begin
                     rd_ptr <= {ADDR_WIDTH{1'b0}};
                 end
             end
@@ -82,34 +69,51 @@ module ring_buffer_pipelined #(
     end
 
     // -------------------------------------------------------------------
-    // Handshake Pipeline Tracking (2 Cycles for Pipelined RAM_DP)
+    // Handshake Pipeline Tracking (1 Cycle Latency)
     // -------------------------------------------------------------------
-    reg valid_s1;
-
     always @(posedge clk_i or negedge rst_n) begin
         if (!rst_n) begin
-            valid_s1 <= 1'b0;
-            valid_o  <= 1'b0;
+            valid_o <= 1'b0;
         end else begin
             valid_o <= ready_i;
         end
     end
 
     // -------------------------------------------------------------------
-    // Dual-Port RAM IP Instantiation
+    // Forwarding / Write-Through Bypass Logic (Optional support for same-cycle Read/Write collision)
+    // -------------------------------------------------------------------
+    reg                  bypass_en;
+    reg [DATA_WIDTH-1:0] bypass_data;
+    wire [DATA_WIDTH-1:0] ram_data_o;
+
+    always @(posedge clk_i or negedge rst_n) begin
+        if (!rst_n) begin
+            bypass_en   <= 1'b0;
+            bypass_data <= {DATA_WIDTH{1'b0}};
+        end else begin
+            // If writing to the exact same address we are currently reading from
+            bypass_en   <= ready_i && (rd_ptr == wr_ptr);
+            bypass_data <= data_i;
+        end
+    end
+
+    assign data_o = bypass_en ? bypass_data : ram_data_o;
+
+    // -------------------------------------------------------------------
+    // Dual-Port RAM IP Instantiation (Pipelined = 0 -> 1 Cycle Read Latency)
     // -------------------------------------------------------------------
     RAM_DP #(
         .AddrWidth (ADDR_WIDTH),
         .DataWidth (DATA_WIDTH),
-        .Pipelined (0)               // 1 = Registered read output (2 cycles read latency)
+        .Pipelined (0)                // 0 = 1 cycle read latency (Unregistered output)
     ) ram_inst (
         .clk_i    (clk_i),
-        .rd_en_i  (1'd1),
-        .wr_en_i  (ready_i),
+        .rd_en_i  (ready_i),          // Read enable directly tied to ready_i
+        .wr_en_i  (ready_i & (limit_i != 0)),
         .addr_r_i (rd_ptr),
         .addr_w_i (wr_ptr),
         .data_i   (data_i),
-        .data_o   (data_o)
+        .data_o   (ram_data_o)
     );
 
 endmodule
