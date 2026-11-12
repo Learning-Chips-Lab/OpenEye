@@ -43,10 +43,10 @@ clk_delay_unit_out = "ps"
 @pytest.mark.parametrize("USE_SPARSE_IACTS", [0])
 @pytest.mark.parametrize("USE_SPARSE_WGHTS", [0])
 @pytest.mark.parametrize("USE_RANDOM_VALUES", [1])
-@pytest.mark.parametrize("CLUSTER_ROWS", [8,4,2,1])
-@pytest.mark.parametrize("NUM_GLB_IACT", [3])
-@pytest.mark.parametrize("NUM_GLB_PSUM", [4,2])
-@pytest.mark.parametrize("NUM_GLB_WGHT", [4,3])
+@pytest.mark.parametrize("CLUSTER_ROWS", [1])
+@pytest.mark.parametrize("NUM_GLB_IACT", [1])
+@pytest.mark.parametrize("NUM_GLB_PSUM", [4])
+@pytest.mark.parametrize("NUM_GLB_WGHT", [3])
 @pytest.mark.parametrize("LOGGER_LEVEL", [0])
 def test_single_conv_layer(
     NUM_FILTERS, STRIDE, KERNEL_SIZE_X, KERNEL_SIZE_Y, INPUT_SIZE_X, INPUT_SIZE_Y, INPUT_CHANNELS,

@@ -208,7 +208,7 @@ class LayerParameters(object):
         # === Data Transmission Parameters ===
         self.needed_Iact_writes = 0            # Number of activation write cycles
         self.needed_iact_buffer_words = 0      # Amount of words per convolution in iact buffer
-        self.cont_iact_channels_glb = 2 # Amount of continous channels stored in GLB
+        self.cont_iact_channels_glb = 2        # Amount of continous channels stored in GLB
 
         # === Miscellaneous Calculation Parameters ===
         self.current_highest_number = 0        # Internal calculation tracker
@@ -1727,7 +1727,7 @@ class LayerParameters(object):
         # its own row's pairs, distributing them round-robin across PE banks.
         self.iact_size_c = (self.used_iact_per_PE * params.PEs_Y * params.Clusters_Y
                             * self.diff_iact_layer)
-        self.iact_buffer_words_per_write = self.diff_iact_layer * math.ceil(self.used_iact_per_PE/params.cont_iact_channels_glb) * params.NUM_GLB_WGHT
+        self.iact_buffer_words_per_write = self.diff_iact_layer * math.ceil(self.used_iact_per_PE/self.cont_iact_channels_glb) * params.NUM_GLB_WGHT
         # CONVERT_IACT emits pairs from fsm_cycle=2 through this inclusive limit.
         self.iact_glb_writing_cycles = self.iact_size_c // 2 + 1
 
