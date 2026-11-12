@@ -1012,34 +1012,33 @@ class LayerParameters(object):
         if ("depthwise" in self.layer_name):
             self.iact_read_limit_0 = (self.channel_div_trans*self.needed_Iact_writes) - 1
             self.iact_read_limit_1 = math.ceil(self.diff_iact_layer) - 1
-            self.iact_read_limit_2 = self.iact_x_line_repetitions - 1
-            self.iact_read_limit_3 = math.ceil(self.iact_size_y/self.strideY) - 1
-            self.iact_read_limit_4 = 1 - 1
-            self.iact_read_inc_0 = 1
-            self.iact_read_inc_1 = self.iact_repetitions_per_write * params.NUM_GLB_IACT
-            self.iact_read_inc_2 = math.ceil(self.iact_buffer_words_per_write/self.diff_iact_layer)
+            self.iact_read_limit_2 = 1 - 1
+            self.iact_read_limit_3 = self.iact_x_line_repetitions - 1
+            self.iact_read_limit_4 = math.ceil(self.iact_size_y/self.strideY) - 1
+            self.iact_read_inc_0 = self.iact_repetitions_per_write
+            self.iact_read_inc_1 = math.ceil(self.iact_buffer_words_per_write/self.diff_iact_layer)
+            self.iact_read_inc_2 = 0
             if ((self.Y_Cluster_Packages == 1) & (params.Clusters_X == 1)):
                 self.iact_read_inc_3 = self.channel_div_trans * params.NUM_GLB_PSUM * self.strideX
             else:
                 self.iact_read_inc_3 = self.channel_div_trans * self.needed_Iact_writes * params.NUM_GLB_IACT
                 if (((params.Clusters_X * self.Y_Cluster_Packages)-1) * (params.NUM_GLB_PSUM * self.strideX) < self.kernel_shape[0] - 1):
                     self.iact_read_inc_3 = self.iact_read_inc_3 + (((params.Clusters_X * self.Y_Cluster_Packages)-1) * ((params.NUM_GLB_PSUM + 1) * self.strideX) - self.kernel_shape[0])
-            self.iact_read_inc_4 = self.iact_read_inc_1*self.strideY
+            self.iact_read_inc_4 = self.iact_read_inc_0*self.strideY
 
             if (self.used_channels == 1):
                 lines_in_words = ((self.iact_size_y+(self.padding_y*2)+1)/2)
             else:
                 lines_in_words = (self.iact_size_y+(self.padding_y*2))
-            self.iact_write_limit_0 = self.iact_buffer_words_per_write - 1
-            self.iact_write_limit_1 = self.iact_x_line_repetitions - 1
-            self.iact_write_limit_2 = (self.kernel_size[0] + self.iact_size_y - 1) - 1
+            self.iact_write_limit_0 = math.ceil(self.iact_buffer_words_per_write/self.channel_div_trans/self.diff_iact_layer) - 1
+            self.iact_write_limit_1 = self.channel_div_trans - 1
+            self.iact_write_limit_2 = self.diff_iact_layer - 1
             self.iact_write_limit_3 = 0
             self.iact_write_limit_4 = 0
-            self.iact_write_inc_0 = lines_in_words * self.channel_div_trans * self.needed_Iact_writes * self.diff_iact_layer
-            self.iact_write_inc_0 = 1
-            self.iact_write_inc_1 = self.channel_div_trans * self.needed_Iact_writes
-            self.iact_write_inc_1 = self.iact_write_limit_2 * self.iact_buffer_words_per_write
-            self.iact_write_inc_2 = self.iact_buffer_words_per_write
+            self.iact_write_inc_0 = self.channel_div_trans
+            self.iact_write_inc_1 = 1
+            self.iact_write_inc_2 = math.ceil(self.iact_buffer_words_per_write/self.diff_iact_layer)
+            self.iact_write_inc_3 = 0
 
             self.pagu_wght_limit = int((self.iact_x_add_up%params.NUM_GLB_PSUM)+self.iact_x_add_up) * self.y_lines_per_calculation * self.different_kernels_per_calculation * self.used_Y_cluster
 
