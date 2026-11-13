@@ -313,3 +313,6 @@ literature/*
 *.vscode
 CLAUDE.md
 notes.md
+
+# Local reference material (papers etc.)
+reference/
