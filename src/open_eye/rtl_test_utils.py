@@ -1688,7 +1688,7 @@ async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_pa
                                         y = 0
                         #elif (current_cycle % math.ceil(oep.PEs_X/words) == math.ceil(oep.PEs_X/words) - 1):
                     else:
-                        if(x >= layer_parameters.iact_size_x):
+                        if(x >= layer_parameters.iact_x_add_up):
                             x = 0
                             f = f + 1
                             if(f == layer_parameters.filters):

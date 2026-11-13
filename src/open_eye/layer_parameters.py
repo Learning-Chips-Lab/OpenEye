@@ -677,7 +677,7 @@ class LayerParameters(object):
             # Default quantization: factor=1, 9 bits
             for f in range(self.filters):
                 self.quantize[f][0] = 1
-                self.quantize[f][1] = 6
+                self.quantize[f][1] = 7
 
 
     def choose_iact_location(self):
@@ -1657,6 +1657,8 @@ class LayerParameters(object):
         self.iact_read_limit_0 = self.needed_Iact_writes * math.ceil(self.used_iact_per_PE / 2)
         self.iact_read_inc_0 = 1
         self.iact_read_limit_1 = self.diff_iact_layer - 1
+        self.iact_read_inc_1 = math.ceil(self.needed_Iact_writes*self.used_iact_per_PE/2)
+        self.iact_read_limit_2 = self.diff_iact_layer - 1
         self.iact_read_inc_2 = math.ceil(self.needed_Iact_writes*self.used_iact_per_PE/2)
         self.iact_write_limit_0 = 255
         self.iact_write_inc_0 = 1

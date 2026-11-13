@@ -79,7 +79,7 @@ def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inp
             # so this mode exercises the interlayer psum->iact write-back that
             # "Convolution_Single" never reaches.
             model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
-            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, 4), strides = strides))
+            model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, filters), strides = strides))
         case "Conv_Pool_Conv":
             # Conv, 2x2 max-pool, conv: the smallest net whose pooling output is
             # written back into the iact buffer and read by a conv layer, as in
@@ -150,6 +150,15 @@ def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inp
             # GemmMapper) it runs on the output-stationary GEMM datapath
             # (gemm_mode=1) instead of the row-stationary conv routing.
             model.add(tf.keras.layers.Dense(input_shape=(inputsize_x,), units=outputsize, use_bias=True))
+        case "Conv_FC":
+            x_axis = 7
+            y_axis = 7
+            channels = 16
+            filters = 16
+            model.add(tf.keras.layers.Conv2D(filters, (3, 3), padding="same", input_shape=(x_axis, y_axis, channels), strides = strides))
+            model.add(tf.keras.layers.Flatten())
+            output_size  = 10
+            model.add(tf.keras.layers.Dense(units=output_size, use_bias = True))
         case "FC":
             #model.add(tf.keras.layers.Conv2D(filters, (kernelsize_x, kernelsize_y), padding="same", input_shape=(inputsize_x, inputsize_y, channels), strides = strides))
             #model.add(tf.keras.layers.Flatten())

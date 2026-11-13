@@ -2353,23 +2353,27 @@ end
               end
 
               if (iact_to_psum_x_pos_counter_next > iact_size_x)begin
-                case ((psum_to_iact_offset + iact_size_x) & 2'b11)
-                  2'b00: begin
-                    psum_to_iact_offset         <= 1'b0;
-                  end
-                  2'b01: begin
-                    psum_to_iact_offset         <= 1'b1;
-                    iact_to_psum_start_shifting <= 1'b0;
-                  end
-                  2'b10: begin
-                    psum_to_iact_offset         <= 1'b0; 
-                    iact_to_psum_start_shifting <= 1'b1;
-                  end
-                  2'b11: begin
-                    psum_to_iact_offset         <= 1'b1;
-                    iact_to_psum_start_shifting <= 1'b1;
-                  end
-                endcase
+                if (iact_to_psum_x_pos_counter >= iact_size_x) begin
+                  iact_to_psum_start_shifting <= 1'b0;
+                end else begin
+                  case ((psum_to_iact_offset + iact_size_x) & 2'b11)
+                    2'b00: begin
+                      psum_to_iact_offset         <= 1'b0;
+                    end
+                    2'b01: begin
+                      psum_to_iact_offset         <= 1'b1;
+                      iact_to_psum_start_shifting <= 1'b0;
+                    end
+                    2'b10: begin
+                      psum_to_iact_offset         <= 1'b0; 
+                      iact_to_psum_start_shifting <= 1'b1;
+                    end
+                    2'b11: begin
+                      psum_to_iact_offset         <= 1'b1;
+                      iact_to_psum_start_shifting <= 1'b1;
+                    end
+                  endcase
+                end
               end
             end            
             for (a = 0; a < WRITEBACK_WORDS; a=a+1) begin

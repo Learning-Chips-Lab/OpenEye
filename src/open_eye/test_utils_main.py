@@ -882,10 +882,10 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
                 for f in range(len(ref_output)):  
                     for x in range(len(ref_output[f])):
                         for y in range(len(ref_output[f][x])):
-                            pos = (f%4)
-                            pos = pos + (4*x)
-                            pos = pos + (current_layer_params.iact_size_x*4*y)
-                            pos = pos + (current_layer_params.iact_size_x*current_layer_params.iact_size_y*4*math.floor(f/4))
+                            pos = (f%2)
+                            pos = pos + (2*x)
+                            pos = pos + (current_layer_params.iact_size_x*2*y)
+                            pos = pos + (current_layer_params.iact_size_x*current_layer_params.iact_size_y*2*math.floor(f/2))
                             dram[pos] += ref_output[f][x][y]
     elif "pooling" in str(current_layer_params.layer_name):
         if "dense" in str(next_layer_params.layer_name):
