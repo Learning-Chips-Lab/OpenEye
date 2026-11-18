@@ -307,3 +307,6 @@ literature/*
 *.vscode
 CLAUDE.md
 notes.md
+
+# Generated synthesis results
+/yosys/results/
