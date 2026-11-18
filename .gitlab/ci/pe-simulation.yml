@@ -8,7 +8,7 @@ pe:
     PYTHONPATH: "$CI_PROJECT_DIR/src"
   before_script:
     - apt-get update
-        - apt-get install -y --no-install-recommends iverilog make util-linux git build-essential python3.12 python3.12-venv python3.12-dev ca-certificates
+    - apt-get install -y --no-install-recommends iverilog make util-linux git build-essential python3.12 python3.12-venv python3.12-dev ca-certificates
     - python3.12 -m venv .venv
     - . .venv/bin/activate
     - python -m pip install "cocotb==2.1.0" "numpy==2.5.4"
