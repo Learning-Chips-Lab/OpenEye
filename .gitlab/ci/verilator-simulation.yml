@@ -1,0 +1,45 @@
+pe-verilator:
+  image: docker:cli
+  stage: test
+  needs: []
+  tags: [shared, docker, linux, dind, privileged]
+  timeout: 30 minutes
+  # Runner #116 advertises privileged DinD; service and checkout sharing are unverified.
+  services:
+    - name: docker:dind
+      alias: docker
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - apk add --no-cache coreutils
+  script:
+    - timeout 20m docker build --progress=plain -t openeye-sim:verilator-5.036 .
+    - mkdir -p test/cocotb_PE/results
+    - docker image inspect openeye-sim:verilator-5.036 --format '{{.Id}}' > test/cocotb_PE/results/container-image.txt
+    - docker run --rm openeye-sim:verilator-5.036 verilator --version
+    - docker run --rm openeye-sim:verilator-5.036 cocotb-config --version
+    - docker run --rm openeye-sim:verilator-5.036 cocotb-config --libpython
+    - |
+      timeout 5m sh -ec '
+        docker run --rm \
+          --user "$(id -u):$(id -g)" \
+          --mount "type=bind,source=$PWD,target=/workspace" \
+          --env SIM=verilator \
+          openeye-sim:verilator-5.036
+        test -s test/cocotb_PE/results/verilator_seed42.*/metadata.txt
+        test -s test/cocotb_PE/results/verilator_seed42.*/output.log
+        test -s test/cocotb_PE/results/verilator_seed42.*/results.xml
+      '
+    - test -n "$(find test/cocotb_PE/results -type f ! -path '*/.*' -print -quit)"
+  artifacts:
+    when: always
+    name: verilator-pe-results
+    paths:
+      - test/cocotb_PE/results/
+    exclude:
+      - '**/.*'
+      - '**/.*/**'
+    expire_in: 90 days

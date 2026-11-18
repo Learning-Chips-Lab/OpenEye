@@ -1,0 +1,30 @@
+pe-dense:
+  image: ubuntu:24.04
+  tags: [shared, docker, linux]
+  stage: test
+  needs: []
+  timeout: 15m
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends git coreutils findutils yosys=0.33-5build2 yosys-abc=0.33-5build2 python3
+    - yosys -V
+  script:
+    - |
+      timeout 10m bash -e -c '
+        bash -n yosys/run_recorded.sh
+        bash yosys/run_recorded.sh pe_dense
+      '
+    - |
+      if ! find yosys/results -type f ! -path '*/.*' -print -quit | grep -q .; then
+        echo "No synthesis result files found." >&2
+        exit 1
+      fi
+  artifacts:
+    name: synthesis-pe-dense
+    when: always
+    paths:
+      - yosys/results/
+    exclude:
+      - '**/.*'
+      - '**/.*/**'
+    expire_in: 90 days

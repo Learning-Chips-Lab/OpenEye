@@ -1,0 +1,41 @@
+pe:
+  image: ubuntu:24.04
+  stage: test
+  needs: []
+  tags: [shared, docker, linux]
+  timeout: 20 minutes
+  variables:
+    PYTHONPATH: "$CI_PROJECT_DIR/src"
+  before_script:
+    - apt-get update
+        - apt-get install -y --no-install-recommends iverilog make util-linux git build-essential python3.12 python3.12-venv python3.12-dev ca-certificates
+    - python3.12 -m venv .venv
+    - . .venv/bin/activate
+    - python -m pip install "cocotb==2.1.0" "numpy==2.5.4"
+    - python -c "import open_eye.vh_file_creator; import open_eye.rtl_test_utils"
+    - python --version
+    - python -m pip freeze
+    - iverilog -V
+  script:
+    - |
+      status=0
+      timeout 3m bash test/cocotb_PE/run_recorded.sh pe_seed42 || status=$?
+      timeout 3m bash test/cocotb_PE/run_recorded.sh pe_seed43 || status=$?
+      timeout 3m bash test/cocotb_PE/run_recorded.sh pe_simple_seed42 || status=$?
+      if [ "$status" -eq 0 ]; then
+        if ! test -n "$(find test/cocotb_PE/results test/cocotb_PE_simple/results -type f ! -path '*/.*' -print -quit 2>/dev/null)"; then
+          echo "No PE result files found" >&2
+          exit 1
+        fi
+      fi
+      exit "$status"
+  artifacts:
+    when: always
+    name: pe-results
+    paths:
+      - test/cocotb_PE/results/
+      - test/cocotb_PE_simple/results/
+    exclude:
+      - '**/.*'
+      - '**/.*/**'
+    expire_in: 90 days
