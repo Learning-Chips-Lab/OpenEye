@@ -892,8 +892,8 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
             for f in range(len(ref_output)):
                 for x in range(len(ref_output[f])):
                     for y in range(len(ref_output[f][x])):
-                        pos = (f%4)+((f//4)*(4*len(ref_output[0])*len(ref_output[0][0])))
-                        pos = pos+((x%2)*4)+((x//2)*4*2)+y*len(ref_output[0]*4)
+                        pos = (f%2)+((f//2)*(2*len(ref_output[0])*len(ref_output[0][0])))
+                        pos = pos+((x%4)*2)+((x//4)*2*4)+y*len(ref_output[0]*2)
                         dram[pos] += ref_output[f][x][y]
         else:
             for f in range(len(ref_output)):    

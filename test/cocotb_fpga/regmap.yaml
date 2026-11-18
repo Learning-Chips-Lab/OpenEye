@@ -18,7 +18,7 @@ registers:
   - {name: trans_cycles_psum, width: 24}
   - {name: iact_glb_writing_cycles, width: 24}
   - {name: iact_converter_buffer_addr_max_cycles, width: 8}
-  - {name: fc_size_reg, width: 14}
+  - {name: fc_size_reg, width: 20}
   - {name: iact_size_x, width: 12}
   - {name: iact_size_y, width: 8}
   - {name: iact_size_c, width: 12}

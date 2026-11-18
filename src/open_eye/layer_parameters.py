@@ -1534,9 +1534,6 @@ class LayerParameters(object):
         if (self.channels == 1):
             self.iact_converter_max_cycles = math.ceil(self.buffer_cycles_for_x_iact*self.iact_x_line_repetitions*(self.iact_size_y +  self.kernel_size[1])/2)
         else:
-            """if (self.iact_x_line_repetitions != 1):
-                self.iact_converter_max_cycles = self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1)
-            else:"""
             self.iact_converter_max_cycles = self.buffer_cycles_for_x_iact*self.iact_x_line_repetitions*((self.iact_size_y + self.kernel_size[1]) - 1)
         if (self.buffer_cycles_for_x_iact == 1):
             full_temp = self.needed_Iact_writes * self.channel_div_trans
@@ -1659,7 +1656,7 @@ class LayerParameters(object):
         self.iact_read_limit_1 = self.diff_iact_layer - 1
         self.iact_read_inc_1 = math.ceil(self.needed_Iact_writes*self.used_iact_per_PE/2)
         self.iact_read_limit_2 = self.diff_iact_layer - 1
-        self.iact_read_inc_2 = math.ceil(self.needed_Iact_writes*self.used_iact_per_PE/2)
+        self.iact_read_inc_2 = 0
         self.iact_write_limit_0 = 255
         self.iact_write_inc_0 = 1
         self.iact_write_limit_1 = 255

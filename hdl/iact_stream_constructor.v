@@ -98,7 +98,7 @@ module iact_stream_constructor #(
     input      [             $clog2(CLUSTER_ROWS+1)-1:0] needed_y_cls_i,
     input      [                CHANNEL_CYCLE_WIDTH-1:0] needed_iact_channel_cycles_i,
     input signed [                               12-1:0] iact_x_add_up,
-    input signed [                                4-1:0] iact_channels_per_pe_i,
+    input unsigned [                                4-1:0] iact_channels_per_pe_i,
     input      [                                    2:0] channel_div_trans,
     input      [                                  8-1:0] x_lines_i,
     input      [                                  8-1:0] needed_wght_cycles_i,
@@ -278,10 +278,10 @@ module iact_stream_constructor #(
     integer pec, per, b;
     always @(posedge clk_i, negedge rst_ni) begin
       if (!rst_ni) begin
-        single_read_half          <= 0;
-        single_output_half        <= 0;
+        single_read_half           <= 0;
+        single_output_half         <= 0;
         fsm_enc_current_state      <= IDLE;
-        fc_output_row             <= 0;
+        fc_output_row              <= 0;
         iact_data_o                <= 0;
         iact_enable_o              <= 0;
         iact_choose_o              <= 0;
@@ -601,7 +601,7 @@ reg enable_write_to_storage;
             kernel_y_counter           <= 0;
             iacts_in_one_trans         <= ((values_per_word+1) / MAX_CHANNELS_IACT_GLB);
             if (fully_connected_i) begin
-              iact_values_per_cluster_transmit <= iact_channels_per_pe_i * PE_Y;
+              iact_values_per_cluster_transmit <= (iact_channels_per_pe_i/2) * PE_Y;
             end else begin
               iact_values_per_cluster_transmit <= needed_iact_router_cycles_i * NUM_GLB_IACT;
             end

@@ -660,7 +660,7 @@ reg [1023:0] fst_path;
   wire [4-1:0] y_lines_per_calc; // Output rows calculated per batch (from dma_storage).
 
   wire [ 7:0] needed_wght_cycles;                                           // Weight cycling period (from dma_storage); how many iact batches share the same weights.
-  wire [13:0] fc_size_reg;                                                  // FC-layer input size (from dma_storage).
+  wire [19:0] fc_size_reg;                                                  // FC-layer input size (from dma_storage).
   wire [BUFFER_WIDTH_IACT_STREAM_CONSTRUCTOR-1:0] needed_iact_buffer_words; // Words required in the iact stream constructor's internal buffer (from dma_storage).
 
   //Output Registers for counting and delaying output (AXI Stream)
@@ -959,9 +959,9 @@ reg [1023:0] fst_path;
         end else begin
           if (((((iact_converter_x + (CLUSTER_COLUMNS * iact_x_per_cluster)) * iact_x_line_repetitions) >= iact_x_add_up * needed_y_cls_reg))) begin
             iact_converter_x <= 0;
-            if (((iact_converter_x + iact_x_per_cluster) >= iact_x_add_up) & (kernels_per_calc != 1) & (iact_x_per_cluster < iact_x_add_up)) begin
-              iact_converter_x <= iact_x_per_cluster;
-            end
+            //if (((iact_converter_x + iact_x_per_cluster) >= iact_x_add_up) & (kernels_per_calc != 1) & (iact_x_per_cluster < iact_x_add_up)) begin
+            //  iact_converter_x <= iact_x_per_cluster;
+            //end
             fsm_iact_params_kernel <= fsm_iact_params_kernel + 1;
             if (fsm_iact_params_kernel == kernels_per_calc - 1) begin
               fsm_iact_params_kernel <= 0;
