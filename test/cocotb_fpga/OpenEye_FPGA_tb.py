@@ -27,7 +27,7 @@ import sys
 import logging
 from pathlib import Path
 from cocotb.utils import get_sim_time
-from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout, SimTimeoutError
+from cocotb.triggers import ValueChange, FallingEdge, RisingEdge, Timer, with_timeout, SimTimeoutError
 
 class CustomSimTimeFormatter(logging.Formatter):
     """Custom logging formatter that adds simulation time to log messages.
@@ -268,6 +268,37 @@ def _is_standard_conv(name):
     # Layers are keyed by their Keras name (conv2d, conv2d_1, depthwise_conv2d, ...).
     return "conv" in str(name) and "depthwise" not in str(name)
 
+FSM_STATES = {
+    0:  "IDLE",
+    1:  "GET_PARAMETERS",
+    2:  "GET_ROUTER_CONFIG",
+    3:  "GET_IACT",
+    4:  "GET_WGHT",
+    5:  "GET_BIAS",
+    6:  "GET_QUANTIZE",
+    7:  "START_CONVERTER",
+    8:  "CONVERT_IACT",
+    9:  "WAIT_CYCLE",
+    10: "WAIT_FOR_RESULTS",
+    11: "RECEIVE_PSUMS_TO_IACT",
+    12: "MAXPOOLING_READ",
+    13: "MAXPOOLING_SEND",
+    14: "MAXPOOLING_WAIT",
+}
+
+def decode_state(signal_val) -> str:
+    if not signal_val.is_resolvable:
+        return f"UNRESOLVED ({signal_val.binstr})"
+    val_int = int(signal_val)
+    return FSM_STATES.get(val_int, f"UNKNOWN ({val_int})")
+
+async def monitor_fsm(dut, signal, name="FSM"):
+    dut._log.info(f"[{name}] Start-State: {decode_state(signal.value)}")
+    while True:
+        await ValueChange(signal)
+        state_str = decode_state(signal.value)
+        dut._log.info(f"[{name}] -> {state_str}")
+
 async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model, rel_layers):
     global logger
     openeye_parameter = oep.get_oep(serial)
@@ -282,6 +313,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         dut._log.info("Clock is %s " + ptp.clk_cycle_unit, ptp.clk_cycle)
         # reset the DUT
         await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
+        cocotb.start_soon(monitor_fsm(dut, dut.fsm_current_state))
 
     if os.environ.get("OPENEYE_PROBE_FSM"):
         cocotb.start_soon(rtl_test_utils.probe_fsm_states(ptp, dut, oep=openeye_parameter))
@@ -549,9 +581,9 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                         time_printer.timestamp("Ready signal detected. Start new stream " , logger)
                 if ("input" not in layer_name):
                     for i, output_layer in enumerate(rel_layers["Next_Layer"][layer_name]):
-                        dram.fmap[output_layer][i] = tum.fill_dram_with_ref(calculated_results, dram.fmap[output_layer][i], layer_parameters[layer_name], layer_parameters[output_layer])
-                        if ("pooling" not in layer_name and "add" not in layer_name):
-                            slo.batchnorm_output(layer_parameters[layer_name], 1, output_layer, dram.fmap[output_layer][i])
+                        dram.fmap[output_layer][0] = tum.fill_dram_with_ref(calculated_results, dram.fmap[output_layer][0], layer_parameters[layer_name], layer_parameters[output_layer])
+                        if ("pooling" not in layer_name and "add" not in layer_name and "concat" not in layer_name):
+                            slo.batchnorm_output(layer_parameters[layer_name], 1, output_layer, dram.fmap[output_layer][0])
                     logger.info("Iact check context: layer %d, repetition %d of %d",
                                 layer_number, layer_repetition,
                                 layer_parameters[layer_name].needed_total_transmissions)
@@ -559,7 +591,7 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                     # layout parameters that describe it are that layer's.
                     if (next_layer != "Output"):
                         assert rtl_test_utils.compare_iact_storage(
-                            ptp, dut, dram.fmap[next_layer][branch_idx[-1]], openeye_parameter,
+                            ptp, dut, dram.fmap[next_layer][0], openeye_parameter,
                             layer_parameters[next_layer])
                         if (len(rel_layers["Previous_Layer"][next_layer]) >= 2):
                             if (branch_idx[-1] == 0):
