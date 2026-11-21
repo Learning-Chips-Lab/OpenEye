@@ -2,169 +2,145 @@
 # © Fachhochschule Dortmund – University of Applied Sciences and Arts (until 2025), Universität Duisburg-Essen (since 2025).
 # SPDX-License-Identifier: SHL-2.1
 # For more details, see the LICENSE file in the root directory of this project.
-import os
-import warnings
-from subprocess import Popen, PIPE
-
-import logging
-logger = logging.getLogger("doc")
-
+"""Generate documented declarations and mandatory diagrams."""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import subprocess
 from textwrap import indent
 
-from docstring_parser import parse_documentation
-from moduledef_parser import parse_module_def
+if __package__:
+    from .docstring_parser import MissingDocumentationError, parse_documentation
+    from .moduledef_parser import parse_module_def, preprocess_header
+else:
+    from docstring_parser import MissingDocumentationError, parse_documentation
+    from moduledef_parser import parse_module_def, preprocess_header
+
+
+DEFINES = frozenset({"USE_INTERNAL_PARAMS", "USE_INTERNAL_PARAMS_PE", "USE_INTERNAL_PARAMS_PE_cluster"})
+
+
+def declarations(doc, module):
+    items = []
+    for name, description in doc.parameters.items():
+        if name in module.parameters:
+            param = module.parameters[name]
+            signature = " ".join(filter(None, (param.kind, param.ptype, name)))
+            signature += f" = {param.default_value}"
+            items.append({"kind": "parameter", "name": name, "signature": signature,
+                          "description": description})
+    for name, description in doc.ports.items():
+        if name in module.ports:
+            port = module.ports[name]
+            signature = f"{port.direction} {port.type} {port.sign}"
+            if port.packed_range is not None:
+                signature += f" [{port.range_upper}:{port.range_lower}]"
+            signature += f" {name}"
+            items.append({"kind": "port", "name": name, "signature": signature,
+                          "description": description})
+    return items
 
 
 def generate_rst(doc, module_def):
-    """
-    Generate RST documentation for a Verilog module.
-
-    Safely handles missing parameters/ports that may be referenced in docstrings
-    but not actually defined in the module.
-
-    Args:
-        doc: ModuleDocumentation object from parse_documentation()
-        module_def: ModuleDefinition object from parse_module_def()
-
-    Returns:
-        String containing the RST documentation
-    """
-    docstring = ""
-
-    title = f"{doc.module_name}"
-    docstring += title + "\n"
-    docstring += "=" * len(title) + "\n\n"
-
-    docstring += f".. verilog:module:: module {doc.module_name}("
-    for port, desc in doc.ports.items():
-        docstring += f"{port}, "
-    docstring = docstring[:-2] + ")\n\n"
-
-    indented_description = indent(doc.description, "    ")
-
-    docstring += f"{indented_description}\n\n"
-
-    image_name = f"__{doc.module_name}.png"
-    docstring += f"    .. image:: {image_name} \n\n"
-
-    # Add parameters - skip any that don't exist in module_def
-    for param, desc in doc.parameters.items():
-        if param not in module_def.parameters:
-            logger.debug(f"Parameter {param} documented but not found in module definition for {doc.module_name}")
-            continue
-
-        param_type = module_def.parameters[param].ptype
-        param_default = module_def.parameters[param].default_value
-        docstring += f"    .. verilog:parameter:: parameter {param_type} {param} = {param_default}\n\n"
-        docstring += f"        {desc}\n\n"
-
-    # Add ports - skip any that don't exist in module_def
-    for port, desc in doc.ports.items():
-        if port not in module_def.ports:
-            logger.debug(f"Port {port} documented but not found in module definition for {doc.module_name}")
-            continue
-
-        port_direction = module_def.ports[port].direction
-        port_sign = module_def.ports[port].sign
-        port_type = module_def.ports[port].type
-        port_upper = module_def.ports[port].range_upper
-        port_lower = module_def.ports[port].range_lower
-
-        docstring += f"    .. verilog:port:: {port_direction} {port_sign} {port_type} {port} "
-        if port_upper!= 1 or port_lower != 0:
-            docstring += f"[{port_upper}:{port_lower}]\n\n"
-        else:
-            docstring += "\n\n"
-        docstring += f"        {desc}\n\n"
-
-    return docstring
+    ports = ", ".join(module_def.ports)
+    text = f"{doc.module_name}\n{'=' * len(doc.module_name)}\n\n"
+    text += f".. verilog:module:: module {doc.module_name}({ports})\n\n"
+    text += indent(doc.description.replace("|", r"\|"), "    ") + "\n\n"
+    text += f"    .. image:: __{doc.module_name}.png\n\n"
+    for item in declarations(doc, module_def):
+        text += f"    .. verilog:{item['kind']}:: {item['signature']}\n\n"
+        text += indent(item["description"].replace("|", r"\|"), "        ") + "\n\n"
+    return text
 
 
-def generate_rst_file(input_filename):
-    with open(input_filename, "r") as f_input:
-        text = f_input.read()
-        doc = parse_documentation(text)
-        module_def = parse_module_def(text)
-        rst = generate_rst(doc, module_def)
-        doc_dir = __file__.split("/")[:-2]
-        doc_dir.extend(["source", "verilog"])
-        output_filename = "/".join(doc_dir) + f"/{doc.module_name}.rst"
-        os.makedirs(os.path.dirname(output_filename), exist_ok=True)
-        with open(output_filename, "w") as f_output:
-            f_output.write(rst) 
+def check_png(path):
+    from PIL import Image
+    with Image.open(path) as picture:
+        if picture.format != "PNG" or min(picture.size) < 2:
+            raise ValueError(f"Invalid diagram: {path}")
+        picture.load()
 
-def generate_svg_file(input_filename):
-    doc_dir = __file__.split("/")[:-2]
-    doc_dir.extend(["source", "verilog"])
 
-    cmd = [
-        'symbolator',
-        '-i', input_filename,
-        '-t',
-        '-o', "/".join(doc_dir) + f"/",
-        '-f', 'PNG'
-    ]
-    p = Popen(cmd, stdout=PIPE, stdin=PIPE, stderr=PIPE)
-    p.communicate()
+def generate(hdl_dir, output_dir, *, allow_partial=False, symbolator="symbolator"):
+    hdl_dir, output_dir = Path(hdl_dir), Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=False)
+    report = {"profile": "structured-comments", "defines": sorted(DEFINES),
+              "allow_partial": allow_partial, "diagrams": "required",
+              "generated": [], "omitted": [], "failed": []}
+    inputs = sorted(hdl_dir.rglob("*.v"))
+    names = set()
+    for source in inputs:
+        entry = {"source": str(source.relative_to(hdl_dir))}
+        try:
+            source_bytes = source.read_bytes()
+            entry["source_sha256"] = hashlib.sha256(source_bytes).hexdigest()
+            text = source_bytes.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+            module = parse_module_def(text, defines=DEFINES)
+            entry["module"] = module.module_name
+            try:
+                doc = parse_documentation(text)
+            except MissingDocumentationError as error:
+                entry["reason"] = str(error)
+                report["omitted"].append(entry)
+                continue
+            if doc.module_name != module.module_name:
+                raise ValueError(f"Comment module {doc.module_name} differs from declaration {module.module_name}")
+            if module.module_name in names:
+                raise ValueError(f"Duplicate module name: {module.module_name}")
+            names.add(module.module_name)
+            entry["ports"] = list(module.ports)
+            entry["declarations"] = declarations(doc, module)
+            entry["undocumented_parameters"] = sorted(module.parameters.keys() - doc.parameters.keys())
+            entry["undocumented_ports"] = sorted(module.ports.keys() - doc.ports.keys())
+            entry["unmatched_comment_parameters"] = sorted(doc.parameters.keys() - module.parameters.keys())
+            entry["unmatched_comment_ports"] = sorted(doc.ports.keys() - module.ports.keys())
+            entry["description"] = doc.description
+            if module.module_name == "index":
+                entry["page"] = "module-index"
+            page = output_dir / f"{entry.get('page', module.module_name)}.rst"
+            selected = output_dir / f"{module.module_name}.v"
+            selected.write_text(preprocess_header(text, DEFINES))
+            command = [symbolator, "-i", str(selected), "-t", "-o", str(output_dir) + "/", "-f", "PNG"]
+            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            (output_dir / f"{module.module_name}.diagram.log").write_text(result.stdout)
+            entry["diagram_command"] = command
+            entry["diagram_exit_status"] = result.returncode
+            if result.returncode:
+                raise ValueError(f"Symbolator exited {result.returncode}; see {module.module_name}.diagram.log")
+            check_png(output_dir / f"__{module.module_name}.png")
+            page.write_text(generate_rst(doc, module), encoding="utf-8")
+            report["generated"].append(entry)
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            entry["reason"] = f"{type(error).__name__}: {error}"
+            report["failed"].append(entry)
+    if not inputs:
+        report["failed"].append({"source": str(hdl_dir), "reason": "No Verilog input files"})
+    index = "Verilog Modules\n===============\n\n.. toctree::\n    :maxdepth: 2\n    :caption: Modules:\n\n"
+    for entry in sorted(report["generated"], key=lambda item: item["module"]):
+        index += f"    {entry.get('page', entry['module'])}\n"
+    (output_dir / "index.rst").write_text(index)
+    (output_dir / "coverage.json").write_text(json.dumps(report, indent=2) + "\n")
+    return report
 
-def generate_index_rst(files):
-    """
-    Generate/update the Verilog modules index.rst file with all generated modules.
 
-    This function creates a Sphinx toctree that includes all Verilog module documentation
-    files, allowing them to be properly indexed in the documentation.
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--hdl-dir", type=Path, default=Path(__file__).resolve().parents[2] / "hdl")
+    parser.add_argument("--output-dir", type=Path, required=True, help="Must not already exist")
+    parser.add_argument("--allow-partial", action="store_true", help="Allow missing structured comments; never allow parser or diagram failures")
+    parser.add_argument("--symbolator", default="symbolator")
+    args = parser.parse_args()
+    try:
+        report = generate(args.hdl_dir, args.output_dir, allow_partial=args.allow_partial, symbolator=args.symbolator)
+    except (ValueError, OSError) as error:
+        parser.exit(1, f"Generation failed: {error}\n")
+    for category in ("generated", "omitted", "failed"):
+        print(f"{category}: {len(report[category])}")
+        for entry in report[category]:
+            print(f"  {entry['source']}: {entry.get('reason', entry.get('module', ''))}")
+    return int(bool(report["failed"] or not report["generated"] or (report["omitted"] and not args.allow_partial)))
 
-    Args:
-        files: List of Verilog filenames (e.g., ['adder.v', 'multiplier.v'])
-    """
-    docstring = ""
-    docstring += "Verilog Modules\n"
-    docstring += "===============\n\n"
-    docstring += ".. toctree::\n"
-    docstring += "    :maxdepth: 2\n"
-    docstring += "    :caption: Modules:\n\n"
-
-    # Extract module names from filenames and sort them
-    module_names = sorted([os.path.splitext(file)[0] for file in files])
-
-    for module_name in module_names:
-        docstring += f"    {module_name}\n"
-
-    doc_dir = __file__.split("/")[:-2]
-    doc_dir.extend(["source", "verilog"])
-    output_filename = "/".join(doc_dir) + "/index.rst"
-    os.makedirs(os.path.dirname(output_filename), exist_ok=True)
-
-    with open(output_filename, "w") as f_output:
-        f_output.write(docstring)
-
-    logger.info(f"Generated Verilog modules index with {len(module_names)} modules at {output_filename}")
 
 if __name__ == "__main__":
-    hdl_dir = __file__.split("/")[:-3]
-    hdl_dir.extend(["hdl"])
-    hdl_dir = "/".join(hdl_dir)
-    generated_doc_files = []
-
-    for root, dirs, files in os.walk(hdl_dir):
-        for filename in sorted(files):
-            if filename.endswith(".v"):
-                # Try to generate RST (this is critical - file must be generated)
-                try:
-                    generate_rst_file(os.path.join(root, filename))
-                    generated_doc_files.append(filename)
-                except Exception as e:
-                    warnings.warn(f"Error processing {filename}: {e}")
-                    logger.debug(f"{e}")
-                    continue
-
-                # Try to generate SVG diagram (this is optional - don't fail if it doesn't work)
-                try:
-                    generate_svg_file(os.path.join(root, filename))
-                except Exception as e:
-                    # SVG generation is optional, just log it
-                    logger.debug(f"Could not generate SVG for {filename}: {e}")
-                    # Don't warn or continue - we still want to add to index
-
-    # Always generate index with the files that were successfully processed
-    generate_index_rst(generated_doc_files)
+    raise SystemExit(main())

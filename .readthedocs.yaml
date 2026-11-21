@@ -10,7 +10,7 @@ build:
     python: "3.12"
   jobs:
     pre_build:
-      - python doc/verilog_doc_parser/rst_doc_generator.py
+      - python doc/verilog_doc_parser/rst_doc_generator.py --output-dir doc/source/verilog --allow-partial
 
 sphinx:
   configuration: doc/source/conf.py
