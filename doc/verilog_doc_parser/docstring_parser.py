@@ -4,7 +4,7 @@
 # For more details, see the LICENSE file in the root directory of this project.
 
 import re
-from pyparsing import Suppress, Word, alphanums, OneOrMore, ZeroOrMore, Group, LineEnd, SkipTo, restOfLine, Optional, White, Regex
+from pyparsing import Suppress, Word, alphanums, OneOrMore, ZeroOrMore, Group, LineEnd, SkipTo, restOfLine, Optional, White, Regex, matchPreviousLiteral, ParseBaseException
 
 
 class ModuleDocumentation:
@@ -20,25 +20,24 @@ class ModuleDocumentation:
     def name(self):
         return self.module_name
 
+class MissingDocumentationError(ValueError):
+    """The source has no structured /// or //! Module: documentation block."""
+
 def parse_documentation(text):
     # Define basic elements
     colon = Suppress(":")
     minus = Suppress("-")
     newline = Suppress(LineEnd())
-    whitespace = Suppress(White())
+    whitespace = Suppress(White(" \t"))
 
     # Define comment starters
     single_line_comment = Suppress("///") | Suppress("//!")
 
     # Define content elements
     word = Word(alphanums + "_.-`")
-    # Port/parameter names: Must be valid Verilog identifiers
-    # Key constraint: Must either be ALL_UPPERCASE (with underscores) or be all lowercase with underscores
-    # Excludes: Section headers like "Ports", "Parameters", subsection headers like "Configuration"
-    # Valid: DATA_WIDTH_SUM (uppercase with underscore), psum_ready_o (lowercase with underscore), clk_i (lowercase with underscore)
-    # Invalid: Ports, Parameters, Configuration, Clock (section/subsection headers without underscores)
-    # Pattern: Either ALL_CAPS with underscores, or starts with lowercase with underscores
-    port_param_name = Regex(r'(?:[A-Z][A-Z0-9_]*_[A-Z0-9_]*|[a-z_][a-z0-9_]*)[`\[\]$/%,*+()]*')
+    # Port/parameter names: valid Verilog identifiers, including simple capitals
+    # and mixed case. Section headers are excluded by the section rules below.
+    port_param_name = Regex(r'[a-zA-Z_][a-zA-Z0-9_$]*[`\[\]$/%,*+()]*')
     description_line = SkipTo(LineEnd())
 
     # brief description
@@ -53,13 +52,13 @@ def parse_documentation(text):
     # Define module name
     module_name = (
         single_line_comment + "Module:" +
-        word("name") + newline
+        Regex(r'[a-zA-Z_][a-zA-Z0-9_$]*')("name") + newline
     )
 
     # Define description - capture everything until Parameters: or Ports:
     # This handles multi-paragraph descriptions with sections like "Overview:", "Architecture:", etc.
     description = Group(
-        OneOrMore(
+        ZeroOrMore(
             (single_line_comment + description_line + newline),
             stopOn= single_line_comment + "Parameters:" | single_line_comment + "Ports:"
         )
@@ -70,8 +69,14 @@ def parse_documentation(text):
     # followed by a name, then optional whitespace, then : or -, then description
     # Key constraint: The name must be a valid identifier (start with alphanumeric or underscore)
     # This filters out lines like "0:" or "1:" which are continuation lines
+    item_indentation = White(" \t", min=2).leaveWhitespace()
+    continuation_indentation = matchPreviousLiteral(item_indentation).leaveWhitespace()
     param_port_item = Group(
-        whitespace + port_param_name("name") + Optional(whitespace) + (colon | minus) + restOfLine("description")
+        Suppress(item_indentation) + port_param_name("name") + Optional(whitespace) + (colon | minus) +
+        (restOfLine.copy().leaveWhitespace().addCondition(lambda tokens: bool(tokens[0].strip())) + ZeroOrMore(
+            newline + ~(single_line_comment + Regex(r'(?:Parameters|Ports):')) + single_line_comment +
+            Suppress(continuation_indentation) + whitespace + Regex(r'\S[^\r\n]*').leaveWhitespace()
+        )).setParseAction(lambda tokens: "\n".join(line.strip() for line in tokens))("description")
     )
 
     # For parameters: include subsection headers/continuations but exclude "Ports:" line
@@ -84,7 +89,7 @@ def parse_documentation(text):
         newline
     )
 
-    param_line_with_catch = (
+    param_line_with_catch = ~(single_line_comment + "Ports:") + (
         empty_documentation_line |
         (single_line_comment + param_port_item + newline) |
         other_comment_not_ports
@@ -118,11 +123,23 @@ def parse_documentation(text):
         module_name +
         description +
         Optional(parameters) +
-        Optional(SkipTo(ports) + ports)
+        Optional(ports)
     )
 
     # Parse the text
-    results = doc_block.parseString(text, parseAll=False)
+    marker = re.search(r'(?m)^[ \t]*(?:///|//!)[ \t]*Module[ \t]*:', text)
+    if not marker:
+        raise MissingDocumentationError("No structured /// or //! Module: comment")
+    block = re.match(r'(?:[ \t]*(?:///|//!)[^\n]*(?:\n|$))+', text[marker.start():]).group()
+    try:
+        module_name.parseString(block, parseAll=False)
+    except ParseBaseException as error:
+        raise ValueError("Invalid structured Module: name") from error
+    text = text[:marker.start() + len(block)]
+    try:
+        results = doc_block.parseString(text, parseAll=False)
+    except ParseBaseException as error:
+        raise ValueError(f"Invalid structured documentation: {error}") from error
 
     # Create and return ModuleDocumentation object
     # Filter out entries without "name" field (those are subsection headers and empty lines)
