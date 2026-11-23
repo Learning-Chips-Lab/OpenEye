@@ -1086,40 +1086,21 @@ def _to_ram_format(datapoints, params, layer_params):
     return ram_words
 
 def _iact_buffer_words(oep, layer_params, iact_ref):
-    """Expected BUFFER_A image for `iact_ref`, in cell order.
+    num_blocks = layer_params.filters
+    step = 2
+    return_words_list = []
+    for i in range(0, num_blocks, step):
+        block0 = iact_ref[i]
+        block1 = iact_ref[i + 1] 
+  
+        for y in range(len(block0[0])):
+            for x in range(len(block0)):
+                return_words_list.append(block0[x][y])
+                return_words_list.append(block1[x][y])
 
-    Delegates to the stream mappers so the layout has exactly one definition,
-    shared with the DMA stream builder. Returns None when the layer type has no
-    raw-pixel buffer layout to compare against - Pooling is the case in
-    practice: pooling_mapper builds no iact stream, and a pooled layer's
-    LayerParameters never run calculate_transmission_cycles, so its layout
-    fields are still at their constructor defaults.
-    """
-    name = str(getattr(layer_params, "layer_name", ""))
-    if "dense" in name:
-        mapper = iact_stream_mapper.DenseIactStreamMapper
-    elif "conv" in name or "depthwise" in name:
-        mapper = iact_stream_mapper.IactStreamMapper
-    else:
-        return None
-    return mapper(oep, layer_params, 0, iact_ref, 0).build_iact_buffer_words()
+    return return_words_list
 
 
-def iact_half_offset(dut, oep):
-    """Base RAM address of the buffer half the DUT currently has selected.
-
-    OpenEye_FPGA assembles the address as {choose_iact_buffer, addr_reg}, so the
-    half-select occupies the top BRANCHES_CLOG bits and each half owns the lower
-    BRANCHES_WIDTH = BUFFER_WIDTH_IACT - BRANCHES_CLOG address bits.
-    """
-    branches = getattr(oep, "BRANCHES", 1)
-    if branches <= 1:
-        return 0
-    try:
-        half = int(dut.choose_iact_buffer.value)
-    except Exception:
-        return 0
-    return half << (oep.BUFFER_WIDTH_IACT - math.ceil(math.log2(branches)))
 
 
 def iact_cells_per_group(oep):
@@ -1134,7 +1115,7 @@ def iact_cells_per_group(oep):
                      / oep.DMA_BITWIDTH)
 
 
-def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
+def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params, slot_idx=0):
     """Compare the iact double-buffer contents with reference activations.
 
     The expected buffer image comes from the same mapper that builds the DMA
@@ -1160,7 +1141,7 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
     except Exception:
         shape = "?"
     logger.info("Iact reference: shape %s, used_channels %s, IACT_RAM_CELLS %s",
-                shape, getattr(layer_params, "used_channels", "?"), oep.IACT_RAM_CELLS)
+                shape, getattr(layer_params, "filters", "?"), oep.IACT_RAM_CELLS)
 
     expected = _to_ram_format(_iact_buffer_words(oep, layer_params, iact_ref),oep,layer_params)
 
@@ -1183,13 +1164,14 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
                      getattr(layer_params, "layer_name", "?"))
         return False
     # Addresses are relative to the half the DUT currently has selected.
-    half_offset = iact_half_offset(dut, oep)
+    branch_idx = layer_params.choose_iact_storage_output * (2**(oep.BUFFER_WIDTH_IACT-1))
     error_found = False
     errors_logged = 0
     for index, ref_word in enumerate(expected):
         cell = index % oep.IACT_RAM_CELLS
         addr = index // oep.IACT_RAM_CELLS
-        dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[half_offset + addr])
+        addr = branch_idx + addr
+        dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[addr])
         if dut_word != ref_word:
             error_found = True
             errors_logged += 1
@@ -1208,13 +1190,13 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params):
             for cell in range(oep.IACT_RAM_CELLS):
                 index = addr * oep.IACT_RAM_CELLS + cell
                 ref_word = expected[index] if index < len(expected) else None
-                dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[half_offset + addr])
+                dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[branch_idx + addr])
                 def fmt(w):
                     return "--------" if w is None else " ".join("%02x" % ((w >> (8 * i)) & 0xFF) for i in range(8))
                 logger.info("iactimg addr=%d cell=%d ref=[%s] dut=[%s]%s", addr, cell,
                             fmt(ref_word), fmt(dut_word), "" if ref_word == dut_word else " <<")
     if error_found:
-        _log_iact_value_comparison(dut, oep, expected, cells_per_group, half_offset)
+        _log_iact_value_comparison(dut, oep, expected, cells_per_group)
         _log_iact_buffer_occupancy(dut, oep)
 
     return not error_found
@@ -1234,7 +1216,7 @@ def _log_iact_value_comparison(dut, oep, expected, cells_per_group, half_offset=
     actual_words, missing = [], 0
     for index in range(len(expected)):
         word = _ram_word(dut.BUFFER_A[index % oep.IACT_RAM_CELLS]
-                         .iact_layer_buffer.impl.mem[half_offset + index // oep.IACT_RAM_CELLS])
+                         .iact_layer_buffer.impl.mem[index // oep.IACT_RAM_CELLS])
         if word is None:
             missing += 1
         else:

@@ -457,17 +457,17 @@ module PE #(
     `ifdef USE_INTERNAL_PARAMS_PE
       parameter integer PARALLEL_MACS = 2,
       parameter integer SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
+      parameter integer USE_DSP       = 0,  // 0=standard multiplier+adder (default), 1=DSP48 slice optimization
     `else
       `include "parameters_PE.vh"
         // Defaultvalues
     `endif
-    parameter integer NUM_GLB_IACT           = 3,
+    parameter integer NUM_GLB_IACT           = 1,
     parameter integer DATA_PSUM_BITWIDTH     = 20,
     parameter IS_TOPLEVEL                    = 1,
     parameter SERIAL                         = 1,
     parameter DEPTHWISE_ENABLED              = 1,
 
-    parameter integer USE_DSP                = 0,  // 0=standard multiplier+adder (default), 1=DSP48 slice optimization
     // Approach 3: when 1, expose horizontal iact pass-through ports for systolic GEMM dataflow
     parameter integer SYSTOLIC_GEMM_EN       = 0,
 
@@ -484,7 +484,7 @@ module PE #(
 
     parameter integer PSUM_ADDR = 32,
 
-    parameter integer TRANS_BITWIDTH_IACT     = 24, // 3 * 8 bit data OR 2 * 12 bit data OR 6 * 4 bit addresses
+    parameter integer TRANS_BITWIDTH_IACT     = 16, // 3 * 8 bit data OR 2 * 12 bit data OR 6 * 4 bit addresses
 
     // local parameters
     localparam integer IACT_WORDWIDTH_SINGLE = SPARSITY_EN == 1 ? (DATA_IACT_BITWIDTH + DATA_IACT_OVERHEAD) : DATA_IACT_BITWIDTH,

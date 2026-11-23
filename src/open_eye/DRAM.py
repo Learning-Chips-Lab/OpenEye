@@ -110,6 +110,8 @@ class DRAMContents(object):
                 dram_weights[name] = []
             elif "add" in str(name):
                 dram_weights[name] = []
+            elif "concat" in str(name):
+                dram_weights[name] = []
 
             # === BIAS INITIALIZATION ===
             # Create bias storage: one bias value per output channel/filter
@@ -129,6 +131,8 @@ class DRAMContents(object):
             elif "input" in str(name):
                 dram_bias[name] = []
             elif "add" in str(name):
+                dram_bias[name] = []
+            elif "concat" in str(name):
                 dram_bias[name] = []
 
             # === FEATURE MAP INITIALIZATION ===
@@ -158,9 +162,16 @@ class DRAMContents(object):
                                 for j in range(layer_parameters[rel_layers["Next_Layer"][name][0]].input_shape[3])]]
             elif "add" in str(name):
                 # Pooling layer input: 3D tensor [channels][height][width]
-                dram_fmap[name] = [[[[0 for l in range(layer_parameters[rel_layers["Previous_Layer"][name][0]].output_shape[2])]
-                                for k in range(layer_parameters[rel_layers["Previous_Layer"][name][0]].output_shape[1])]
-                                for j in range(layer_parameters[rel_layers["Previous_Layer"][name][0]].output_shape[3])]
+                dram_fmap[name] = [[[[0 for l in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[2])]
+                                for k in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[1])]
+                                for j in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[3])]
+                                for i in range(len(rel_layers["Previous_Layer"][name]))]
+                
+            elif "concat" in str(name):
+                # Pooling layer input: 3D tensor [channels][height][width]
+                dram_fmap[name] = [[[[0 for l in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[2])]
+                                for k in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[1])]
+                                for j in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[3])]
                                 for i in range(len(rel_layers["Previous_Layer"][name]))]
                 
 

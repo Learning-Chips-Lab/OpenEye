@@ -242,7 +242,8 @@ class ConvMapper(LayerMapper):
         "psum_pagu_addr_inc_2" : layer_params.psum_pagu_addr_inc[2],
         "psum_pagu_addr_inc_3" : layer_params.psum_pagu_addr_inc[3],
         "psum_pagu_addr_inc_4" : layer_params.psum_pagu_addr_inc[4],
-        "gemm_mode": getattr(layer_params, "gemm_mode", 0)
+        "gemm_mode": getattr(layer_params, "gemm_mode", 0),
+        "concat_limit": layer_params.concat_limit
         })
 
         # === SERIAL MODE: DMA TRANSMISSION ===

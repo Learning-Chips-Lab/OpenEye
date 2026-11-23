@@ -82,41 +82,25 @@ def flat(dram, layer, layer_number):
             for ix in range(layer.input.shape[2]):
                     dram.fmap[layer_number + 1][0][ic * layer.input.shape[2] * layer.input.shape[1]+ iy * layer.input.shape[2] + ix] = dram.fmap[layer_number][0][ic][ix][iy]
 
-def batchnorm_output(layer_parameters, divide_value, layer_name, dram):
-    """Apply batch normalization and quantization to layer outputs.
-    
-    This function performs post-processing on layer outputs, applying both
-    batch normalization and quantization. It handles both convolutional and
-    dense layer outputs differently due to their distinct data organizations.
-    
-    Args:
-        layer_parameters: Layer configuration containing:
-            - layer_name: Type of layer ("Conv" or "Dense")
-            - quantize: Per-channel quantization parameters [scale, shift]
-        divide_value: Division factor for dense layer normalization
-        layer_number: Index of the current layer
-        dram: Memory object containing feature maps
-        
-    The function handles two cases:
-    1. Convolutional layers: 
-       - Applies per-channel quantization with scale and shift
-       - Uses floor division to maintain integer arithmetic
-    2. Dense layers:
-       - Applies simple division by divide_value
-       - Uses floor division for result
-    
-    All operations are performed in-place on dram[layer_number + 1].
-    """
-    #if "Conv" in str(layer_parameters.layer_name):
-    
-    try:
-        for f in range(len(dram)):
-            for x in range(len(dram[f])):
-                for y in range(len(dram[f][x])):
-                    dram[f][x][y] = math.floor((layer_parameters.quantize[f][0]*dram[f][x][y])/(2**layer_parameters.quantize[f][1]))
+def quantize_dict(calculated_results, layer_parameters):
+  bn_results = {}
 
-    #elif "Dense" in str(layer_parameters.layer_name):
-    except:
-        for f in range(len(dram)):
-            dram[f] = math.floor(dram[f]/(2**layer_parameters.quantize[0][1]))
+  # f = Key (0..15), matrix = 4x4 Liste
+  for f, matrix in calculated_results.items():
+    mult = layer_parameters.quantize[f][0]
+    shift = 2 ** layer_parameters.quantize[f][1]
+
+    quantized_matrix = []
+    # Jede Zeile (X-Achse) durchgehen
+    for row in matrix:
+      quantized_row = []
+      # Jeden einzelnen Wert in der Zeile (Y-Achse) quantisieren
+      for val in row:
+        q_val = math.floor((mult * val) / shift)
+        quantized_row.append(q_val)
+      quantized_matrix.append(quantized_row)
+
+    bn_results[f] = quantized_matrix
+
+  return bn_results
 

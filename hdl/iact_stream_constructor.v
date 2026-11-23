@@ -74,7 +74,7 @@ module iact_stream_constructor #(
     localparam IACT_WORDS_IN_RAM   = RAM_CELLS_WORDWIDTH / DATA_IACT_BITWIDTH,
     localparam IACT_DATA_DATA      = DATA_IACT_BITWIDTH + (DATA_IACT_OVERHEAD * SPARSITY_EN),
     localparam BITS_PER_ROUTER     = WORD_BITWIDTH / NUM_GLB_IACT,
-    localparam WORDS_PER_TRANS     = BITS_PER_ROUTER / IACT_DATA_DATA,
+    localparam WORDS_PER_TRANS     = BITS_PER_ROUTER / DATA_IACT_BITWIDTH,
     localparam IACT_CHOOSE_BITS    = $clog2(NUM_GLB_IACT+1),    
     localparam PARAMS_SIZE         = 32,
     localparam PARAM_LENGTH        = 8,
@@ -747,9 +747,7 @@ reg enable_write_to_storage;
         // Successive single-channel rows fill the low and high halves.
         // A low-half write also clears the upper half for odd-height padding.
         assign write_mask[w_gen] = !single_channel || (w_gen != 0) || !single_write_half_q;
-        assign write_data[w_gen*IACT_DATA_DATA+:IACT_DATA_DATA] =
-            (single_channel && !single_write_half_q && (w_gen != 0)) ?
-            {IACT_DATA_DATA{1'b0}} : ram_data_i_w[w_gen*IACT_DATA_DATA+:IACT_DATA_DATA];
+        assign write_data[w_gen*DATA_IACT_BITWIDTH+:DATA_IACT_BITWIDTH] = ram_data_i_w[w_gen*DATA_IACT_BITWIDTH+:DATA_IACT_BITWIDTH];
       end
       RAM_SP #(
           .DataWidth(BITS_PER_ROUTER),
@@ -769,10 +767,7 @@ reg enable_write_to_storage;
     for (r_gen = 0; r_gen < NUM_GLB_IACT; r_gen = r_gen + 1) begin
       assign ram_data_o[r_gen * BITS_PER_ROUTER+:BITS_PER_ROUTER]=BUFFER[r_gen].ram_data_o_w;
       for (w_gen = 0; w_gen < WORDS_PER_TRANS; w_gen = w_gen + 1) begin
-        assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA +:DATA_IACT_BITWIDTH]                      = mem_data_payload_reg[r_gen][w_gen];
-        if (SPARSITY_EN == 1) begin
-          assign BUFFER[r_gen].ram_data_i_w[w_gen * IACT_DATA_DATA + DATA_IACT_BITWIDTH +:DATA_IACT_OVERHEAD] = mem_data_overhead_reg[r_gen][w_gen];
-        end
+        assign BUFFER[r_gen].ram_data_i_w[w_gen * DATA_IACT_BITWIDTH +:DATA_IACT_BITWIDTH] = mem_data_payload_reg[r_gen][w_gen];
       end
     end
   endgenerate

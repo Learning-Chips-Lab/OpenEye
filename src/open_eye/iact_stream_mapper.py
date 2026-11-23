@@ -175,7 +175,7 @@ class IactStreamMapper(object):
         Returns:
             list[int]: packed words, padded to a whole number of groups.
         """
-        bitwidth = self.params.IACT_Bitwidth
+        bitwidth = self.params.IACT_WOH_Bitwidth
         dma_bitwidth = self.params.DMA_BITWIDTH
         values_per_word = dma_bitwidth // bitwidth
 
@@ -540,9 +540,6 @@ class IactStreamMapper(object):
 
                     # Process each cycle's SPAD data
                     for cycle in range(len(current_spad)):
-                        # Address stream disabled (would pack address pointers)
-                        #stream[cl_x][cl_y][router].extend(self.create_pe_addr_iact_stream(current_spad[cycle]))
-
                         # Pack activation data and overhead into transmission words
                         stream[cl_x][cl_y][router].extend(self.create_pe_data_iact_stream(current_spad[cycle]))
 
@@ -645,7 +642,7 @@ class IactStreamMapper(object):
                     # Create combined value: 4-bit overhead + activation value
                     # Format: [overhead(4 bits) | value(IACT_Bitwidth bits)]
                     value = gtu.to_twos_complement_string(spad[number_of_value][1], 4) + \
-                        gtu.to_twos_complement_string(spad[number_of_value][0], self.params.IACT_Bitwidth)
+                        gtu.to_twos_complement_string(spad[number_of_value][0], self.params.IACT_WOH_Bitwidth)
                     # Pack into transmission word at appropriate bit position
                     temp_trans = temp_trans + (int(value,2) << (data_in_trans * params.IACT_WOH_Bitwidth))
                 except:
@@ -879,7 +876,7 @@ class DenseIactStreamMapper(IactStreamMapper):
         params = self.params
         layer_params = self.layer_params
         dram_fmap = self.dram_fmap
-        bitwidth = params.IACT_Bitwidth
+        bitwidth = params.IACT_WOH_Bitwidth
         values_per_word = params.DMA_BITWIDTH // bitwidth
         # iact_size_x is the flattened feature count K; input_shape may
         # be 2D (standalone Dense/GEMM) or 4D (after conv), so it is

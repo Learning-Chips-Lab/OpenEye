@@ -128,6 +128,7 @@ def create_vh_file(openeye_parameter: object, filename: str = 'parameters.vh',
         with open(filename, 'w') as txt_file:
             txt_file.write(f"parameter PARALLEL_MACS = {openeye_parameter.PARALLEL_MACS},\n")
             txt_file.write(f"parameter SPARSITY_EN = {openeye_parameter.SPARSITY_EN},\n")
+            txt_file.write(f"parameter USE_DSP = {openeye_parameter.USE_DSP},\n")
 
 
 def _update_vh_file(openeye_parameter: object, file_path_vh: str, file_path_hdl: str,

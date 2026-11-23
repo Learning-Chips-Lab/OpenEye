@@ -173,7 +173,7 @@ class OpenEyeParameters(object):
         try:
             self.IACT_RAM_CELLS = int(os.getenv("IACT_RAM_CELLS"))
         except:
-            self.IACT_RAM_CELLS = 4  # Default: 4 global PSUM buffers per cluster
+            self.IACT_RAM_CELLS = 4  # Default: 4 global Iact buffers
 
         # Number of global weight buffers and vertical PEs per cluster
         # NUM_GLB_WGHT corresponds to PEs_Y since weights are distributed vertically
@@ -189,40 +189,40 @@ class OpenEyeParameters(object):
         try:
             self.BUFFER_WIDTH_IACT = int(os.getenv("BUFFER_WIDTH_IACT"))
         except:
-            self.BUFFER_WIDTH_IACT = 10
+            self.BUFFER_WIDTH_IACT = 23
 
         # Width of WGHT GLBs
         try:
             self.BUFFER_WIDTH_WGHT = int(os.getenv("BUFFER_WIDTH_WGHT"))
         except:
-            self.BUFFER_WIDTH_WGHT = 12
+            self.BUFFER_WIDTH_WGHT = 24
             
         # Width of PSUM GLBs
         try:
             self.BUFFER_WIDTH_PSUM = int(os.getenv("BUFFER_WIDTH_PSUM"))
         except:
-            self.BUFFER_WIDTH_PSUM = 14
+            self.BUFFER_WIDTH_PSUM = 24
 
         # Number of possible branches in one single net
         try:
             self.BRANCHES = int(os.getenv("BRANCHES"))
         except:
-            self.BRANCHES = 2  
+            self.BRANCHES = 1  
         # Number of possible branches in one single net
         try:
             self.QUANT_AMOUNT = int(os.getenv("QUANT_AMOUNT"))
         except:
-            self.QUANT_AMOUNT = 32  
+            self.QUANT_AMOUNT = 1024  
         # Number of parallel rewrites to next layer
         try:
             self.TRANS_WORDS = int(os.getenv("TRANS_WORDS"))
         except:
-            self.TRANS_WORDS = 8 
+            self.TRANS_WORDS = 4
         # Partial sum bitwidth (wider to prevent overflow during accumulation)
         try:
             self.DATA_PSUM_BITWIDTH = int(os.getenv("DATA_PSUM_BITWIDTH"))
         except:
-            self.DATA_PSUM_BITWIDTH = 20        # Partial sum: 20 bits (signed accumulator)
+            self.DATA_PSUM_BITWIDTH = 32        # Partial sum: 20 bits (signed accumulator)
 
         try:
             self.PARALLEL_MACS = int(os.getenv("PARALLEL_MACS"))
@@ -237,7 +237,7 @@ class OpenEyeParameters(object):
         try:
             self.DMA_BITWIDTH = int(os.getenv("DMA_BITWIDTH"))
         except:
-            self.DMA_BITWIDTH = 64          # AXI bus width for DMA transfers (64 bits)
+            self.DMA_BITWIDTH = 32          # AXI bus width for DMA transfers (64 bits)
 
         try:
             self.STRIDE_ENABLED = int(os.getenv("STRIDE_ENABLED"))
@@ -247,32 +247,37 @@ class OpenEyeParameters(object):
         try:
             self.CYCLE_WIDTH = int(os.getenv("CYCLE_WIDTH"))
         except:
-            self.CYCLE_WIDTH = 16        # Width of cycle counters
+            self.CYCLE_WIDTH = 32        # Width of cycle counters
 
         try:
             self.LIMIT_SIZE_IACT = int(os.getenv("LIMIT_SIZE_IACT"))
         except:
-            self.LIMIT_SIZE_IACT = 16        # Width of iact limit
+            self.LIMIT_SIZE_IACT = 18        # Width of iact limit
 
         try:
             self.LIMIT_SIZE_WGHT = int(os.getenv("LIMIT_SIZE_WGHT"))
         except:
-            self.LIMIT_SIZE_WGHT = 16        # Width of wght limit
+            self.LIMIT_SIZE_WGHT = 12        # Width of wght limit
 
         try:
             self.LIMIT_SIZE_PSUM = int(os.getenv("LIMIT_SIZE_PSUM"))
         except:
-            self.LIMIT_SIZE_PSUM = 16        # Width of psum limit
+            self.LIMIT_SIZE_PSUM = 12        # Width of psum limit
 
         try:
             self.DEPTHWISE_ENABLED = int(os.getenv("DEPTHWISE_ENABLED"))
         except:
-            self.DEPTHWISE_ENABLED = 16        # Enable DW Conv Calculations
+            self.DEPTHWISE_ENABLED = 0        # Enable DW Conv Calculations
 
         try:
             self.CHANNEL_CYCLE_WIDTH = int(os.getenv("CHANNEL_CYCLE_WIDTH"))
         except:
             self.CHANNEL_CYCLE_WIDTH = 16       # Width of Channel counters
+
+        try:
+            self.USE_DSP = int(os.getenv("USE_DSP"))
+        except:
+            self.USE_DSP = 0       # Use default processing units
 
             
 
@@ -309,7 +314,7 @@ class OpenEyeParameters(object):
 
         # Transmission bitwidths for data movement across routers
         self.MAX_CHANNELS_IACT_GLB = 2
-        self.IACT_Trans_Bitwidth   = self.MAX_CHANNELS_IACT_GLB * self.IACT_WOH_Bitwidth  # Activation transmission: 24 bits
+        self.IACT_Trans_Bitwidth   = self.MAX_CHANNELS_IACT_GLB * self.IACT_Bitwidth  # Activation transmission: 24 bits
         self.WGHT_Trans_Bitwidth   = self.WGHT_WOH_Bitwidth * self.PARALLEL_MACS  # Weight transmission: 24 bits
         self.PSUM_Trans_Bitwidth   = self.DATA_PSUM_BITWIDTH * self.PARALLEL_MACS  # PSUM transmission: 40 bits (2 MACs)
 

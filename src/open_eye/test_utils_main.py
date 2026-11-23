@@ -521,6 +521,13 @@ def collect_results(layer_params, dram, serial):
             for i in range(layer_params.output_shape[2]):
                 for j in range(layer_params.output_shape[1]):
                     calculated_results[f][j][i] = dram.fmap[layer_params.layer_name][0][f][j][i]
+
+    elif "concat" in str(layer_params.layer_name):
+        calculated_results = [
+            [row[:] for row in channel]
+            for input_fmap in dram.fmap[layer_params.layer_name]
+            for channel in input_fmap
+        ]
     else:
         calculated_results = []
 
@@ -748,6 +755,7 @@ def calculate_conv_results_mp(f, layer_name, layer_params, serial, dram, calcula
                                     calculated_results[j][i] = int(calculated_results[j][i] + \
                                                                     dram.weights[layer_name][c][f][y + math.floor((layer_params.kernel_size[1]-1)/2)][x + math.floor(layer_params.kernel_size[0]/2)] * \
                                                                     dram.fmap[layer_name][0][c][x + (j * layer_params.strideX)][y + (i * layer_params.strideY)])
+
                                 else:
                                     if (serial) :
                                         pass
@@ -872,7 +880,7 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
     """
     logger.info("Results are transmitted.")
     if "conv" in str(current_layer_params.layer_name):
-        if any(x in str(next_layer_params.layer_name) for x in ("conv", "pooling", "add")):
+        if any(x in str(next_layer_params.layer_name) for x in ("conv", "pooling", "add", "concat")):
             for f in range(len(ref_output)):    
                 for x in range(len(ref_output[f])):
                     for y in range(len(ref_output[f][x])):
@@ -908,4 +916,6 @@ def fill_dram_with_ref(ref_output, dram, current_layer_params, next_layer_params
             for x in range(len(ref_output[f])):
                 for y in range(len(ref_output[f][x])):
                     dram[f][x][y] += ref_output[f][x][y]
+    elif "concat" in str(current_layer_params.layer_name):
+        dram = ref_output
     return dram

@@ -175,12 +175,13 @@ module data_pipeline_iact #(
     parameter FIRST_SPAD_DATA           = 4,
     parameter SECOND_SPAD_ADDR          = 16,
     parameter SECOND_SPAD_DATA          = 12,
+    parameter IACT_DATA_WIDTH           = 8,
     parameter SECOND_PAYLOAD_WIDTH      = 8,
     parameter SPARSITY_EN               = 1,  // 1=sparse mode (default), 0=dense mode
     parameter FIRST_SPAD_ADDR_BITWIDTH  = $clog2(FIRST_SPAD_ADDR),
     parameter SECOND_SPAD_ADDR_BITWIDTH = $clog2(SECOND_SPAD_ADDR),
     parameter FIRST_SPAD_DATA_CYCLE     = DATA_WIDTH / FIRST_SPAD_DATA,
-    parameter SECOND_SPAD_DATA_CYCLE    = DATA_WIDTH / SECOND_SPAD_DATA,
+    parameter SECOND_SPAD_DATA_CYCLE    = 2,
     parameter SECOND_OVERHEAD_WIDTH     = SECOND_SPAD_DATA - SECOND_PAYLOAD_WIDTH
 ) (
     input                                         clk_i,
@@ -296,7 +297,7 @@ module data_pipeline_iact #(
   // current_data: right-shift data_storage_2 to reveal the next sub-word.
   // On cycle_counter == 0 this is not used (data taken from data_i directly).
   // On cycle_counter >= 1 this gives sub-word [cycle_counter] of the word.
-  assign current_data = data_storage_2 >> SECOND_SPAD_DATA;
+  assign current_data = data_storage_2 >> IACT_DATA_WIDTH;
 
   // second_spad_data_o: packed second SPAD write word.
   //   Upper SECOND_OVERHEAD_WIDTH bits: transmission_counter_delay

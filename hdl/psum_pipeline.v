@@ -212,8 +212,8 @@ module psum_pipeline #(
       end
     end
   end
-  reg                                                 ready_dma_i_q1;
-  reg                                                 ready_dma_i_q2;
+  reg ready_dma_i_q1;
+  reg ready_dma_i_q2;
   assign current_shift = quant_exp[current_filter];
 
   
@@ -598,8 +598,8 @@ module psum_pipeline #(
         end
 
         WAIT_FOR_SENDING_RESULTS: begin
-          fsm_psum_cycle       <= fsm_psum_cycle + 1;
-          fsm_psum_last_state  <= WAIT_FOR_SENDING_RESULTS;
+          fsm_psum_cycle        <= fsm_psum_cycle + 1;
+          fsm_psum_last_state   <= WAIT_FOR_SENDING_RESULTS;
           psum_select_cnt_0     <= 0;
           psum_select_cnt_1     <= 0;
           psum_select_cnt_2     <= 0;

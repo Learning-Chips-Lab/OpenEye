@@ -177,6 +177,8 @@ class LayerParameters(object):
         # === Layer Identification ===
         self.use_layer_on_hw = True
         self.rel_layers = rel_layers
+        self.prev_layers = []
+        self.next_layers = []
         self.layer_number_in_model = layer_number
         # === Layer Identification ===
         self.layer_name = ""
@@ -287,6 +289,7 @@ class LayerParameters(object):
         self.psum_output_words = 1             # Neede transmissions for output
         self.wght_cycles_one_word_all_ram = 0
         self.iact_glb_writing_cycles = 0   # (was "= 0," - a tuple that crashed Dense register packing)
+        self.concat_limit = 0
 
         # === Control Flags ===
         self.send_values_out = 1               # Send outputs to DRAM
@@ -370,6 +373,13 @@ class LayerParameters(object):
             logger.debug("Adding Layer")
             self.output_shape = layer.output.shape
             self.use_layer_on_hw = False
+            return
+        
+        elif "concat" in layer.name:
+            logger.debug("Concat Layer")
+            self.output_shape = layer.output.shape
+            self.use_layer_on_hw = False
+            
             return
 
         elif "input" in layer.name:
@@ -545,10 +555,14 @@ class LayerParameters(object):
             # === MASKING PHASE 1: Handle non-aligned output width ===
             # If output width doesn't evenly divide by PEs_X, some PEs will be unused
             available_clusters = params.Clusters_X*self.Y_Cluster_Packages
-            calculation_ress = math.floor((available_clusters * params.PEs_X)/self.different_kernels_per_calculation)
-            self.psum_add_up = (self.output_shape[1]) % calculation_ress
-            self.psum_add_up = calculation_ress - self.psum_add_up
-            self.psum_add_up = self.psum_add_up % calculation_ress
+            needed_cluster_rows = math.ceil(self.psum_size_x / params.Clusters_X * params.PEs_X)
+            if (params.Clusters_Y >= needed_cluster_rows):
+                calculation_ress = needed_cluster_rows * params.Clusters_X * params.PEs_X
+                self.psum_add_up = (self.output_shape[1]) % calculation_ress
+                self.psum_add_up = calculation_ress - self.psum_add_up
+                self.psum_add_up = self.psum_add_up % calculation_ress
+            else:
+                self.psum_add_up = ((params.Clusters_Y * params.PEs_X * params.Clusters_X) - (self.psum_size_x % (params.Clusters_Y * (params.PEs_X*params.Clusters_X)))) % (params.Clusters_Y * params.PEs_X * params.Clusters_X)
             self.add_up = self.psum_add_up * self.strideX
             self.iact_x_add_up = self.iact_size_x + self.add_up
             # === MASKING PHASE 2: Eliminate PEs beyond computation requirements ===
@@ -666,15 +680,46 @@ class LayerParameters(object):
         # Check for partial sum skip flag (for layer fusion)
         if hasattr(layer, 'skip_psum'):
             self.skipPsum = layer.skip_psum
-            self.choose_iact_storage_input = 1
 
-        # Read quantization parameters if provided, otherwise use defaults
+        self.prev_layers = self.rel_layers["Previous_Layer"][self.layer_name]
+        self.next_layers = self.rel_layers["Next_Layer"][self.layer_name]
+        # 1. INPUT-Slot bestimmen:
+        if not self.prev_layers or "input_layer" in self.prev_layers[0]:
+            self.choose_iact_storage_input = 0
+        elif len(self.prev_layers) > 1:
+            self.choose_iact_storage_input = [
+                self.rel_layers["Next_Layer"][prev].index(self.layer_name)
+                if len(self.rel_layers["Next_Layer"][prev]) > 1
+                else self._get_prev_output_slot(prev)
+                for prev in self.prev_layers
+            ]
+        else:
+            prev = self.prev_layers[0]
+            prev_next = self.rel_layers["Next_Layer"][prev]
+            if len(prev_next) > 1:
+                self.choose_iact_storage_input = len(prev_next) - 1
+            else:
+                prev_prev = self.rel_layers["Previous_Layer"][prev][0]
+                if len(self.rel_layers["Next_Layer"][prev_prev]) > 1:
+                    self.choose_iact_storage_input = self.rel_layers["Next_Layer"][prev_prev].index(prev)
+                else:
+                    self.choose_iact_storage_input = 0
+        if len(self.next_layers) > 1:
+            self.choose_iact_storage_output = len(self.next_layers) - 1
+        elif self.prev_layers and "input_layer" not in self.prev_layers[0]:
+            prev = self.prev_layers[0]
+            siblings = self.rel_layers["Next_Layer"][prev]
+            if len(siblings) > 1:
+                self.choose_iact_storage_output = siblings.index(self.layer_name)
+            else:
+                self.choose_iact_storage_output = 0
+        else:
+            self.choose_iact_storage_output = 0
         if hasattr(layer, 'quantization_factor'):
             for f in range(self.filters):
-                self.quantize[f][0] = layer.quantization_factor[f][0]  # Scaling factor
-                self.quantize[f][1] = layer.quantization_factor[f][1]  # Bit width
+                self.quantize[f][0] = layer.quantization_factor[f][0]
+                self.quantize[f][1] = layer.quantization_factor[f][1]
         else:
-            # Default quantization: factor=1, 9 bits
             for f in range(self.filters):
                 self.quantize[f][0] = 1
                 self.quantize[f][1] = 7
@@ -688,11 +733,9 @@ class LayerParameters(object):
         by keeping intermediate activations in on-chip memory.
 
         Sets:
-            self.choose_iact_storage_input: 1 to load from DRAM, 0 to reuse from prev layer
             self.send_values_out: 1 to write outputs to DRAM (last layer), 0 otherwise
             self.skipIact: 1 to skip activation loading (not first layer), 0 otherwise
         """
-        self.choose_iact_storage_input = 1
 
         # Last layer must send outputs to DRAM
         if (len(self.rel_layers["Next_Layer"][self.layer_name]) == 0):
@@ -704,7 +747,6 @@ class LayerParameters(object):
         # Non-first layers can skip loading activations (reuse from previous)
         if (self.rel_layers["Previous_Layer"][self.layer_name] != ["input_layer"]):
             self.skipIact = 1
-            self.choose_iact_storage_input = 0
 
     def calculate_used_channels(self, params):
         """Calculate how many input channels are processed per iteration.
@@ -1256,6 +1298,9 @@ class LayerParameters(object):
         x_size = (self.iact_x_add_up+2*self.padding_x-self.strideX+1)
         y_size = (self.iact_size_y+2*self.padding_y-self.strideY+1)
         self.iact_glb_writing_cycles = self.diff_iact_layer*y_size*x_size*self.channel_div_trans + 1
+        if ("concat" in self.prev_layers[0]):
+            self.concat_limit = (self.iact_glb_writing_cycles//2) - 9
+            self.concat_limit = 4 - 1
         # === Phase 7: Calculate timing parameters ===
         # Partial sum delay for accumulation pipeline
         self.psum_delay = int(max([(math.ceil(self.used_psum_per_PE) - 2) - (self.used_Y_cluster * params.PEs_Y * 2),0]))

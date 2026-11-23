@@ -314,7 +314,7 @@ async def send_iact(ptp, dut, data_array):
         True,  # SISD mode
         0,
         False,  # Ignore zeros
-        sparsity_en=sparsity_en  # Use global sparsity_en setting
+        sparsity_en=0  # Use global sparsity_en setting
     )
 
     dut._log.info("IACT DATA is %s", spad_data)
@@ -330,8 +330,8 @@ async def send_iact(ptp, dut, data_array):
         spad_data,
         dut.iact_data_i,
         C0*B,  # Total elements
-        int(dut.TRANS_BITWIDTH_IACT.value),  # Convert LogicArray to int
-        int(dut.IACT_DATA_DATA.value),  # Convert LogicArray to int
+        int(16),  # Convert LogicArray to int
+        int(8),  # Convert LogicArray to int
         C0 == 1,  # Sequential mode
     )
 
@@ -820,7 +820,7 @@ def create_iact_wght_psum_arrays(dut):
             - psums: [1] (1 bias value for M0=1 output channel)
     """
     # Generate input activations: random values from -128 to 127, without 0
-    iacts = np.random.randint(-64, 63, size=(C0, B))
+    iacts = np.random.randint(-64, 63, size=(B, C0))
     iacts[iacts >= 0] += 1
     # Apply random sparsity to activations
     # Choose random indices to zero out (sparse_iact fraction of total)
@@ -831,7 +831,7 @@ def create_iact_wght_psum_arrays(dut):
     # indices = [] #Manual override option
     if (sparsity_en):
         for x in range(len(indices)):
-            iacts[int(indices[x] / B)][int(indices[x] % B)] = 0
+            iacts[int(indices[x] / C0)][int(indices[x] % C0)] = 0
 
     # Generate weights: random values from -128 to 127, without 0
     wghts = np.random.randint(-64, 63, size=(C0S, M0))

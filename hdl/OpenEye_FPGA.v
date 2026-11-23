@@ -111,7 +111,7 @@ module OpenEye_FPGA #(
       parameter NUM_GLB_IACT  = 3,
       parameter NUM_GLB_PSUM  = 4,
       parameter NUM_GLB_WGHT  = 3,
-      parameter IACT_RAM_CELLS= 8,
+      parameter IACT_RAM_CELLS= 4,
       parameter BRANCHES      = 1,
       parameter BUFFER_WIDTH_IACT  = 10,
       parameter BUFFER_WIDTH_PSUM = 14,
@@ -120,7 +120,7 @@ module OpenEye_FPGA #(
       parameter DATA_PSUM_BITWIDTH = 32,
       parameter CLUSTER_COLUMNS = 2,
       parameter TRANS_WORDS = 4,
-      parameter DMA_BITWIDTH  = 64,
+      parameter DMA_BITWIDTH  = 32,
       parameter TRANSMISSIONS = 8,
       parameter PARALLEL_MACS = 2,
       parameter SPARSITY_EN   = 1,  // 1=sparse mode (default), 0=dense mode
@@ -269,7 +269,8 @@ module OpenEye_FPGA #(
     // One write-back group reads one cluster. Extra quantizer instances do
     // not add spatial lanes to that cluster or channels to the transpose.
     localparam integer WRITEBACK_WORDS = TRANS_WORDS < NUM_GLB_PSUM ? TRANS_WORDS : NUM_GLB_PSUM,
-    localparam integer PSUM_OUTPUT_WORDS = DMA_BITWIDTH == 64? 2 : 1
+    localparam integer PSUM_OUTPUT_WORDS = DMA_BITWIDTH == 64? 2 : 1,
+    localparam CONCANTENATE_EN = BRANCHES != 1 ? 1: 0
 ) (
     //Clock and Reset
     input clk_i,
@@ -520,20 +521,20 @@ reg [1023:0] fst_path;
   // RAM never written, downstream reads return X forever). A fixed 4-bit
   // width happens to fit the default configs but silently breaks for any
   // parameter set where either modulus exceeds 16.
-  reg [$clog2(IACT_ONE_WORD_ALL_RAM > WGHT_ONE_WORD_ALL_RAM ? IACT_ONE_WORD_ALL_RAM : WGHT_ONE_WORD_ALL_RAM)-1:0] current_buffer;   // Index of the cell currently being written; increments each DMA word.
-  wire [11:0] iact_size_x;       // Feature map width in pixels (from dma_storage).
-  wire [ 7:0] iact_size_y;       // Feature map height in pixels (from dma_storage).
-  wire [11:0] iact_size_c;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
-  wire [11:0] psum_size_x;       // Output map width in pixels (from dma_storage).
-  wire [ 7:0] psum_size_y;       // Output map height in pixels (from dma_storage).
-  wire [ 2:0] channel_div_trans;
-  wire [ 3:0] iact_channels_per_pe;             // Channels assigned to one PE (from dma_storage).
-  wire [ 3:0] iact_channels_per_pe_next_layer;  // Channel count for the next layer (from dma_storage); used when routing psums back as iact.
-  reg  [CHANNEL_CYCLE_WIDTH-1:0] iact_channels_counter;             // Counts which channel batch [0..iact_channel_max_cycles-1] is currently being processed.
-  wire [CHANNEL_CYCLE_WIDTH-1:0] iact_channel_max_cycles;          // Total number of channel batches per layer pass (from dma_storage).
-  wire [15:0] psum_x_all_cluster;               // Psum X with multiple channels counting seperate
-  wire [ 3:0] iact_x_per_cluster;
-  wire [11:0] iact_x_add_up;
+  reg  unsigned [$clog2(IACT_ONE_WORD_ALL_RAM > WGHT_ONE_WORD_ALL_RAM ? IACT_ONE_WORD_ALL_RAM : WGHT_ONE_WORD_ALL_RAM)-1:0] current_buffer;   // Index of the cell currently being written; increments each DMA word.
+  wire unsigned [11:0] iact_size_x;       // Feature map width in pixels (from dma_storage).
+  wire unsigned [ 7:0] iact_size_y;       // Feature map height in pixels (from dma_storage).
+  wire unsigned [11:0] iact_size_c;      // Total input channel count for this PE batch; computed in GET_ROUTER_CONFIG as iact_channels_per_pe * iact_channel_max_cycles.
+  wire unsigned [11:0] psum_size_x;       // Output map width in pixels (from dma_storage).
+  wire unsigned [ 7:0] psum_size_y;       // Output map height in pixels (from dma_storage).
+  wire unsigned [ 2:0] channel_div_trans;
+  wire unsigned [ 3:0] iact_channels_per_pe;             // Channels assigned to one PE (from dma_storage).
+  wire unsigned [ 3:0] iact_channels_per_pe_next_layer;  // Channel count for the next layer (from dma_storage); used when routing psums back as iact.
+  reg  unsigned [CHANNEL_CYCLE_WIDTH-1:0] iact_channels_counter;             // Counts which channel batch [0..iact_channel_max_cycles-1] is currently being processed.
+  wire unsigned [CHANNEL_CYCLE_WIDTH-1:0] iact_channel_max_cycles;          // Total number of channel batches per layer pass (from dma_storage).
+  wire unsigned [15:0] psum_x_all_cluster;               // Psum X with multiple channels counting seperate
+  wire unsigned [ 3:0] iact_x_per_cluster;
+  wire unsigned [11:0] iact_x_add_up;
 
   reg [$clog2(CLUSTER_ROWS+1)-1:0] iact_router_counter; // Counts how many cluster-row sweeps have been performed within the current iact delivery; wraps at needed_y_cls_reg.
 
@@ -548,8 +549,8 @@ reg [1023:0] fst_path;
   wire fully_connected_layer;                                   // When 1: layer is a fully-connected (FC) layer; modifies iact packing and weight/psum addressing (from dma_storage).
   wire dw_mode;                                                 // When 1: layer is a depthwise convolution (DW) layer; modifies pe calculations.
   wire pooling;                                             // When 1: skip compute; instead run a 2×2 max-pool on the iact buffer (from dma_storage).
-  reg [           BUFFER_WIDTH_IACT-1:0] iact_buffer_addr_reg      [IACT_RAM_CELLS-1:0]; // Per-cell read/write address; advanced by the sliding-window logic in CONVERT_IACT.
-  reg [           BUFFER_WIDTH_IACT-1:0] buffer_addr_temp_reg; // Saved address snapshot used to restart a cell's address in MAXPOOLING_SEND.
+  reg [            BRANCHES_WIDTH-1:0] iact_buffer_addr_reg      [IACT_RAM_CELLS-1:0]; // Per-cell read/write address; advanced by the sliding-window logic in CONVERT_IACT.
+  reg [            BRANCHES_WIDTH-1:0] buffer_addr_temp_reg; // Saved address snapshot used to restart a cell's address in MAXPOOLING_SEND.
 
   // -----------------------------------------------------------------------
   // Iact Stream Constructor Control
@@ -850,8 +851,8 @@ reg [1023:0] fst_path;
   reg [7:0] fsm_iact_params;       // Countdown: param writes remaining this push.
   reg [7:0] fsm_iact_params_y_line;// Y-line index within current kernel/y-line batch.
   reg [7:0] fsm_iact_params_kernel;// Kernel index within current y-line.
-  reg [7:0] iact_converter_x;      // X-pixel origin for column 0; col k gets +k*NUM_GLB_PSUM.
-  reg [7:0] iact_converter_y;      // Y-pixel (row) coordinate currently being configured.
+  reg unsigned [7:0] iact_converter_x;      // X-pixel origin for column 0; col k gets +k*NUM_GLB_PSUM.
+  reg unsigned [7:0] iact_converter_y;      // Y-pixel (row) coordinate currently being configured.
   reg [7:0] iact_converter_c;      // Input channel index currently being configured.
   // additional register for fsm
   reg [$clog2(CLUSTER_ROWS+1)-1:0] fsm_row;        // Current CLUSTER_ROW target; steps by needed_y_cls_reg.
@@ -1364,7 +1365,7 @@ end
   //#######################
   reg                                                     iact_buffer_en_r   [IACT_RAM_CELLS-1:0]; // Per-cell read enable from FSM or converter.
   reg                                                     iact_buffer_en_w   [IACT_RAM_CELLS-1:0]; // Per-cell write enable from FSM or converter.
-  wire [                                 BUFFER_WIDTH_IACT-1:0] iact_buffer_addr   [IACT_RAM_CELLS-1:0]; // Per-cell address (half-width; MSB is buffer_select).
+  wire [                           BUFFER_WIDTH_IACT-1:0] iact_buffer_addr   [IACT_RAM_CELLS-1:0]; // Per-cell address (half-width; MSB is buffer_select).
   reg [                        IACT_CELL_INPUT_WIDTH-1:0] iact_buffer_data_w;                      // Per-cell write data (64 bits).
   wire [ IACT_RAM_CELLS_WORD_BITWIDTH*IACT_RAM_CELLS-1:0] iact_buffer_data_r;                     // Active-half read data: unpacked from iact_buffer_data_r.
 
@@ -1401,11 +1402,10 @@ end
   // Asserted when the iact_stream_constructor is about to need the next buffer address
   // (one cycle before the current address window runs out).
   reg signed [                                 12-1:0] current_x;
-  reg signed [                                  8-1:0] current_y;
+  reg signed [                                  9-1:0] current_y;
   reg        [           $clog2(2*IACT_RAM_CELLS)-1:0] current_pos_in_iact_glb;
   reg        [                                  3-1:0] relative_pos;
-  reg        [                                    1:0] iact_channel_sending_cycle1;
-  reg        [                                    1:0] iact_channel_sending_cycle2;
+  reg        [                                    1:0] iact_channel_sending_cycle;
   reg        [(8*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window;
   reg        [(2*DATA_IACT_BITWIDTH*NUM_GLB_IACT)-1:0] iact_input_window_q;
   reg        [             (2*DATA_IACT_BITWIDTH)-1:0] iact_input_window_q2;
@@ -1438,6 +1438,10 @@ end
   reg [$clog2(CLUSTER_ROWS+1)-1:0]    fsm_y_cl_psum_q2; // 2-cycle delayed fsm_y_cl_psum.
   reg [$clog2(CLUSTER_ROWS+1)-1:0]    fsm_y_cl_psum_q3; // 3-cycle delayed fsm_y_cl_psum.
 
+  // ---Concat Wires and regs ---
+  wire [11:0]concat_limit;
+  reg  [11:0]concat_cnt;
+
   // --- Quantization output staging (SEND_PSUM_TO_IACT) ---
   // After quantization, the 8 output bytes (one per filter in the current group)
   // are held here for packing into the iact buffer.
@@ -1453,8 +1457,8 @@ end
   wire [TRANS_BITWIDTH_IACT*CLUSTERS*NUM_GLB_IACT-1:0] iact_data_i_oep_w;    // Packed iact data from all converters.
   wire [                    CLUSTERS*NUM_GLB_IACT-1:0] iact_enable_i_oep_w;  // Per-GLB iact-valid flags from converters.
 
-    wire [11:0] x_bound;
-    wire [11:0] y_bound;
+    wire unsigned [11:0] x_bound;
+    wire unsigned [11:0] y_bound;
     assign x_bound = STRIDE_ENABLED == 1? iact_x_add_up + padding_x - stride_x : iact_x_add_up + padding_x - 1;
     assign y_bound = STRIDE_ENABLED == 1? iact_size_y + padding_y - stride_y : iact_size_y + padding_y - 1;
   // -----------------------------------------------------------------------
@@ -1605,6 +1609,7 @@ end
       // Pooling
       iact_buffer_data_pool_temp         <= 0;
       pooling_buffer_enable              <= 0;
+      concat_cnt                         <= 0;
       for (a = 0; a < CHANNELS_PER_WORD; a = a + 1) begin
         pooling_buffer_new[a] <= 0;
         pooling_buffer_old_q[a] <= 0;
@@ -1653,8 +1658,7 @@ end
       iact_input_window_q2         <= 0;
       fc_storage_valid_q           <= 0;
       fc_storage_valid_q2          <= 0;
-      iact_channel_sending_cycle1  <= 0;
-      iact_channel_sending_cycle2  <= 0;
+      iact_channel_sending_cycle  <= 0;
       test_reg                     <= 0;
       psum_to_iact_offset          <= 0;
       psum_to_iact_offset_q        <= 0;
@@ -1717,6 +1721,9 @@ end
           iact_to_psum_trans_counter   <= 0;
           iact_to_psum_x_pos_counter   <= 0;
           iact_to_psum_storage_counter <= 0;
+          if (CONCANTENATE_EN == 1) begin
+            concat_cnt                 <= 0;
+          end
           for (a = 0; a < IACT_RAM_CELLS; a = a + 1) begin
             iact_buffer_en_r[a]      <= 0;
             iact_buffer_en_w[a]      <= 0;
@@ -2105,8 +2112,7 @@ end
             if (converters_ready == 1) begin
               fsm_cycle                   <= 0;
               iact_input_window           <= iact_buffer_data_r[0+:2*8*4];
-              iact_channel_sending_cycle1 <= 0;
-              iact_channel_sending_cycle2 <= 0;
+              iact_channel_sending_cycle <= 0;
               iact_converter_enc_enable   <= 1;
               select_iact_glb_addr_inc    <= 0;
               current_x                   <= -padding_x;
@@ -2116,6 +2122,7 @@ end
               iact_input_window_q         <= 0;
               fsm_current_state           <= CONVERT_IACT;
               select_ram_counter          <= 0;
+              concat_cnt                  <= 1;
             end
           end
         end
@@ -2142,21 +2149,17 @@ end
           fsm_cycle                 <= fsm_cycle + 1;
           iact_converter_enc_enable <= 0;
           if (fsm_cycle >= 2) begin
-            iact_channel_sending_cycle1 <= iact_channel_sending_cycle1 + 1;
-            if (iact_channel_sending_cycle1 == 1 - 1) begin
-              iact_channel_sending_cycle1 <= 0;
-                // The input sweep is serial: one channel pair of one pixel.
-                // Parallel activation ports are populated by the constructor.
-                current_x <= current_x + (fully_connected_layer ? 2 : 1);
-                if (!fully_connected_layer & (current_x == x_bound)) begin
-                  current_x <= -padding_x;
-                  current_y <= current_y + 1;
-                  if (current_y == y_bound) begin
-                    current_y <= -padding_y;
-                  end
-              iact_channel_sending_cycle2 <= iact_channel_sending_cycle2 + 1; //Remove?
-              if (iact_channel_sending_cycle2 == channel_div_trans - 1) begin
-                iact_channel_sending_cycle2 <= 0;
+            iact_channel_sending_cycle <= iact_channel_sending_cycle + 1;
+            if (iact_channel_sending_cycle == 1 - 1) begin
+              iact_channel_sending_cycle <= 0;
+              // The input sweep is serial: one channel pair of one pixel.
+              // Parallel activation ports are populated by the constructor.
+              current_x <= current_x + (fully_connected_layer ? 2 : 1);
+              if (!fully_connected_layer & (current_x == x_bound)) begin
+                current_x <= -padding_x;
+                current_y <= current_y + 1;
+                if (current_y == y_bound) begin
+                  current_y <= -padding_y;
                 end
               end 
               iact_input_window_q <= 0;
@@ -2193,6 +2196,22 @@ end
                       iact_buffer_addr_reg[a] <= iact_buffer_addr_reg[a] + 1;
                     end
                   end
+                  if (CONCANTENATE_EN == 1) begin
+                    if (concat_limit != 0) begin
+                      concat_cnt <= concat_cnt + 1;
+                      if (concat_cnt == concat_limit) begin
+                        select_iact_glb_addr_inc <= 0;
+                        current_pos_in_iact_glb  <= 0;
+                        for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+                          for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
+                            iact_buffer_addr_reg[a] <= 0;
+                          end
+                        end
+                        choose_iact_buffer <= choose_iact_buffer + 1;
+                        concat_cnt         <= 0;
+                      end
+                    end
+                  end
                 end
               end
             end
@@ -2202,6 +2221,9 @@ end
             fsm_cycle             <= 0;
             for (a = 0; a < IACT_RAM_CELLS; a=a+1) begin
               iact_buffer_en_r[a] <= 0;
+            end
+            if (CONCANTENATE_EN == 1) begin
+              choose_iact_buffer <= 0;
             end
           end
         end
@@ -2371,6 +2393,8 @@ end
                     2'b11: begin
                       psum_to_iact_offset         <= 1'b1;
                       iact_to_psum_start_shifting <= 1'b1;
+                    end
+                    default: begin
                     end
                   endcase
                 end
@@ -3201,7 +3225,8 @@ end
         .psum_pagu_addr_inc_1(psum_pagu_addr_inc_1),
         .psum_pagu_addr_inc_2(psum_pagu_addr_inc_2),
         .psum_pagu_addr_inc_3(psum_pagu_addr_inc_3),
-        .psum_pagu_addr_inc_4(psum_pagu_addr_inc_4)
+        .psum_pagu_addr_inc_4(psum_pagu_addr_inc_4),
+        .concat_limit(concat_limit)
     );
 
 
