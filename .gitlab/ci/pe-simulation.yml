@@ -39,3 +39,22 @@ pe:
       - '**/.*'
       - '**/.*/**'
     expire_in: 90 days
+
+pe-cluster-dense:
+  extends: pe
+  script:
+    - python -m pip install "pytest==9.1.1" "cocotb-test==0.3.0"
+    - |
+      set -o pipefail
+      mkdir -p cluster-results
+      timeout 3m python -B -m pytest -v -s -p no:cacheprovider \
+        --log-cli-level=INFO --junitxml=cluster-results/junit.xml \
+        'test/cocotb_PE_cluster/test_PE_CLUSTER_dense.py::test_pe_cluster_dense[1]' \
+        2>&1 | tee cluster-results/simulation.log
+  artifacts:
+    name: pe-cluster-dense-results
+    when: always
+    paths:
+      - cluster-results/simulation.log
+    reports:
+      junit: cluster-results/junit.xml
