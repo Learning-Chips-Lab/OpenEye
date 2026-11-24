@@ -95,11 +95,11 @@ registers:
   - {name: psum_pagu_cs_inc_1, width: 4}
   - {name: psum_pagu_cs_inc_2, width: 4}
   - {name: psum_pagu_cs_inc_3, width: 4}
-  - {name: psum_pagu_loop_limit_0, width: 12}
-  - {name: psum_pagu_loop_limit_1, width: 12}
-  - {name: psum_pagu_loop_limit_2, width: 12}
-  - {name: psum_pagu_loop_limit_3, width: 12}
-  - {name: psum_pagu_loop_limit_4, width: 12}
+  - {name: psum_pagu_loop_limit_0, width: int(LIMIT_SIZE_PSUM)}
+  - {name: psum_pagu_loop_limit_1, width: int(LIMIT_SIZE_PSUM)}
+  - {name: psum_pagu_loop_limit_2, width: int(LIMIT_SIZE_PSUM)}
+  - {name: psum_pagu_loop_limit_3, width: int(LIMIT_SIZE_PSUM)}
+  - {name: psum_pagu_loop_limit_4, width: int(LIMIT_SIZE_PSUM)}
   - {name: psum_pagu_addr_inc_0, width: int(BUFFER_WIDTH_PSUM)}
   - {name: psum_pagu_addr_inc_1, width: int(BUFFER_WIDTH_PSUM)}
   - {name: psum_pagu_addr_inc_2, width: int(BUFFER_WIDTH_PSUM)}

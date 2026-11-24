@@ -18,12 +18,14 @@ cluster array.
 import math
 import logging
 import open_eye.stream_dicts as strdic
+from open_eye.generator import pack_registers
 from open_eye.layer_mapper import LayerMapper
 from open_eye.iact_stream_mapper import DenseIactStreamMapper
 from open_eye.wght_stream_mapper import DenseWghtStreamMapper
 from open_eye.psum_stream_mapper import DensePsumStreamMapper
 
 logger = logging.getLogger("cocotb")
+
 
 class DenseMapper(LayerMapper):
     """Mapper for fully connected (dense) layers in the OpenEye accelerator.
@@ -53,13 +55,41 @@ class DenseMapper(LayerMapper):
     """
 
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content, sparse_iacts, sparse_wghts):
-        # Create specialized stream mappers for dense layer operations
         input_mapper = DenseIactStreamMapper(params, layer_params, layer_repetition, dram_layer_content[0][0], sparse_iacts)
         weight_mapper = DenseWghtStreamMapper(params, layer_params, layer_repetition, dram_layer_content[1], sparse_wghts)
         bias_mapper = DensePsumStreamMapper(params, layer_params, layer_repetition, dram_layer_content[2])
-
-        # Initialize parent LayerMapper with the dense-specific mappers
         super().__init__(params, layer_params, layer_repetition, dram_layer_content, input_mapper, weight_mapper, bias_mapper)
+
+    @staticmethod
+    def _pack_router_values(flat_values, dma_bitwidth, router_bits):
+        """Pack a flat list of router configuration codes into DMA-width words."""
+        entries_per_word = dma_bitwidth // router_bits
+        packed = []
+        for i in range(0, len(flat_values), entries_per_word):
+            word = 0
+            for slot, val in enumerate(flat_values[i : i + entries_per_word]):
+                word |= val << (router_bits * slot)
+            packed.append(word)
+        return packed
+
+    @staticmethod
+    def _compute_pe_bitmap(params, layer_params):
+        """Build integer bitmap of active PEs across all clusters."""
+        computing_pes = 0
+        bit_idx = 0
+        comp_mx = layer_params.computing_mx
+
+        for x in range(params.Clusters_X):
+            comp_x = comp_mx[x]
+            for y in range(params.Clusters_Y):
+                comp_xy = comp_x[y]
+                for pe_y in range(params.PEs_Y):
+                    comp_row = comp_xy[pe_y]
+                    for pe_x in range(params.PEs_X):
+                        if comp_row[pe_x] == 1:
+                            computing_pes |= 1 << bit_idx
+                        bit_idx += 1
+        return computing_pes
 
     def write_working_parameters(self, params, layer_params, layer_repetition):
         """Generate working parameters and register configuration for the dense layer.
@@ -67,10 +97,6 @@ class DenseMapper(LayerMapper):
         Packs all layer configuration parameters into register format for hardware transmission.
         For dense layers, this includes matrix multiplication settings, PE allocation, and
         stream configuration. Handles both serial (DMA) and parallel transmission modes.
-
-        The method computes the PE enable bitmap to indicate which processing elements
-        are active for this layer, and generates four DMA transmission words containing
-        packed configuration data.
 
         Args:
             params: Hardware configuration parameters
@@ -82,555 +108,326 @@ class DenseMapper(LayerMapper):
                   returns DMA words including register configuration, PE enable bitmap, and
                   router configurations. In parallel mode, returns indexed configuration values.
         """
-        # Initialize storage structure based on communication mode (serial vs parallel)
-        if (params.SERIAL):
-            # Serial mode: list indexed by stream_serial_dict
-            storage = [[] for b in range(len(strdic.stream_serial_dict))]
-        else:
-            # Parallel mode: list indexed by status_dict
-            storage = [[] for b in range(len(strdic.status_dict))]
-
-        needed_refreshes = 1
-
-        # Determine whether to skip partial sum (bias) loading based on layer repetition
-        # Skip if not at the start of a new input activation transmission cycle
-        if ((layer_repetition % layer_params.needed_iact_transmissions) == 0) :
-            layer_params.skipPsum = 0  # Load biases at the start of new iact cycle
-        else :
-            layer_params.skipPsum = 1  # Skip bias loading for subsequent repetitions
-
-        counter = 0
-        computing_pes = 0
+        # Skip partial sum (bias) loading unless at the start of a new iact transmission cycle
+        layer_params.skipPsum = 0 if (layer_repetition % layer_params.needed_iact_transmissions) == 0 else 1
 
         # === PE ALLOCATION BITMAP ===
-        # Create a bitmap indicating which PEs are active for computation
-        # Each bit represents one PE across all clusters (X, Y, PE_Y, PE_X)
-        for x in range(params.Clusters_X):
-            for y in range(params.Clusters_Y):
-                for pe_y in range(params.PEs_Y):
-                    for pe_x in range(params.PEs_X):
-                        # Set bit if this PE is used for computation
-                        if(layer_params.computing_mx[x][y][pe_y][pe_x]== 1):
-                            computing_pes = computing_pes + 2**(counter)
-                        counter = counter + 1
+        computing_pes = self._compute_pe_bitmap(params, layer_params)
 
-        # Format the PE bitmap as a binary string (reversed for transmission)
-        total_bits = params.Clusters_X * params.Clusters_Y * params.PEs_Y * params.PEs_X
-        bitstring = format(computing_pes, f"0{total_bits}b")[::-1]
-        if (params.SERIAL):
-            # === SERIAL MODE: DMA BITSTREAM GENERATION ===
-            # Pack all parameters into bit-packed DMA lines for serial transmission
-            dma_line = 0
-            dma_storage = []
-        # === REGISTER PACKING ===
-        # Pack all layer configuration parameters into hardware register format
-        # Uses pack_registers() utility from regmap_pack module
-            from open_eye.generator import pack_registers
-            words = pack_registers({
-            "stride_x": layer_params.strideX,
-            "stride_y": layer_params.strideY,
-            "skipIact_reg": layer_params.skipIact,
-            "skipWght_reg": layer_params.skipWght,
-            "skipPsum_reg": layer_params.skipPsum,
-            "dw_mode": 0,
-            "psum_q": layer_params.psum_delay,
-            "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
-            "kernel_size_x": 1,
-            "kernel_size_y": 1,
-            "x_lines_reg": layer_params.iact_x_lines,
-            "needed_wght_cycles": layer_params.needed_wght_transmissions,
-            "needed_cycles": layer_params.needed_refreshes_mx[layer_repetition][0],
-            "trans_cycles_psum": layer_params.trans_cycles_psum,
-            # GET_WGHT's exit condition (fsm_cycle == trans_cycles_wght - 1)
-            # counts one DMA word per cycle, so this must equal the actual
-            # weight stream's word count. dense/gemm never packed this
-            # register at all (conv_mapper.py is the only mapper that did,
-            # via layer_parameters.calculate_transmission_cycles() - a
-            # conv-only method using conv-specific geometry), which left
-            # trans_cycles_wght defaulting to 0 and GET_WGHT hanging
-            # forever. Read directly from the weight mapper rather than
-            # re-deriving conv's formula for dense's different layout -
-            # this runs before make_stream()'s own call to the same
-            # get_wght_stream(), so it's an extra (cheap, deterministic)
-            # invocation, not a duplicate of stream construction.
-            "trans_cycles_wght": len(self.WghtStreamCreator.get_wght_stream()),
-            # GET_IACT's exit condition (fsm_cycle == trans_cycles_iact - 1)
-            # counts one DMA word per cycle, so - same reasoning as
-            # trans_cycles_wght above - this must equal the actual iact
-            # stream's word count. The previous formula
-            # (used_iact_per_PE*NUM_GLB_WGHT*diff_iact_layer/IACT_WORDS_IN_RAM)
-            # didn't match IactStreamMapper.get_iact_stream()'s own
-            # transmissions count (iact_size_x rounded up to a
-            # NUM_GLB_IACT*used_iact_per_PE multiple, then packed
-            # DMA_BITWIDTH/IACT_Bitwidth values per word), undercounting it and
-            # leaving GET_IACT exit early with most of the iact buffer never
-            # loaded. Read directly from the iact mapper instead of
-            # re-deriving the formula, mirroring trans_cycles_wght.
-            "trans_cycles_iact": len(self.IactStreamCreator.get_iact_stream()),
-            # Process 5's weight-send phase (hdl/OpenEye_FPGA.v) uses this as
-            # the upper bound of its wght_buffer_rd_addr sweep and the
-            # window width of the wght_enable_i broadcast pulse to every PE
-            # (fsm_sending_cycle in (1, wghts_per_pe+2]). wght_buffer holds
-            # one packed PARALLEL_MACS-wide word per address (data_pipeline_wght
-            # advances its own SPad address once per word, extracting both
-            # packed values from it), so this must be an address/word count
-            # (ceil(used_wght_per_PE/PARALLEL_MACS)), matching what
-            # conv_mapper.py packs for the same register - not the raw
-            # per-PE value count. dense/gemm never packed it at all before
-            # (only conv_mapper.py did, from the same commit that added the
-            # register), leaving it 0 and collapsing the window to a single
-            # cycle - only the first weight word ever reached each PE's
-            # weight-address SPad, leaving every other address read back X
-            # and stalling PE.v's CALCULATING state forever. Packing the raw
-            # (unclamped) value count instead of the word count fixed that
-            # hang but left the window twice as wide as the buffer actually
-            # holds valid data for, so the back half of every weight load
-            # still read stale/X buffer content.
-            "iact_glb_writing_cycles": layer_params.iact_glb_writing_cycles,
-            "used_wght_per_PE": math.ceil(layer_params.used_wght_per_PE / params.PARALLEL_MACS),
-            "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
-            "iact_channels_per_pe": layer_params.used_iact_per_PE,
-            "fc_size_reg": layer_params.iact_size_x,
-            "iact_size_x": math.ceil(layer_params.iact_size_x/2),
-            "iact_size_y": layer_params.iact_size_y,
-            "iact_size_c": layer_params.iact_size_c,
-            "padding_x": layer_params.padding_x,
-            "padding_y": layer_params.padding_y,
-            "psum_size_x":math.ceil(layer_params.iact_size_x/layer_params.strideX),
-            "psum_size_y": math.ceil(layer_params.iact_size_y/layer_params.strideY),
-            "iact_needed_cycles": layer_params.iact_stream_cycles,
-            "kernels_per_calc": layer_params.different_kernels_per_calculation,
-            "y_lines_per_calc": layer_params.y_lines_per_calculation,
-            "store_in_psum": layer_params.store_in_psum,
-            "max_pooling": layer_params.max_pooling,
-            "fully_connected_layer": layer_params.fully_connected,
-            "choose_iact_buffer_output": layer_params.choose_iact_storage_output,
-            "choose_iact_buffer_input": layer_params.choose_iact_storage_input,
-            "iact_channels_per_pe_next_layer": 1,
-            "needed_psum_storage_cycles_reg": layer_params.psum_storage_cycles,
-            "iact_channel_max_cycles": layer_params.diff_iact_layer,
-            "channel_div_trans": 1,
-            "input_activations": layer_params.used_iact_per_PE,
-            "filters": layer_params.used_psum_per_PE,
-            "needed_x_cls_reg": layer_params.used_X_cluster,
-            "needed_y_cls_reg": 1,
-            "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
-            "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
-            "send_data_out": layer_params.send_values_out,
-            "needed_iact_buffer_words": layer_params.needed_iact_buffer_words,
-            "iact_x_line_repetitions_reg":layer_params.iact_x_line_repetitions,
-            "buffer_cycles_for_x_iact" : layer_params.buffer_cycles_for_x_iact,
-            # ConvMapper sends these four; DenseMapper did not, so the DUT read 0.
-            # overhang_discrepancy is computed for Dense (write_dense_layer) and was
-            # simply never packed. The other three are still left at their defaults
-            # by the Dense path, so they go out as 0 until write_dense_layer sets
-            # them - sending them here at least makes that visible in one place.
-            "iact_x_per_cluster": layer_params.iact_x_per_cluster,
-            "iact_x_add_up": layer_params.iact_x_add_up,
-            "psum_x_all_cluster": layer_params.psum_x_all_cluster,
-            "overhang_discrepancy": layer_params.overhang_discrepancy,
-            "start_param_array" : layer_params.start_param_array,
-            "limit_increase" : layer_params.limit_increase,
-            "lower_bound" : layer_params.lower_bound,
-            "upper_bound" : layer_params.upper_bound,
-            "initial_upper_limit": layer_params.initial_upper_limit,
-            "iteration_for_kernels": layer_params.iteration_for_kernels,
-            "fsm_psum_limit": layer_params.fsm_psum_limit,
-            "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
-            "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
-            "iact_x_pos_inc": layer_params.iact_x_pos_inc,
-            "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
-            "iact_words_per_compute": layer_params.iact_words_per_compute,
-            "pooling_mode": 0,
-            "psum_output_words": layer_params.psum_output_words,
-            "iact_read_limit_0" : layer_params.iact_read_limit_0,
-            "iact_read_limit_1" : layer_params.iact_read_limit_1,
-            "iact_read_limit_2" : layer_params.iact_read_limit_2,
-            "iact_read_limit_3" : layer_params.iact_read_limit_3,
-            "iact_read_limit_4" : layer_params.iact_read_limit_4,
-            "iact_read_inc_0" : layer_params.iact_read_inc_0,
-            "iact_read_inc_1" : layer_params.iact_read_inc_1,
-            "iact_read_inc_2" : layer_params.iact_read_inc_2,
-            "iact_read_inc_3" : layer_params.iact_read_inc_3,
-            "iact_read_inc_4" : layer_params.iact_read_inc_4,
-            "iact_write_limit_0" : layer_params.iact_write_limit_0,
-            "iact_write_limit_1" : layer_params.iact_write_limit_1,
-            "iact_write_limit_2" : layer_params.iact_write_limit_2,
-            "iact_write_inc_0" : layer_params.iact_write_inc_0,
-            "iact_write_inc_1" : layer_params.iact_write_inc_1,
-            "iact_write_inc_2" : layer_params.iact_write_inc_2,
-            "iact_write_inc_3" : layer_params.iact_write_inc_3,
-            "pagu_wght_limit" : layer_params.pagu_wght_limit,
-            "psum_pagu_cs_limit_0" : layer_params.psum_pagu_cs_limit[0],
-            "psum_pagu_cs_limit_1" : layer_params.psum_pagu_cs_limit[1],
-            "psum_pagu_cs_limit_2" : layer_params.psum_pagu_cs_limit[2],
-            "psum_pagu_cs_inc_0" : layer_params.psum_pagu_cs_inc[0],
-            "psum_pagu_cs_inc_1" : layer_params.psum_pagu_cs_inc[1],
-            "psum_pagu_cs_inc_2" : layer_params.psum_pagu_cs_inc[2],
-            "psum_pagu_loop_limit_0" : layer_params.psum_pagu_loop_limit[0],
-            "psum_pagu_loop_limit_1" : layer_params.psum_pagu_loop_limit[1],
-            "psum_pagu_loop_limit_2" : layer_params.psum_pagu_loop_limit[2],
-            "psum_pagu_loop_limit_3" : layer_params.psum_pagu_loop_limit[3],
-            "psum_pagu_loop_limit_4" : layer_params.psum_pagu_loop_limit[4],
-            "psum_pagu_addr_inc_0" : layer_params.psum_pagu_addr_inc[0],
-            "psum_pagu_addr_inc_1" : layer_params.psum_pagu_addr_inc[1],
-            "psum_pagu_addr_inc_2" : layer_params.psum_pagu_addr_inc[2],
-            "psum_pagu_addr_inc_3" : layer_params.psum_pagu_addr_inc[3],
-            "psum_pagu_addr_inc_4" : layer_params.psum_pagu_addr_inc[4],
-            "gemm_mode": getattr(layer_params, "gemm_mode", 0)
+        # === SERIAL MODE: DMA BITSTREAM GENERATION ===
+        if params.SERIAL:
+            dma_storage = pack_registers({
+                "stride_x": layer_params.strideX,
+                "stride_y": layer_params.strideY,
+                "skipIact_reg": layer_params.skipIact,
+                "skipWght_reg": layer_params.skipWght,
+                "skipPsum_reg": layer_params.skipPsum,
+                "dw_mode": 0,
+                "psum_q": layer_params.psum_delay,
+                "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
+                "kernel_size_x": 1,
+                "kernel_size_y": 1,
+                "x_lines_reg": layer_params.iact_x_lines,
+                "needed_wght_cycles": layer_params.needed_wght_transmissions,
+                "needed_cycles": layer_params.needed_refreshes_mx[layer_repetition][0],
+                "trans_cycles_psum": layer_params.trans_cycles_psum,
+                # GET_WGHT's exit condition (fsm_cycle == trans_cycles_wght - 1)
+                # counts one DMA word per cycle, so this must equal the actual
+                # weight stream's word count. Read directly from the weight mapper
+                # rather than re-deriving conv's formula for dense's different layout.
+                # GET_IACT's exit condition (fsm_cycle == trans_cycles_iact - 1)
+                # counts one DMA word per cycle, so this must equal the actual iact
+                # stream's word count. Read directly from the iact mapper.
+                "trans_cycles_wght": layer_params.trans_cycles_wght or len(self.WghtStreamCreator.get_wght_stream()),
+                "trans_cycles_iact": layer_params.trans_cycles_iact or len(self.IactStreamCreator.get_iact_stream()),
+                # Process 5's weight-send phase (hdl/OpenEye_FPGA.v) uses this as
+                # the upper bound of its wght_buffer_rd_addr sweep and the
+                # window width of the wght_enable_i broadcast pulse to every PE.
+                "iact_glb_writing_cycles": layer_params.iact_glb_writing_cycles,
+                "used_wght_per_PE": math.ceil(layer_params.used_wght_per_PE / params.PARALLEL_MACS),
+                "iact_converter_buffer_addr_max_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
+                "iact_channels_per_pe": layer_params.used_iact_per_PE,
+                "fc_size_reg": layer_params.iact_size_x,
+                "iact_size_x": math.ceil(layer_params.iact_size_x / 2),
+                "iact_size_y": layer_params.iact_size_y,
+                "iact_size_c": layer_params.iact_size_c,
+                "padding_x": layer_params.padding_x,
+                "padding_y": layer_params.padding_y,
+                "psum_size_x": math.ceil(layer_params.iact_size_x / layer_params.strideX),
+                "psum_size_y": math.ceil(layer_params.iact_size_y / layer_params.strideY),
+                "iact_needed_cycles": layer_params.iact_stream_cycles,
+                "kernels_per_calc": layer_params.different_kernels_per_calculation,
+                "y_lines_per_calc": layer_params.y_lines_per_calculation,
+                "store_in_psum": layer_params.store_in_psum,
+                "max_pooling": layer_params.max_pooling,
+                "fully_connected_layer": layer_params.fully_connected,
+                "choose_iact_buffer_output": layer_params.choose_iact_storage_output,
+                "choose_iact_buffer_input": layer_params.choose_iact_storage_input,
+                "iact_channels_per_pe_next_layer": 1,
+                "needed_psum_storage_cycles_reg": layer_params.psum_storage_cycles,
+                "iact_channel_max_cycles": layer_params.diff_iact_layer,
+                "channel_div_trans": 1,
+                "input_activations": layer_params.used_iact_per_PE,
+                "filters": layer_params.used_psum_per_PE,
+                "needed_x_cls_reg": layer_params.used_X_cluster,
+                "needed_y_cls_reg": 1,
+                "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
+                "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
+                "send_data_out": layer_params.send_values_out,
+                "needed_iact_buffer_words": layer_params.needed_iact_buffer_words,
+                "iact_x_line_repetitions_reg": layer_params.iact_x_line_repetitions,
+                "buffer_cycles_for_x_iact": layer_params.buffer_cycles_for_x_iact,
+                "iact_x_per_cluster": layer_params.iact_x_per_cluster,
+                "iact_x_add_up": layer_params.iact_x_add_up,
+                "psum_x_all_cluster": layer_params.psum_x_all_cluster,
+                "overhang_discrepancy": layer_params.overhang_discrepancy,
+                "start_param_array": layer_params.start_param_array,
+                "limit_increase": layer_params.limit_increase,
+                "lower_bound": layer_params.lower_bound,
+                "upper_bound": layer_params.upper_bound,
+                "initial_upper_limit": layer_params.initial_upper_limit,
+                "iteration_for_kernels": layer_params.iteration_for_kernels,
+                "fsm_psum_limit": layer_params.fsm_psum_limit,
+                "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
+                "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
+                "iact_x_pos_inc": layer_params.iact_x_pos_inc,
+                "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
+                "iact_words_per_compute": layer_params.iact_words_per_compute,
+                "pooling_mode": 0,
+                "psum_output_words": layer_params.psum_output_words,
+                "iact_read_limit_0": layer_params.iact_read_limit_0,
+                "iact_read_limit_1": layer_params.iact_read_limit_1,
+                "iact_read_limit_2": layer_params.iact_read_limit_2,
+                "iact_read_limit_3": layer_params.iact_read_limit_3,
+                "iact_read_limit_4": layer_params.iact_read_limit_4,
+                "iact_read_inc_0": layer_params.iact_read_inc_0,
+                "iact_read_inc_1": layer_params.iact_read_inc_1,
+                "iact_read_inc_2": layer_params.iact_read_inc_2,
+                "iact_read_inc_3": layer_params.iact_read_inc_3,
+                "iact_read_inc_4": layer_params.iact_read_inc_4,
+                "iact_write_limit_0": layer_params.iact_write_limit_0,
+                "iact_write_limit_1": layer_params.iact_write_limit_1,
+                "iact_write_limit_2": layer_params.iact_write_limit_2,
+                "iact_write_inc_0": layer_params.iact_write_inc_0,
+                "iact_write_inc_1": layer_params.iact_write_inc_1,
+                "iact_write_inc_2": layer_params.iact_write_inc_2,
+                "iact_write_inc_3": layer_params.iact_write_inc_3,
+                "pagu_wght_limit": layer_params.pagu_wght_limit,
+                "psum_pagu_cs_limit_0": layer_params.psum_pagu_cs_limit[0],
+                "psum_pagu_cs_limit_1": layer_params.psum_pagu_cs_limit[1],
+                "psum_pagu_cs_limit_2": layer_params.psum_pagu_cs_limit[2],
+                "psum_pagu_cs_inc_0": layer_params.psum_pagu_cs_inc[0],
+                "psum_pagu_cs_inc_1": layer_params.psum_pagu_cs_inc[1],
+                "psum_pagu_cs_inc_2": layer_params.psum_pagu_cs_inc[2],
+                "psum_pagu_loop_limit_0": layer_params.psum_pagu_loop_limit[0],
+                "psum_pagu_loop_limit_1": layer_params.psum_pagu_loop_limit[1],
+                "psum_pagu_loop_limit_2": layer_params.psum_pagu_loop_limit[2],
+                "psum_pagu_loop_limit_3": layer_params.psum_pagu_loop_limit[3],
+                "psum_pagu_loop_limit_4": layer_params.psum_pagu_loop_limit[4],
+                "psum_pagu_addr_inc_0": layer_params.psum_pagu_addr_inc[0],
+                "psum_pagu_addr_inc_1": layer_params.psum_pagu_addr_inc[1],
+                "psum_pagu_addr_inc_2": layer_params.psum_pagu_addr_inc[2],
+                "psum_pagu_addr_inc_3": layer_params.psum_pagu_addr_inc[3],
+                "psum_pagu_addr_inc_4": layer_params.psum_pagu_addr_inc[4],
+                "gemm_mode": getattr(layer_params, "gemm_mode", 0),
             })
-            
-        # === SERIAL MODE: DMA TRANSMISSION ===
-        if (params.SERIAL):
-            # Use modern register packing approach (commented code above is legacy)
-            dma_storage = words
 
-            # === PE ENABLE BITMAP TRANSMISSION ===
-            # Split PE bitmap into AXI-width segments and append to DMA stream
-            for x in range(math.ceil(params.PE_Complete/params.DMA_BITWIDTH)):
-                segment = bitstring[x*params.DMA_BITWIDTH:(x+1)*params.DMA_BITWIDTH]
-                dma_storage.append(int(segment[::-1], 2))
+            # Slice PE bitmap directly into DMA-width words without binary string conversion
+            dma_w = params.DMA_BITWIDTH
+            dma_mask = (1 << dma_w) - 1
+            num_pe_words = math.ceil(params.PE_Complete / dma_w)
+            for x in range(num_pe_words):
+                dma_storage.append((computing_pes >> (x * dma_w)) & dma_mask)
 
-            # === ROUTER CONFIGURATION TRANSMISSION ===
             # Append router configurations for all three data paths
             dma_storage.extend(self.write_router_iact(params, layer_params))
             dma_storage.extend(self.write_router_wght(params, layer_params))
             dma_storage.extend(self.write_router_psum(params, layer_params))
-
-            storage = dma_storage
+            return dma_storage
 
         # === PARALLEL MODE: DIRECT PARAMETER ASSIGNMENT ===
-        else:
-            # === PARALLEL MODE: DICTIONARY-BASED CONFIGURATION ===
-            # Store each parameter individually by name for parallel register access
-            storage[strdic.status_dict["data_mode"]] = params.data_mode
-            storage[strdic.status_dict["realfactor"]] = layer_params.realfactor
-            storage[strdic.status_dict["autofunction"]] = params.autofunction
-            storage[strdic.status_dict["poolingmode"]] = params.poolingmode
-            storage[strdic.status_dict["psum_delay"]] = layer_params.psum_delay
-            storage[strdic.status_dict["needed_refreshes"]] = needed_refreshes
-            storage[strdic.status_dict["used_X_cluster"]] = layer_params.used_X_cluster
-            storage[strdic.status_dict["used_Y_cluster"]] = layer_params.used_Y_cluster
-            storage[strdic.status_dict["needed_Iact_writes"]] = layer_params.needed_Iact_writes
-            storage[strdic.status_dict["used_psum_per_PE"]] = layer_params.used_psum_per_PE
-            storage[strdic.status_dict["used_iact_addr_per_PE"]] = layer_params.used_iact_addr_per_PE
-            storage[strdic.status_dict["used_wght_addr_per_PE"]] = layer_params.used_wght_addr_per_PE
-            storage[strdic.status_dict["used_iact_per_PE"]] = layer_params.used_iact_per_PE
-            storage[strdic.status_dict["iact_addr_len"]] = layer_params.iact_addr_len
-            storage[strdic.status_dict["iact_data_len"]] = layer_params.iact_data_len
-            storage[strdic.status_dict["strideX"]] = layer_params.strideX
-            storage[strdic.status_dict["strideY"]] = layer_params.strideY
-            storage[strdic.status_dict["skipIact"]] = layer_params.skipIact
-            storage[strdic.status_dict["skipWght"]] = layer_params.skipWght
-            storage[strdic.status_dict["skipPsum"]] = layer_params.skipPsum
-            storage[strdic.status_dict["usePEs"]] = int(computing_pes,2)
-            storage[strdic.status_dict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
-            storage[strdic.status_dict["gemm_mode"]] = getattr(layer_params, "gemm_mode", 0)
-            # Router configurations as nested structures for parallel access
-            storage[strdic.status_dict["router_iact"]] = self.write_router_iact(params, layer_params)
-            storage[strdic.status_dict["router_wght"]] = self.write_router_wght(params, layer_params)
-            storage[strdic.status_dict["router_psum"]] = self.write_router_psum(params, layer_params)
+        sdict = strdic.status_dict
+        storage = [[] for _ in range(len(sdict))]
+        needed_refreshes = 1
+
+        storage[sdict["data_mode"]] = params.data_mode
+        storage[sdict["realfactor"]] = layer_params.realfactor
+        storage[sdict["autofunction"]] = params.autofunction
+        storage[sdict["poolingmode"]] = params.poolingmode
+        storage[sdict["psum_delay"]] = layer_params.psum_delay
+        storage[sdict["needed_refreshes"]] = needed_refreshes
+        storage[sdict["used_X_cluster"]] = layer_params.used_X_cluster
+        storage[sdict["used_Y_cluster"]] = layer_params.used_Y_cluster
+        storage[sdict["needed_Iact_writes"]] = layer_params.needed_Iact_writes
+        storage[sdict["used_psum_per_PE"]] = layer_params.used_psum_per_PE
+        storage[sdict["used_iact_addr_per_PE"]] = layer_params.used_iact_addr_per_PE
+        storage[sdict["used_wght_addr_per_PE"]] = layer_params.used_wght_addr_per_PE
+        storage[sdict["used_iact_per_PE"]] = layer_params.used_iact_per_PE
+        storage[sdict["iact_addr_len"]] = layer_params.iact_addr_len
+        storage[sdict["iact_data_len"]] = layer_params.iact_data_len
+        storage[sdict["strideX"]] = layer_params.strideX
+        storage[sdict["strideY"]] = layer_params.strideY
+        storage[sdict["skipIact"]] = layer_params.skipIact
+        storage[sdict["skipWght"]] = layer_params.skipWght
+        storage[sdict["skipPsum"]] = layer_params.skipPsum
+        storage[sdict["usePEs"]] = computing_pes
+        storage[sdict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
+        storage[sdict["gemm_mode"]] = getattr(layer_params, "gemm_mode", 0)
+
+        storage[sdict["router_iact"]] = self.write_router_iact(params, layer_params)
+        storage[sdict["router_wght"]] = self.write_router_wght(params, layer_params)
+        storage[sdict["router_psum"]] = self.write_router_psum(params, layer_params)
         return storage
 
     def write_quant_and_offset(self, params, layer_params, layer_repetition):
-        """
-        Generates unified quantization and offset parameters packed for shift-register streaming.
-        
+        """Generate unified quantization and offset parameters packed for shift-register streaming.
+
         Layout per Filter (LSB -> MSB):
         - Offset   : OFFSET_WIDTH bits
         - Exponent : EXPONENT_WIDTH bits
         - Mantissa : MANTISSA_WIDTH bits
-        
+
         Shift behavior:
         Filter 0 lands at the lowest bit-positions (quant_reg[0 +: ENTRY_WIDTH]).
-        To achieve this with a left-shift register (`quant_reg <= {quant_reg, new_data}`),
-        the highest filter blocks (e.g. Filter N-1 down to Filter 0) must be transmitted FIRST,
-        or the streaming array must be sliced accordingly.
+        Incoming DMA words shift from lower to higher indices, so words are emitted
+        from MSB down to LSB.
         """
-        offset_w = getattr(params, 'OFFSET_WIDTH', 8)
-        exp_w    = getattr(params, 'EXPONENT_WIDTH', 7)
-        mant_w   = getattr(params, 'MANTISSA_WIDTH', 25)
-        
-        entry_w  = offset_w + exp_w + mant_w  # e.g. 8 + 7 + 25 = 40 Bits per filter
-        dma_w    = params.DMA_BITWIDTH        # e.g. 64 Bits
-        
-        total_bits = params.QUANT_AMOUNT * entry_w
-        
-        # 1. Pack ALL filter data into one giant bitfield (Filter 0 at LSB)
+        offset_w = getattr(params, "OFFSET_WIDTH", 8)
+        exp_w = getattr(params, "EXPONENT_WIDTH", 7)
+        mant_w = getattr(params, "MANTISSA_WIDTH", 25)
+
+        entry_w = offset_w + exp_w + mant_w
+        dma_w = params.DMA_BITWIDTH
+
+        offset_mask = (1 << offset_w) - 1
+        exp_mask = (1 << exp_w) - 1
+        mant_mask = (1 << mant_w) - 1
+        mant_shift = offset_w + exp_w
+
+        quantize = layer_params.quantize
+        offsets = layer_params.offset
         packed_bitstream = 0
+
         for f in range(params.QUANT_AMOUNT):
-            mant   = layer_params.quantize[f][0]  # Mantissa
-            exp    = layer_params.quantize[f][1]  # Exponent
-            offset = layer_params.offset[f]       # Zero-Point Offset
-            
-            # Combine offset | exp | mant for filter `f`
-            filter_entry = (offset & ((1 << offset_w) - 1)) | \
-                        ((exp    & ((1 << exp_w) - 1)) << offset_w) | \
-                        ((mant   & ((1 << mant_w) - 1)) << (offset_w + exp_w))
-            
-            # Shift into the global bitstream at position `f * entry_w`
-            packed_bitstream |= (filter_entry << (f * entry_w))
-            
-        # 2. Slice the bitstream into DMA words
-        # Because your Verilog shifts incoming words from lower to higher indices:
-        #   quant_reg[(a+1)*DMA_BITWIDTH +: DMA_BITWIDTH] <= quant_reg[a*DMA_BITWIDTH +: DMA_BITWIDTH]
-        # The FIRST word sent will end up at the HIGHEST index.
-        # Therefore, we chunk from MSB down to LSB!
-        
+            q_entry = quantize[f]
+            filter_entry = (
+                (int(offsets[f]) & offset_mask)
+                | ((int(q_entry[1]) & exp_mask) << offset_w)
+                | ((int(q_entry[0]) & mant_mask) << mant_shift)
+            )
+            packed_bitstream |= filter_entry << (f * entry_w)
+
+        total_bits = params.QUANT_AMOUNT * entry_w
         num_dma_words = math.ceil(total_bits / dma_w)
-        dma_storage = []
-        
-        # Calculate top padded length
         total_padded_bits = num_dma_words * dma_w
-        
+        dma_mask = (1 << dma_w) - 1
+
+        dma_storage = []
         for i in range(num_dma_words):
-            # Extract word starting from the top bits down to bottom
             shift_amount = total_padded_bits - (i + 1) * dma_w
-            if shift_amount >= 0:
-                word = (packed_bitstream >> shift_amount) & ((1 << dma_w) - 1)
-            else:
-                # Handle edge alignment if total_bits isn't perfectly divisible
-                word = (packed_bitstream << abs(shift_amount)) & ((1 << dma_w) - 1)
-                
+            word = (
+                (packed_bitstream >> shift_amount)
+                if shift_amount >= 0
+                else (packed_bitstream << -shift_amount)
+            ) & dma_mask
             dma_storage.append(word)
         return dma_storage
-    
+
     def write_router_iact(self, params, layer_params):
         """Configure input activation (iact) router settings for dense layer.
 
-        Generates routing configuration for distributing input activations across the
-        cluster array for dense layer operations. For dense layers, routing is simplified
-        compared to convolutional layers, using broadcast mode (routing value 1) for
-        clusters within the first 4 rows.
-
         Routing values:
-        - 1: Broadcast input data to this cluster (for cl_y < 4)
-        - 0: No routing (implicit for cl_y >= 4)
-
-        Args:
-            params: Hardware configuration parameters including cluster dimensions
-            layer_params: Layer-specific parameters for the dense layer
-
-        Returns:
-            In serial mode: list of DMA words with packed router values
-            In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
+        - 1: Broadcast input data to this cluster
+        - 0: Single-cluster default
         """
-        line = 0
-        # Initialize storage based on mode
-        if(params.SERIAL):
-            storage = []  # Serial: list of packed DMA words
-        else:
-            # Parallel: 3D array [cluster_x][cluster_y][router]
-            storage = [[[[] for c in range(params.NUM_GLB_IACT)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
-        if ((params.Clusters_Y == 1) & (params.Clusters_X == 1)):
-            storage.append(line)
-            return storage
+        clusters_x = params.Clusters_X
+        clusters_y = params.Clusters_Y
+        num_glb_iact = params.NUM_GLB_IACT
 
-        router_cycle = 0  # Track position within current DMA word
+        if clusters_y == 1 and clusters_x == 1:
+            return [0] if params.SERIAL else [[[[] for _ in range(num_glb_iact)]]]
 
-        # Iterate through all clusters and routers
-        for cl_y in range(params.Clusters_Y):
-            for cl_x in range(params.Clusters_X):
-                for router in range(params.NUM_GLB_IACT):
-                    if(params.SERIAL):
-                        # Routing value 1: broadcast input data to this cluster
-                        line = line + (1 << (params.Iact_Router_Bits * router_cycle))
-                    else:
-                        # Parallel mode: store routing value directly
-                        storage[cl_x][cl_y][router] = 1
+        if params.SERIAL:
+            total_entries = clusters_y * clusters_x * num_glb_iact
+            return self._pack_router_values([1] * total_entries, params.DMA_BITWIDTH, params.Iact_Router_Bits)
 
-                    router_cycle = router_cycle + 1
-
-                    # Check if current DMA word is full
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Iact_Router_Bits))):
-                        router_cycle = 0
-                        storage.append(line)
-                        line = 0
-
-        # Append any remaining partial DMA word
-        if(params.SERIAL and (router_cycle != 0)):
-            router_cycle = 0
-            storage.append(line)
-
-        return storage
+        return [[[1] * num_glb_iact for _ in range(clusters_y)] for _ in range(clusters_x)]
 
     def write_router_wght(self, params, layer_params):
         """Configure weight (wght) router settings for dense layer.
 
-        Generates routing configuration for distributing weights across the cluster array
-        for dense layer operations. For dense layers, all clusters use local weight data
-        (routing value 0), as each cluster typically processes different weight rows.
-
         Routing values:
         - 0: Use local weight data (all clusters)
-
-        Args:
-            params: Hardware configuration parameters including cluster dimensions
-            layer_params: Layer-specific parameters for the dense layer
-
-        Returns:
-            In serial mode: list of DMA words with packed router values
-            In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
         """
-        line = 0
-        # Initialize storage based on mode
-        if(params.SERIAL):
-            storage = []  # Serial: list of packed DMA words
-        else:
-            # Parallel: 3D array [cluster_x][cluster_y][router]
-            storage = [[[[] for c in range(params.Wght_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
-        if ((params.Clusters_X == 1)):
-            return storage
+        clusters_x = params.Clusters_X
+        clusters_y = params.Clusters_Y
+        wght_routers = params.Wght_Routers
 
-        router_cycle = 0  # Track position within current DMA word
+        if clusters_x == 1:
+            return [] if params.SERIAL else [[[[] for _ in range(wght_routers)] for _ in range(clusters_y)]]
 
-        # Iterate through all clusters and routers
-        for cl_x in range(params.Clusters_X):
-            for cl_y in range(params.Clusters_Y):
-                for router in range(params.Wght_Routers):
-                    if(params.SERIAL):
-                        # Routing value 0: use local weight data (no routing/broadcast)
-                        # All clusters load their own weights for dense layers
-                        line = line + (0 << (params.Wght_Router_Bits * router_cycle))
-                    else:
-                        # Parallel mode: store routing value directly
-                        storage[cl_x][cl_y][router] = 0
+        if params.SERIAL:
+            total_entries = clusters_x * clusters_y * wght_routers
+            entries_per_word = params.DMA_BITWIDTH // params.Wght_Router_Bits
+            return [0] * math.ceil(total_entries / entries_per_word)
 
-                    router_cycle = router_cycle + 1
-
-                    # Check if current DMA word is full
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Wght_Router_Bits))):
-                        router_cycle = 0
-                        storage.append(line)
-                        line = 0
-
-        # Append any remaining partial DMA word
-        if(params.SERIAL and (router_cycle != 0)):
-            router_cycle = 0
-            storage.append(line)
-        return storage
+        return [[[0] * wght_routers for _ in range(clusters_y)] for _ in range(clusters_x)]
 
     def write_router_psum(self, params, layer_params):
         """Configure partial sum (psum) router settings for dense layer.
-
-        Generates routing configuration for collecting and forwarding partial sums through
-        the cluster array for dense layer operations. The routing depends on PE utilization
-        and cluster Y organization, determining how partial sums are accumulated.
 
         Routing values:
         - 2: Pass-through cluster (middle of Y-cluster group)
         - 3: Final accumulation cluster (last in Y-cluster group)
         - 4: Output cluster (single PE per cluster mode)
         - 5: First accumulation cluster (first in Y-cluster group)
-
-        Args:
-            params: Hardware configuration parameters including cluster dimensions
-            layer_params: Layer-specific parameters including PE and cluster usage
-
-        Returns:
-            In serial mode: list of DMA words with packed router values
-            In parallel mode: 3D list [cluster_x][cluster_y][router] of routing values
         """
-        line = 0
-        # Initialize storage based on mode
-        if(params.SERIAL):
-            storage = []  # Serial: list of packed DMA words
-        else:
-            # Parallel: 3D array [cluster_x][cluster_y][router]
-            storage = [[[[] for c in range(params.Psum_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
-        if ((params.Clusters_Y == 1)):
-            return storage
+        clusters_x = params.Clusters_X
+        clusters_y = params.Clusters_Y
+        psum_routers = params.Psum_Routers
 
-        router_cycle = 0  # Track position within current DMA word
+        if clusters_y == 1:
+            return [] if params.SERIAL else [[[[] for _ in range(psum_routers)] for _ in range(clusters_y)] for _ in range(clusters_x)]
 
-        # Iterate through all clusters and routers
-        # Row-major cluster order (cr*CLUSTER_COLUMNS + cc), matching how
-        # OpenEye_Parallel and psum_pipeline index router_mode_psum since 983fc95.
-        for cl_y in range(params.Clusters_Y):
-            for cl_x in range(params.Clusters_X):
-                for router in range(params.Psum_Routers):
-                    # Determine routing mode based on PE usage pattern
-                    if((layer_params.used_Y_cluster == 1) | (params.Clusters_Y==1)):
-                        # Single PE per cluster: direct output (no accumulation chain)
-                        if(params.SERIAL):
-                            line = line + (4 << (params.Psum_Router_Bits * router_cycle))
-                        else:
-                            storage[cl_x][cl_y][router] = 4
-                    else:
-                        # Multiple PEs per cluster: build accumulation chain along Y-axis
-                        if((cl_y % layer_params.used_Y_cluster) == 0):
-                            # First cluster in Y-group: start of accumulation chain
-                            if(params.SERIAL):
-                                line = line + (5 << (params.Psum_Router_Bits * router_cycle))
-                            else:
-                                storage[cl_x][cl_y][router] = 5
-                        else:
-                            if(((cl_y + 1) %  layer_params.used_Y_cluster) == 0):
-                                # Last cluster in Y-group: final accumulation and output
-                                if(params.SERIAL):
-                                    line = line + (3 << (params.Psum_Router_Bits * router_cycle))
-                                else:
-                                    storage[cl_x][cl_y][router] = 3
-                            else:
-                                # Middle cluster in Y-group: pass-through accumulation
-                                if(params.SERIAL):
-                                    line = line + (2 << (params.Psum_Router_Bits * router_cycle))
-                                else:
-                                    storage[cl_x][cl_y][router] = 2
+        used_y = layer_params.used_Y_cluster
+        per_y_entries = clusters_x * psum_routers
 
-                    router_cycle = router_cycle + 1
+        if params.SERIAL:
+            flat_values = []
+            for cl_y in range(clusters_y):
+                if used_y == 1:
+                    val = 4
+                elif (cl_y % used_y) == 0:
+                    val = 5
+                elif ((cl_y + 1) % used_y) == 0:
+                    val = 3
+                else:
+                    val = 2
+                flat_values.extend([val] * per_y_entries)
+            return self._pack_router_values(flat_values, params.DMA_BITWIDTH, params.Psum_Router_Bits)
 
-                    # Check if current DMA word is full
-                    if(params.SERIAL and (router_cycle == math.floor(params.DMA_BITWIDTH/params.Psum_Router_Bits))):
-                        router_cycle = 0
-                        storage.append(line)
-                        line = 0
-
-        # Append any remaining partial DMA word
-        if(params.SERIAL and (router_cycle != 0)):
-            router_cycle = 0
-            storage.append(line)
+        storage = [[[0] * psum_routers for _ in range(clusters_y)] for _ in range(clusters_x)]
+        for cl_y in range(clusters_y):
+            if used_y == 1:
+                val = 4
+            elif (cl_y % used_y) == 0:
+                val = 5
+            elif ((cl_y + 1) % used_y) == 0:
+                val = 3
+            else:
+                val = 2
+            row_vals = [val] * psum_routers
+            for cl_x in range(clusters_x):
+                storage[cl_x][cl_y] = row_vals.copy()
         return storage
 
     def write_psum_data_glb(self, params, layer_params, layer_repetition, dram, cl_y, router, cycle):
-        """Write partial sum data to global buffer format for dense layer.
-
-        Converts partial sum (bias) data from DRAM format to the global buffer format
-        expected by the hardware. For dense layers, this typically initializes bias values
-        to zero, with scaling based on the configured bitwidths.
-
-        Args:
-            params: Hardware configuration parameters including bitwidth settings
-            layer_params: Layer-specific parameters including filter/neuron counts
-            layer_repetition: Current repetition index for the layer
-            dram: Source data from DRAM containing bias values
-            cl_y: Cluster Y coordinate (currently unused in implementation)
-            router: Router index (currently unused in implementation)
-            cycle: Cycle index (currently unused in implementation)
-
-        Returns:
-            In serial mode: list of DMA words containing scaled bias values (currently zeros)
-            In parallel mode: 2D list [cluster_x][data_index] of scaled bias values
-        """
-        # Initialize storage structure
-        storage, line = self.initialize_storage(params.SERIAL), 0
-
-        # Process partial sum (bias) data for each output neuron/filter
-        for part_data_num in range(math.ceil(self.layer_params.used_psum_per_PE/2)):
-            if(part_data_num < self.layer_params.used_psum_per_PE):
-                # Write bias value for each cluster X
-                for cl_x in range(self.params.Clusters_X):
-                    if(self.params.SERIAL):
-                        # Calculate scaled bias value (currently initialized to 0)
-                        # Scaling factor: 2^(IACT_Bitwidth + WGHT_Bitwidth - 1)
-                        scaled_bias = int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * 0)))
-                        line = line + (scaled_bias << (params.DATA_PSUM_BITWIDTH * cl_x))
-                        storage.append(line)
-                        line = 0
-                    else:
-                        # Parallel mode: append directly to cluster-specific storage
-                        scaled_bias = int(round(float((2**(params.IACT_Bitwidth + params.WGHT_Bitwidth - 1)) * 0)))
-                        storage[cl_x].append(scaled_bias)
-            else:
-                line = 0
-        return storage
+        """Legacy helper for global buffer partial sum initialization."""
+        num_entries = min(
+            math.ceil(self.layer_params.used_psum_per_PE / 2),
+            int(self.layer_params.used_psum_per_PE),
+        )
+        count = max(0, num_entries)
+        if params.SERIAL:
+            return [0] * (count * self.params.Clusters_X)
+        return [[0] * count for _ in range(self.params.Clusters_X)]

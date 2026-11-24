@@ -262,7 +262,7 @@ class OpenEyeParameters(object):
         try:
             self.LIMIT_SIZE_PSUM = int(os.getenv("LIMIT_SIZE_PSUM"))
         except:
-            self.LIMIT_SIZE_PSUM = 12        # Width of psum limit
+            self.LIMIT_SIZE_PSUM = 16        # Width of psum limit
 
         try:
             self.DEPTHWISE_ENABLED = int(os.getenv("DEPTHWISE_ENABLED"))

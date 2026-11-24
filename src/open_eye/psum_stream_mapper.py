@@ -11,10 +11,10 @@ It handles the initialization of partial sum accumulators with bias values and
 manages their distribution across processing elements and clusters.
 
 Key Features:
-    - Bias value conversion to two's complement format for hardware compatibility
-    - Partial sum stream generation for serial and parallel communication modes
-    - Layer-specific mapping for Conv2D, Depthwise, and Dense layers
-    - Router-based distribution across PE clusters and scratchpad memories
+- Bias value conversion to two's complement format for hardware compatibility
+- Partial sum stream generation for serial and parallel communication modes
+- Layer-specific mapping for Conv2D, Depthwise, and Dense layers
+- Router-based distribution across PE clusters and scratchpad memories
 
 The partial sum stream mapper coordinates with the hardware's accumulator architecture
 to ensure bias values are correctly loaded before computation begins. During convolution
@@ -36,7 +36,6 @@ Typical Usage:
 import math
 import logging
 import open_eye.generic_test_utils as gtu
-import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
 
@@ -58,16 +57,11 @@ class PsumStreamMapper(object):
         layer_params: Layer-specific parameters (filters, dimensions, PE allocation)
         layer_repetition (int): Current repetition index for this layer execution
         dram_bias (list): Bias values loaded from DRAM for the current layer
-        storage (list): Storage structure for organizing partial sum data streams.
-                       Format depends on communication mode (serial vs parallel).
 
     """
 
     def __init__(self, params, layer_params, layer_repetition, dram_layer_content):
         """Initialize the partial sum stream mapper.
-
-        Sets up storage structures for partial sum data based on the hardware
-        communication mode (serial or parallel).
 
         Args:
             params: OpenEye hardware parameters including:
@@ -87,14 +81,6 @@ class PsumStreamMapper(object):
         self.layer_repetition = layer_repetition
         self.dram_bias = dram_layer_content
 
-        # Initialize storage structure based on communication mode
-        if (self.params.SERIAL):
-            # Serial mode: indexed by stream_serial_dict entries
-            self.storage = [[] for _ in range(len(strdic.stream_serial_dict))]
-        else:
-            # Parallel mode: indexed by stream_parallel_dict entries
-            self.storage = [[] for _ in range(len(strdic.stream_parallel_dict))]
-
     def get_psum_stream(self):
         """Generate the complete partial sum data stream for the layer.
 
@@ -107,55 +93,50 @@ class PsumStreamMapper(object):
             Serial mode: List of packed integers containing bias values in two's
                         complement format. Each bias is duplicated to fill block_length
                         positions for different output spatial locations.
-            Parallel mode: List of integers organized per cluster and router, ready
+            Parallel mode: 3D list [cluster_x][cluster_y][router] of integers ready
                           for distribution to PE scratchpad memories.
 
         Note:
-            - Serial mode uses two's complement for each bias value
-            - Values are packed into 40-bit words (two values per word)
+            - Serial mode converts each filter bias once and replicates at C-speed
             - Parallel mode delegates to write_psum_data_glb() for per-cluster generation
 
         """
-        if (self.params.SERIAL):
+        if self.params.SERIAL:
             # === SERIAL MODE: LINEAR STREAM GENERATION ===
-            # Calculate how many times to replicate each bias value
-            psum_stream = []
-            words_per_transmission = min(2,self.params.DMA_BITWIDTH//self.params.DATA_PSUM_BITWIDTH)
-            block_length = ((self.params.NUM_GLB_PSUM//words_per_transmission) * self.params.Clusters)//self.layer_params.different_kernels_per_calculation
-            # Generate bias stream for each output position and filter
-            for k in range (self.layer_params.iact_x_line_repetitions) :
-                for j in range(self.layer_params.iact_size_y) :
-                    for i in range(self.layer_params.filters) :
-                        # Convert bias to two's complement
-                        temp = 0
-                        bias_bit = gtu.to_twos_complement(self.dram_bias[i], self.params.DATA_PSUM_BITWIDTH)
-                        for j in range(words_per_transmission) :
-                            temp = bias_bit + (temp * 2**self.params.DATA_PSUM_BITWIDTH)
-                            # Pack two values into a 40-bit word and replicate
-                            packed_value = bias_bit + (bias_bit * 2**self.params.DATA_PSUM_BITWIDTH)
-                        psum_stream.extend([temp] * block_length)
-        else:
-            # === PARALLEL MODE: CLUSTER-BASED STREAM GENERATION ===
-            # Create 3D structure: [cluster_x][cluster_y][router]
-            psum_stream = [[[[] for c in range(self.params.Psum_Routers)] for b in range(self.params.Clusters_Y)] for a in range(self.params.Clusters_X)]
+            bitwidth = self.params.DATA_PSUM_BITWIDTH
+            words_per_transmission = min(2, self.params.DMA_BITWIDTH // bitwidth)
+            block_length = (
+                (self.params.NUM_GLB_PSUM // words_per_transmission) * self.params.Clusters
+            ) // self.layer_params.different_kernels_per_calculation
 
-            # Generate partial sum data for each cluster and router
-            for cl_x in range(self.params.Clusters_X):
-                for cl_y in range(self.params.Clusters_Y):
-                    for router in range(self.params.Psum_Routers):
-                        # Delegate to subclass-specific implementation
-                        psum_stream[cl_x][cl_y][router] = self.write_psum_data_glb(cl_x, cl_y, router)
+            # Convert and pack each filter bias once, then replicate per block
+            packed_biases = []
+            for i in range(self.layer_params.filters):
+                bias_bit = gtu.to_twos_complement(self.dram_bias[i], bitwidth)
+                packed_word = 0
+                for _ in range(words_per_transmission):
+                    packed_word = (packed_word << bitwidth) | bias_bit
+                packed_biases.extend([packed_word] * block_length)
 
-            # Flatten the hierarchical structure into a complete stream
-            psum_stream = self.create_complete_psum_stream(psum_stream)
-        return psum_stream
+            # Replicate the full filter sequence across all spatial output positions
+            total_repetitions = self.layer_params.iact_x_line_repetitions * self.layer_params.iact_size_y
+            return packed_biases * total_repetitions
+
+        # === PARALLEL MODE: CLUSTER-BASED STREAM GENERATION ===
+        # write_psum_data_glb already returns flat per-router streams across all cycles
+        return [
+            [
+                [self.write_psum_data_glb(cl_x, cl_y, router) for router in range(self.params.Psum_Routers)]
+                for cl_y in range(self.params.Clusters_Y)
+            ]
+            for cl_x in range(self.params.Clusters_X)
+        ]
 
     def write_psum_data_glb(self, cl_x, cl_y, router):
         """Generate partial sum data for a specific cluster and router.
 
         Creates the partial sum initialization data for a given cluster's global
-        buffer (GLB) router. The number of cycles depends on the layer's refresh
-        requirements and communication mode.
+        buffer (GLB) router across all required refresh cycles.
 
         Args:
             cl_x (int): X-coordinate of the target cluster
@@ -163,90 +144,56 @@ class PsumStreamMapper(object):
             router (int): Router index within the cluster for partial sum distribution
 
         Returns:
-            list: Storage containing partial sum data for each cycle. Each entry
-                  corresponds to one refresh cycle and contains layer-specific
-                  partial sum values (implementation in subclasses).
+            list: Flat list containing partial sum initialization data across all cycles.
 
         Note:
             - Serial mode: Number of cycles = iact_size_y * 2
-            - Parallel mode: Cycles determined by needed_refreshes_mx range
-            - Delegates actual data generation to write_psum_storage()
+            - Parallel mode: Cycle count determined by needed_refreshes_mx range
+            - Multiplies single-cycle storage directly since initialization is cycle-invariant
 
         """
-        storage = []
-        if (self.params.SERIAL):
-            # Serial mode: fixed number of cycles based on input height
-            for cycle in range(self.layer_params.iact_size_y * 2):
-                storage.append(self.write_psum_storage(cl_x, cl_y, router, cycle))
+        if self.params.SERIAL:
+            num_cycles = self.layer_params.iact_size_y * 2
         else:
-            # Parallel mode: cycle range based on refresh scheduling
-            # Extract start and end cycle from refresh matrix for this repetition
-            start_cycle = math.floor(self.layer_params.needed_refreshes_mx[self.layer_repetition][1]/2)
-            end_cycle = math.ceil(self.layer_params.needed_refreshes_mx[self.layer_repetition][2]/2)
-            for cycle in range(start_cycle, end_cycle):
-                storage.append(self.write_psum_storage(cl_x, cl_y, router, cycle))
-        return storage
+            refresh_bounds = self.layer_params.needed_refreshes_mx[self.layer_repetition]
+            num_cycles = math.ceil(refresh_bounds[2] / 2) - math.floor(refresh_bounds[1] / 2)
+
+        if num_cycles <= 0:
+            return []
+
+        return self.write_psum_storage(cl_x, cl_y, router, 0) * num_cycles
 
     def create_complete_psum_stream(self, spad_storage):
-        """Flatten scratchpad storage into a complete partial sum stream.
-
-        Converts the hierarchical scratchpad storage structure into a final stream
-        format ready for hardware transmission. Handles cycle-by-cycle data and
-        performs mode-specific formatting.
+        """Format flattened scratchpad storage into a complete partial sum stream.
 
         Args:
             spad_storage (list): 3D structure [cluster_x][cluster_y][router] containing
-                                partial sum data organized by cycles within each location.
+                                flattened partial sum data per router.
 
         Returns:
             Serial mode: List of packed 48-bit words combining data from both X-clusters
-            Parallel mode: 3D array [cluster_x][cluster_y][router] with flattened cycles
+            Parallel mode: 3D array [cluster_x][cluster_y][router] as-is
 
         Note:
-            - Serial mode combines data from two X-clusters into single words
-            - Each word packs cluster 0 data in lower 24 bits, cluster 1 in upper 24 bits
-            - Parallel mode simply flattens the cycle dimension while maintaining structure
+            - Serial mode packs cluster 0 data in lower 24 bits, cluster 1 in upper 24 bits
 
         """
-        params = self.params
-        # Initialize output stream with same hierarchical structure
-        stream = [[[[] for c in range(params.Psum_Routers)] for b in range(params.Clusters_Y)] for a in range(params.Clusters_X)]
+        if not self.params.SERIAL:
+            return spad_storage
 
-        # === FLATTEN CYCLE DATA ===
-        # Extend each router's stream with data from all cycles
-        for cl_x in range(params.Clusters_X):
-            for cl_y in range(params.Clusters_Y):
-                for router in range(params.Psum_Routers):
-                    # Get all cycles for this cluster/router combination
-                    current_spad = spad_storage[cl_x][cl_y][router]
-                    # Concatenate data from all cycles into a single stream
-                    for cycle in range(len(current_spad)):
-                        stream[cl_x][cl_y][router].extend(spad_storage[cl_x][cl_y][router][cycle])
-
-        # === MODE-SPECIFIC FORMATTING ===
-        if(params.SERIAL):
-            # Serial mode: combine X-clusters into packed words
-            temp_stream = stream
-            stream = []
-
-            # Iterate through Y-clusters and routers
-            for cl_y in range(self.params.Clusters_Y):
-                for router in range(self.params.NUM_GLB_PSUM):
-                    # Pack data from both X-clusters into single words
-                    for word in range(len(temp_stream[0][cl_y][router])):
-                        # Lower 24 bits: cluster 0, Upper 24 bits: cluster 1
-                        packed_word = temp_stream[0][cl_y][router][word] + (temp_stream[1][cl_y][router][word] * (2**24))
-                        stream.append(packed_word)
-        else:
-            # Parallel mode: return flattened hierarchical structure as-is
-            return stream
+        stream = []
+        for cl_y in range(self.params.Clusters_Y):
+            for router in range(self.params.NUM_GLB_PSUM):
+                for w0, w1 in zip(spad_storage[0][cl_y][router], spad_storage[1][cl_y][router]):
+                    stream.append(w0 | (w1 << 24))
         return stream
+
 
 class ConvPsumStreamMapper(PsumStreamMapper):
     """Partial sum stream mapper for standard convolutional layers.
 
     This class extends PsumStreamMapper to provide Conv2D-specific partial sum
-    initialization. For standard convolutions, partial sums are typically initialized
+    initialization. For standard convolutions, partial sums are initialized
     to zero as bias values are added during the first accumulation cycle.
 
     Attributes:
@@ -272,10 +219,6 @@ class ConvPsumStreamMapper(PsumStreamMapper):
     def write_psum_storage(self, cl_x, cl_y, router, cycle):
         """Generate partial sum storage data for one cycle in a Conv2D layer.
 
-        Creates the partial sum initialization values for a specific cluster, router,
-        and computation cycle. For standard convolution, most partial sums are
-        initialized to zero.
-
         Args:
             cl_x (int): X-coordinate of the target cluster
             cl_y (int): Y-coordinate of the target cluster
@@ -283,27 +226,13 @@ class ConvPsumStreamMapper(PsumStreamMapper):
             cycle (int): Current computation cycle index
 
         Returns:
-            list: Storage containing zeros for partial sum initialization. Length
-                  equals filters / needed_wght_transmissions, limited by used_psum_per_PE.
-
-        Note:
-            - Partial sums initialized to 0 for Conv2D layers
-            - Bias values are typically added during accumulation, not initialization
-            - Storage size determined by filter count and transmission scheduling
+            list: Zero-initialized partial sum entries bounded by used_psum_per_PE.
 
         """
-        storage = []
-        # Calculate number of partial sum entries for this cycle
-        num_entries = int(self.layer_params.filters / self.layer_params.needed_wght_transmissions)
+        num_entries = self.layer_params.filters // self.layer_params.needed_wght_transmissions
+        count = min(num_entries, int(self.layer_params.used_psum_per_PE))
+        return [0] * max(0, count)
 
-        for part_data_num in range(num_entries):
-            # Initialize partial sums to zero up to the PE allocation limit
-            if(part_data_num < self.layer_params.used_psum_per_PE):
-                storage.append(0)
-            else:
-                # Unused entries (should not occur in normal operation)
-                line = 0
-        return storage
 
 class DwPsumStreamMapper(PsumStreamMapper):
     """Partial sum stream mapper for depthwise convolutional layers.
@@ -336,9 +265,8 @@ class DwPsumStreamMapper(PsumStreamMapper):
     def write_psum_storage(self, cl_x, cl_y, router, cycle):
         """Generate partial sum storage data for one cycle in a depthwise layer.
 
-        Creates the partial sum initialization values for depthwise convolution.
-        Only specific Y-clusters are used based on PE column allocation, resulting
-        in sparse partial sum initialization.
+        Only clusters at PE column boundaries (cl_y % used_Y_cluster == 0) are used,
+        resulting in sparse partial sum initialization.
 
         Args:
             cl_x (int): X-coordinate of the target cluster
@@ -347,37 +275,24 @@ class DwPsumStreamMapper(PsumStreamMapper):
             cycle (int): Current computation cycle index
 
         Returns:
-            list: Storage containing zeros for partial sum initialization. Empty list
-                  for unused clusters, populated list for active clusters at column starts.
-
-        Note:
-            - Only clusters at column boundaries (cl_y % used_Y_cluster == 0) are used
-            - Storage size is ceil(filters/2) to account for dual-channel processing
-            - Partial sums initialized to 0 for depthwise layers
+            list: Zero-initialized partial sum entries for active column boundary clusters,
+                  or an empty list for unused clusters.
 
         """
-        storage = []
-        # Calculate number of partial sum entries (filters divided by 2 for dual processing)
-        num_entries = math.ceil(self.layer_params.filters / 2)
+        if (cl_y % self.layer_params.used_Y_cluster) != 0:
+            return []
 
-        for part_data_num in range(num_entries):
-            # Only initialize partial sums for clusters at PE column boundaries
-            if((cl_y % self.layer_params.used_Y_cluster) == 0):
-                # Initialize partial sums to zero up to the PE allocation limit
-                if(part_data_num < self.layer_params.used_psum_per_PE):
-                    storage.append(0)
-                else:
-                    # Unused entries (should not occur in normal operation)
-                    line = 0
-        return storage
+        num_entries = math.ceil(self.layer_params.filters / 2)
+        count = min(num_entries, int(self.layer_params.used_psum_per_PE))
+        return [0] * max(0, count)
+
 
 class DensePsumStreamMapper(PsumStreamMapper):
     """Partial sum stream mapper for fully connected (dense) layers.
 
     This class extends PsumStreamMapper to provide dense layer-specific partial sum
-    initialization. Dense layers have different data organization than convolutional
-    layers, with bias values directly loaded into partial sum accumulators before
-    the matrix-vector multiplication begins.
+    initialization. Dense layers load bias values directly into partial sum accumulators
+    before matrix-vector multiplication begins.
 
     Attributes:
         Inherited from PsumStreamMapper (params, layer_params, dram_bias, etc.)
@@ -402,45 +317,44 @@ class DensePsumStreamMapper(PsumStreamMapper):
         """Generate the complete partial sum data stream for a dense layer.
 
         Creates a specialized stream for dense layers that directly loads bias values
-        into partial sum accumulators. Unlike convolutional layers, dense layers
-        initialize partial sums with actual bias values in two's complement format.
+        into partial sum accumulators in two's complement format, interleaved across
+        cluster columns.
 
         Returns:
-            list: Stream of 20-bit two's complement bias values organized for dual
-                  PE processing. Values are interleaved in blocks of 2.
-
-        Note:
-            - Block length is fixed at 2 for dual-PE processing
-            - Bias values converted to 20-bit two's complement
-            - Values organized in pattern: [bias[0], bias[values], bias[1], bias[values+1], ...]
-            - Total stream length = ceil(used_psum_per_PE) * 2
+            list: Stream of two's complement bias values interleaved across cluster columns.
 
         """
-        psum_stream = []
-
-        # Calculate number of bias values per PE block
+        bitwidth = self.params.DATA_PSUM_BITWIDTH
+        clusters_x = self.params.Clusters_X
+        used_psum = int(self.layer_params.used_psum_per_PE)
         values = math.ceil(self.layer_params.used_psum_per_PE)
+        repetitions = self.layer_params.needed_psum_transmissions
+
+        # Pre-encode all DRAM biases once (0 remains 0 in two's complement)
+        encoded_biases = [gtu.to_twos_complement(b, bitwidth) for b in self.dram_bias]
+        num_biases = len(encoded_biases)
+
+        psum_stream = []
+        rep_stride = clusters_x * used_psum
+
         # One word per filter index per cluster column, columns interleaved
         # (f0c0, f0c1, f1c0, ...): psum_pipeline's FC GET_BIAS branch writes
         # word k into cluster column k % CLUSTER_COLUMNS and advances the
         # buffer address after every CLUSTER_COLUMNS words. The filters are
         # split across the columns, so column c holds filters
-        # c*values .. c*values+values-1. Sending only column 0's biases left
-        # column 1 without any and half of each column's addresses unwritten.
-        for repetition in range(self.layer_params.needed_psum_transmissions):
+        # c*values .. c*values+values-1.
+        for repetition in range(repetitions):
+            rep_offset = repetition * rep_stride
             for i in range(values):
-                for cl_x in range(self.params.Clusters_X):
-                    bias_index = i + repetition * self.params.Clusters_X * self.layer_params.used_psum_per_PE + cl_x * self.layer_params.used_psum_per_PE
-                    bias = self.dram_bias[bias_index] if bias_index < len(self.dram_bias) else 0
-                    psum_stream.append(gtu.to_twos_complement(bias, self.params.DATA_PSUM_BITWIDTH))
+                base_idx = rep_offset + i
+                for cl_x in range(clusters_x):
+                    bias_index = base_idx + cl_x * used_psum
+                    psum_stream.append(encoded_biases[bias_index] if bias_index < num_biases else 0)
+
         return psum_stream
 
     def write_psum_storage(self, cl_x, cl_y, router, cycle):
         """Generate partial sum storage data for one cycle in a dense layer.
-
-        Creates the partial sum initialization values for a specific cluster, router,
-        and computation cycle. For dense layers, partial sums are initialized to zero
-        as bias values are loaded separately via get_psum_stream().
 
         Args:
             cl_x (int): X-coordinate of the target cluster
@@ -449,29 +363,9 @@ class DensePsumStreamMapper(PsumStreamMapper):
             cycle (int): Current computation cycle index
 
         Returns:
-            list: Storage containing zeros for partial sum initialization. Length
-                  equals ceil(used_psum_per_PE/2) for dual PE processing.
-
-        Note:
-            - Storage initialized to 0 for dense layers
-            - Size is half of used_psum_per_PE due to dual processing
-            - Actual bias values loaded through separate mechanism in get_psum_stream()
+            list: Zero-initialized storage of length ceil(used_psum_per_PE / 2)
+                  for dual-PE processing.
 
         """
-        storage = []
-        # Calculate number of partial sum entries (half for dual processing)
         num_entries = math.ceil(self.layer_params.used_psum_per_PE / 2)
-
-        for part_data_num in range(num_entries):
-            # Check if this entry is within the PE allocation limit
-            if(part_data_num < self.layer_params.used_psum_per_PE):
-                # Redundant check (could be simplified) - initialize to zero
-                if(part_data_num < self.layer_params.used_psum_per_PE):
-                    storage.append(0)
-                else:
-                    # Unused entries (should not occur in normal operation)
-                    line = 0
-        return storage
-
-
-    
+        return [0] * max(0, num_entries)
