@@ -138,10 +138,10 @@ module psum_pipeline #(
   reg [4:0] psum_select_cnt_2;
   reg [4:0] psum_select_cnt_3;
   reg [24-1:0] psum_cycle_loop_cnt_0;
-  reg [12-1:0] psum_cycle_loop_cnt_1;
-  reg [12-1:0] psum_cycle_loop_cnt_2;
-  reg [12-1:0] psum_cycle_loop_cnt_3;
-  reg [12-1:0] psum_cycle_loop_cnt_4;
+  reg [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_cnt_1;
+  reg [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_cnt_2;
+  reg [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_cnt_3;
+  reg [LOOP_LIMIT_SIZE-1:0] psum_cycle_loop_cnt_4;
   reg [3:0] sending_cluster_rows;
   reg [3:0]  psum_cluster_select_0;
   reg [3:0]  psum_cluster_select_1;
