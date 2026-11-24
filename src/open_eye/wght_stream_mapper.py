@@ -42,8 +42,9 @@ Typical Usage:
     >>> wght_stream = dense_mapper.get_wght_stream()
 """
 
-import math
 import logging
+import math
+import numpy as np
 import open_eye.generic_test_utils as gtu
 
 logger = logging.getLogger("cocotb")
@@ -57,9 +58,9 @@ class WghtStreamMapper(object):
     with optional support for sparse weight encoding.
 
     The mapper organizes weights across multiple dimensions:
-    - Spatial: X/Y clusters containing PE arrays
-    - Temporal: Layer repetitions for weight reuse patterns
-    - Logical: Router assignments for data distribution
+- Spatial: X/Y clusters containing PE arrays
+- Temporal: Layer repetitions for weight reuse patterns
+- Logical: Router assignments for data distribution
 
     Attributes:
         params: Hardware architecture parameters (cluster counts, PE dimensions, bitwidths)
@@ -97,21 +98,15 @@ class WghtStreamMapper(object):
         clusters_x = self.params.Clusters_X
         clusters_y = self.params.Clusters_Y
         routers = self.params.Wght_Routers
-        computing_mx = self.layer_params.computing_mx
         use_sparse = self.sparse_data == 1
 
         storage = [[[[] for _ in range(routers)] for _ in range(clusters_y)] for _ in range(clusters_x)]
 
-        for cl_x in range(clusters_x):
-            comp_x = computing_mx[cl_x]
-            for cl_y in range(clusters_y):
-                comp_xy = comp_x[cl_y]
-                for router in range(routers):
-                    if comp_xy[router][0] == 1:
-                        spad = self.write_wght_pe(cl_x, cl_y, router)
-                        storage[cl_x][cl_y][router] = (
-                            self.set_sparse_stream(spad) if use_sparse else spad
-                        )
+        comp_arr = np.asarray(self.layer_params.computing_mx)[:clusters_x, :clusters_y, :routers, 0]
+        for cl_x, cl_y, router in np.argwhere(comp_arr == 1).tolist():
+            spad = self.write_wght_pe(cl_x, cl_y, router)
+            storage[cl_x][cl_y][router] = self.set_sparse_stream(spad) if use_sparse else spad
+
         return storage
 
     def _finalize_stream(self, raw_stream):
@@ -123,7 +118,7 @@ class WghtStreamMapper(object):
             self.params.DMA_BITWIDTH,
             chunk,
         )
-        n = self.layer_params.wght_cycles_one_word_all_ram
+        n = int(self.layer_params.wght_cycles_one_word_all_ram)
         if n <= 1:
             return transformed
 
@@ -141,13 +136,13 @@ class WghtStreamMapper(object):
         bitstreams.
 
         The method handles two transmission modes:
-        - Serial: Iterates through all weight transmissions, creating a time-sequenced stream
-        - Parallel: Creates a single snapshot of weight data for parallel loading
+- Serial: Iterates through all weight transmissions, creating a time-sequenced stream
+- Parallel: Creates a single snapshot of weight data for parallel loading
 
         Returns:
             list: Complete weight bitstream ready for hardware transmission. Format varies:
-                - Serial mode: Flat list of packed integers sequenced by transmission time
-                - Parallel mode: Nested structure [cluster_x][cluster_y][router][words]
+- Serial mode: Flat list of packed integers sequenced by transmission time
+- Parallel mode: Nested structure [cluster_x][cluster_y][router][words]
 
         Note:
             Only active PEs (indicated by computing_mx == 1) receive weight data.
@@ -157,7 +152,7 @@ class WghtStreamMapper(object):
         if self.params.SERIAL:
             # === SERIAL MODE: Multiple transmissions over time ===
             wght_stream = []
-            for layer_repetition_loop in range(self.layer_params.needed_wght_transmissions):
+            for layer_repetition_loop in range(int(self.layer_params.needed_wght_transmissions)):
                 self.layer_repetition = layer_repetition_loop
                 temp_storage = self._build_transmission_storage()
                 wght_stream.extend(self.create_complete_wght_stream(temp_storage))
@@ -176,22 +171,23 @@ class WghtStreamMapper(object):
         with an offset field indicating how many zeros preceded it.
 
         Sparse Format: [weight_value, skip_offset]
-        - weight_value: The actual non-zero weight
-        - skip_offset: Number of zeros skipped before this weight
+- weight_value: The actual non-zero weight
+- skip_offset: Number of zeros skipped before this weight
 
         Args:
             spad_data (list): Dense SPAD data as [addr_spad, data_spad]
-                - addr_spad: Address pointers for data regions
-                - data_spad: Weight values in dense format
+- addr_spad: Address pointers for data regions
+- data_spad: Weight values in dense format
 
         Returns:
             list: Sparse SPAD data as [new_addr_spad, new_data_spad]
-                - new_addr_spad: Updated address pointers for sparse data
-                - new_data_spad: Sparse-encoded weights with offset information
+- new_addr_spad: Updated address pointers for sparse data
+- new_data_spad: Sparse-encoded weights with offset information
 
         """
-        parallel_macs = self.params.PARALLEL_MACS
-        src_addr, data_spad = spad_data[0], spad_data[1]
+        parallel_macs = int(self.params.PARALLEL_MACS)
+        src_addr = [int(a) for a in spad_data[0]]
+        data_spad = spad_data[1].tolist() if isinstance(spad_data[1], np.ndarray) else spad_data[1]
 
         addr_spad = [0]
         temp_word = []
@@ -207,7 +203,7 @@ class WghtStreamMapper(object):
             for data_spad_pos in range(src_addr[addr_spad_count], region_end):
                 row = data_spad[data_spad_pos]
                 for x in range(parallel_macs):
-                    val = row[x][0]
+                    val = int(row[x][0])
                     if val != 0:
                         temp_word.append([val, temp_offset])
                         temp_offset = 0
@@ -259,22 +255,27 @@ class WghtStreamMapper(object):
         params = self.params
         dram = self.dram_weights
 
-        parallel_macs = params.PARALLEL_MACS
+        parallel_macs = int(params.PARALLEL_MACS)
         total_words = int(params.Wghts_per_PE / parallel_macs)
         max_used_words = math.ceil(layer_params.used_wght_per_PE / parallel_macs)
 
         spad_storage = [[[0, 0] for _ in range(parallel_macs)] for _ in range(total_words)]
-        overhead_counter = 0
-        kernel_x = 0
 
         in_channels = layer_params.input_shape[3]
         iact_trans = layer_params.iact_transmissions_pe
-        rep_mod = layer_repetition % iact_trans
-        channels_per_trans_ceil = math.ceil(in_channels / iact_trans)
         channels_per_trans_floor = int(in_channels / iact_trans)
 
-        channel = rep_mod * channels_per_trans_ceil
-        channel_limit = channels_per_trans_floor + rep_mod * channels_per_trans_ceil
+        kernel_row = int((cl_y % (layer_params.used_Y_cluster * params.PEs_Y)) * params.PEs_Y + router)
+        if kernel_row >= (layer_params.kernel_size[1] * channels_per_trans_floor):
+            return spad_storage
+
+        overhead_counter = 0
+        kernel_x = 0
+
+        rep_mod = layer_repetition % iact_trans
+        channels_per_trans_ceil = math.ceil(in_channels / iact_trans)
+        channel = int(rep_mod * channels_per_trans_ceil)
+        channel_limit = int(channels_per_trans_floor + rep_mod * channels_per_trans_ceil)
 
         filters_per_calculation = math.ceil(layer_params.used_wght_per_PE / layer_params.used_iact_per_PE)
         start_current_repetition = int(
@@ -283,31 +284,54 @@ class WghtStreamMapper(object):
         )
         end_filter = start_current_repetition + filters_per_calculation
         filters = start_current_repetition
+        kernel_w = int(layer_params.kernel_size[0])
 
-        kernel_w = layer_params.kernel_size[0]
-        kernel_row = (cl_y % (layer_params.used_Y_cluster * params.PEs_Y)) * params.PEs_Y + router
-        valid_kernel_row = kernel_row < (layer_params.kernel_size[1] * channels_per_trans_floor)
+        is_ndarray = isinstance(dram, np.ndarray) and dram.ndim == 4
+        dram_kr = dram[:, :, kernel_row, :] if is_ndarray else None
 
         for words_in_storage in range(total_words):
-            if valid_kernel_row:
-                word_slot = spad_storage[words_in_storage]
-                for spad_val_number in range(parallel_macs):
-                    if channel != channel_limit:
-                        slot = word_slot[spad_val_number]
-                        slot[0] = dram[channel][filters][kernel_row][kernel_x]
-                        slot[1] = overhead_counter
-                        overhead_counter = 0
+            word_slot = spad_storage[words_in_storage]
+            for spad_val_number in range(parallel_macs):
+                if channel != channel_limit:
+                    slot = word_slot[spad_val_number]
+                    slot[0] = (
+                        int(dram_kr[channel, filters, kernel_x])
+                        if is_ndarray
+                        else int(dram[channel][filters][kernel_row][kernel_x])
+                    )
+                    slot[1] = overhead_counter
+                    overhead_counter = 0
 
-                        filters += 1
-                        if filters == end_filter:
-                            filters = start_current_repetition
-                            kernel_x += 1
+                    filters += 1
+                    if filters == end_filter:
+                        filters = start_current_repetition
+                        kernel_x += 1
 
-                        if kernel_x == kernel_w:
-                            kernel_x = 0
-                            channel += 1
+                    if kernel_x == kernel_w:
+                        kernel_x = 0
+                        channel += 1
 
             if words_in_storage == max_used_words:
+                break
+
+        return spad_storage
+
+    def _write_conv_dw_addr_storage(self):
+        """Shared address SPAD pointer generator for Conv2D and DWConv2D."""
+        layer_params = self.layer_params
+        params = self.params
+        total_addr = math.ceil(params.Wghts_Addr_per_PE)
+        spad_storage = [0] * params.Wghts_Addr_per_PE
+
+        used_addr = int(layer_params.used_wght_addr_per_PE)
+        all_used = used_addr == params.Wghts_Addr_per_PE
+        last_idx = used_addr - 1
+        stride = math.ceil(layer_params.used_wght_per_PE / 2 / int(layer_params.used_iact_per_PE))
+
+        for words_in_storage in range(total_addr):
+            if (words_in_storage != last_idx) or all_used:
+                spad_storage[words_in_storage] = int(words_in_storage * stride)
+            else:
                 break
 
         return spad_storage
@@ -329,7 +353,7 @@ class WghtStreamMapper(object):
         params = self.params
 
         spad_storage = [0] * params.Wghts_Addr_per_PE
-        last_idx = layer_params.used_wght_addr_per_PE - 1
+        last_idx = int(layer_params.used_wght_addr_per_PE) - 1
         stride = math.ceil(
             layer_params.used_wght_per_PE
             / layer_params.kernel_size[0]
@@ -353,8 +377,8 @@ class WghtStreamMapper(object):
 
         Returns:
             list: Formatted weight bitstream
-                - Serial mode: Flat list sequenced by transmission time
-                - Parallel mode: Nested structure [cluster_x][cluster_y][router][words]
+- Serial mode: Flat list sequenced by transmission time
+- Parallel mode: Nested structure [cluster_x][cluster_y][router][words]
 
         """
         params = self.params
@@ -386,7 +410,7 @@ class WghtStreamMapper(object):
                         stream_xy = stream_x[cl_y]
                         for router in range(num_glb_wght):
                             pe_words = stream_xy[router]
-                            flat_stream.append(pe_words[word] if word < len(pe_words) else 0)
+                            flat_stream.append(int(pe_words[word]) if word < len(pe_words) else 0)
             return flat_stream
 
         return stream
@@ -404,9 +428,9 @@ class WghtStreamMapper(object):
         layer_params = self.layer_params
         params = self.params
 
-        addr_bitwidth = params.WGHT_Addr_Bitwidth
+        addr_bitwidth = int(params.WGHT_Addr_Bitwidth)
         addr_per_trans = math.floor(params.WGHT_Trans_Bitwidth / addr_bitwidth)
-        used_addr = layer_params.used_wght_addr_per_PE
+        used_addr = int(layer_params.used_wght_addr_per_PE)
         addr_list = spad[0]
         addr_len = len(addr_list)
         stream = []
@@ -418,7 +442,7 @@ class WghtStreamMapper(object):
             for addr_in_trans in range(addr_per_trans):
                 spad_word = base_word + addr_in_trans
                 if spad_word < addr_len:
-                    temp_trans |= addr_list[spad_word] << (addr_bitwidth * addr_in_trans)
+                    temp_trans |= int(addr_list[spad_word]) << (addr_bitwidth * addr_in_trans)
 
             # Replicate the packed word for each address it contains
             remaining = used_addr - len(stream)
@@ -435,8 +459,8 @@ class WghtStreamMapper(object):
         """Pack weight data SPAD into transmission-ready bitstream for a single PE.
 
         Weight Word Format: [overhead_bits][value_bits]
-        - value_bits: Actual weight value in two's complement
-        - overhead_bits: Sparsity offset or other metadata
+- value_bits: Actual weight value in two's complement
+- overhead_bits: Sparsity offset or other metadata
 
         Args:
             spad (list): Weight data SPAD for a single PE
@@ -448,32 +472,59 @@ class WghtStreamMapper(object):
         layer_params = self.layer_params
         params = self.params
 
-        wght_bw = params.WGHT_Bitwidth
-        woh_bw = params.WGHT_WOH_Bitwidth
+        wght_bw = int(params.WGHT_Bitwidth)
+        woh_bw = int(params.WGHT_WOH_Bitwidth)
+        trans_bw = int(params.WGHT_Trans_Bitwidth)
         overhead_bw = woh_bw - wght_bw
 
         val_mask = (1 << wght_bw) - 1
         ovh_mask = (1 << overhead_bw) - 1
 
-        data_per_trans = math.floor(params.WGHT_Trans_Bitwidth / woh_bw)
+        data_per_trans = math.floor(trans_bw / woh_bw)
         total_trans = math.floor(params.Wghts_per_PE / data_per_trans)
         max_lines = math.ceil(layer_params.used_wght_per_PE / params.PARALLEL_MACS)
         keep_zeros = (not self.SKIP_ZERO_WORDS) or (layer_params.needed_wght_transmissions > 1)
 
+        limit = min(int(total_trans), int(max_lines))
+        if limit <= 0:
+            return []
+
         spad_len = len(spad)
-        line_counter = 0
+        if spad_len == 0:
+            return [0] * limit if keep_zeros else []
+
+        rows_to_pack = min(limit, spad_len)
+        if trans_bw <= 64:
+            try:
+                arr = np.asarray(spad[:rows_to_pack], dtype=np.int64)
+                if arr.ndim == 3 and arr.shape[2] == 2:
+                    cols = min(data_per_trans, arr.shape[1])
+                    if cols > 0:
+                        sub = arr[:, :cols, :]
+                        vals = sub[:, :, 0].astype(np.uint64) & np.uint64(val_mask)
+                        ovhs = sub[:, :, 1].astype(np.uint64) & np.uint64(ovh_mask)
+                        packed = (ovhs << np.uint64(wght_bw)) | vals
+                        shifts = np.arange(cols, dtype=np.uint64) * np.uint64(woh_bw)
+                        words = np.bitwise_or.reduce(packed << shifts, axis=1).tolist()
+                    else:
+                        words = [0] * rows_to_pack
+
+                    if rows_to_pack < limit:
+                        words.extend([0] * (limit - rows_to_pack))
+                    return words if keep_zeros else [w for w in words if w != 0]
+            except ValueError:
+                pass
+
+        # Fallback for inhomogeneous SPAD rows or trans_bw > 64
         stream = []
-
-        for spad_data_trans in range(total_trans):
+        for spad_data_trans in range(limit):
             temp_trans = 0
-
             if spad_data_trans < spad_len:
                 row = spad[spad_data_trans]
                 row_len = len(row)
                 for data_in_trans in range(data_per_trans):
                     if data_in_trans < row_len:
                         entry = row[data_in_trans]
-                        # Fast bitwise two's complement equivalent to gtu.to_twos_complement
                         val_bits = int(entry[0]) & val_mask
                         ovh_bits = int(entry[1]) & ovh_mask
                         packed = (ovh_bits << wght_bw) | val_bits
@@ -482,10 +533,6 @@ class WghtStreamMapper(object):
             if temp_trans != 0 or keep_zeros:
                 stream.append(temp_trans)
 
-            line_counter += 1
-            if line_counter == max_lines:
-                break
-
         return stream
 
 
@@ -493,9 +540,9 @@ class ConvWghtStreamMapper(WghtStreamMapper):
     """Weight stream mapper specialized for standard 2D convolution layers.
 
     Key differences from base class:
-    - Supports multi-kernel-per-PE-cluster configurations
-    - Handles channel offset calculations for different clusters
-    - Accounts for single-cluster vs. multi-cluster computation modes
+- Supports multi-kernel-per-PE-cluster configurations
+- Handles channel offset calculations for different clusters
+- Accounts for single-cluster vs. multi-cluster computation modes
 
     Attributes:
         Inherited from WghtStreamMapper
@@ -525,9 +572,13 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         params = self.params
         dram = self.dram_weights
 
-        parallel_macs = params.PARALLEL_MACS
+        parallel_macs = int(params.PARALLEL_MACS)
         total_words = int(params.Wghts_per_PE / parallel_macs)
         spad_storage = [[[0, 0] for _ in range(parallel_macs)] for _ in range(total_words)]
+        amount_of_words = math.ceil(layer_params.used_wght_per_PE / parallel_macs)
+        if amount_of_words <= 0:
+            return spad_storage
+
         overhead_counter = 0
         kernel_x = 0
 
@@ -539,15 +590,16 @@ class ConvWghtStreamMapper(WghtStreamMapper):
         channels_per_trans_floor = int(in_channels / iact_trans)
 
         # Calculate starting channel index for this transmission and router
-        channel = rep_mod * channels_per_trans_ceil + math.ceil(
-            math.ceil((router % kernels_per_cluster) * in_channels / iact_trans / kernels_per_cluster)
+        channel = int(
+            rep_mod * channels_per_trans_ceil
+            + math.ceil(math.ceil((router % kernels_per_cluster) * in_channels / iact_trans / kernels_per_cluster))
         )
         channel_offset = channel
-        channel_limit = 1 + channels_per_trans_floor + rep_mod * channels_per_trans_ceil
-        used_channels_end = layer_params.used_channels + channel_offset
+        channel_limit = int(1 + channels_per_trans_floor + rep_mod * channels_per_trans_ceil)
+        used_channels_end = int(layer_params.used_channels + channel_offset)
 
         # Calculate filter assignment accounting for different kernel computations per PE
-        diff_kernels = layer_params.different_kernels_per_calculation
+        diff_kernels = int(layer_params.different_kernels_per_calculation)
         filters_per_calculation = (
             math.ceil(layer_params.used_wght_per_PE / layer_params.used_iact_per_PE) * diff_kernels
         )
@@ -561,23 +613,56 @@ class ConvWghtStreamMapper(WghtStreamMapper):
             (layer_params.used_Y_cluster * math.ceil(layer_params.iact_x_add_up / layer_params.strideX))
             / params.PEs_X
         )
-        channel_offset_in_calculation = (params.Clusters_X * cl_y + cl_x) // amount_of_used_clusters
+        channel_offset_in_calculation = int((params.Clusters_X * cl_y + cl_x) // amount_of_used_clusters)
         start_current_repetition += channel_offset_in_calculation
         end_filter = start_current_repetition + filters_per_calculation
 
-        amount_of_words = math.ceil(layer_params.used_wght_per_PE / parallel_macs)
-        kernel_row = (cl_y % layer_params.used_Y_cluster) * params.PEs_Y + (router % layer_params.kernel_size[0])
-
+        kernel_row = int((cl_y % layer_params.used_Y_cluster) * params.PEs_Y + (router % layer_params.kernel_size[0]))
         filters = start_current_repetition
         spad_position = 0
 
-        for words_in_storage in range(amount_of_words):
+        if isinstance(dram, np.ndarray) and dram.ndim == 4:
+            d0, d1, d2, d3 = dram.shape
+            valid_kr = 0 <= kernel_row < d3
+            dram_kr = dram[:, :, :, kernel_row] if valid_kr else None
+
+            for _ in range(amount_of_words):
+                for _ in range(parallel_macs):
+                    if channel != channel_limit:
+                        w_idx = spad_position // parallel_macs
+                        m_idx = spad_position % parallel_macs
+                        if valid_kr and (0 <= channel < d0) and (0 <= filters < d1) and (0 <= kernel_x < d2):
+                            val = int(dram_kr[channel, filters, kernel_x])
+                            spad_storage[w_idx][m_idx][0] = val
+                            if val == 0:
+                                overhead_counter += 1
+                            else:
+                                spad_storage[w_idx][m_idx][1] = overhead_counter
+                                spad_position += 1
+                                overhead_counter = 0
+                        else:
+                            spad_storage[w_idx][m_idx][0] = 0
+                            spad_position += 1
+
+                        filters += diff_kernels
+                        if filters == end_filter:
+                            filters = start_current_repetition
+                            channel += 1
+                            spad_position += spad_position % parallel_macs
+
+                        if channel == used_channels_end:
+                            channel = channel_offset
+                            kernel_x += 1
+
+            return spad_storage
+
+        for _ in range(amount_of_words):
             for _ in range(parallel_macs):
                 if channel != channel_limit:
                     w_idx = spad_position // parallel_macs
                     m_idx = spad_position % parallel_macs
                     try:
-                        val = dram[channel][filters][kernel_x][kernel_row]
+                        val = int(dram[channel][filters][kernel_x][kernel_row])
                         spad_storage[w_idx][m_idx][0] = val
                         if val == 0:
                             overhead_counter += 1
@@ -589,64 +674,30 @@ class ConvWghtStreamMapper(WghtStreamMapper):
                         spad_storage[w_idx][m_idx][0] = 0
                         spad_position += 1
 
-                    # Advance to next filter (with stride for different kernels)
                     filters += diff_kernels
-
-                    # Wrap to next channel when filter range exhausted
                     if filters == end_filter:
                         filters = start_current_repetition
                         channel += 1
                         spad_position += spad_position % parallel_macs
 
-                    # Wrap to next kernel X when channels exhausted
                     if channel == used_channels_end:
                         channel = channel_offset
                         kernel_x += 1
 
-            if words_in_storage == amount_of_words:
-                break
-
         return spad_storage
 
     def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
-        """Generate address SPAD pointers for Conv2D weight data access.
-
-        Args:
-            cl_x (int): Cluster X coordinate (unused)
-            cl_y (int): Cluster Y coordinate (unused)
-            router (int): Router/PE ID (unused)
-            data_spad: Weight data SPAD (unused)
-
-        Returns:
-            list: Address SPAD containing integer pointers to weight regions
-
-        """
-        layer_params = self.layer_params
-        params = self.params
-        total_addr = math.ceil(params.Wghts_Addr_per_PE)
-        spad_storage = [0] * params.Wghts_Addr_per_PE
-
-        used_addr = layer_params.used_wght_addr_per_PE
-        all_used = used_addr == params.Wghts_Addr_per_PE
-        last_idx = used_addr - 1
-        stride = math.ceil(layer_params.used_wght_per_PE / 2 / int(layer_params.used_iact_per_PE))
-
-        for words_in_storage in range(total_addr):
-            if (words_in_storage != last_idx) or all_used:
-                spad_storage[words_in_storage] = int(words_in_storage * stride)
-            else:
-                break
-
-        return spad_storage
+        """Generate address SPAD pointers for Conv2D weight data access."""
+        return self._write_conv_dw_addr_storage()
 
 
 class DenseWghtStreamMapper(WghtStreamMapper):
     """Weight stream mapper specialized for fully-connected (Dense) layers.
 
     Key differences from base class:
-    - Uses 2D weight matrix instead of 4D convolution kernels
-    - Different PE assignment strategy based on output features
-    - Always processes all weight transmissions in sequence
+- Uses 2D weight matrix instead of 4D convolution kernels
+- Different PE assignment strategy based on output features
+- Always processes all weight transmissions in sequence
 
     Attributes:
         Inherited from WghtStreamMapper
@@ -671,7 +722,7 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         """
         wght_stream = []
         # Always iterate through all weight transmissions for Dense layers
-        for layer_repetition_loop in range(self.layer_params.needed_wght_transmissions):
+        for layer_repetition_loop in range(int(self.layer_params.needed_wght_transmissions)):
             self.layer_repetition = layer_repetition_loop
             temp_storage = self._build_transmission_storage()
             wght_stream.extend(self.create_complete_wght_stream(temp_storage))
@@ -707,7 +758,7 @@ class DenseWghtStreamMapper(WghtStreamMapper):
             # === SERIAL MODE: Time-multiplex across clusters ===
             num_words = len(wght_stream[0][0][0])
             num_glb_wght = params.NUM_GLB_WGHT
-            shift = params.WGHT_Trans_Bitwidth
+            shift = int(params.WGHT_Trans_Bitwidth)
             flat_stream = []
 
             for word in range(num_words):
@@ -718,7 +769,7 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                         for router in range(num_glb_wght):
                             pe_words = stream_xy[router]
                             if word < len(pe_words):
-                                val = pe_words[word]
+                                val = int(pe_words[word])
                                 # NOTE: both terms index cl_x, so this doubles one
                                 # column rather than combining columns 0 and 1 as
                                 # the iact/psum mappers do. Emitting a single
@@ -753,25 +804,27 @@ class DenseWghtStreamMapper(WghtStreamMapper):
         params = self.params
         dram = self.dram_weights
 
-        parallel_macs = params.PARALLEL_MACS
+        parallel_macs = int(params.PARALLEL_MACS)
         total_words = int(params.Wghts_per_PE / parallel_macs)
         max_used_words = math.ceil(layer_params.used_wght_per_PE / parallel_macs)
-        spad_storage = [[[0, 0] for _ in range(parallel_macs)] for _ in range(total_words)]
+        loop_words = min(total_words, max_used_words + 1) if max_used_words >= 0 else total_words
+
+        if loop_words <= 0 or parallel_macs <= 0:
+            return [[[0, 0] for _ in range(parallel_macs)] for _ in range(total_words)]
 
         iact_words_per_memory = 2
-        used_psum = layer_params.used_psum_per_PE
-        used_iact = layer_params.used_iact_per_PE
-        num_glb_wght = params.NUM_GLB_WGHT
+        used_psum = int(layer_params.used_psum_per_PE)
+        used_iact = int(layer_params.used_iact_per_PE)
+        num_glb_wght = int(params.NUM_GLB_WGHT)
         needed_wghts_in_word = math.ceil(used_psum / parallel_macs) * parallel_macs
 
-        # Loop-invariant filter and channel base offsets
-        filter_base = (
+        filter_base = int(
             cl_x * used_psum
             + (math.floor(layer_repetition / layer_params.diff_iact_layer) % layer_params.needed_psum_transmissions)
             * params.Clusters_X
             * used_psum
         )
-        channel_base = (
+        channel_base = int(
             math.floor((layer_repetition % layer_params.diff_iact_layer) * (num_glb_wght * params.Clusters_Y * used_iact))
             + (cl_y * num_glb_wght * used_iact)
             + router * iact_words_per_memory
@@ -779,9 +832,35 @@ class DenseWghtStreamMapper(WghtStreamMapper):
 
         channel_word_stride = iact_words_per_memory * num_glb_wght
         block_size = needed_wghts_in_word * iact_words_per_memory
-        dram_rows = len(dram)
 
-        for words_in_storage in range(total_words):
+        try:
+            dram_arr = dram if (isinstance(dram, np.ndarray) and dram.ndim == 2) else np.asarray(dram, dtype=np.int64)
+            if dram_arr.ndim == 2:
+                d_rows, d_cols = dram_arr.shape
+                positions = np.arange(loop_words * parallel_macs, dtype=np.int64)
+                pos_mod = positions % needed_wghts_in_word
+                active = pos_mod < used_psum
+                filters = pos_mod + filter_base
+                channels = (
+                    channel_base
+                    + ((positions // needed_wghts_in_word) % iact_words_per_memory)
+                    + ((positions // block_size) * channel_word_stride)
+                )
+                valid = active & (filters >= 0) & (filters < d_rows) & (channels >= 0) & (channels < d_cols)
+
+                vals = np.zeros(positions.size, dtype=np.int64)
+                vals[valid] = dram_arr[filters[valid], channels[valid]]
+
+                out = np.zeros((total_words, parallel_macs, 2), dtype=np.int64)
+                out[:loop_words, :, 0] = vals.reshape(loop_words, parallel_macs)
+                return out.tolist()
+        except ValueError:
+            pass
+
+        # Fallback for jagged 2D Python lists
+        spad_storage = [[[0, 0] for _ in range(parallel_macs)] for _ in range(total_words)]
+        dram_rows = len(dram)
+        for words_in_storage in range(loop_words):
             word_slot = spad_storage[words_in_storage]
             base_pos = words_in_storage * parallel_macs
 
@@ -790,19 +869,16 @@ class DenseWghtStreamMapper(WghtStreamMapper):
                 pos_mod = position % needed_wghts_in_word
 
                 if pos_mod < used_psum:
-                    filters = int(pos_mod + filter_base)
-                    channel = int(
+                    filters = pos_mod + filter_base
+                    channel = (
                         channel_base
-                        + (math.floor(position / needed_wghts_in_word) % iact_words_per_memory)
-                        + (math.floor(position / block_size) * channel_word_stride)
+                        + ((position // needed_wghts_in_word) % iact_words_per_memory)
+                        + ((position // block_size) * channel_word_stride)
                     )
                     if 0 <= filters < dram_rows:
                         dram_row = dram[filters]
                         if 0 <= channel < len(dram_row):
-                            word_slot[spad_val_number][0] = dram_row[channel]
-
-            if words_in_storage == max_used_words:
-                break
+                            word_slot[spad_val_number][0] = int(dram_row[channel])
 
         return spad_storage
 
@@ -824,7 +900,7 @@ class DenseWghtStreamMapper(WghtStreamMapper):
 
         total_addr = math.ceil(params.Wghts_Addr_per_PE)
         spad_storage = [0] * params.Wghts_Addr_per_PE
-        last_idx = layer_params.used_wght_addr_per_PE - 1
+        last_idx = int(layer_params.used_wght_addr_per_PE) - 1
         stride = math.ceil(layer_params.used_psum_per_PE / params.PARALLEL_MACS)
 
         for words_in_storage in range(total_addr):
@@ -870,9 +946,13 @@ class DwWghtStreamMapper(WghtStreamMapper):
         params = self.params
         dram = self.dram_weights
 
-        parallel_macs = params.PARALLEL_MACS
+        parallel_macs = int(params.PARALLEL_MACS)
         total_words = int(params.Wghts_per_PE / parallel_macs)
         spad_storage = [[[0, 0] for _ in range(parallel_macs)] for _ in range(total_words)]
+        amount_of_words = math.ceil(layer_params.used_wght_per_PE / parallel_macs)
+        if amount_of_words <= 0:
+            return spad_storage
+
         overhead_counter = 0
         kernel_x = 0
 
@@ -884,24 +964,56 @@ class DwWghtStreamMapper(WghtStreamMapper):
         channels_per_trans_floor = int(in_channels / iact_trans)
 
         # Calculate starting channel index for this transmission and router
-        channel = rep_mod * channels_per_trans_ceil + math.ceil(
-            math.ceil((router % kernels_per_cluster) * in_channels / iact_trans / kernels_per_cluster)
+        channel = int(
+            rep_mod * channels_per_trans_ceil
+            + math.ceil(math.ceil((router % kernels_per_cluster) * in_channels / iact_trans / kernels_per_cluster))
         )
         channel_offset = channel
-        channel_limit = 1 + channels_per_trans_floor + rep_mod * channels_per_trans_ceil
-        used_channels_end = layer_params.used_channels + channel_offset
+        channel_limit = int(1 + channels_per_trans_floor + rep_mod * channels_per_trans_ceil)
+        used_channels_end = int(layer_params.used_channels + channel_offset)
 
-        amount_of_words = math.ceil(layer_params.used_wght_per_PE / parallel_macs)
-        kernel_row = (cl_y % layer_params.used_Y_cluster) * params.PEs_Y + (router % layer_params.kernel_size[0])
+        kernel_row = int((cl_y % layer_params.used_Y_cluster) * params.PEs_Y + (router % layer_params.kernel_size[0]))
         spad_position = 0
 
-        for words_in_storage in range(amount_of_words):
+        if isinstance(dram, np.ndarray) and dram.ndim == 3:
+            d0, d1, d2 = dram.shape
+            valid_kr = 0 <= kernel_row < d2
+            dram_kr = dram[:, :, kernel_row] if valid_kr else None
+
+            for _ in range(amount_of_words):
+                for _ in range(parallel_macs):
+                    if channel != channel_limit:
+                        w_idx = spad_position // parallel_macs
+                        m_idx = spad_position % parallel_macs
+                        if valid_kr and (0 <= channel < d0) and (0 <= kernel_x < d1):
+                            val = int(dram_kr[channel, kernel_x])
+                            spad_storage[w_idx][m_idx][0] = val
+                            if val == 0:
+                                overhead_counter += 1
+                            else:
+                                spad_storage[w_idx][m_idx][1] = overhead_counter
+                                spad_position += 1
+                                overhead_counter = 0
+                        else:
+                            spad_storage[w_idx][m_idx][0] = 0
+                            spad_position += 1
+
+                        channel += 1
+                        spad_position += spad_position % parallel_macs
+
+                        if channel == used_channels_end:
+                            channel = channel_offset
+                            kernel_x += 1
+
+            return spad_storage
+
+        for _ in range(amount_of_words):
             for _ in range(parallel_macs):
                 if channel != channel_limit:
                     w_idx = spad_position // parallel_macs
                     m_idx = spad_position % parallel_macs
                     try:
-                        val = dram[channel][kernel_x][kernel_row]
+                        val = int(dram[channel][kernel_x][kernel_row])
                         spad_storage[w_idx][m_idx][0] = val
                         if val == 0:
                             overhead_counter += 1
@@ -916,43 +1028,12 @@ class DwWghtStreamMapper(WghtStreamMapper):
                     channel += 1
                     spad_position += spad_position % parallel_macs
 
-                    # Wrap to next kernel X when channels exhausted
                     if channel == used_channels_end:
                         channel = channel_offset
                         kernel_x += 1
 
-            if words_in_storage == amount_of_words:
-                break
-
         return spad_storage
 
     def write_wght_addr_storage(self, cl_x, cl_y, router, data_spad):
-        """Generate address SPAD pointers for Depthwise Conv2D weight data access.
-
-        Args:
-            cl_x (int): Cluster X coordinate (unused)
-            cl_y (int): Cluster Y coordinate (unused)
-            router (int): Router/PE ID (unused)
-            data_spad: Weight data SPAD (unused)
-
-        Returns:
-            list: Address SPAD containing integer pointers to weight regions
-
-        """
-        layer_params = self.layer_params
-        params = self.params
-        total_addr = math.ceil(params.Wghts_Addr_per_PE)
-        spad_storage = [0] * params.Wghts_Addr_per_PE
-
-        used_addr = layer_params.used_wght_addr_per_PE
-        all_used = used_addr == params.Wghts_Addr_per_PE
-        last_idx = used_addr - 1
-        stride = math.ceil(layer_params.used_wght_per_PE / 2 / int(layer_params.used_iact_per_PE))
-
-        for words_in_storage in range(total_addr):
-            if (words_in_storage != last_idx) or all_used:
-                spad_storage[words_in_storage] = int(words_in_storage * stride)
-            else:
-                break
-
-        return spad_storage
+        """Generate address SPAD pointers for Depthwise Conv2D weight data access."""
+        return self._write_conv_dw_addr_storage()

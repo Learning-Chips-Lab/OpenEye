@@ -5,102 +5,84 @@
 
 """Layer operation utilities for the OpenEye neural network accelerator.
 
-This module provides implementation of basic neural network layer operations
-that are performed on the host side or used for reference calculations.
-It includes operations for:
+This module provides host-side reference implementations of basic neural network
+layer operations operating on NumPy-backed DRAM buffers:
 - Pooling layers (max and average pooling)
 - Flattening operations
-- Batch normalization and quantization
-
-The operations work directly with the DRAM data structures used by OpenEye
-and handle the data format transformations needed between layers.
+- Quantization / requantization
 """
 
-import math
+import numpy as np
+
 
 def pool(dram, layer, layer_number):
-    """Perform pooling operation on feature maps.
-    
-    This function implements both average and max pooling operations on the input
-    feature maps. The type of pooling is determined by the layer configuration.
-    
-    Args:
-        dram: Memory object containing feature maps
-        layer: Layer configuration object containing:
-            - output.shape: Output dimensions (batch, height, width, channels)
-            - strides: Pooling window size and stride
-            - Type indicator ("Average" or "Max" in layer string representation)
-        layer_number: Index of the current layer (used for DRAM indexing)
-    
-    The function operates in-place on the DRAM object, writing results to
-    layer_number + 1 index. For average pooling, results are integer-divided
-    by the pooling window area.
+    """Perform 2D pooling on feature maps in ``dram.fmap[layer_number][0]``.
+
+    Writes the pooled output into ``dram.fmap[layer_number + 1][0]``.
     """
-    temp_number = 0
+    out_x = layer.output.shape[1]
+    out_y = layer.output.shape[2]
+    out_c = layer.output.shape[3]
+    stride_x = layer.strides[0]
+    stride_y = layer.strides[1]
 
-    if "Average" in str(layer):
-        for oc in range(layer.output.shape[3]):
-            for ox in range(layer.output.shape[2]):
-                for oy in range(layer.output.shape[1]):
-                    for ix in range(layer.strides[1]):
-                        for iy in range(layer.strides[0]):
-                            temp_number = temp_number + dram.fmap[layer_number][0][oc][ix][iy]
-                    dram.fmap[layer_number + 1][0][oc][ox][oy] = int(temp_number/ (layer.strides[0]*layer.strides[1]))
+    src = np.asarray(dram.fmap[layer_number][0], dtype=np.int64)
+    dst = dram.fmap[layer_number + 1][0]
 
-    elif "Max" in str(layer):
-        for oc in range(layer.output.shape[3]):
-            for ox in range(layer.output.shape[2]):
-                for oy in range(layer.output.shape[1]):
-                    for ix in range(layer.strides[1]):
-                        for iy in range(layer.strides[0]):
-                            if(dram.fmap[layer_number][0][oc][ix][iy] > temp_number):
-                                temp_number = dram.fmap[layer_number][0][oc][ix][iy]
+    # Build sliding/strided window view of shape (out_c, out_x, out_y, stride_x, stride_y)
+    windows = np.lib.stride_tricks.sliding_window_view(
+        src[:out_c], (stride_x, stride_y), axis=(1, 2)
+    )[:, ::stride_x, ::stride_y, :, :][:, :out_x, :out_y, :, :]
 
-                    dram.fmap[layer_number + 1][0][oc][ox][oy] = temp_number
-        
+    layer_str = str(layer)
+    if "Average" in layer_str:
+        area = stride_x * stride_y
+        dst[:out_c, :out_x, :out_y] = (windows.sum(axis=(3, 4)) // area).astype(dst.dtype)
+    elif "Max" in layer_str:
+        dst[:out_c, :out_x, :out_y] = windows.max(axis=(3, 4)).astype(dst.dtype)
+
 
 def flat(dram, layer, layer_number):
-    """Flatten multi-dimensional feature maps to 1D arrays.
-    
-    This function transforms 3D feature maps (channels, height, width) into
-    a 1D array, which is typically used before fully connected layers. The
-    flattening preserves the data order required by subsequent operations.
-    
-    Args:
-        dram: Memory object containing feature maps
-        layer: Layer configuration object containing:
-            - input.shape: Input dimensions (batch, height, width, channels)
-        layer_number: Index of the current layer
-        
-    The function performs the following transformations:
-    - Reads 3D input from dram[layer_number]
-    - Writes flattened 1D output to dram[layer_number + 1]
-    - Maintains channel-major ordering (channels before spatial dimensions)
-    """
-    for ic in range(layer.input.shape[3]):
-        for iy in range(layer.input.shape[1]):
-            for ix in range(layer.input.shape[2]):
-                    dram.fmap[layer_number + 1][0][ic * layer.input.shape[2] * layer.input.shape[1]+ iy * layer.input.shape[2] + ix] = dram.fmap[layer_number][0][ic][ix][iy]
+    """Flatten 3D feature maps (channels, width, height) into a 1D vector."""
+    in_x = layer.input.shape[1]
+    in_y = layer.input.shape[2]
+    in_c = layer.input.shape[3]
+
+    src = np.asarray(dram.fmap[layer_number][0])[:in_c, :in_x, :in_y]
+    # Preserve channel-major, y-then-x traversal order
+    flattened = src.transpose(0, 2, 1).ravel()
+
+    dst = dram.fmap[layer_number + 1][0]
+    dst[: flattened.size] = flattened.astype(dst.dtype)
+
+
+def _quantize_array(values, mult: int, shift_bits: int) -> np.ndarray:
+    """Apply fixed-point multiplier and floor bit-shift to an integer array."""
+    arr = np.asarray(values, dtype=np.int64)
+    scaled = arr * int(mult)
+    if shift_bits >= 0:
+        return scaled >> int(shift_bits)
+    return np.floor(scaled / (2.0 ** int(shift_bits))).astype(np.int64)
+
 
 def quantize_dict(calculated_results, layer_parameters):
-  bn_results = {}
+    """Quantize per-filter feature maps using each filter's (multiplier, shift) pair."""
+    if isinstance(calculated_results, dict):
+        return {
+            f: _quantize_array(
+                matrix,
+                int(layer_parameters.quantize[f][0]),
+                int(layer_parameters.quantize[f][1]),
+            ).tolist()
+            for f, matrix in calculated_results.items()
+        }
 
-  # f = Key (0..15), matrix = 4x4 Liste
-  for f, matrix in calculated_results.items():
-    mult = layer_parameters.quantize[f][0]
-    shift = 2 ** layer_parameters.quantize[f][1]
-
-    quantized_matrix = []
-    # Jede Zeile (X-Achse) durchgehen
-    for row in matrix:
-      quantized_row = []
-      # Jeden einzelnen Wert in der Zeile (Y-Achse) quantisieren
-      for val in row:
-        q_val = math.floor((mult * val) / shift)
-        quantized_row.append(q_val)
-      quantized_matrix.append(quantized_row)
-
-    bn_results[f] = quantized_matrix
-
-  return bn_results
-
+    arr = np.asarray(calculated_results, dtype=np.int64)
+    out = np.empty_like(arr)
+    for f in range(arr.shape[0]):
+        out[f] = _quantize_array(
+            arr[f],
+            int(layer_parameters.quantize[f][0]),
+            int(layer_parameters.quantize[f][1]),
+        )
+    return out.tolist()

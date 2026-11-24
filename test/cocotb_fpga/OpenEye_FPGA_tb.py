@@ -9,11 +9,11 @@ import logging
 from pathlib import Path
 
 import cocotb
+import numpy as np
 import tensorflow as tf
 from cocotb.clock import Clock
-from cocotb.logging import SimLogFormatter
 from cocotb.utils import get_sim_time
-from cocotb.triggers import ValueChange, FallingEdge, RisingEdge, Timer, with_timeout, SimTimeoutError
+from cocotb.triggers import ValueChange, Timer, with_timeout, SimTimeoutError
 
 import open_eye.test_utils_main as tum
 import open_eye.rtl_test_utils as rtl_test_utils
@@ -26,25 +26,19 @@ import open_eye.layer_parameters as lp
 import open_eye.simple_layer_operations as slo
 import open_eye.layer_execution_state as les
 import open_eye.data_create as data_create
-import open_eye.tflite2model as tflite2model
 import open_eye.onnx2model as o2m
 
 
 class CustomSimTimeFormatter(logging.Formatter):
-    """Custom logging formatter that adds simulation time to log messages.
-    
-    This formatter extends the standard logging.Formatter to prepend simulation
-    time in nanoseconds to each log message.
-    """
+    """Custom logging formatter that prepends simulation time in nanoseconds."""
+
     def format(self, record):
-        # Zeit in ns holen
         try:
-            sim_time = get_sim_time('ns')
+            sim_time = get_sim_time("ns")
             sim_time_str = f"{sim_time:10.2f}ns"
         except Exception:
             sim_time_str = "  -.--ns"
-            
-        # Das Standard-Format von cocotb nachbauen
+
         msg = super().format(record)
         return f"{sim_time_str} {msg}"
 
@@ -53,7 +47,6 @@ os.environ["CLOCK_LEN"] = "10"
 os.environ["CLOCK_UNIT"] = "ns"
 os.environ["CLOCK_DELAY_INPUT"] = "100"
 os.environ["CLOCK_DELAY_UNIT_INPUT"] = "ps"
-
 os.environ["CLOCK_DELAY_OUTPUT"] = "100"
 os.environ["CLOCK_DELAY_UNIT_OUTPUT"] = "ps"
 
@@ -61,42 +54,37 @@ time_printer = time_stamper.time_stamper()
 
 tests_dir = os.path.abspath(os.path.dirname(__file__))
 hdl_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir, os.pardir, "hdl"))
-log_level = int(os.getenv("LOGGER_LEVEL"))
+_raw_log_level = os.getenv("LOGGER_LEVEL")
+log_level = int(_raw_log_level) if _raw_log_level else logging.INFO
 logger = logging.getLogger("cocotb")
 
 
 async def setup_file_logging():
+    """Configure optional file logging with simulation timestamps."""
     global logger
-    """Hilfsfunktion, um den Logger sauber zu konfigurieren."""
     log_path = os.getenv("COCOTB_LOG_FILE_PATH")
     if not log_path:
         return
-    
+
     log_path = os.path.abspath(log_path)
     logger = logging.getLogger("cocotb")
-    
-    # Verhindere doppelte Handler, falls dieser Code mehrfach aufgerufen wird
+
     for h in logger.handlers[:]:
         if isinstance(h, logging.FileHandler):
             logger.removeHandler(h)
-    
-    # Handler erstellen
-    fh = logging.FileHandler(log_path, mode='w')
 
-    # Level setzen
+    fh = logging.FileHandler(log_path, mode="w")
     raw_level = os.getenv("LOGGER_LEVEL")
     level = int(raw_level) if raw_level else logging.INFO
     fh.setLevel(level)
-    
-    # Formatter mit Simulationszeit
     fh.setFormatter(CustomSimTimeFormatter("%(levelname)-8s %(name)-20s %(message)s"))
 
     logger.addHandler(fh)
-    logger.info(f"File logging started at sim time {cocotb.utils.get_sim_time('ns')} ns")
+    logger.info("File logging started at sim time %s ns", cocotb.utils.get_sim_time("ns"))
 
 
-def envvars_to_vars():    
-    # Get variables that are used for the execution of the test
+def envvars_to_vars():
+    """Load test configuration variables from environment variables."""
     only_files = gtu.load_env_to_variable("ONLY_FILES", 0)
     layer_mode = gtu.load_env_to_variable("LAYER", "Convolution")
     filters = gtu.load_env_to_variable("NUM_FILTERS", 4)
@@ -105,126 +93,125 @@ def envvars_to_vars():
     inputsize_x = gtu.load_env_to_variable("INPUT_SIZE_X", 64)
     inputsize_y = gtu.load_env_to_variable("INPUT_SIZE_Y", 1)
     outputsize = gtu.load_env_to_variable("OUTPUT_SIZE", 1)
-    strides = gtu.load_env_to_variable("STRIDE", 1), gtu.load_env_to_variable("STRIDE", 1)
+    stride_val = gtu.load_env_to_variable("STRIDE", 1)
+    strides = (stride_val, stride_val)
     channels = gtu.load_env_to_variable("INPUT_CHANNELS", 4)
     sparse_iacts = gtu.load_env_to_variable("USE_SPARSE_IACTS", 0)
-    # Runners set USE_SPARSE_WGHTS; keep USE_SPARSE_WEIGHTS as fallback for
-    # older callers.
     sparse_wghts = gtu.load_env_to_variable(
-        "USE_SPARSE_WGHTS", gtu.load_env_to_variable("USE_SPARSE_WEIGHTS", 0))
+        "USE_SPARSE_WGHTS", gtu.load_env_to_variable("USE_SPARSE_WEIGHTS", 0)
+    )
     return (
-        only_files, layer_mode, filters, kernelsize_x, kernelsize_y,
-        inputsize_x, inputsize_y, outputsize, strides, channels,
-        sparse_iacts, sparse_wghts
+        only_files,
+        layer_mode,
+        filters,
+        kernelsize_x,
+        kernelsize_y,
+        inputsize_x,
+        inputsize_y,
+        outputsize,
+        strides,
+        channels,
+        sparse_iacts,
+        sparse_wghts,
     )
 
 
-#@cocotb.test()
-async def model_test(dut):
-    """ Test the DUT with a given DNN model.
+def _create_port_timing_params() -> tp.PortTimingParameters:
+    """Initialize PortTimingParameters from clock environment variables."""
+    ptp = tp.PortTimingParameters()
+    ptp.initiate_params(
+        int(os.environ["CLOCK_LEN"]),
+        os.environ["CLOCK_UNIT"],
+        int(os.environ["CLOCK_DELAY_INPUT"]),
+        os.environ["CLOCK_DELAY_UNIT_INPUT"],
+        int(os.environ["CLOCK_DELAY_OUTPUT"]),
+        os.environ["CLOCK_DELAY_UNIT_OUTPUT"],
+    )
+    return ptp
 
-    Load a trained DNN model (in TFLite format) 
-    and simulate the execution using the OpenEye FPGA wrapper.
-    """
-    (
-        only_files, layer_mode, filters, kernelsize_x, kernelsize_y,
-        inputsize_x, inputsize_y, outputsize, strides,
-        channels, sparse_iacts, sparse_wghts
-    ) = envvars_to_vars()
+
+# @cocotb.test()
+async def model_test(dut):
+    """Test the DUT with a given trained DNN model."""
+    only_files, *_, sparse_iacts, sparse_wghts = envvars_to_vars()
     layer_es = les.LayerExecutionState()
     serial = 1
-    clk_cycle = int(os.environ["CLOCK_LEN"])
-    clk_cycle_unit = os.environ["CLOCK_UNIT"]
+    ptp = _create_port_timing_params()
 
-    clk_delay_in = int(os.environ["CLOCK_DELAY_INPUT"])
-    clk_delay_unit_in = os.environ["CLOCK_DELAY_UNIT_INPUT"]
-
-    clk_delay_out = int(os.environ["CLOCK_DELAY_OUTPUT"])
-    clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]
-
-    ptp = tp.PortTimingParameters()
-    ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
-    
     tf_model_path = os.environ["MODEL_PATH"]
     model = tf.keras.models.load_model(tf_model_path)
     rel_layers = build_layer_topology(model)
     trunc_model = truncate_model(model)
 
-    await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, trunc_model, rel_layers)
+    await execute_model(
+        dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, trunc_model, rel_layers
+    )
 
 
 @cocotb.test()
 async def start_test_fpga(dut):
-    """
-    Main cocotb test entry point for FPGA verification.
-    """
-    global logger
+    """Main cocotb test entry point for FPGA verification."""
     await setup_file_logging()
     timeout_time = 1500000000
-    timeout_unit = 'ns'
+    timeout_unit = "ns"
 
     try:
-        # Here the test gets started
         await with_timeout(single_layer_test(dut), timeout_time, timeout_unit)
     except SimTimeoutError:
         dut._log.error("Test did not finish in time!")
-        raise  # Error if does not finish in time
+        raise
 
 
 async def single_layer_test(dut):
-    """Simulate a single layer.
-    
-    Simulate a single layer using the OpenEye FPGA wrapper.
-    """
+    """Simulate a single layer or benchmark model using the OpenEye FPGA wrapper."""
     (
-        only_files, layer_mode, filters, kernelsize_x, kernelsize_y,
-        inputsize_x, inputsize_y, outputsize, strides, channels,
-        sparse_iacts, sparse_wghts
+        only_files,
+        layer_mode,
+        filters,
+        kernelsize_x,
+        kernelsize_y,
+        inputsize_x,
+        inputsize_y,
+        outputsize,
+        strides,
+        channels,
+        sparse_iacts,
+        sparse_wghts,
     ) = envvars_to_vars()
 
     try:
         use_random = int(os.environ["USE_RANDOM_VALUES"])
-        print("try use random")
     except Exception:
         use_random = 1
-        logger.debug("USE_RANDOM_VALUES set to one")
-        print("except use random")
+        logger.debug("USE_RANDOM_VALUES set to 1")
 
     layer_es = les.LayerExecutionState()
     serial = 1
-    clk_cycle = int(os.environ["CLOCK_LEN"])
-    clk_cycle_unit = os.environ["CLOCK_UNIT"]
+    ptp = _create_port_timing_params()
 
-    clk_delay_in = int(os.environ["CLOCK_DELAY_INPUT"])
-    clk_delay_unit_in = os.environ["CLOCK_DELAY_UNIT_INPUT"]
-
-    clk_delay_out = int(os.environ["CLOCK_DELAY_OUTPUT"])
-    clk_delay_unit_out = os.environ["CLOCK_DELAY_UNIT_OUTPUT"]
-
-    ptp = tp.PortTimingParameters()
-    ptp.initiate_params(clk_cycle, clk_cycle_unit, clk_delay_in, clk_delay_unit_in, clk_delay_out, clk_delay_unit_out)
-    
-    # Create a test model    
     gtu.select_gpu(0)
 
-    # Here If-Condition test, whether use model or single Layer
     if use_random:
         model = data_create.create_net(
-            layer_mode, filters, kernelsize_x, kernelsize_y,
-            inputsize_x, inputsize_y, strides, channels, outputsize
+            layer_mode,
+            filters,
+            kernelsize_x,
+            kernelsize_y,
+            inputsize_x,
+            inputsize_y,
+            strides,
+            channels,
+            outputsize,
         )
         rel_layers = build_layer_topology(model)
-        trunc_model = [
-            layer for layer in model.layers
-            if not isinstance(layer, (
-                tf.keras.layers.Bidirectional, tf.keras.layers.Flatten
-            ))
-        ]
+        trunc_model = truncate_model(model)
     else:
         current_dir = Path(__file__).resolve().parent
         target_dir = current_dir.parent.parent / "models"
-        sys.path.append(str(target_dir))
-        from mnist_conv_net import SimpleMNISTConvNet, load_simple_mnist_model
+        if str(target_dir) not in sys.path:
+            sys.path.append(str(target_dir))
+        from mnist_conv_net import SimpleMNISTConvNet
+
         model = SimpleMNISTConvNet()
         model = o2m.get_model(model)
         rel_layers = build_layer_topology(model)
@@ -233,50 +220,40 @@ async def single_layer_test(dut):
     if os.environ.get("OPENEYE_EXPECT_LAYERS"):
         expected_layers = int(os.environ["OPENEYE_EXPECT_LAYERS"])
         assert len(trunc_model) == expected_layers, (
-            f"{layer_mode}: expected {expected_layers} layers, got {len(trunc_model)}")
+            f"{layer_mode}: expected {expected_layers} layers, got {len(trunc_model)}"
+        )
 
-    await execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, trunc_model, rel_layers)
+    await execute_model(
+        dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, trunc_model, rel_layers
+    )
 
 
 def truncate_model(model):
+    """Strip host-only reshape/recurrent wrapper layers not mapped to OpenEye hardware."""
     layers = model.layers if hasattr(model, "layers") else model
-    trunc_model = [
-        layer for layer in layers
-        if not isinstance(layer, (
-            tf.keras.layers.Bidirectional, tf.keras.layers.Flatten
-        ))
+    return [
+        layer
+        for layer in layers
+        if not isinstance(layer, (tf.keras.layers.Bidirectional, tf.keras.layers.Flatten))
     ]
-    return trunc_model
 
 
 def build_layer_topology(model):
+    """Build directed graph maps ('Previous_Layer', 'Next_Layer') across hardware-mapped layers."""
     previous_layers = {layer.name: [] for layer in model.layers}
     next_layers = {layer.name: [] for layer in model.layers}
 
     for layer in model.layers:
-        inputs = layer.input
-        if not isinstance(inputs, list):
-            inputs = [inputs]
-            
+        inputs = layer.input if isinstance(layer.input, list) else [layer.input]
         for tensor in inputs:
-            if hasattr(tensor, '_keras_history'):
+            if hasattr(tensor, "_keras_history"):
                 prev_layer = tensor._keras_history[0]
-                
-                # Sicherstellen, dass der vorherige Layer im Dictionary existiert
-                # (Wichtig für Input-Layer, die Keras manchmal in model.layers versteckt)
-                if prev_layer.name not in next_layers:
-                    next_layers[prev_layer.name] = []
-                if prev_layer.name not in previous_layers:
-                    previous_layers[prev_layer.name] = []
-                    
-                # Vorherigen Layer eintragen
+                next_layers.setdefault(prev_layer.name, [])
+                previous_layers.setdefault(prev_layer.name, [])
                 previous_layers[layer.name].append(prev_layer.name)
-                
-                # Bei diesem vorherigen Layer den aktuellen Layer als "nächsten" eintragen
                 next_layers[prev_layer.name].append(layer.name)
-                
-    # Flatten is a pure reshape that never reaches the hardware flow (it is
-    # filtered from the layer list): connect its neighbours directly.
+
+    # Flatten is a pure reshape that never reaches the hardware flow: connect its neighbours directly.
     for layer in model.layers:
         if not isinstance(layer, tf.keras.layers.Flatten):
             continue
@@ -288,26 +265,24 @@ def build_layer_topology(model):
         for nxt in nexts:
             previous_layers[nxt] = [q for q in previous_layers[nxt] if q != name] + prevs
 
-    rel_layers = {"Previous_Layer": previous_layers, "Next_Layer": next_layers}
-    return rel_layers
+    return {"Previous_Layer": previous_layers, "Next_Layer": next_layers}
 
 
 def _is_standard_conv(name):
-    # Layers are keyed by their Keras name (conv2d, conv2d_1, depthwise_conv2d, ...).
     return "conv" in str(name) and "depthwise" not in str(name)
 
 
 FSM_STATES = {
-    0:  "IDLE",
-    1:  "GET_PARAMETERS",
-    2:  "GET_ROUTER_CONFIG",
-    3:  "GET_IACT",
-    4:  "GET_WGHT",
-    5:  "GET_BIAS",
-    6:  "GET_QUANTIZE",
-    7:  "START_CONVERTER",
-    8:  "CONVERT_IACT",
-    9:  "WAIT_CYCLE",
+    0: "IDLE",
+    1: "GET_PARAMETERS",
+    2: "GET_ROUTER_CONFIG",
+    3: "GET_IACT",
+    4: "GET_WGHT",
+    5: "GET_BIAS",
+    6: "GET_QUANTIZE",
+    7: "START_CONVERTER",
+    8: "CONVERT_IACT",
+    9: "WAIT_CYCLE",
     10: "WAIT_FOR_RESULTS",
     11: "RECEIVE_PSUMS_TO_IACT",
     12: "MAXPOOLING_READ",
@@ -324,11 +299,10 @@ def decode_state(signal_val) -> str:
 
 
 async def monitor_fsm(dut, signal, name="FSM"):
-    dut._log.info(f"[{name}] Start-State: {decode_state(signal.value)}")
+    dut._log.info("[%s] Start-State: %s", name, decode_state(signal.value))
     while True:
         await ValueChange(signal)
-        state_str = decode_state(signal.value)
-        dut._log.info(f"[{name}] -> {state_str}")
+        dut._log.info("[%s] -> %s", name, decode_state(signal.value))
 
 
 def build_edge_to_slot_map(rel_layers):
@@ -339,207 +313,246 @@ def build_edge_to_slot_map(rel_layers):
     return edge_to_slot
 
 
-async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model, rel_layers):
-    global logger
-    openeye_parameter = oep.get_oep(serial)
-    time_printer.timestamp("OpenEye parameters set. ", logger)
+def _start_debug_monitors(ptp, dut, openeye_parameter):
+    """Spawn optional RTL signal/buffer monitors controlled by environment variables."""
+    env = os.environ
 
-    gtu.delete_files_in_directory('demo/')
-
-    if only_files == 0:
-        # Start the clock
-        clk = Clock(dut.clk_i, ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        cocotb.start_soon(clk.start())
-        dut._log.info("Clock is %s " + ptp.clk_cycle_unit, ptp.clk_cycle)
-        # reset the DUT
-        await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
-        cocotb.start_soon(monitor_fsm(dut, dut.fsm_current_state))
-
-    if os.environ.get("OPENEYE_PROBE_FSM"):
+    if env.get("OPENEYE_PROBE_FSM"):
         cocotb.start_soon(rtl_test_utils.probe_fsm_states(ptp, dut, oep=openeye_parameter))
         cocotb.start_soon(rtl_test_utils.monitor_iact_handoff(ptp, dut))
-    if os.environ.get("DUMP_PSUM_BUFFERS") and not os.environ.get("OPENEYE_PROBE_FSM"):
+    elif env.get("DUMP_PSUM_BUFFERS"):
         cocotb.start_soon(rtl_test_utils.monitor_iact_handoff(ptp, dut))
-    if os.environ.get("TRACE_CONVERTER_GATE"):
-        # Both cluster rows, to compare their acceptance windows directly.
+
+    if env.get("TRACE_CONVERTER_GATE"):
         cocotb.start_soon(rtl_test_utils.trace_converter_gate(ptp, dut, openeye_parameter, col=0, row=0))
         cocotb.start_soon(rtl_test_utils.trace_converter_gate(ptp, dut, openeye_parameter, col=0, row=1))
-    if os.environ.get("DUMP_IACT_BUFFER"):
+
+    if env.get("DUMP_IACT_BUFFER"):
         async def _dump_buf():
-            from cocotb.triggers import Timer as _T
             for _ in range(400):
-                await _T(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
             rtl_test_utils.dump_iact_buffer_values(dut, openeye_parameter)
+
         cocotb.start_soon(_dump_buf())
-    if os.environ.get("TRACE_CONVERT_WINDOW"):
-        cocotb.start_soon(rtl_test_utils.trace_convert_window(ptp, dut, openeye_parameter))
-    if os.environ.get("DUMP_CONVERT_LIMITS"):
-        cocotb.start_soon(rtl_test_utils.dump_convert_iact_limits(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_IACT_LANES"):
-        cocotb.start_soon(rtl_test_utils.trace_iact_lanes(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_PSUM_SLICES"):
-        cocotb.start_soon(rtl_test_utils.trace_psum_capture_slices(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_CONV_WRITEBACK"):
-        cocotb.start_soon(rtl_test_utils.trace_conv_writeback(ptp, dut))
-    if os.environ.get("TRACE_PE_CALC"):
-        cocotb.start_soon(rtl_test_utils.trace_pe_calc_loop(ptp, dut, openeye_parameter))
-    if os.environ.get("DUMP_CLUSTER_IACT"):
+
+    if env.get("DUMP_CLUSTER_IACT"):
         cocotb.start_soon(rtl_test_utils.monitor_cluster_iact(ptp, dut, openeye_parameter))
         cocotb.start_soon(rtl_test_utils.monitor_pe_iact(ptp, dut, openeye_parameter))
         cocotb.start_soon(rtl_test_utils.monitor_converter_store(ptp, dut, openeye_parameter))
-    if os.environ.get("PROBE_PSUM_STREAM"):
-        cocotb.start_soon(rtl_test_utils.probe_psum_stream(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_PSUM_CAPTURE"):
+
+    if env.get("TRACE_PSUM_CAPTURE"):
         cocotb.start_soon(rtl_test_utils.trace_psum_capture(ptp, dut, openeye_parameter))
         cocotb.start_soon(rtl_test_utils.trace_bias_load(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_CONVERTER"):
-        cocotb.start_soon(rtl_test_utils.trace_converter(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_RAM_WRITES"):
-        cocotb.start_soon(rtl_test_utils.trace_ram_writes(ptp, dut))
-    if os.environ.get("TRACE_POOLING"):
-        cocotb.start_soon(rtl_test_utils.trace_pooling(ptp, dut, max_lines=4000))
-    if os.environ.get("TRACE_PE_SPADS"):
-        cocotb.start_soon(rtl_test_utils.trace_pe_spads(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_PE_WADDR"):
-        cocotb.start_soon(rtl_test_utils.trace_pe_wght_addrs(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_PE_WGHT"):
-        cocotb.start_soon(rtl_test_utils.trace_pe_wght_writes(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_PE_PASSES"):
-        cocotb.start_soon(rtl_test_utils.trace_pe_pass_counts(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_WB_EVENTS"):
-        cocotb.start_soon(rtl_test_utils.trace_wb_events(ptp, dut))
-    if os.environ.get("TRACE_ALL_PE"):
-        cocotb.start_soon(rtl_test_utils.trace_all_pe_states(ptp, dut, openeye_parameter, max_lines=4000))
-    if os.environ.get("TRACE_PE_IACT"):
-        cocotb.start_soon(rtl_test_utils.trace_pe_iact(ptp, dut, openeye_parameter))
-    if os.environ.get("TRACE_PE_PSUM"):
-        cocotb.start_soon(rtl_test_utils.trace_pe_psum(ptp, dut, openeye_parameter))
 
-    # Process the layers of the model one after another
+    if env.get("TRACE_POOLING"):
+        cocotb.start_soon(rtl_test_utils.trace_pooling(ptp, dut, max_lines=4000))
+
+    if env.get("TRACE_ALL_PE"):
+        cocotb.start_soon(rtl_test_utils.trace_all_pe_states(ptp, dut, openeye_parameter, max_lines=4000))
+
+    # Monitors taking (ptp, dut)
+    simple_monitors = (
+        ("TRACE_CONV_WRITEBACK", rtl_test_utils.trace_conv_writeback),
+        ("TRACE_RAM_WRITES", rtl_test_utils.trace_ram_writes),
+        ("TRACE_WB_EVENTS", rtl_test_utils.trace_wb_events),
+    )
+    for flag, fn in simple_monitors:
+        if env.get(flag):
+            cocotb.start_soon(fn(ptp, dut))
+
+    # Monitors taking (ptp, dut, openeye_parameter)
+    oep_monitors = (
+        ("TRACE_CONVERT_WINDOW", rtl_test_utils.trace_convert_window),
+        ("DUMP_CONVERT_LIMITS", rtl_test_utils.dump_convert_iact_limits),
+        ("TRACE_IACT_LANES", rtl_test_utils.trace_iact_lanes),
+        ("TRACE_PSUM_SLICES", rtl_test_utils.trace_psum_capture_slices),
+        ("TRACE_PE_CALC", rtl_test_utils.trace_pe_calc_loop),
+        ("PROBE_PSUM_STREAM", rtl_test_utils.probe_psum_stream),
+        ("TRACE_CONVERTER", rtl_test_utils.trace_converter),
+        ("TRACE_PE_SPADS", rtl_test_utils.trace_pe_spads),
+        ("TRACE_PE_WADDR", rtl_test_utils.trace_pe_wght_addrs),
+        ("TRACE_PE_WGHT", rtl_test_utils.trace_pe_wght_writes),
+        ("TRACE_PE_PASSES", rtl_test_utils.trace_pe_pass_counts),
+        ("TRACE_PE_IACT", rtl_test_utils.trace_pe_iact),
+        ("TRACE_PE_PSUM", rtl_test_utils.trace_pe_psum),
+    )
+    for flag, fn in oep_monitors:
+        if env.get(flag):
+            cocotb.start_soon(fn(ptp, dut, openeye_parameter))
+
+
+def _log_layer_summaries(layer_parameters):
+    """Log compact per-layer parameter summaries and optional full PAGU parameter dumps."""
+    if os.environ.get("DUMP_LAYER_PARAMS"):
+        extra_keys = {
+            "iact_x_lines",
+            "iact_x_line_repetitions",
+            "iact_words_per_compute",
+            "needed_iact_buffer_words",
+            "needed_Iact_writes",
+            "channel_div_trans",
+            "used_channels",
+            "diff_iact_layer",
+            "needed_wght_cycles",
+            "iact_repetitions_per_write",
+            "iact_converter_max_cycles",
+            "buffer_cycles_for_x_iact",
+            "iact_converter_buffer_addr_max_cycles",
+            "lower_bound",
+            "upper_bound",
+            "used_Y_cluster",
+            "y_lines_per_calculation",
+            "different_kernels_per_calculation",
+            "padding_y",
+            "padding_x",
+            "strideY",
+            "used_X_cluster",
+            "iact_x_add_up",
+            "psum_size_y",
+            "psum_size_x",
+            "filters",
+            "fsm_psum_limit",
+            "used_psum_per_PE",
+            "iact_size_x",
+            "iact_size_y",
+            "diff_iact_layer_next_layer",
+            "psum_storage_cycles",
+        }
+        for n, lpar in enumerate(layer_parameters.values()):
+            fields = sorted(
+                k
+                for k in vars(lpar)
+                if k.startswith(("iact_read_", "iact_write_", "psum_pagu_")) or k in extra_keys
+            )
+            logger.info("layerparams %d: %s", n, " ".join(f"{k}={getattr(lpar, k)}" for k in fields))
+
+    for lpar in layer_parameters.values():
+        logger.info(
+            "layer %s: in=%sx%s ch=%s filters=%s send_values_out=%s "
+            "store_in_psum=%s transmissions=%s output_cycles=%s psum_output_words=%s "
+            "used_Y_cluster=%s used_X_cluster=%s",
+            lpar.layer_name,
+            getattr(lpar, "iact_size_x", "?"),
+            getattr(lpar, "iact_size_y", "?"),
+            getattr(lpar, "channels", "?"),
+            getattr(lpar, "filters", "?"),
+            lpar.send_values_out,
+            getattr(lpar, "store_in_psum", "?"),
+            getattr(lpar, "needed_total_transmissions", "?"),
+            getattr(lpar, "output_cycles", "?"),
+            getattr(lpar, "psum_output_words", "?"),
+            getattr(lpar, "used_Y_cluster", "?"),
+            getattr(lpar, "used_X_cluster", "?"),
+        )
+
+
+def _apply_debug_dram_overrides(dram: DRAM.DRAMContents, model, layer_parameters):
+    """Apply vectorized debug overrides to NumPy-backed DRAM buffers when requested via env vars."""
+    env = os.environ
+    first_layer = model[0].name
+
+    if env.get("OPENEYE_ZERO_IACTS"):
+        dram.fmap[first_layer][0].fill(0)
+        logger.info("OPENEYE_ZERO_IACTS: layer-0 input zeroed")
+
+    if env.get("OPENEYE_CONST_IACTS"):
+        const_iact = int(env["OPENEYE_CONST_IACTS"])
+        dram.fmap[first_layer][0].fill(const_iact)
+        logger.info("OPENEYE_CONST_IACTS: layer-0 input set to %d", const_iact)
+
+    if env.get("OPENEYE_CONST_WGHTS"):
+        const_wght = int(env["OPENEYE_CONST_WGHTS"])
+        for w in dram.weights.values():
+            w.fill(const_wght)
+        logger.info("OPENEYE_CONST_WGHTS: all weights set to %d", const_wght)
+
+    if env.get("OPENEYE_ASYMMETRIC_KERNEL"):
+        for params in layer_parameters.values():
+            if not _is_standard_conv(params.layer_name):
+                continue
+            w = dram.weights[params.layer_name]
+            ky, kx = w.shape[2], w.shape[3]
+            pattern = (1 + np.arange(kx)[None, :] + kx * np.arange(ky)[:, None]).astype(DRAM.DRAM_DTYPE)
+            w[:] = pattern[None, None, :, :]
+        logger.info("OPENEYE_ASYMMETRIC_KERNEL: weight[y][x] = 1 + x + kernel_width*y")
+
+    if env.get("OPENEYE_MIX_WEIGHTS"):
+        for params in layer_parameters.values():
+            if not _is_standard_conv(params.layer_name):
+                continue
+            w = dram.weights[params.layer_name]
+            c_dim, f_dim = w.shape[0], w.shape[1]
+            pattern = (1 + np.arange(c_dim)[:, None] + 5 * np.arange(f_dim)[None, :]).astype(DRAM.DRAM_DTYPE)
+            w[:] = pattern[:, :, None, None]
+        logger.info("OPENEYE_MIX_WEIGHTS: weight[c][f] = 1 + c + 5*f")
+
+    if env.get("OPENEYE_RAMP_IACTS"):
+        arr = dram.fmap[first_layer][0]
+        idx = np.arange(arr.size, dtype=DRAM.DRAM_DTYPE)
+        if env.get("OPENEYE_RAMP_MULT"):
+            mult = int(env["OPENEYE_RAMP_MULT"])
+            vals = ((idx * mult) % 61) + 1
+        else:
+            vals = (idx % 100) + 1
+        arr[:] = vals.reshape(arr.shape)
+        logger.info("OPENEYE_RAMP_IACTS: layer-0 input set to 1..N in flat order")
+
+    if env.get("OPENEYE_BIAS_STEP"):
+        step = int(env["OPENEYE_BIAS_STEP"])
+        for name, bias in dram.bias.items():
+            if bias.size > 0:
+                dram.bias[name] = 1 + step * np.arange(bias.size, dtype=DRAM.DRAM_DTYPE)
+        logger.info("OPENEYE_BIAS_STEP: bias[f] = 1 + %d*f", step)
+
+    if env.get("DUMP_INPUT_IACTS"):
+        try:
+            flat = np.asarray(dram.fmap[first_layer][0]).ravel()
+            logger.info("layer-0 input activations (first 34): %s", flat[:34].tolist())
+        except Exception as exc:
+            logger.info("could not flatten layer-0 input (%s)", type(exc).__name__)
+
+
+async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, serial, ptp, model, rel_layers):
+    openeye_parameter = oep.get_oep(serial)
+    time_printer.timestamp("OpenEye parameters set. ", logger)
+
+    gtu.delete_files_in_directory("demo/")
+
+    if only_files == 0:
+        clk = Clock(dut.clk_i, ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        cocotb.start_soon(clk.start())
+        dut._log.info("Clock is %s %s", ptp.clk_cycle, ptp.clk_cycle_unit)
+        await cocotb.start_soon(rtl_test_utils.reset_all_signals(ptp, dut, openeye_parameter.SERIAL))
+        cocotb.start_soon(monitor_fsm(dut, dut.fsm_current_state))
+
+    _start_debug_monitors(ptp, dut, openeye_parameter)
+
+    # Process the layers of the model in reverse topological order so downstream
+    # channel requirements are visible to preceding layers.
     layer_parameters = {}
     for layer_number, layer in reversed(list(enumerate(model))):
         temp_params = lp.LayerParameters(layer_parameters, layer, openeye_parameter, rel_layers, layer_number)
         layer_parameters[temp_params.layer_name] = temp_params
 
-    if os.environ.get("DUMP_LAYER_PARAMS"):
-        for n, lpar in enumerate(layer_parameters.values()):
-            fields = sorted(
-                k for k in vars(lpar)
-                if k.startswith(("iact_read_", "iact_write_", "psum_pagu_"))
-                or k in (
-                    "iact_x_lines", "iact_x_line_repetitions", "iact_words_per_compute",
-                    "needed_iact_buffer_words", "needed_Iact_writes", "channel_div_trans",
-                    "used_channels", "diff_iact_layer", "needed_wght_cycles",
-                    "iact_repetitions_per_write", "iact_converter_max_cycles",
-                    "buffer_cycles_for_x_iact", "iact_converter_buffer_addr_max_cycles",
-                    "lower_bound", "upper_bound", "used_Y_cluster", "y_lines_per_calculation",
-                    "different_kernels_per_calculation", "padding_y", "padding_x", "strideY",
-                    "used_X_cluster", "iact_x_add_up", "psum_size_y", "psum_size_x", "filters",
-                    "fsm_psum_limit", "used_psum_per_PE", "iact_size_x", "iact_size_y",
-                    "diff_iact_layer_next_layer", "psum_storage_cycles"
-                )
-            )
-            logger.info("layerparams %d: %s", n, " ".join("%s=%s" % (k, getattr(lpar, k)) for k in fields))
+    _log_layer_summaries(layer_parameters)
 
-    for layer_name, lpar in layer_parameters.items():
-        logger.info(
-            "layer %s: in=%sx%s ch=%s filters=%s send_values_out=%s "
-            "store_in_psum=%s transmissions=%s output_cycles=%s psum_output_words=%s "
-            "used_Y_cluster=%s used_X_cluster=%s",
-            lpar.layer_name, getattr(lpar, "iact_size_x", "?"),
-            getattr(lpar, "iact_size_y", "?"), getattr(lpar, "channels", "?"),
-            getattr(lpar, "filters", "?"), lpar.send_values_out,
-            getattr(lpar, "store_in_psum", "?"), getattr(lpar, "needed_total_transmissions", "?"),
-            getattr(lpar, "output_cycles", "?"), getattr(lpar, "psum_output_words", "?"),
-            getattr(lpar, "used_Y_cluster", "?"), getattr(lpar, "used_X_cluster", "?")
-        )
-
-    # Create the OpenEye parameters and the DRAM given the model
-    dram = DRAM.DRAMContents(model, layer_parameters, rel_layers)
+    # Create and populate NumPy-backed DRAM storage
+    seed = int(os.environ["OPENEYE_SEED"]) if os.environ.get("OPENEYE_SEED") else None
+    dram = DRAM.DRAMContents(model, layer_parameters, rel_layers, seed=seed)
     time_printer.timestamp("Initialized DRAM. ", logger)
-    dram.write_initial_data_to_dram(model, layer_parameters, sparse_iacts, sparse_wghts, rel_layers)
+    dram.write_initial_data_to_dram(model, layer_parameters, sparse_iacts, sparse_wghts, rel_layers, seed=seed)
 
-    if os.environ.get("OPENEYE_ZERO_IACTS"):
-        # Debug: zero the first layer's input so every product is 0 and each
-        # output must equal its bias alone.
-        def _zero(x):
-            return [_zero(v) for v in x] if isinstance(x, list) else 0
-        dram.fmap[model[0].name][0] = _zero(dram.fmap[model[0].name][0])
-        logger.info("OPENEYE_ZERO_IACTS: layer-0 input zeroed")
+    _apply_debug_dram_overrides(dram, model, layer_parameters)
 
-    if os.environ.get("OPENEYE_CONST_IACTS"):
-        # Debug: force every layer-0 activation to one constant.
-        const_iact = int(os.environ["OPENEYE_CONST_IACTS"])
-        def _const(x):
-            return [_const(v) for v in x] if isinstance(x, list) else const_iact
-        dram.fmap[model[0].name][0] = _const(dram.fmap[model[0].name][0])
-        logger.info("OPENEYE_CONST_IACTS: layer-0 input set to %d", const_iact)
-
-    if os.environ.get("OPENEYE_CONST_WGHTS"):
-        # Debug: force every weight to one constant.
-        const_wght = int(os.environ["OPENEYE_CONST_WGHTS"])
-        def _const_w(x):
-            return [_const_w(v) for v in x] if isinstance(x, list) else const_wght
-        dram.weights = {name: _const_w(w) for name, w in dram.weights.items()}
-        logger.info("OPENEYE_CONST_WGHTS: all weights set to %d", const_wght)
-
-    if os.environ.get("OPENEYE_ASYMMETRIC_KERNEL"):
-        for params in layer_parameters.values():
-            if not _is_standard_conv(params.layer_name):
-                continue
-            for channel in dram.weights[params.layer_name]:
-                for kernel in channel:
-                    for y, row in enumerate(kernel):
-                        for x in range(len(row)):
-                            row[x] = 1 + x + len(row) * y
-        logger.info("OPENEYE_ASYMMETRIC_KERNEL: weight[y][x] = 1 + x + kernel_width*y")
-
-    if os.environ.get("OPENEYE_MIX_WEIGHTS"):
-        for params in layer_parameters.values():
-            if not _is_standard_conv(params.layer_name):
-                continue
-            for c, channel in enumerate(dram.weights[params.layer_name]):
-                for f, kernel in enumerate(channel):
-                    for row in kernel:
-                        for x in range(len(row)):
-                            row[x] = 1 + c + 5 * f
-        logger.info("OPENEYE_MIX_WEIGHTS: weight[c][f] = 1 + c + 5*f")
-
-    if os.environ.get("OPENEYE_RAMP_IACTS"):
-        def _ramp(x, ctr=[0]):
-            if isinstance(x, list):
-                return [_ramp(v, ctr) for v in x]
-            ctr[0] += 1
-            if os.environ.get("OPENEYE_RAMP_MULT"):
-                return ((ctr[0] - 1) * int(os.environ["OPENEYE_RAMP_MULT"])) % 61 + 1
-            return (ctr[0] - 1) % 100 + 1
-        dram.fmap[model[0].name][0] = _ramp(dram.fmap[model[0].name][0])
-        logger.info("OPENEYE_RAMP_IACTS: layer-0 input set to 1..N in flat order")
-
-    if os.environ.get("OPENEYE_BIAS_STEP"):
-        step = int(os.environ["OPENEYE_BIAS_STEP"])
-        dram.bias = {name: [1 + step * f for f in range(len(bias))] for name, bias in dram.bias.items()}
-        logger.info("OPENEYE_BIAS_STEP: bias[f] = 1 + %d*f", step)
-
-    if os.environ.get("DUMP_INPUT_IACTS"):
-        try:
-            flat = dram.fmap[model[0].name][0]
-            while isinstance(flat, list) and flat and isinstance(flat[0], list):
-                flat = [v for sub in flat for v in sub]
-            logger.info("layer-0 input activations (first 34): %s", flat[:34])
-        except Exception as exc:
-            logger.info("could not flatten layer-0 input (%s)", type(exc).__name__)
-
-    # Statische Zuordnung jeder Kante (src_layer, target_layer) auf den Ziel-Iact-Slot
+    # Static edge -> input-slot mapping
     edge_to_slot = build_edge_to_slot_map(rel_layers)
 
-    # Falls der Input-Layer verzweigt (z.B. Skip-Connection direkt vom Input),
-    # initialisierte Eingangsdaten in die entsprechenden Ziel-Slots kopieren.
+    # Copy initial input activations into branch slots if input_layer fans out
     if model and "input" in model[0].name:
         input_name = model[0].name
         for output_layer in rel_layers["Next_Layer"][input_name]:
             target_slot = edge_to_slot[(input_name, output_layer)]
-            if target_slot > 0 and target_slot < len(dram.fmap[output_layer]):
+            if 0 < target_slot < len(dram.fmap[output_layer]):
                 dram.fmap[output_layer][target_slot] = tum.fill_dram_with_ref(
                     dram.fmap[input_name][0],
                     dram.fmap[output_layer][target_slot],
@@ -552,10 +565,9 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
         for layer_number, layer in enumerate(model):
             time_printer.timestamp("Layer parameters created. ", logger)
             layer_name = layer.name
+            lpar = layer_parameters[layer_name]
 
-            calculated_results = tum.collect_results(
-                layer_parameters[layer_name], dram, openeye_parameter.SERIAL
-            )
+            calculated_results = tum.collect_results(lpar, dram, openeye_parameter.SERIAL)
             if logging.DEBUG >= log_level:
                 time_printer.timestamp("Reference data created. ", logger)
 
@@ -566,33 +578,23 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
             ]
             time_printer.timestamp("Start creating stream. ", logger)
 
-            # Sparsity is realized in the DRAM data (write_initial_data_to_dram
-            # zeroes ~50% of iacts/wghts when the flags are set). The serial DMA
-            # streams must stay on the standard path: iacts are sent as raw
-            # pixels (the hardware iact_stream_constructor derives the sparse
-            # stream), and the conv weight mapper always emits the
-            # overhead-encoded (zero-compressed) SPad format. The mappers'
-            # sparse_data=1 re-encoding only applies to the parallel-port flow
-            # and is incompatible with the serial conv weight SPad layout.
-            if layer_parameters[layer_name].use_layer_on_hw:
+            if lpar.use_layer_on_hw:
                 output_order = tum.make_ref(
-                    openeye_parameter, layer_parameters[layer_name], layer_name, dram, calculated_results
+                    openeye_parameter, lpar, layer_name, dram, calculated_results
                 )
                 stream = tum.write_stream(
-                    openeye_parameter, layer_parameters[layer_name], dram_layer_content, 0, 0
+                    openeye_parameter, lpar, dram_layer_content, 0, 0
                 )
-                for layer_repetition in range(layer_parameters[layer_name].needed_total_transmissions):
-                    gtu.create_stream_file(
-                        stream[layer_repetition], layer_parameters[layer_name], layer_repetition
-                    )
+                for layer_repetition in range(lpar.needed_total_transmissions):
+                    gtu.create_stream_file(stream[layer_repetition], lpar, layer_repetition)
             time_printer.timestamp("Streams set. ", logger)
 
             next_layers = rel_layers["Next_Layer"][layer_name]
-            is_output_layer = (len(next_layers) == 0)
-            l_type = str(layer_parameters[layer_name].layer_name)
+            is_output_layer = len(next_layers) == 0
+            l_type = str(lpar.layer_name)
 
-            for layer_repetition in range(layer_parameters[layer_name].needed_total_transmissions):
-                if (not only_files) and layer_parameters[layer_name].use_layer_on_hw:
+            for layer_repetition in range(lpar.needed_total_transmissions):
+                if (not only_files) and lpar.use_layer_on_hw:
                     logger.info("Send stream No. %d with the name: %s", layer_number + 1, layer_name)
                     fc_write_check = None
                     if (
@@ -602,14 +604,13 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                     ):
                         fc_write_check = cocotb.start_soon(
                             rtl_test_utils.check_fc_activation_writes(
-                                dut, openeye_parameter, layer_parameters[layer_name], dram.fmap[layer_name]
+                                dut, openeye_parameter, lpar, dram.fmap[layer_name]
                             )
                         )
 
                     await cocotb.start_soon(
                         rtl_test_utils.send_stream(
-                            ptp, dut, stream[layer_repetition], openeye_parameter,
-                            layer_parameters[layer_name], layer_repetition
+                            ptp, dut, stream[layer_repetition], openeye_parameter, lpar, layer_repetition
                         )
                     )
                     logger.info("Stream is sent.")
@@ -623,86 +624,117 @@ async def execute_model(dut, only_files, sparse_iacts, sparse_wghts, layer_es, s
                         if "depthwise" in l_type:
                             await cocotb.start_soon(
                                 rtl_test_utils.compare_stream_Dw(
-                                    ptp, dut, layer_number, layer_repetition, layer_parameters[layer_name],
-                                    openeye_parameter, layer_es, dram, log_level, output_order, rel_layers
+                                    ptp,
+                                    dut,
+                                    layer_number,
+                                    layer_repetition,
+                                    lpar,
+                                    openeye_parameter,
+                                    layer_es,
+                                    dram,
+                                    log_level,
+                                    output_order,
+                                    rel_layers,
                                 )
                             )
                         elif "conv" in l_type:
                             await cocotb.start_soon(
                                 rtl_test_utils.compare_stream_Conv(
-                                    ptp, dut, layer_number, layer_repetition, layer_parameters[layer_name],
-                                    openeye_parameter, layer_es, dram, log_level, output_order, rel_layers
+                                    ptp,
+                                    dut,
+                                    layer_number,
+                                    layer_repetition,
+                                    lpar,
+                                    openeye_parameter,
+                                    layer_es,
+                                    dram,
+                                    log_level,
+                                    output_order,
+                                    rel_layers,
                                 )
                             )
                         elif "dense" in l_type:
                             await cocotb.start_soon(
                                 rtl_test_utils.compare_stream_Dense(
-                                    ptp, dut, layer_number, layer_repetition, layer_parameters[layer_name],
-                                    openeye_parameter, layer_es, dram, log_level, rel_layers
+                                    ptp,
+                                    dut,
+                                    layer_number,
+                                    layer_repetition,
+                                    lpar,
+                                    openeye_parameter,
+                                    layer_es,
+                                    dram,
+                                    log_level,
+                                    rel_layers,
                                 )
                             )
                         elif "pooling" in l_type:
                             await cocotb.start_soon(
                                 rtl_test_utils.compare_stream_Pooling(
-                                    ptp, dut, layer_number, layer_repetition, layer_parameters[layer_name],
-                                    openeye_parameter, layer_es, dram, log_level, rel_layers
+                                    ptp,
+                                    dut,
+                                    layer_number,
+                                    layer_repetition,
+                                    lpar,
+                                    openeye_parameter,
+                                    layer_es,
+                                    dram,
+                                    log_level,
+                                    rel_layers,
                                 )
                             )
 
                         if os.environ.get("DUMP_PSUM_BUFFERS") and "dense" in l_type:
-                            # Debug listing of every filter; compare_dram_with_ref below
-                            # asserts, but only logs the first few mismatches.
+                            out_buf = dram.fmap["Output"][0]
                             for f in range(len(calculated_results)):
-                                logger.info(
-                                    "dense f=%2d ref=%s dut=%s", f, calculated_results[f],
-                                    dram.fmap["Output"][0][f]
-                                )
+                                logger.info("dense f=%2d ref=%s dut=%s", f, calculated_results[f], out_buf[f])
 
-                        # Check both decoded values and the complete DMA stream.
                         dram_ok = tum.compare_dram_with_ref(
-                            layer_parameters[layer_name], calculated_results, dram.fmap["Output"][0]
+                            lpar, calculated_results, dram.fmap["Output"][0]
                         )
                         file_ok = True
                         if logging.DEBUG >= log_level:
                             file_ok = gtu.check_results(
                                 openeye_parameter,
-                                'demo/layer_' + l_type + '/dma_stream_ref.txt',
-                                'demo/layer_' + l_type + '/output.txt'
+                                f"demo/layer_{l_type}/dma_stream_ref.txt",
+                                f"demo/layer_{l_type}/output.txt",
                             )
-                        assert dram_ok and file_ok, "result check failed: values %s, reference file %s" % (
-                            "ok" if dram_ok else "differ", "ok" if file_ok else "differs"
+                        assert dram_ok and file_ok, (
+                            f"result check failed: values {'ok' if dram_ok else 'differ'}, "
+                            f"reference file {'ok' if file_ok else 'differs'}"
                         )
                     else:
                         await cocotb.start_soon(rtl_test_utils.await_ready_signal(ptp, dut))
                         time_printer.timestamp("Ready signal detected. Start new stream ", logger)
 
                 if ("input" not in layer_name) and not is_output_layer:
-                    if ("pooling" not in layer_name and "add" not in layer_name and "concat" not in layer_name):
-                        calculated_results = slo.quantize_dict(calculated_results, layer_parameters[layer_name])
+                    if "pooling" not in layer_name and "add" not in layer_name and "concat" not in layer_name:
+                        calculated_results = slo.quantize_dict(calculated_results, lpar)
+                    target_slot = 0
                     for output_layer in next_layers:
                         target_slot = edge_to_slot[(layer_name, output_layer)]
-                        
                         dram.fmap[output_layer][target_slot] = tum.fill_dram_with_ref(
                             calculated_results,
                             dram.fmap[output_layer][target_slot],
-                            layer_parameters[layer_name],
+                            lpar,
                             layer_parameters[output_layer],
                         )
-
                         logger.info(
                             "Iact check context: layer %d (%s) -> %s [slot %d], repetition %d of %d",
-                            layer_number, layer_name, output_layer, target_slot,
-                            layer_repetition, layer_parameters[layer_name].needed_total_transmissions
+                            layer_number,
+                            layer_name,
+                            output_layer,
+                            target_slot,
+                            layer_repetition,
+                            lpar.needed_total_transmissions,
                         )
-                    # The buffer being checked is the next layer's input slot, so the
-                    # layout parameters that describe it are that layer's.
-                    if ("flatten" not in layer_name and "concat" not in layer_name):
+                    if "flatten" not in layer_name and "concat" not in layer_name:
                         assert rtl_test_utils.compare_iact_storage(
                             ptp,
                             dut,
                             calculated_results,
                             openeye_parameter,
-                            layer_parameters[layer_name],
+                            lpar,
                             slot_idx=target_slot,
                         )
 

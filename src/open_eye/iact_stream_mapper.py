@@ -30,8 +30,8 @@ Typical Usage:
     >>> iact_stream = iact_mapper.get_iact_stream()
 """
 
-import math
 import logging
+import math
 import numpy as np
 
 logger = logging.getLogger("cocotb")
@@ -39,18 +39,23 @@ logger = logging.getLogger("cocotb")
 
 def pack_values_into_words(flat_values, params, layer_params):
     """Pack activation values into DMA-width words, padded to whole cell groups."""
-    bitwidth = params.IACT_Bitwidth
-    values_per_word = params.DMA_BITWIDTH // bitwidth
+    bitwidth = int(params.IACT_Bitwidth)
+    dma_bw = int(params.DMA_BITWIDTH)
+    values_per_word = dma_bw // bitwidth
     mask = (1 << bitwidth) - 1
-    n = layer_params.iact_cycles_one_word_all_ram
+    n = int(layer_params.iact_cycles_one_word_all_ram)
 
-    arr = np.asarray(flat_values, dtype=np.int64)
+    arr = np.asarray(flat_values, dtype=np.int64).ravel()
     rem = arr.size % values_per_word
     if rem:
         arr = np.pad(arr, (0, values_per_word - rem), constant_values=0)
 
     if arr.size == 0:
         words = []
+    elif dma_bw <= 64:
+        grouped = arr.reshape(-1, values_per_word).astype(np.uint64) & np.uint64(mask)
+        shifts = np.arange(values_per_word, dtype=np.uint64) * np.uint64(bitwidth)
+        words = np.bitwise_or.reduce(grouped << shifts, axis=1).tolist()
     else:
         grouped = arr.reshape(-1, values_per_word) & mask
         words = []
@@ -73,7 +78,7 @@ def buffer_words_to_dma_stream(buffer_words, layer_params):
     cells at once, so a group of iact_cycles_one_word_all_ram words has to
     arrive reversed for cell j to end up holding word j of that group.
     """
-    n = layer_params.iact_cycles_one_word_all_ram
+    n = int(layer_params.iact_cycles_one_word_all_ram)
     padded = list(buffer_words)
     pad_len = (n - len(padded)) % n
     if pad_len:
@@ -97,10 +102,10 @@ class IactStreamMapper(object):
     dense activation patterns.
 
     The mapping process involves:
-    1. Determining which activations each PE needs based on output location
-    2. Computing DRAM addresses considering stride, padding, and kernel positions
-    3. Organizing data into PE scratchpad storage format
-    4. Generating bit-packed streams for transmission to hardware
+1. Determining which activations each PE needs based on output location
+2. Computing DRAM addresses considering stride, padding, and kernel positions
+3. Organizing data into PE scratchpad storage format
+4. Generating bit-packed streams for transmission to hardware
 
     Attributes:
         params: OpenEye hardware parameters (cluster config, PE counts, bitwidths, etc.)
@@ -152,8 +157,8 @@ class IactStreamMapper(object):
 
         Returns:
             Activation stream in one of two formats:
-            - Parallel mode: 3D list [cluster_x][cluster_y][router] of bit-packed words
-            - Serial mode: 1D list of DMA words, or empty list if skipIact is set
+- Parallel mode: 3D list [cluster_x][cluster_y][router] of bit-packed words
+- Serial mode: 1D list of DMA words, or empty list if skipIact is set
 
         """
         if not self.params.SERIAL:
@@ -186,7 +191,7 @@ class IactStreamMapper(object):
         # Transpose from [C][X][Y] to [Y][X][C] for row-major ordering
         values = np.transpose(np.asarray(self.dram_fmap), axes=(2, 1, 0))
         iact_size_y, iact_size_x, channels = values.shape
-        group_size = self.layer_params.cont_iact_channels_glb
+        group_size = int(self.layer_params.cont_iact_channels_glb)
 
         if channels % group_size == 0:
             # Fast vectorized grouping: [Y][X][num_groups][group_size] -> [num_groups][Y][X][group_size]
@@ -215,11 +220,11 @@ class IactStreamMapper(object):
         """
         storage = []
         refresh_bounds = self.layer_params.needed_refreshes_mx[self.layer_repetition]
-        needed_writes = self.layer_params.needed_Iact_writes
-        used_y_cluster = self.layer_params.used_Y_cluster
+        needed_writes = int(self.layer_params.needed_Iact_writes)
+        used_y_cluster = int(self.layer_params.used_Y_cluster)
         use_sparse = self.sparse_data == 1
 
-        for cycle in range(refresh_bounds[1], refresh_bounds[2]):
+        for cycle in range(int(refresh_bounds[1]), int(refresh_bounds[2])):
             if (cl_y - cycle) % used_y_cluster == 0:
                 for iact_cycle in range(needed_writes):
                     spad = self.write_iact_pe(cl_x, cl_y, router, cycle, iact_cycle)
@@ -273,7 +278,7 @@ class IactStreamMapper(object):
         pes_x = params.PEs_X
         clusters_x = params.Clusters_X
         used_y_cluster = layer_params.used_Y_cluster
-        kernel_w, kernel_h = layer_params.kernel_size[0], layer_params.kernel_size[1]
+        kernel_w, kernel_h = int(layer_params.kernel_size[0]), int(layer_params.kernel_size[1])
 
         out_span_x = (layer_params.output_shape[2] + layer_params.add_up) * stride_x
         pad_offset = math.ceil((kernel_h - 1) / 2)
@@ -291,7 +296,9 @@ class IactStreamMapper(object):
             case 2:
                 x_factor = clusters_x if case_2_uses_clusters_x else math.floor(params.Clusters / used_y_cluster)
                 cycle_step = (cycle * pes_x * x_factor) * stride_x
-                iact_temp_pos_x = int(math.floor((cl_x * pes_x) * stride_x + cycle_step) % out_span_x) + router_iact_offset
+                iact_temp_pos_x = (
+                    int(math.floor((cl_x * pes_x) * stride_x + cycle_step) % out_span_x) + router_iact_offset
+                )
                 base_y = int(stride_y * math.floor(cycle_step / out_span_x)) - pad_offset
             case _:
                 cl_y_offset = math.floor(cl_y / used_y_cluster) * pes_x * clusters_x
@@ -305,9 +312,9 @@ class IactStreamMapper(object):
 
         channel_base = (
             (self.layer_repetition % layer_params.iact_transmissions_pe)
-            * math.ceil(layer_params.input_shape[3] / layer_params.iact_transmissions_pe)
+            - math.ceil(layer_params.input_shape[3] / layer_params.iact_transmissions_pe)
         )
-        return iact_temp_pos_x, base_y, channel_base, kernel_w, kernel_h
+        return iact_temp_pos_x, base_y, int(channel_base), kernel_w, kernel_h
 
     def write_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
         """Generate activation data SPAD storage for a specific PE location and cycle."""
@@ -315,7 +322,7 @@ class IactStreamMapper(object):
         params = self.params
 
         spad_storage = [[0, 0] for _ in range(params.Iacts_per_PE)]
-        max_words = min(math.ceil(params.Iacts_per_PE), layer_params.used_iact_per_PE)
+        max_words = min(math.ceil(params.Iacts_per_PE), int(layer_params.used_iact_per_PE))
         if max_words <= 0:
             return spad_storage
 
@@ -333,7 +340,7 @@ class IactStreamMapper(object):
 
         stride_x = layer_params.strideX
         stride_y = layer_params.strideY
-        kernel_w, kernel_h = layer_params.kernel_size[0], layer_params.kernel_size[1]
+        kernel_w, kernel_h = int(layer_params.kernel_size[0]), int(layer_params.kernel_size[1])
         out_span_x = (layer_params.output_shape[2] + layer_params.add_up) * stride_x
         pad_offset = math.ceil((kernel_h - 1) / 2)
         router_iact_offset = (
@@ -365,20 +372,128 @@ class IactStreamMapper(object):
         max_x = layer_params.output_shape[1] * stride_x
         max_y = layer_params.output_shape[2] * stride_y
         valid_x = 0 <= iact_temp_pos_x < max_x
-        channel_base = (
-            self.layer_repetition % layer_params.iact_transmissions_pe
-        ) * math.ceil(layer_params.input_shape[3] / layer_params.iact_transmissions_pe)
+        channel_base = int(
+            (self.layer_repetition % layer_params.iact_transmissions_pe)
+            * math.ceil(layer_params.input_shape[3] / layer_params.iact_transmissions_pe)
+        )
 
         dram_fmap = self.dram_fmap
+        is_ndarray = isinstance(dram_fmap, np.ndarray) and dram_fmap.ndim == 3
+
         for words_in_storage in range(max_words):
             iact_temp_pos_y = (words_in_storage % kernel_h) + base_y
             slot = spad_storage[words_in_storage]
             if valid_x and (0 <= iact_temp_pos_y < max_y):
                 channel = (words_in_storage // kernel_w) + channel_base
-                slot[0] = dram_fmap[channel][iact_temp_pos_x][iact_temp_pos_y]
+                slot[0] = (
+                    int(dram_fmap[channel, iact_temp_pos_x, iact_temp_pos_y])
+                    if is_ndarray
+                    else int(dram_fmap[channel][iact_temp_pos_x][iact_temp_pos_y])
+                )
             else:
                 slot[0] = 1
             slot[1] = words_in_storage
+
+        return spad_storage
+
+    def _write_spatial_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
+        """Shared spatial activation SPAD storage builder for Conv2D and DWConv2D."""
+        layer_params = self.layer_params
+        params = self.params
+
+        spad_storage = [[0, 0] for _ in range(params.Iacts_per_PE)]
+
+        in_channels = layer_params.input_shape[3]
+        iact_trans = layer_params.iact_transmissions_pe
+        kernels_per_cluster = layer_params.kernel_per_pe_cluster
+        kernel_w, kernel_h = int(layer_params.kernel_size[0]), int(layer_params.kernel_size[1])
+
+        amount_of_channels = (
+            math.ceil((router + 1) * in_channels / iact_trans / kernels_per_cluster)
+            - math.ceil(router * in_channels / iact_trans / kernels_per_cluster)
+        )
+        max_words = min(amount_of_channels * kernel_h, int(layer_params.used_iact_per_PE))
+        if max_words <= 0:
+            return spad_storage
+
+        used_y_cluster = layer_params.used_Y_cluster
+        pes_x = params.PEs_X
+        clusters_x = params.Clusters_X
+        in_active_region = (
+            (
+                (math.floor(cycle / used_y_cluster) * params.Clusters_Y * clusters_x * pes_x)
+                + (math.floor(cl_y / used_y_cluster) * clusters_x * pes_x)
+                + (cl_x * pes_x)
+            )
+            < (layer_params.output_shape[1] * (layer_params.output_shape[2] + layer_params.add_up))
+        ) or (layer_params.single_cluster_computation != 0)
+
+        if not in_active_region:
+            return spad_storage
+
+        iact_temp_pos_x, base_y, rep_channel_base, kernel_w, kernel_h = self._compute_spatial_indices(
+            cl_x, cl_y, router, cycle, iact_cycle, case_2_uses_clusters_x=True
+        )
+        router_channel_offset = math.ceil(
+            ((router % kernels_per_cluster) * math.ceil(in_channels / iact_trans)) / kernels_per_cluster
+        )
+        channel_base = int(router_channel_offset + rep_channel_base)
+
+        max_x = layer_params.output_shape[1] * layer_params.strideX
+        max_y = layer_params.output_shape[2] * layer_params.strideY
+        valid_x = 0 <= iact_temp_pos_x < max_x
+
+        dram_fmap = self.dram_fmap
+        if isinstance(dram_fmap, np.ndarray) and dram_fmap.ndim == 3:
+            dram_channels, dim_x, dim_y = dram_fmap.shape
+            in_x_bounds = 0 <= iact_temp_pos_x < dim_x
+            for words_in_storage in range(max_words):
+                iact_temp_pos_y = (words_in_storage % kernel_h) + base_y
+                slot = spad_storage[words_in_storage]
+                if valid_x and (0 <= iact_temp_pos_y < max_y):
+                    channel = (words_in_storage // kernel_w) + channel_base
+                    if in_x_bounds and (0 <= channel < dram_channels) and (0 <= iact_temp_pos_y < dim_y):
+                        slot[0] = int(dram_fmap[channel, iact_temp_pos_x, iact_temp_pos_y])
+                    else:
+                        slot[0] = 0
+                else:
+                    slot[0] = 1
+                slot[1] = words_in_storage
+            return spad_storage
+
+        dram_channels = len(dram_fmap)
+        for words_in_storage in range(max_words):
+            iact_temp_pos_y = (words_in_storage % kernel_h) + base_y
+            slot = spad_storage[words_in_storage]
+            if valid_x and (0 <= iact_temp_pos_y < max_y):
+                channel = (words_in_storage // kernel_w) + channel_base
+                if 0 <= channel < dram_channels:
+                    dram_c = dram_fmap[channel]
+                    if 0 <= iact_temp_pos_x < len(dram_c) and 0 <= iact_temp_pos_y < len(dram_c[iact_temp_pos_x]):
+                        slot[0] = int(dram_c[iact_temp_pos_x][iact_temp_pos_y])
+                    else:
+                        slot[0] = 0
+                else:
+                    slot[0] = 0
+            else:
+                slot[0] = 1
+            slot[1] = words_in_storage
+
+        return spad_storage
+
+    def _write_spatial_iact_addr_storage(self):
+        """Shared spatial activation address SPAD builder for Conv2D and DWConv2D."""
+        layer_params = self.layer_params
+        params = self.params
+        spad_storage = [0] * params.Iacts_Addr_per_PE
+        kernel_w = int(layer_params.kernel_size[0])
+
+        if kernel_w == 1:
+            spad_storage[0] = int(layer_params.used_channels)
+        else:
+            limit = min(params.Iacts_Addr_per_PE, math.ceil(layer_params.used_iact_per_PE / kernel_w))
+            for words_in_storage in range(limit):
+                spad_storage[words_in_storage] = kernel_w * (words_in_storage + 1)
 
         return spad_storage
 
@@ -387,7 +502,7 @@ class IactStreamMapper(object):
         layer_params = self.layer_params
         params = self.params
         spad_storage = [0] * params.Iacts_Addr_per_PE
-        kernel_w = layer_params.kernel_size[0]
+        kernel_w = int(layer_params.kernel_size[0])
         limit = min(params.Iacts_Addr_per_PE, math.ceil(layer_params.used_iact_per_PE / kernel_w))
 
         for words_in_storage in range(limit):
@@ -419,7 +534,7 @@ class IactStreamMapper(object):
             for cl_y in range(clusters_y):
                 for router in range(num_glb_iact):
                     for w0, w1 in zip(stream[0][cl_y][router], stream[1][cl_y][router]):
-                        flat_stream.append(w0 | (w1 << 24))
+                        flat_stream.append(int(w0) | (int(w1) << 24))
             return flat_stream
 
         return stream
@@ -429,7 +544,7 @@ class IactStreamMapper(object):
         layer_params = self.layer_params
         params = self.params
 
-        addr_bw = params.IACT_Addr_Bitwidth
+        addr_bw = int(params.IACT_Addr_Bitwidth)
         addr_per_trans = math.floor(params.IACT_Trans_Bitwidth / addr_bw)
         total_trans = math.ceil(params.Iacts_Addr_per_PE / addr_per_trans)
         max_lines = math.ceil(layer_params.used_iact_addr_per_PE / addr_per_trans)
@@ -443,7 +558,7 @@ class IactStreamMapper(object):
             for addr_in_trans in range(addr_per_trans):
                 spad_word = base_word + addr_in_trans
                 if spad_word < addr_len:
-                    temp_trans |= addr_list[spad_word] << (addr_bw * addr_in_trans)
+                    temp_trans |= int(addr_list[spad_word]) << (addr_bw * addr_in_trans)
             stream.append(temp_trans)
             if len(stream) == max_lines:
                 return stream
@@ -457,7 +572,7 @@ class IactStreamMapper(object):
         layer_params = self.layer_params
         params = self.params
 
-        woh_bw = params.IACT_WOH_Bitwidth
+        woh_bw = int(params.IACT_WOH_Bitwidth)
         val_mask = (1 << woh_bw) - 1
         ovh_mask = 0xF
 
@@ -501,98 +616,21 @@ class ConvIactStreamMapper(IactStreamMapper):
 
     def write_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
         """Generate Conv2D-specific activation data SPAD storage."""
-        layer_params = self.layer_params
-        params = self.params
-
-        spad_storage = [[0, 0] for _ in range(params.Iacts_per_PE)]
-
-        in_channels = layer_params.input_shape[3]
-        iact_trans = layer_params.iact_transmissions_pe
-        kernels_per_cluster = layer_params.kernel_per_pe_cluster
-        kernel_w, kernel_h = layer_params.kernel_size[0], layer_params.kernel_size[1]
-
-        amount_of_channels = (
-            math.ceil((router + 1) * in_channels / iact_trans / kernels_per_cluster)
-            - math.ceil(router * in_channels / iact_trans / kernels_per_cluster)
-        )
-        max_words = min(amount_of_channels * kernel_h, layer_params.used_iact_per_PE)
-        if max_words <= 0:
-            return spad_storage
-
-        used_y_cluster = layer_params.used_Y_cluster
-        pes_x = params.PEs_X
-        clusters_x = params.Clusters_X
-        in_active_region = (
-            (
-                (math.floor(cycle / used_y_cluster) * params.Clusters_Y * clusters_x * pes_x)
-                + (math.floor(cl_y / used_y_cluster) * clusters_x * pes_x)
-                + (cl_x * pes_x)
-            )
-            < (layer_params.output_shape[1] * (layer_params.output_shape[2] + layer_params.add_up))
-        ) or (layer_params.single_cluster_computation != 0)
-
-        if not in_active_region:
-            return spad_storage
-
-        iact_temp_pos_x, base_y, rep_channel_base, kernel_w, kernel_h = self._compute_spatial_indices(
-            cl_x, cl_y, router, cycle, iact_cycle, case_2_uses_clusters_x=True
-        )
-        router_channel_offset = math.ceil(
-            ((router % kernels_per_cluster) * math.ceil(in_channels / iact_trans)) / kernels_per_cluster
-        )
-        channel_base = router_channel_offset + rep_channel_base
-
-        max_x = layer_params.output_shape[1] * layer_params.strideX
-        max_y = layer_params.output_shape[2] * layer_params.strideY
-        valid_x = 0 <= iact_temp_pos_x < max_x
-
-        dram_fmap = self.dram_fmap
-        dram_channels = len(dram_fmap)
-
-        for words_in_storage in range(max_words):
-            iact_temp_pos_y = (words_in_storage % kernel_h) + base_y
-            slot = spad_storage[words_in_storage]
-            if valid_x and (0 <= iact_temp_pos_y < max_y):
-                channel = (words_in_storage // kernel_w) + channel_base
-                if 0 <= channel < dram_channels:
-                    dram_c = dram_fmap[channel]
-                    if iact_temp_pos_x < len(dram_c) and iact_temp_pos_y < len(dram_c[iact_temp_pos_x]):
-                        slot[0] = dram_c[iact_temp_pos_x][iact_temp_pos_y]
-                    else:
-                        slot[0] = 0
-                else:
-                    slot[0] = 0
-            else:
-                slot[0] = 1
-            slot[1] = words_in_storage
-
-        return spad_storage
+        return self._write_spatial_iact_data_storage(cl_x, cl_y, router, cycle, iact_cycle)
 
     def write_iact_addr_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
         """Generate address SPAD pointers for Conv2D activation access."""
-        layer_params = self.layer_params
-        params = self.params
-        spad_storage = [0] * params.Iacts_Addr_per_PE
-        kernel_w = layer_params.kernel_size[0]
-
-        if kernel_w == 1:
-            spad_storage[0] = layer_params.used_channels
-        else:
-            limit = min(params.Iacts_Addr_per_PE, math.ceil(layer_params.used_iact_per_PE / kernel_w))
-            for words_in_storage in range(limit):
-                spad_storage[words_in_storage] = kernel_w * (words_in_storage + 1)
-
-        return spad_storage
+        return self._write_spatial_iact_addr_storage()
 
 
 class DenseIactStreamMapper(IactStreamMapper):
     """Specialized mapper for fully connected (Dense) layer input activations.
 
     Key Differences from Conv:
-    - Input is 1D vector instead of 2D/3D feature map
-    - No spatial position calculation or padding
-    - Sequential distribution across routers without kernel windowing
-    - Only first Y-cluster (cl_y == 0) loads data (no Y-dimension parallelism)
+- Input is 1D vector instead of 2D/3D feature map
+- No spatial position calculation or padding
+- Sequential distribution across routers without kernel windowing
+- Only first Y-cluster (cl_y == 0) loads data (no Y-dimension parallelism)
 
     Attributes:
         Inherited from IactStreamMapper
@@ -619,28 +657,27 @@ class DenseIactStreamMapper(IactStreamMapper):
         """Raw activation values in BUFFER_A cell order for a Dense layer."""
         params = self.params
         layer_params = self.layer_params
-        dram_fmap = self.dram_fmap
         values_per_word = params.DMA_BITWIDTH // params.IACT_WOH_Bitwidth
 
         # iact_size_x is the flattened feature count K; input_shape may be 2D or 4D
-        group_size = params.NUM_GLB_IACT * layer_params.used_iact_per_PE
+        group_size = int(params.NUM_GLB_IACT * layer_params.used_iact_per_PE)
         total_vals = math.ceil(layer_params.iact_size_x / group_size) * group_size
         transmissions = math.ceil(total_vals / values_per_word)
         target_len = transmissions * values_per_word
 
-        dram_len = len(dram_fmap)
-        if dram_len >= target_len:
-            return list(dram_fmap[:target_len])
-        return list(dram_fmap) + [0] * (target_len - dram_len)
+        flat_dram = np.asarray(self.dram_fmap).ravel()
+        if flat_dram.size >= target_len:
+            return flat_dram[:target_len].tolist()
+        return np.pad(flat_dram, (0, target_len - flat_dram.size), constant_values=0).tolist()
 
     def write_iact_data_glb(self, cl_x, cl_y, router):
         """Generate GLB activation data for Dense layers."""
         storage = []
         refresh_bounds = self.layer_params.needed_refreshes_mx[self.layer_repetition]
-        needed_writes = self.layer_params.needed_Iact_writes
+        needed_writes = int(self.layer_params.needed_Iact_writes)
         use_sparse = self.sparse_data == 1
 
-        for cycle in range(refresh_bounds[1], refresh_bounds[2]):
+        for cycle in range(int(refresh_bounds[1]), int(refresh_bounds[2])):
             for iact_cycle in range(needed_writes):
                 spad = self.write_iact_pe(cl_x, cl_y, router, cycle, iact_cycle)
                 storage.append(self.set_sparse_stream(spad) if use_sparse else spad)
@@ -650,7 +687,7 @@ class DenseIactStreamMapper(IactStreamMapper):
         """Generate address storage for Dense layers (cl_y == 0 only)."""
         spad_storage = [0] * self.params.Iacts_Addr_per_PE
         if cl_y == 0 and self.params.Iacts_Addr_per_PE > 0:
-            spad_storage[0] = self.layer_params.used_iact_per_PE
+            spad_storage[0] = int(self.layer_params.used_iact_per_PE)
         return spad_storage
 
     def write_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
@@ -662,23 +699,30 @@ class DenseIactStreamMapper(IactStreamMapper):
         if cl_y != 0:
             return spad_storage
 
-        used_iact = layer_params.used_iact_per_PE
+        used_iact = int(layer_params.used_iact_per_PE)
         max_words = min(math.ceil(params.Iacts_per_PE), used_iact)
         if max_words <= 0:
             return spad_storage
 
-        base_offset = (
+        base_offset = int(
             router * used_iact
             + (self.layer_repetition % layer_params.iact_transmissions_pe) * params.NUM_GLB_IACT * used_iact
         )
-        dram_fmap = self.dram_fmap
-        dram_len = len(dram_fmap)
+        flat_dram = np.asarray(self.dram_fmap).ravel()
+        dram_len = flat_dram.size
 
-        for words_in_storage in range(max_words):
-            idx = words_in_storage + base_offset
-            slot = spad_storage[words_in_storage]
-            slot[0] = dram_fmap[idx] if 0 <= idx < dram_len else 0
-            slot[1] = words_in_storage
+        if base_offset >= 0 and base_offset + max_words <= dram_len:
+            vals = flat_dram[base_offset : base_offset + max_words].tolist()
+            for i, val in enumerate(vals):
+                slot = spad_storage[i]
+                slot[0] = val
+                slot[1] = i
+        else:
+            for words_in_storage in range(max_words):
+                idx = words_in_storage + base_offset
+                slot = spad_storage[words_in_storage]
+                slot[0] = int(flat_dram[idx]) if 0 <= idx < dram_len else 0
+                slot[1] = words_in_storage
 
         return spad_storage
 
@@ -700,85 +744,8 @@ class DwIactStreamMapper(IactStreamMapper):
 
     def write_iact_data_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
         """Generate DWConv2D-specific activation data SPAD storage."""
-        layer_params = self.layer_params
-        params = self.params
-
-        spad_storage = [[0, 0] for _ in range(params.Iacts_per_PE)]
-
-        in_channels = layer_params.input_shape[3]
-        iact_trans = layer_params.iact_transmissions_pe
-        kernels_per_cluster = layer_params.kernel_per_pe_cluster
-        kernel_w, kernel_h = layer_params.kernel_size[0], layer_params.kernel_size[1]
-
-        amount_of_channels = (
-            math.ceil((router + 1) * in_channels / iact_trans / kernels_per_cluster)
-            - math.ceil(router * in_channels / iact_trans / kernels_per_cluster)
-        )
-        max_words = min(amount_of_channels * kernel_h, layer_params.used_iact_per_PE)
-        if max_words <= 0:
-            return spad_storage
-
-        used_y_cluster = layer_params.used_Y_cluster
-        pes_x = params.PEs_X
-        clusters_x = params.Clusters_X
-        in_active_region = (
-            (
-                (math.floor(cycle / used_y_cluster) * params.Clusters_Y * clusters_x * pes_x)
-                + (math.floor(cl_y / used_y_cluster) * clusters_x * pes_x)
-                + (cl_x * pes_x)
-            )
-            < (layer_params.output_shape[1] * (layer_params.output_shape[2] + layer_params.add_up))
-        ) or (layer_params.single_cluster_computation != 0)
-
-        if not in_active_region:
-            return spad_storage
-
-        iact_temp_pos_x, base_y, rep_channel_base, kernel_w, kernel_h = self._compute_spatial_indices(
-            cl_x, cl_y, router, cycle, iact_cycle, case_2_uses_clusters_x=True
-        )
-        router_channel_offset = math.ceil(
-            ((router % kernels_per_cluster) * math.ceil(in_channels / iact_trans)) / kernels_per_cluster
-        )
-        channel_base = router_channel_offset + rep_channel_base
-
-        max_x = layer_params.output_shape[1] * layer_params.strideX
-        max_y = layer_params.output_shape[2] * layer_params.strideY
-        valid_x = 0 <= iact_temp_pos_x < max_x
-
-        dram_fmap = self.dram_fmap
-        dram_channels = len(dram_fmap)
-
-        for words_in_storage in range(max_words):
-            iact_temp_pos_y = (words_in_storage % kernel_h) + base_y
-            slot = spad_storage[words_in_storage]
-            if valid_x and (0 <= iact_temp_pos_y < max_y):
-                channel = (words_in_storage // kernel_w) + channel_base
-                if 0 <= channel < dram_channels:
-                    dram_c = dram_fmap[channel]
-                    if iact_temp_pos_x < len(dram_c) and iact_temp_pos_y < len(dram_c[iact_temp_pos_x]):
-                        slot[0] = dram_c[iact_temp_pos_x][iact_temp_pos_y]
-                    else:
-                        slot[0] = 0
-                else:
-                    slot[0] = 0
-            else:
-                slot[0] = 1
-            slot[1] = words_in_storage
-
-        return spad_storage
+        return self._write_spatial_iact_data_storage(cl_x, cl_y, router, cycle, iact_cycle)
 
     def write_iact_addr_storage(self, cl_x, cl_y, router, cycle, iact_cycle):
         """Generate address SPAD pointers for DWConv2D activation access."""
-        layer_params = self.layer_params
-        params = self.params
-        spad_storage = [0] * params.Iacts_Addr_per_PE
-        kernel_w = layer_params.kernel_size[0]
-
-        if kernel_w == 1:
-            spad_storage[0] = layer_params.used_channels
-        else:
-            limit = min(params.Iacts_Addr_per_PE, math.ceil(layer_params.used_iact_per_PE / kernel_w))
-            for words_in_storage in range(limit):
-                spad_storage[words_in_storage] = kernel_w * (words_in_storage + 1)
-
-        return spad_storage
+        return self._write_spatial_iact_addr_storage()

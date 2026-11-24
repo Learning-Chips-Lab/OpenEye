@@ -33,9 +33,9 @@ Typical Usage:
     >>> psum_stream = dw_psum_mapper.get_psum_stream()
 """
 
-import math
 import logging
-import open_eye.generic_test_utils as gtu
+import math
+import numpy as np
 
 logger = logging.getLogger("cocotb")
 
@@ -56,7 +56,7 @@ class PsumStreamMapper(object):
         params: OpenEye hardware parameters (cluster configuration, communication mode)
         layer_params: Layer-specific parameters (filters, dimensions, PE allocation)
         layer_repetition (int): Current repetition index for this layer execution
-        dram_bias (list): Bias values loaded from DRAM for the current layer
+        dram_bias: Bias values loaded from DRAM for the current layer
 
     """
 
@@ -65,15 +65,15 @@ class PsumStreamMapper(object):
 
         Args:
             params: OpenEye hardware parameters including:
-                - SERIAL: Communication mode flag (True for serial, False for parallel)
-                - Clusters_X/Y: Number of clusters in each dimension
-                - Psum_Routers: Number of partial sum routers per cluster
+- SERIAL: Communication mode flag (True for serial, False for parallel)
+- Clusters_X/Y: Number of clusters in each dimension
+- Psum_Routers: Number of partial sum routers per cluster
             layer_params: Layer-specific parameters including:
-                - filters: Number of output filters
-                - iact_size_y: Input activation height
-                - used_psum_per_PE: Number of partial sums per PE
+- filters: Number of output filters
+- iact_size_y: Input activation height
+- used_psum_per_PE: Number of partial sums per PE
             layer_repetition (int): Repetition index for layer execution scheduling
-            dram_layer_content (list): Bias values from DRAM for this layer
+            dram_layer_content: Bias values from DRAM for this layer
 
         """
         self.params = params
@@ -86,8 +86,8 @@ class PsumStreamMapper(object):
 
         Creates the data stream that initializes partial sum accumulators with bias
         values. The format differs based on the communication mode:
-        - Serial mode: Single linear stream with duplicated bias values
-        - Parallel mode: 3D structure organized by cluster and router
+- Serial mode: Single linear stream with duplicated bias values
+- Parallel mode: 3D structure organized by cluster and router
 
         Returns:
             Serial mode: List of packed integers containing bias values in two's
@@ -97,29 +97,44 @@ class PsumStreamMapper(object):
                           for distribution to PE scratchpad memories.
 
         Note:
-            - Serial mode converts each filter bias once and replicates at C-speed
-            - Parallel mode delegates to write_psum_data_glb() for per-cluster generation
+- Serial mode converts each filter bias once and replicates at C-speed
+- Parallel mode delegates to write_psum_data_glb() for per-cluster generation
 
         """
         if self.params.SERIAL:
             # === SERIAL MODE: LINEAR STREAM GENERATION ===
-            bitwidth = self.params.DATA_PSUM_BITWIDTH
-            words_per_transmission = min(2, self.params.DMA_BITWIDTH // bitwidth)
+            bitwidth = int(self.params.DATA_PSUM_BITWIDTH)
+            dma_bw = int(self.params.DMA_BITWIDTH)
+            words_per_transmission = min(2, dma_bw // bitwidth)
             block_length = (
-                (self.params.NUM_GLB_PSUM // words_per_transmission) * self.params.Clusters
-            ) // self.layer_params.different_kernels_per_calculation
+                (int(self.params.NUM_GLB_PSUM) // words_per_transmission) * int(self.params.Clusters)
+            ) // int(self.layer_params.different_kernels_per_calculation)
+            total_repetitions = int(self.layer_params.iact_x_line_repetitions) * int(self.layer_params.iact_size_y)
+            filters = int(self.layer_params.filters)
 
-            # Convert and pack each filter bias once, then replicate per block
-            packed_biases = []
-            for i in range(self.layer_params.filters):
-                bias_bit = gtu.to_twos_complement(self.dram_bias[i], bitwidth)
-                packed_word = 0
+            if filters <= 0 or block_length <= 0 or total_repetitions <= 0:
+                return []
+
+            raw_biases = np.asarray(self.dram_bias, dtype=np.int64).ravel()[:filters]
+            total_bits = bitwidth * words_per_transmission
+
+            if total_bits <= 64:
+                mask = np.uint64((1 << bitwidth) - 1)
+                bias_bits = raw_biases.astype(np.uint64) & mask
+                packed = np.zeros_like(bias_bits)
                 for _ in range(words_per_transmission):
-                    packed_word = (packed_word << bitwidth) | bias_bit
-                packed_biases.extend([packed_word] * block_length)
+                    packed = (packed << np.uint64(bitwidth)) | bias_bits
+                packed_biases = np.repeat(packed, block_length).tolist()
+            else:
+                mask = (1 << bitwidth) - 1
+                packed_biases = []
+                for b in raw_biases.tolist():
+                    bias_bit = int(b) & mask
+                    packed_word = 0
+                    for _ in range(words_per_transmission):
+                        packed_word = (packed_word << bitwidth) | bias_bit
+                    packed_biases.extend([packed_word] * block_length)
 
-            # Replicate the full filter sequence across all spatial output positions
-            total_repetitions = self.layer_params.iact_x_line_repetitions * self.layer_params.iact_size_y
             return packed_biases * total_repetitions
 
         # === PARALLEL MODE: CLUSTER-BASED STREAM GENERATION ===
@@ -147,13 +162,13 @@ class PsumStreamMapper(object):
             list: Flat list containing partial sum initialization data across all cycles.
 
         Note:
-            - Serial mode: Number of cycles = iact_size_y * 2
-            - Parallel mode: Cycle count determined by needed_refreshes_mx range
-            - Multiplies single-cycle storage directly since initialization is cycle-invariant
+- Serial mode: Number of cycles = iact_size_y * 2
+- Parallel mode: Cycle count determined by needed_refreshes_mx range
+- Multiplies single-cycle storage directly since initialization is cycle-invariant
 
         """
         if self.params.SERIAL:
-            num_cycles = self.layer_params.iact_size_y * 2
+            num_cycles = int(self.layer_params.iact_size_y) * 2
         else:
             refresh_bounds = self.layer_params.needed_refreshes_mx[self.layer_repetition]
             num_cycles = math.ceil(refresh_bounds[2] / 2) - math.floor(refresh_bounds[1] / 2)
@@ -161,7 +176,7 @@ class PsumStreamMapper(object):
         if num_cycles <= 0:
             return []
 
-        return self.write_psum_storage(cl_x, cl_y, router, 0) * num_cycles
+        return self.write_psum_storage(cl_x, cl_y, router, 0) * int(num_cycles)
 
     def create_complete_psum_stream(self, spad_storage):
         """Format flattened scratchpad storage into a complete partial sum stream.
@@ -175,17 +190,23 @@ class PsumStreamMapper(object):
             Parallel mode: 3D array [cluster_x][cluster_y][router] as-is
 
         Note:
-            - Serial mode packs cluster 0 data in lower 24 bits, cluster 1 in upper 24 bits
+- Serial mode packs cluster 0 data in lower 24 bits, cluster 1 in upper 24 bits
 
         """
         if not self.params.SERIAL:
             return spad_storage
 
         stream = []
+        shift = np.uint64(24)
         for cl_y in range(self.params.Clusters_Y):
             for router in range(self.params.NUM_GLB_PSUM):
-                for w0, w1 in zip(spad_storage[0][cl_y][router], spad_storage[1][cl_y][router]):
-                    stream.append(w0 | (w1 << 24))
+                s0 = spad_storage[0][cl_y][router]
+                s1 = spad_storage[1][cl_y][router]
+                n = min(len(s0), len(s1))
+                if n > 0:
+                    arr0 = np.asarray(s0[:n], dtype=np.uint64)
+                    arr1 = np.asarray(s1[:n], dtype=np.uint64)
+                    stream.extend((arr0 | (arr1 << shift)).tolist())
         return stream
 
 
@@ -207,11 +228,11 @@ class ConvPsumStreamMapper(PsumStreamMapper):
         Args:
             params: OpenEye hardware parameters
             layer_params: Conv2D layer parameters including:
-                - filters: Number of output filters/channels
-                - needed_wght_transmissions: Number of weight transmission cycles
-                - used_psum_per_PE: Partial sums allocated per PE
+- filters: Number of output filters/channels
+- needed_wght_transmissions: Number of weight transmission cycles
+- used_psum_per_PE: Partial sums allocated per PE
             layer_repetition (int): Current layer repetition index
-            dram_layer_content (list): Bias values from DRAM for this convolution layer
+            dram_layer_content: Bias values from DRAM for this convolution layer
 
         """
         super().__init__(params, layer_params, layer_repetition, dram_layer_content)
@@ -229,7 +250,7 @@ class ConvPsumStreamMapper(PsumStreamMapper):
             list: Zero-initialized partial sum entries bounded by used_psum_per_PE.
 
         """
-        num_entries = self.layer_params.filters // self.layer_params.needed_wght_transmissions
+        num_entries = int(self.layer_params.filters) // int(self.layer_params.needed_wght_transmissions)
         count = min(num_entries, int(self.layer_params.used_psum_per_PE))
         return [0] * max(0, count)
 
@@ -253,11 +274,11 @@ class DwPsumStreamMapper(PsumStreamMapper):
         Args:
             params: OpenEye hardware parameters
             layer_params: Depthwise layer parameters including:
-                - filters: Number of output channels (matches input channels)
-                - used_psum_per_PE: Partial sums allocated per PE
-                - used_Y_cluster: Number of PEs used per column
+- filters: Number of output channels (matches input channels)
+- used_psum_per_PE: Partial sums allocated per PE
+- used_Y_cluster: Number of PEs used per column
             layer_repetition (int): Current layer repetition index
-            dram_layer_content (list): Bias values from DRAM for this depthwise layer
+            dram_layer_content: Bias values from DRAM for this depthwise layer
 
         """
         super().__init__(params, layer_params, layer_repetition, dram_layer_content)
@@ -279,7 +300,7 @@ class DwPsumStreamMapper(PsumStreamMapper):
                   or an empty list for unused clusters.
 
         """
-        if (cl_y % self.layer_params.used_Y_cluster) != 0:
+        if (cl_y % int(self.layer_params.used_Y_cluster)) != 0:
             return []
 
         num_entries = math.ceil(self.layer_params.filters / 2)
@@ -305,10 +326,10 @@ class DensePsumStreamMapper(PsumStreamMapper):
         Args:
             params: OpenEye hardware parameters
             layer_params: Dense layer parameters including:
-                - output_shape: Output dimensions determining number of bias values
-                - used_psum_per_PE: Partial sums allocated per PE
+- output_shape: Output dimensions determining number of bias values
+- used_psum_per_PE: Partial sums allocated per PE
             layer_repetition (int): Current layer repetition index
-            dram_layer_content (list): Bias values from DRAM for this dense layer
+            dram_layer_content: Bias values from DRAM for this dense layer
 
         """
         super().__init__(params, layer_params, layer_repetition, dram_layer_content)
@@ -324,18 +345,24 @@ class DensePsumStreamMapper(PsumStreamMapper):
             list: Stream of two's complement bias values interleaved across cluster columns.
 
         """
-        bitwidth = self.params.DATA_PSUM_BITWIDTH
-        clusters_x = self.params.Clusters_X
+        bitwidth = int(self.params.DATA_PSUM_BITWIDTH)
+        clusters_x = int(self.params.Clusters_X)
         used_psum = int(self.layer_params.used_psum_per_PE)
         values = math.ceil(self.layer_params.used_psum_per_PE)
-        repetitions = self.layer_params.needed_psum_transmissions
+        repetitions = int(self.layer_params.needed_psum_transmissions)
 
-        # Pre-encode all DRAM biases once (0 remains 0 in two's complement)
-        encoded_biases = [gtu.to_twos_complement(b, bitwidth) for b in self.dram_bias]
-        num_biases = len(encoded_biases)
+        if repetitions <= 0 or values <= 0 or clusters_x <= 0:
+            return []
 
-        psum_stream = []
-        rep_stride = clusters_x * used_psum
+        raw_biases = np.asarray(self.dram_bias, dtype=np.int64).ravel()
+        num_biases = raw_biases.size
+
+        if bitwidth <= 64:
+            mask = np.uint64((1 << bitwidth) - 1)
+            encoded_biases = raw_biases.astype(np.uint64) & mask
+        else:
+            mask = (1 << bitwidth) - 1
+            encoded_biases = np.array([int(b) & mask for b in raw_biases.tolist()], dtype=object)
 
         # One word per filter index per cluster column, columns interleaved
         # (f0c0, f0c1, f1c0, ...): psum_pipeline's FC GET_BIAS branch writes
@@ -343,15 +370,15 @@ class DensePsumStreamMapper(PsumStreamMapper):
         # buffer address after every CLUSTER_COLUMNS words. The filters are
         # split across the columns, so column c holds filters
         # c*values .. c*values+values-1.
-        for repetition in range(repetitions):
-            rep_offset = repetition * rep_stride
-            for i in range(values):
-                base_idx = rep_offset + i
-                for cl_x in range(clusters_x):
-                    bias_index = base_idx + cl_x * used_psum
-                    psum_stream.append(encoded_biases[bias_index] if bias_index < num_biases else 0)
+        rep_offsets = np.arange(repetitions, dtype=np.int64)[:, None, None] * (clusters_x * used_psum)
+        val_offsets = np.arange(values, dtype=np.int64)[None, :, None]
+        col_offsets = np.arange(clusters_x, dtype=np.int64)[None, None, :] * used_psum
+        indices = (rep_offsets + val_offsets + col_offsets).ravel()
 
-        return psum_stream
+        out = np.zeros(indices.size, dtype=encoded_biases.dtype)
+        valid = (indices >= 0) & (indices < num_biases)
+        out[valid] = encoded_biases[indices[valid]]
+        return out.tolist()
 
     def write_psum_storage(self, cl_x, cl_y, router, cycle):
         """Generate partial sum storage data for one cycle in a dense layer.

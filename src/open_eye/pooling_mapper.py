@@ -24,8 +24,9 @@ Typical Usage:
     ...                                                           layer_repetition)
 """
 
-import math
 import logging
+import math
+import numpy as np
 import open_eye.stream_dicts as strdic
 from open_eye.generator import pack_registers
 from open_eye.layer_mapper import LayerMapper
@@ -66,34 +67,39 @@ class PoolingMapper(LayerMapper):
 
     @staticmethod
     def _pack_router_values(flat_values, dma_bitwidth, router_bits):
-        """Pack a flat list of router configuration codes into DMA-width words."""
+        """Pack a flat sequence of router configuration codes into DMA-width words."""
+        if not flat_values:
+            return []
         entries_per_word = dma_bitwidth // router_bits
         packed = []
         for i in range(0, len(flat_values), entries_per_word):
             word = 0
             for slot, val in enumerate(flat_values[i : i + entries_per_word]):
-                word |= val << (router_bits * slot)
+                word |= int(val) << (router_bits * slot)
             packed.append(word)
         return packed
 
     @staticmethod
     def _compute_pe_bitmap(params, layer_params):
         """Build integer bitmap of active PEs across all clusters."""
+        comp_arr = np.asarray(layer_params.computing_mx)[
+            : params.Clusters_X, : params.Clusters_Y, : params.PEs_Y, : params.PEs_X
+        ]
         computing_pes = 0
-        bit_idx = 0
-        comp_mx = layer_params.computing_mx
-
-        for x in range(params.Clusters_X):
-            comp_x = comp_mx[x]
-            for y in range(params.Clusters_Y):
-                comp_xy = comp_x[y]
-                for pe_y in range(params.PEs_Y):
-                    comp_row = comp_xy[pe_y]
-                    for pe_x in range(params.PEs_X):
-                        if comp_row[pe_x] == 1:
-                            computing_pes |= 1 << bit_idx
-                        bit_idx += 1
+        for bit_idx in np.flatnonzero(comp_arr.ravel() == 1).tolist():
+            computing_pes |= 1 << bit_idx
         return computing_pes
+
+    @staticmethod
+    def _psum_router_code(cl_y: int, used_y: int) -> int:
+        """Return the psum router mode code for a Y cluster index."""
+        if used_y == 1:
+            return 4
+        if (cl_y % used_y) == 0:
+            return 5
+        if ((cl_y + 1) % used_y) == 0:
+            return 3
+        return 2
 
     def write_working_parameters(self, params, layer_params, layer_repetition):
         """Generate working parameters and router configurations for the pooling layer.
@@ -110,8 +116,8 @@ class PoolingMapper(LayerMapper):
         Returns:
             list: Configuration storage containing all working parameters. Format depends
                   on params.SERIAL mode:
-                  - Serial mode: DMA-formatted bitstream as list of packed integers
-                  - Parallel mode: List indexed by status_dict keys
+- Serial mode: DMA-formatted bitstream as list of packed integers
+- Parallel mode: List indexed by status_dict keys
 
         """
         # === PE ALLOCATION BITMAP GENERATION ===
@@ -119,89 +125,92 @@ class PoolingMapper(LayerMapper):
 
         # === SERIAL MODE: DMA TRANSMISSION ===
         if params.SERIAL:
+            loop_limit = [int(v) for v in layer_params.psum_pagu_loop_limit]
+            addr_inc = [int(v) for v in layer_params.psum_pagu_addr_inc]
+
             dma_storage = pack_registers({
-                "stride_x": layer_params.strideX,
-                "stride_y": layer_params.strideY,
-                "skipIact_reg": layer_params.skipIact,
-                "skipWght_reg": layer_params.skipWght,
-                "skipPsum_reg": layer_params.skipPsum,
+                "stride_x": int(layer_params.strideX),
+                "stride_y": int(layer_params.strideY),
+                "skipIact_reg": int(layer_params.skipIact),
+                "skipWght_reg": int(layer_params.skipWght),
+                "skipPsum_reg": int(layer_params.skipPsum),
                 "dw_mode": 0,
-                "psum_q": layer_params.psum_delay,
-                "kernel_per_pe_cluster_reg": layer_params.kernel_per_pe_cluster,
-                "kernel_size_x": layer_params.strideX,
-                "kernel_size_y": layer_params.strideY,
-                "x_lines_reg": layer_params.iact_x_lines,
+                "psum_q": int(layer_params.psum_delay),
+                "kernel_per_pe_cluster_reg": int(layer_params.kernel_per_pe_cluster),
+                "kernel_size_x": int(layer_params.strideX),
+                "kernel_size_y": int(layer_params.strideY),
+                "x_lines_reg": int(layer_params.iact_x_lines),
                 "needed_wght_cycles": math.ceil(
                     layer_params.filters
                     / (layer_params.used_psum_per_PE * layer_params.different_kernels_per_calculation)
                 ),
-                "needed_cycles": layer_params.iact_converter_buffer_addr_max_cycles,
-                "trans_cycles_iact": layer_params.trans_cycles_iact,
-                "trans_cycles_wght": layer_params.trans_cycles_wght,
-                "trans_cycles_psum": layer_params.trans_cycles_psum,
-                "iact_converter_buffer_addr_max_cycles": layer_params.needed_cycles,
-                "iact_channels_per_pe": layer_params.used_channels,
+                "needed_cycles": int(layer_params.iact_converter_buffer_addr_max_cycles),
+                "trans_cycles_iact": int(layer_params.trans_cycles_iact),
+                "trans_cycles_wght": int(layer_params.trans_cycles_wght),
+                "trans_cycles_psum": int(layer_params.trans_cycles_psum),
+                "iact_converter_buffer_addr_max_cycles": int(layer_params.needed_cycles),
+                "iact_channels_per_pe": int(layer_params.used_channels),
                 "fc_size_reg": 0,
-                "iact_size_x": layer_params.iact_size_x,
-                "iact_size_y": layer_params.iact_size_y,
-                "iact_size_c": layer_params.channels,
-                "iact_x_per_cluster": layer_params.iact_x_per_cluster,
-                "psum_x_all_cluster": layer_params.psum_x_all_cluster,
-                "padding_x": layer_params.padding_x,
-                "padding_y": layer_params.padding_y,
+                "iact_size_x": int(layer_params.iact_size_x),
+                "iact_size_y": int(layer_params.iact_size_y),
+                "iact_size_c": int(layer_params.channels),
+                "iact_x_per_cluster": int(layer_params.iact_x_per_cluster),
+                "psum_x_all_cluster": int(layer_params.psum_x_all_cluster),
+                "padding_x": int(layer_params.padding_x),
+                "padding_y": int(layer_params.padding_y),
                 "psum_size_x": math.ceil(layer_params.iact_size_x / layer_params.strideX),
                 "psum_size_y": math.ceil(layer_params.iact_size_y / layer_params.strideY),
-                "iact_needed_cycles": layer_params.iact_stream_cycles,
-                "kernels_per_calc": layer_params.different_kernels_per_calculation,
-                "y_lines_per_calc": layer_params.y_lines_per_calculation,
-                "store_in_psum": layer_params.store_in_psum,
-                "max_pooling": layer_params.max_pooling,
-                "fully_connected_layer": layer_params.fully_connected,
-                "choose_iact_buffer_output": layer_params.choose_iact_storage_output,
-                "choose_iact_buffer_input": layer_params.choose_iact_storage_input,
-                "iact_channels_per_pe_next_layer": layer_params.diff_iact_layer_next_layer,
+                "iact_needed_cycles": int(layer_params.iact_stream_cycles),
+                "kernels_per_calc": int(layer_params.different_kernels_per_calculation),
+                "y_lines_per_calc": int(layer_params.y_lines_per_calculation),
+                "store_in_psum": int(layer_params.store_in_psum),
+                "max_pooling": int(layer_params.max_pooling),
+                "fully_connected_layer": int(layer_params.fully_connected),
+                "choose_iact_buffer_output": int(layer_params.choose_iact_storage_output),
+                "choose_iact_buffer_input": int(layer_params.choose_iact_storage_input),
+                "iact_channels_per_pe_next_layer": int(layer_params.diff_iact_layer_next_layer),
                 "needed_psum_storage_cycles_reg": 0,
-                "iact_channel_max_cycles": layer_params.diff_iact_layer,
-                "input_activations": layer_params.used_iact_per_PE,
-                "filters": layer_params.used_psum_per_PE,
-                "needed_x_cls_reg": layer_params.used_X_cluster,
-                "needed_y_cls_reg": layer_params.used_Y_cluster,
-                "needed_iact_cycles_reg": layer_params.needed_Iact_writes,
-                "wght_addr_len_reg": layer_params.used_wght_addr_per_PE,
-                "send_data_out": layer_params.send_values_out,
-                "needed_iact_buffer_words": layer_params.needed_iact_buffer_words,
-                "iact_x_line_repetitions_reg": layer_params.iact_x_line_repetitions,
-                "buffer_cycles_for_x_iact": layer_params.buffer_cycles_for_x_iact,
-                "start_param_array": layer_params.start_param_array,
-                "limit_increase": layer_params.limit_increase,
-                "initial_upper_limit": layer_params.initial_upper_limit,
-                "iteration_for_kernels": layer_params.iteration_for_kernels,
-                "fsm_psum_limit": layer_params.fsm_psum_limit,
-                "cluster_per_conv_cycle": layer_params.cluster_per_conv_cycle,
-                "iact_converter_max_cycles": layer_params.iact_converter_max_cycles,
-                "iact_buffer_words_per_write": layer_params.iact_buffer_words_per_write,
-                "pooling_mode": layer_params.pooling_mode,
-                "used_wght_per_PE": layer_params.used_wght_per_PE,
-                "overhang_discrepancy": layer_params.overhang_discrepancy,
-                "psum_output_words": layer_params.psum_output_words,
-                "iact_read_inc_1": layer_params.iact_read_inc_1,
-                "iact_read_inc_2": layer_params.iact_read_inc_2,
-                "iact_read_inc_3": layer_params.iact_read_inc_3,
-                "iact_read_inc_4": layer_params.iact_read_inc_4,
-                "iact_write_inc_1": layer_params.iact_write_inc_1,
-                "iact_write_inc_2": layer_params.iact_write_inc_2,
-                "iact_write_inc_3": layer_params.iact_write_inc_3,
-                "pagu_wght_limit": layer_params.pagu_wght_limit,
-                "psum_pagu_loop_limit_0": layer_params.psum_pagu_loop_limit[0],
-                "psum_pagu_loop_limit_1": layer_params.psum_pagu_loop_limit[1],
-                "psum_pagu_loop_limit_2": layer_params.psum_pagu_loop_limit[2],
-                "psum_pagu_loop_limit_3": layer_params.psum_pagu_loop_limit[3],
-                "psum_pagu_loop_limit_4": layer_params.psum_pagu_loop_limit[4],
-                "psum_pagu_addr_inc_0": layer_params.psum_pagu_addr_inc[0],
-                "psum_pagu_addr_inc_1": layer_params.psum_pagu_addr_inc[1],
-                "psum_pagu_addr_inc_2": layer_params.psum_pagu_addr_inc[2],
-                "psum_pagu_addr_inc_3": layer_params.psum_pagu_addr_inc[3],
-                "psum_pagu_addr_inc_4": layer_params.psum_pagu_addr_inc[4],
+                "iact_channel_max_cycles": int(layer_params.diff_iact_layer),
+                "input_activations": int(layer_params.used_iact_per_PE),
+                "filters": int(layer_params.used_psum_per_PE),
+                "needed_x_cls_reg": int(layer_params.used_X_cluster),
+                "needed_y_cls_reg": int(layer_params.used_Y_cluster),
+                "needed_iact_cycles_reg": int(layer_params.needed_Iact_writes),
+                "wght_addr_len_reg": int(layer_params.used_wght_addr_per_PE),
+                "send_data_out": int(layer_params.send_values_out),
+                "needed_iact_buffer_words": int(layer_params.needed_iact_buffer_words),
+                "iact_x_line_repetitions_reg": int(layer_params.iact_x_line_repetitions),
+                "buffer_cycles_for_x_iact": int(layer_params.buffer_cycles_for_x_iact),
+                "start_param_array": int(layer_params.start_param_array),
+                "limit_increase": int(layer_params.limit_increase),
+                "initial_upper_limit": int(layer_params.initial_upper_limit),
+                "iteration_for_kernels": int(layer_params.iteration_for_kernels),
+                "fsm_psum_limit": int(layer_params.fsm_psum_limit),
+                "cluster_per_conv_cycle": int(layer_params.cluster_per_conv_cycle),
+                "iact_converter_max_cycles": int(layer_params.iact_converter_max_cycles),
+                "iact_buffer_words_per_write": int(layer_params.iact_buffer_words_per_write),
+                "pooling_mode": int(layer_params.pooling_mode),
+                "used_wght_per_PE": int(layer_params.used_wght_per_PE),
+                "overhang_discrepancy": int(layer_params.overhang_discrepancy),
+                "psum_output_words": int(layer_params.psum_output_words),
+                "iact_read_inc_1": int(layer_params.iact_read_inc_1),
+                "iact_read_inc_2": int(layer_params.iact_read_inc_2),
+                "iact_read_inc_3": int(layer_params.iact_read_inc_3),
+                "iact_read_inc_4": int(layer_params.iact_read_inc_4),
+                "iact_write_inc_1": int(layer_params.iact_write_inc_1),
+                "iact_write_inc_2": int(layer_params.iact_write_inc_2),
+                "iact_write_inc_3": int(layer_params.iact_write_inc_3),
+                "pagu_wght_limit": int(layer_params.pagu_wght_limit),
+                "psum_pagu_loop_limit_0": loop_limit[0],
+                "psum_pagu_loop_limit_1": loop_limit[1],
+                "psum_pagu_loop_limit_2": loop_limit[2],
+                "psum_pagu_loop_limit_3": loop_limit[3],
+                "psum_pagu_loop_limit_4": loop_limit[4],
+                "psum_pagu_addr_inc_0": addr_inc[0],
+                "psum_pagu_addr_inc_1": addr_inc[1],
+                "psum_pagu_addr_inc_2": addr_inc[2],
+                "psum_pagu_addr_inc_3": addr_inc[3],
+                "psum_pagu_addr_inc_4": addr_inc[4],
                 "gemm_mode": 0,
             })
 
@@ -226,24 +235,24 @@ class PoolingMapper(LayerMapper):
         storage[sdict["realfactor"]] = layer_params.realfactor
         storage[sdict["autofunction"]] = params.autofunction
         storage[sdict["poolingmode"]] = params.poolingmode
-        storage[sdict["psum_delay"]] = layer_params.psum_delay
-        storage[sdict["needed_refreshes"]] = layer_params.needed_refreshes_mx[layer_repetition][0]
-        storage[sdict["used_X_cluster"]] = layer_params.used_X_cluster
-        storage[sdict["used_Y_cluster"]] = layer_params.used_Y_cluster
-        storage[sdict["needed_Iact_writes"]] = layer_params.needed_Iact_writes
-        storage[sdict["used_psum_per_PE"]] = layer_params.used_psum_per_PE
-        storage[sdict["used_iact_addr_per_PE"]] = layer_params.used_iact_addr_per_PE
-        storage[sdict["used_wght_addr_per_PE"]] = layer_params.used_wght_addr_per_PE
-        storage[sdict["used_iact_per_PE"]] = layer_params.used_iact_per_PE
-        storage[sdict["iact_addr_len"]] = layer_params.iact_addr_len
-        storage[sdict["iact_data_len"]] = layer_params.iact_data_len
-        storage[sdict["strideX"]] = layer_params.strideX
-        storage[sdict["strideY"]] = layer_params.strideY
-        storage[sdict["skipIact"]] = layer_params.skipIact
-        storage[sdict["skipWght"]] = layer_params.skipWght
-        storage[sdict["skipPsum"]] = layer_params.skipPsum
+        storage[sdict["psum_delay"]] = int(layer_params.psum_delay)
+        storage[sdict["needed_refreshes"]] = int(layer_params.needed_refreshes_mx[layer_repetition][0])
+        storage[sdict["used_X_cluster"]] = int(layer_params.used_X_cluster)
+        storage[sdict["used_Y_cluster"]] = int(layer_params.used_Y_cluster)
+        storage[sdict["needed_Iact_writes"]] = int(layer_params.needed_Iact_writes)
+        storage[sdict["used_psum_per_PE"]] = int(layer_params.used_psum_per_PE)
+        storage[sdict["used_iact_addr_per_PE"]] = int(layer_params.used_iact_addr_per_PE)
+        storage[sdict["used_wght_addr_per_PE"]] = int(layer_params.used_wght_addr_per_PE)
+        storage[sdict["used_iact_per_PE"]] = int(layer_params.used_iact_per_PE)
+        storage[sdict["iact_addr_len"]] = int(layer_params.iact_addr_len)
+        storage[sdict["iact_data_len"]] = int(layer_params.iact_data_len)
+        storage[sdict["strideX"]] = int(layer_params.strideX)
+        storage[sdict["strideY"]] = int(layer_params.strideY)
+        storage[sdict["skipIact"]] = int(layer_params.skipIact)
+        storage[sdict["skipWght"]] = int(layer_params.skipWght)
+        storage[sdict["skipPsum"]] = int(layer_params.skipPsum)
         storage[sdict["usePEs"]] = computing_pes
-        storage[sdict["kernel_per_pe_cluster"]] = layer_params.kernel_per_pe_cluster
+        storage[sdict["kernel_per_pe_cluster"]] = int(layer_params.kernel_per_pe_cluster)
 
         storage[sdict["router_iact"]] = self.write_router_iact(params, layer_params)
         storage[sdict["router_wght"]] = self.write_router_wght(params, layer_params)
@@ -254,9 +263,9 @@ class PoolingMapper(LayerMapper):
         """Generate unified quantization and offset parameters packed for shift-register streaming.
 
         Layout per Filter (LSB -> MSB):
-        - Offset   : OFFSET_WIDTH bits
-        - Exponent : EXPONENT_WIDTH bits
-        - Mantissa : MANTISSA_WIDTH bits
+- Offset   : OFFSET_WIDTH bits
+- Exponent : EXPONENT_WIDTH bits
+- Mantissa : MANTISSA_WIDTH bits
 
         Shift behavior:
         Filter 0 lands at the lowest bit-positions (quant_reg[0 +: ENTRY_WIDTH]).
@@ -269,6 +278,7 @@ class PoolingMapper(LayerMapper):
 
         entry_w = offset_w + exp_w + mant_w
         dma_w = params.DMA_BITWIDTH
+        n_quant = params.QUANT_AMOUNT
 
         offset_mask = (1 << offset_w) - 1
         exp_mask = (1 << exp_w) - 1
@@ -277,18 +287,28 @@ class PoolingMapper(LayerMapper):
 
         quantize = layer_params.quantize
         offsets = layer_params.offset
+
+        if isinstance(quantize, dict):
+            q_arr = np.asarray([quantize[f] for f in range(n_quant)], dtype=np.int64)
+        else:
+            q_arr = np.asarray(quantize, dtype=np.int64)[:n_quant]
+
+        if isinstance(offsets, dict):
+            o_arr = np.asarray([offsets[f] for f in range(n_quant)], dtype=np.int64)
+        else:
+            o_arr = np.asarray(offsets, dtype=np.int64)[:n_quant]
+
+        entries = (
+            (o_arr.astype(np.uint64) & np.uint64(offset_mask))
+            | ((q_arr[:, 1].astype(np.uint64) & np.uint64(exp_mask)) << np.uint64(offset_w))
+            | ((q_arr[:, 0].astype(np.uint64) & np.uint64(mant_mask)) << np.uint64(mant_shift))
+        )
+
         packed_bitstream = 0
+        for f, entry in enumerate(entries.tolist()):
+            packed_bitstream |= entry << (f * entry_w)
 
-        for f in range(params.QUANT_AMOUNT):
-            q_entry = quantize[f]
-            filter_entry = (
-                (int(offsets[f]) & offset_mask)
-                | ((int(q_entry[1]) & exp_mask) << offset_w)
-                | ((int(q_entry[0]) & mant_mask) << mant_shift)
-            )
-            packed_bitstream |= filter_entry << (f * entry_w)
-
-        total_bits = params.QUANT_AMOUNT * entry_w
+        total_bits = n_quant * entry_w
         num_dma_words = math.ceil(total_bits / dma_w)
         total_padded_bits = num_dma_words * dma_w
         dma_mask = (1 << dma_w) - 1
@@ -346,41 +366,27 @@ class PoolingMapper(LayerMapper):
         """Generate partial sum router configuration for pooling operations.
 
         Routing values:
-        - 2: Pass through intermediate cluster (forward to next)
-        - 3: Last cluster in chain (receive and finalize)
-        - 4: Single PE per column (local handling only)
-        - 5: First cluster in chain (receive from bottom and forward up)
+- 2: Pass through intermediate cluster (forward to next)
+- 3: Last cluster in chain (receive and finalize)
+- 4: Single PE per column (local handling only)
+- 5: First cluster in chain (receive from bottom and forward up)
         """
         clusters_x = params.Clusters_X
         clusters_y = params.Clusters_Y
         psum_routers = params.Psum_Routers
-        used_y = layer_params.used_Y_cluster
+        used_y = int(layer_params.used_Y_cluster)
         per_y_entries = clusters_x * psum_routers
 
         if params.SERIAL:
             flat_values = []
             for cl_y in range(clusters_y):
-                if used_y == 1:
-                    val = 4
-                elif (cl_y % used_y) == 0:
-                    val = 5
-                elif ((cl_y + 1) % used_y) == 0:
-                    val = 3
-                else:
-                    val = 2
+                val = self._psum_router_code(cl_y, used_y)
                 flat_values.extend([val] * per_y_entries)
             return self._pack_router_values(flat_values, params.DMA_BITWIDTH, params.Psum_Router_Bits)
 
         storage = [[[0] * psum_routers for _ in range(clusters_y)] for _ in range(clusters_x)]
         for cl_y in range(clusters_y):
-            if used_y == 1:
-                val = 4
-            elif (cl_y % used_y) == 0:
-                val = 5
-            elif ((cl_y + 1) % used_y) == 0:
-                val = 3
-            else:
-                val = 2
+            val = self._psum_router_code(cl_y, used_y)
             row_vals = [val] * psum_routers
             for cl_x in range(clusters_x):
                 storage[cl_x][cl_y] = row_vals.copy()

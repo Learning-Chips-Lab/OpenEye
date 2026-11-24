@@ -6,312 +6,247 @@
 """DRAM simulation module for OpenEye accelerator testing.
 
 This module provides the DRAMContents class which simulates DRAM memory storage
-for the OpenEye neural network accelerator. It manages storage and initialization
-of weights, biases, and feature maps (activations) across various layer types
-including Conv2D, Depthwise Convolution, Dense, Pooling, and Flatten layers.
+for the OpenEye neural network accelerator using contiguous NumPy arrays. It manages
+storage and initialization of weights, biases, and feature maps (activations) across
+Conv2D, Depthwise Convolution, Dense, GEMM, Pooling, Flatten, Add, and Concat layers.
 
-Key Features:
-    - Automatic storage allocation based on layer parameters
-    - INT8 quantization of model weights and biases
-    - Support for sparse weight and activation patterns for testing
-    - Random initialization of input data for simulation
-
-Typical Usage:
-    >>> dram = DRAMContents(model, layer_parameters)
-    >>> dram.write_initial_data_to_dram(model, layer_parameters,
-    ...                                 sparse_iacts=False, sparse_wghts=False)
+Memory Layout (all arrays use ``DRAM_DTYPE = np.int32``):
+    - ``fmap[layer_name]``: ``list[np.ndarray]`` (one array per input/branch slot)
+        * Conv / Pooling / Flatten / Input / Add / Concat: ``(channels, width, height)``
+        * Dense / GEMM: ``(features,)``
+    - ``weights[layer_name]``: ``np.ndarray``
+        * Depthwise Conv2D: ``(channels, kernel_x, kernel_y)``
+        * Standard Conv2D: ``(channels, filters, kernel_y, kernel_x)``
+        * Dense / GEMM: ``(filters, iact_size_x)``
+    - ``bias[layer_name]``: ``np.ndarray``
+        * Conv2D / Depthwise / Dense / GEMM: ``(filters,)``
 """
 
-import math
 import numpy as np
 
-class DRAMContents(object):
-    """DRAM contents storage for intermediate data during OpenEye accelerator tests.
+DRAM_DTYPE = np.int32
+_NONZERO_CHOICES = np.array([-1, 1], dtype=DRAM_DTYPE)
 
-    This class simulates DRAM memory used by the OpenEye accelerator during simulation.
-    It manages storage for feature maps, weights, and biases across different neural
-    network layers, supporting Conv2D, Depthwise, Dense, Pooling, and Flatten layers.
 
-    The DRAM contents persist intermediate data between:
-    - Different layers in the network
-    - Different repetitions/iterations of the same layer
-    - Input feature maps and output activations
+def _replace_zeros_with_unit_signs(arr: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Replace all exact zero entries in ``arr`` in-place with random -1 or +1."""
+    zero_mask = arr == 0
+    num_zeros = int(np.count_nonzero(zero_mask))
+    if num_zeros > 0:
+        arr[zero_mask] = rng.choice(_NONZERO_CHOICES, size=num_zeros)
+    return arr
 
-    Attributes:
-        fmap (list): List of feature maps for each layer, storing input/output activations.
-                     Structure varies by layer type:
-                     - Conv/Pooling: 3D arrays [channels][height][width]
-                     - Dense: 1D arrays [features]
-        weights (list): List of weight tensors for each layer. Structure varies by layer type:
-                        - Conv: 4D arrays [input_channels][filters][kernel_h][kernel_w]
-                        - Depthwise: 3D arrays [channels][kernel_h][kernel_w]
-                        - Dense: 2D arrays [output_features][input_features]
-        bias (list): List of bias vectors for each layer, one value per output channel/filter.
 
-    """
+class DRAMContents:
+    """NumPy-backed DRAM contents storage for OpenEye accelerator tests."""
 
     def __init__(self, model, layer_parameters, rel_layers, seed: int | None = None) -> None:
-        """Initialize DRAM storage structures for all layers in the model.
+        """Allocate zero-initialized NumPy storage buffers for all layers in the model."""
+        self._rng = np.random.default_rng(seed)
 
-        Creates appropriately shaped data structures for feature maps, weights, and
-        biases based on the layer types and parameters. All values are initialized to zero.
+        dram_fmap: dict[str, list[np.ndarray]] = {}
+        dram_weights: dict[str, np.ndarray] = {}
+        dram_bias: dict[str, np.ndarray] = {}
 
-        Args:
-            model: The neural network model containing layer configurations.
-            layer_parameters (list): List of layer parameter objects, each containing:
-                - layer_name: Type of layer (Conv, Depthwise, Dense, Pooling, Flatten)
-                - input_shape: Input tensor dimensions
-                - output_shape: Output tensor dimensions
-                - kernel_size: Convolution kernel dimensions (if applicable)
-                - filters: Number of output filters (if applicable)
-            seed (int | None): Optional RNG seed for deterministic initialization of any
-                random values (weights for Dense layers and input activations). If None,
-                randomness is not seeded.
+        next_layers_map = rel_layers["Next_Layer"]
+        prev_layers_map = rel_layers["Previous_Layer"]
 
-        """
-        # Set RNG seed if provided for reproducibility
-        if seed is not None:
-            np.random.seed(seed)
-
-        # Initialize empty lists to hold data structures for each layer
-        dram_fmap = {}      # Feature maps (activations)
-        dram_weights = {}   # Weight tensors
-        dram_bias = {}      # Bias vectors
-
-        # Iterate through all layers to create appropriately shaped storage structures
         for name, layer_param in layer_parameters.items():
-            # === WEIGHT INITIALIZATION ===
-            # Create weight storage based on layer type
-            if "depthwise" in str(name):
-                # Depthwise Conv: separate kernel per input channel
-                # Shape: [input_channels][kernel_height][kernel_width]
-                dram_weights[name] = [[[0 for l in range(layer_param.kernel_size[0])]
-                                    for k in range(layer_param.kernel_size[1])]
-                                    for j in range(layer_param.channels)]
-            elif "conv" in str(name):
-                # Standard Conv2D: full kernel for each input-output channel pair
-                # Shape: [input_channels][output_filters][kernel_height][kernel_width]
-                dram_weights[name] = [[[[0 for m in range(layer_param.kernel_size[0])]
-                                    for l in range(layer_param.kernel_size[1])]
-                                    for k in range(layer_param.filters)]
-                                    for j in range(layer_param.channels)]
-            elif "dense" in str(name):
-                # Fully connected layer: weight matrix
-                # Shape: [filters][input_features]
-                dram_weights[name] = [[0 for m in range(layer_param.iact_size_x)]
-                                    for l in range(layer_param.filters)]
-            elif "flat" in str(name):
-                # Flatten layer: no weights needed (placeholder)
-                dram_weights[name] = [0]
-            elif "pooling" in str(name):
-                # Pooling layer: no weights needed (placeholder)
-                dram_weights[name] = [0]
-            elif "input" in str(name):
-                dram_weights[name] = []
-            elif "add" in str(name):
-                dram_weights[name] = []
-            elif "concat" in str(name):
-                dram_weights[name] = []
+            lname = str(name)
 
-            # === BIAS INITIALIZATION ===
-            # Create bias storage: one bias value per output channel/filter
+            # === WEIGHT & BIAS INITIALIZATION ===
+            if "depthwise" in lname:
+                dram_weights[name] = np.zeros(
+                    (layer_param.channels, layer_param.kernel_size[0], layer_param.kernel_size[1]),
+                    dtype=DRAM_DTYPE,
+                )
+                dram_bias[name] = np.zeros(layer_param.filters, dtype=DRAM_DTYPE)
 
-            if "depthwise" in str(name):
-                # Depthwise Conv: one bias per kernel (typically matches kernel height)
-                dram_bias[name] = [0 for k in range(layer_param.filters)]
-            elif "conv" in str(name):
-                # Standard Conv2D: one bias per output filter
-                dram_bias[name] = [0 for m in range(layer_param.filters)]
-            elif "dense" in str(name):
-                # Dense layer: one bias per output feature
-                dram_bias[name] = [0 for m in range(layer_param.filters)]
-            elif "pooling" in str(name):
-                # Pooling layer: one bias per output channel (width dimension)
-                dram_bias[name] = [0 for m in range(layer_param.output_shape[2])]
-            elif "input" in str(name):
-                dram_bias[name] = []
-            elif "add" in str(name):
-                dram_bias[name] = []
-            elif "concat" in str(name):
-                dram_bias[name] = []
+            elif "conv" in lname:
+                dram_weights[name] = np.zeros(
+                    (
+                        layer_param.channels,
+                        layer_param.filters,
+                        layer_param.kernel_size[1],
+                        layer_param.kernel_size[0],
+                    ),
+                    dtype=DRAM_DTYPE,
+                )
+                dram_bias[name] = np.zeros(layer_param.filters, dtype=DRAM_DTYPE)
+
+            elif "dense" in lname or "gemm" in lname or "matmul" in lname:
+                dram_weights[name] = np.zeros(
+                    (layer_param.filters, layer_param.iact_size_x),
+                    dtype=DRAM_DTYPE,
+                )
+                dram_bias[name] = np.zeros(layer_param.filters, dtype=DRAM_DTYPE)
+
+            elif "flat" in lname:
+                dram_weights[name] = np.zeros(1, dtype=DRAM_DTYPE)
+                dram_bias[name] = np.empty(0, dtype=DRAM_DTYPE)
+
+            elif "pooling" in lname:
+                dram_weights[name] = np.zeros(1, dtype=DRAM_DTYPE)
+                dram_bias[name] = np.zeros(layer_param.output_shape[2], dtype=DRAM_DTYPE)
+
+            elif "input" in lname or "add" in lname or "concat" in lname:
+                dram_weights[name] = np.empty(0, dtype=DRAM_DTYPE)
+                dram_bias[name] = np.empty(0, dtype=DRAM_DTYPE)
 
             # === FEATURE MAP INITIALIZATION ===
-            # Create input feature map storage for each layer
-            if "conv" in str(name):
-                # Conv layer input: 3D tensor [channels][height][width]
-                dram_fmap[name] = [[[[0 for l in range(layer_param.iact_size_y)]
-                                for k in range(layer_param.iact_size_x)]
-                                for j in range(layer_param.channels)]]
-            elif "dense" in str(name):
-                # Dense layer input: 1D vector [features]
-                dram_fmap[name] = [[0 for j in range(layer_param.iact_size_x)]]
-            elif "flat" in str(name):
-                # Flatten layer input: 3D tensor (pre-flattening shape)
-                dram_fmap[name] = [[[[0 for l in range(layer_param.input_shape[2])]
-                                for k in range(layer_param.input_shape[1])]
-                                for j in range(layer_param.channels)]]
-            elif "pooling" in str(name):
-                # Pooling layer input: 3D tensor [channels][height][width]
-                dram_fmap[name] = [[[[0 for l in range(layer_param.iact_size_y)]
-                                for k in range(layer_param.iact_size_x)]
-                                for j in range(layer_param.channels)]]
-            elif "input" in str(name):
-                # Pooling layer input: 3D tensor [channels][height][width]
-                dram_fmap[name] = [[[[0 for l in range(layer_parameters[rel_layers["Next_Layer"][name][0]].input_shape[2])]
-                                for k in range(layer_parameters[rel_layers["Next_Layer"][name][0]].input_shape[1])]
-                                for j in range(layer_parameters[rel_layers["Next_Layer"][name][0]].input_shape[3])]]
-            elif "add" in str(name):
-                # Pooling layer input: 3D tensor [channels][height][width]
-                dram_fmap[name] = [[[[0 for l in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[2])]
-                                for k in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[1])]
-                                for j in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[3])]
-                                for i in range(len(rel_layers["Previous_Layer"][name]))]
-                
-            elif "concat" in str(name):
-                # Pooling layer input: 3D tensor [channels][height][width]
-                dram_fmap[name] = [[[[0 for l in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[2])]
-                                for k in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[1])]
-                                for j in range(layer_parameters[rel_layers["Previous_Layer"][name][i]].output_shape[3])]
-                                for i in range(len(rel_layers["Previous_Layer"][name]))]
-                
+            if "conv" in lname or "pooling" in lname:
+                dram_fmap[name] = [
+                    np.zeros(
+                        (layer_param.channels, layer_param.iact_size_x, layer_param.iact_size_y),
+                        dtype=DRAM_DTYPE,
+                    )
+                ]
 
-        # Add output feature map storage for the final layer
-            if (len(rel_layers["Next_Layer"][name]) == 0):
-                if "conv" in str(name):
-                    # Conv output: 3D tensor [channels][height][width]
-                    dram_fmap["Output"] = [[[[0 for l in range(layer_parameters[name].output_shape[2])]
-                                        for k in range(layer_parameters[name].output_shape[1])]
-                                        for j in range(layer_parameters[name].filters)]]
-                elif "dense" in str(name):
-                    # Dense output: 1D vector [features]
-                    dram_fmap["Output"] = [[0 for l in range(layer_parameters[name].filters)]]
+            elif "dense" in lname or "gemm" in lname or "matmul" in lname:
+                dram_fmap[name] = [np.zeros(layer_param.iact_size_x, dtype=DRAM_DTYPE)]
 
-        # Assign initialized structures to instance attributes
+            elif "flat" in lname:
+                dram_fmap[name] = [
+                    np.zeros(
+                        (layer_param.channels, layer_param.input_shape[1], layer_param.input_shape[2]),
+                        dtype=DRAM_DTYPE,
+                    )
+                ]
+
+            elif "input" in lname:
+                first_next = layer_parameters[next_layers_map[name][0]]
+                in_shape = first_next.input_shape
+                dram_fmap[name] = [
+                    np.zeros((in_shape[3], in_shape[1], in_shape[2]), dtype=DRAM_DTYPE)
+                ]
+
+            elif "add" in lname or "concat" in lname:
+                dram_fmap[name] = [
+                    np.zeros(
+                        (
+                            layer_parameters[prev_name].output_shape[3],
+                            layer_parameters[prev_name].output_shape[1],
+                            layer_parameters[prev_name].output_shape[2],
+                        ),
+                        dtype=DRAM_DTYPE,
+                    )
+                    for prev_name in prev_layers_map[name]
+                ]
+
+            # === FINAL OUTPUT FEATURE MAP ===
+            if len(next_layers_map[name]) == 0:
+                out_shape = layer_param.output_shape
+                if "conv" in lname:
+                    dram_fmap["Output"] = [
+                        np.zeros((layer_param.filters, out_shape[1], out_shape[2]), dtype=DRAM_DTYPE)
+                    ]
+                elif "pooling" in lname:
+                    dram_fmap["Output"] = [
+                        np.zeros((layer_param.channels, out_shape[1], out_shape[2]), dtype=DRAM_DTYPE)
+                    ]
+                elif "dense" in lname or "gemm" in lname or "matmul" in lname:
+                    dram_fmap["Output"] = [np.zeros(layer_param.filters, dtype=DRAM_DTYPE)]
+
         self.fmap = dram_fmap
         self.weights = dram_weights
         self.bias = dram_bias
 
-    def write_initial_data_to_dram(self, model, layer_parameters, sparse_iacts, sparse_wghts, rel_layers, seed: int | None = None):
-        """Populate DRAM with initial weights, biases, and input feature maps from the model.
+    def write_initial_data_to_dram(
+        self,
+        model,
+        layer_parameters,
+        sparse_iacts: bool,
+        sparse_wghts: bool,
+        rel_layers,
+        seed: int | None = None,
+    ) -> None:
+        """Populate DRAM with vectorized quantized weights, biases, and initial activations."""
+        rng = np.random.default_rng(seed) if seed is not None else self._rng
+        layers_seq = model.layers if hasattr(model, "layers") else model
+        prev_layers_map = rel_layers["Previous_Layer"]
 
-        This method loads the trained model parameters into the DRAM simulation storage.
-        Weights are quantized to 8-bit integers (INT8 format, range -128 to 127).
-        Optionally creates sparse tensors by zeroing out selected elements.
-
-        Args:
-            model: The trained neural network model with layer weights and biases.
-            layer_parameters (list): List of layer parameter objects describing each layer.
-            sparse_iacts (bool): If True, creates sparse input activations by zeroing
-                                 elements at positions where (c+x+y) % 2 == 0.
-            sparse_wghts (bool): If True, creates sparse weights by zeroing elements
-                                 based on positional indices.
-            seed (int | None): Optional RNG seed to make random initialization deterministic.
-                If provided, it overrides any seed set in the constructor for this method call.
-
-        Note:
-            - Weights are quantized by multiplying by 127 and flooring to nearest integer
-            - Zero weights are replaced with random values (-1 or 1) to avoid true zeros
-            - Sparse patterns use modulo arithmetic on spatial/channel indices
-
-        """
-        # Optionally set RNG seed for deterministic behavior of this method
-        if seed is not None:
-            np.random.seed(seed)
-        # === WEIGHT LOADING ===
-        # Load and quantize weights from the trained model for each layer
         for name, layer_param in layer_parameters.items():
-            if "depthwise" in str(layer_param.layer_name):
-                # Load depthwise convolution weights
-                # Iterate: channels -> kernel_height -> kernel_width
-                for c in range(layer_param.input_shape[3]):
-                    for x in range(layer_param.kernel_size[0]):
-                        for y in range(layer_param.kernel_size[1]):
-                            # Quantize weight to INT8: multiply by 127 and floor
-                            self.weights[name][c][x][y] = int(math.floor(float(127*model[layer_parameters[name].layer_number_in_model].weights[0][x][y][c])))
-                            # Replace zeros with random -1 or 1 to avoid true zero weights
-                            if (self.weights[name][c][x][y] == 0):
-                                self.weights[name][c][x][y] = int(np.random.choice([-1, 1]))
-            elif "conv" in str(layer_param.layer_name):
-                # Load standard Conv2D weights
-                # Iterate: input_channels -> output_filters -> kernel_height -> kernel_width
-                for c in range(layer_param.input_shape[3]):
-                    for f in range(layer_param.filters):
-                        for y in range(layer_param.kernel_size[1]):
-                            for x in range(layer_param.kernel_size[0]):
-                                # Quantize weight to INT8
-                                self.weights[name][c][f][y][x] = int(math.floor(float(127*model[layer_parameters[name].layer_number_in_model].weights[0][x][y][c][f])))
-                                # Apply sparsity pattern if requested: zero out elements where sum of indices is even
-                                if (sparse_wghts & (((c+f+x+y) % 2) == 0)):
-                                    self.weights[name][c][f][y][x] = 0
-                                else:
-                                    # Replace zeros with random -1 or 1
-                                    if (self.weights[name][c][f][y][x] == 0):
-                                        self.weights[name][c][f][y][x] = int(np.random.choice([-1, 1]))
-            elif "dense" in str(layer_param.layer_name):
-                # Load Dense (fully connected) layer weights
-                # Note: Uses random weights instead of model weights
-                # Iterate: input_features -> output_features
-                for c in range(layer_param.iact_size_x):
-                    for x in range(layer_param.filters):
-                        # Generate random INT8 weights for Dense layer
-                        self.weights[name][x][c] = np.random.randint(-64, 63)
-                        # Apply sparsity pattern if requested
-                        if (sparse_wghts & (((c+x) % 2) == 0)):
-                            self.weights[name][x][c] = 0
-                        else:
-                            # Replace zeros with random -1 or 1
-                            if (self.weights[name][x][c] == 0):
-                                self.weights[name][x][c] = int(np.random.choice([-1, 1]))
+            lname = str(layer_param.layer_name)
+            layer_idx = layer_param.layer_number_in_model
 
-        # === BIAS LOADING ===
-        # Load and quantize bias values from the trained model
-            if "depthwise" in str(layer_param.layer_name):
-                # Load depthwise convolution biases
-                if (layer_param.kernel_size[0] != 1):
-                    # Multiple bias values (one per kernel row)
-                    for x in range(layer_param.filters):
-                        self.bias[name][x] = int(math.floor(float(model[layer_parameters[name].layer_number_in_model].weights[1][x])))
+            # === WEIGHT & BIAS LOADING ===
+            if "depthwise" in lname:
+                keras_weights = layers_seq[layer_idx].weights
+                # Keras shape: (kx, ky, channels, depth_multiplier) -> (channels, kx, ky)
+                raw_w = np.asarray(keras_weights[0], dtype=np.float64)[..., 0]
+                quant_w = np.floor(127.0 * np.transpose(raw_w, (2, 0, 1))).astype(DRAM_DTYPE)
+                self.weights[name] = _replace_zeros_with_unit_signs(quant_w, rng)
+
+                if len(keras_weights) > 1:
+                    raw_b = np.asarray(keras_weights[1], dtype=np.float64).ravel()
+                    quant_b = np.floor(raw_b).astype(DRAM_DTYPE)
+                    if layer_param.kernel_size[0] != 1:
+                        self.bias[name][: quant_b.size] = quant_b[: layer_param.filters]
+                    else:
+                        self.bias[name][0] = quant_b[0]
+
+            elif "conv" in lname:
+                keras_weights = layers_seq[layer_idx].weights
+                # Keras shape: (kx, ky, in_c, out_f) -> (in_c, out_f, ky, kx)
+                raw_w = np.asarray(keras_weights[0], dtype=np.float64)
+                quant_w = np.floor(127.0 * np.transpose(raw_w, (2, 3, 1, 0))).astype(DRAM_DTYPE)
+
+                if sparse_wghts:
+                    c_idx = np.arange(quant_w.shape[0])[:, None, None, None]
+                    f_idx = np.arange(quant_w.shape[1])[None, :, None, None]
+                    y_idx = np.arange(quant_w.shape[2])[None, None, :, None]
+                    x_idx = np.arange(quant_w.shape[3])[None, None, None, :]
+                    sparse_mask = ((c_idx + f_idx + x_idx + y_idx) & 1) == 0
+
+                    _replace_zeros_with_unit_signs(quant_w, rng)
+                    quant_w[sparse_mask] = 0
                 else:
-                    # Single bias value for 1x1 kernels
-                    self.bias[name][0] = int(math.floor(float(model[layer_parameters[name].layer_number_in_model].weights[1])))
-            elif "conv" in str(layer_param.layer_name):
-                # Load Conv2D biases: one bias per output filter
-                for x in range(layer_param.filters):
-                    self.bias[name][x] = int(math.floor(float(model[layer_parameters[name].layer_number_in_model].weights[1][x])))
-                    self.bias[name][x] = 1
-                    # Alternative: self.bias[l][x] = x * (-1)  # Uncomment for test pattern
-            elif "dense" in str(layer_param.layer_name):
-                # Load Dense layer biases: one bias per output feature
-                # Note: Uses sequential test values (c+1) instead of model biases
-                for c in range(layer_param.filters):
-                    # Alternative: self.bias[l][c] = int(math.floor(float(model[l].weights[1][c])))
-                    self.bias[name][c] = int(c + 1)  # Test pattern: 1, 2, 3, ...
+                    _replace_zeros_with_unit_signs(quant_w, rng)
 
-            # === INPUT FEATURE MAP INITIALIZATION ===
-            # Initialize input feature maps for the first layer with random values
-            if (rel_layers["Previous_Layer"][name] == ["input_layer"]): 
-                if "conv" in str(name):
-                    # Initialize 3D input feature map for Conv layers
-                    # Iterate: channels -> height -> width
-                    for c in range(layer_param.input_shape[3]):
-                        for x in range(layer_param.input_shape[1]):
-                            for y in range(layer_param.input_shape[2]):
-                                # Generate random INT8 activation values
-                                self.fmap[name][0][c][x][y] = np.random.randint(-128, 127)
-                                self.fmap[name][0][c][x][y] = np.random.randint(-32, 31)
-                                # Apply sparsity pattern if requested: zero elements where sum is even
-                                if (sparse_iacts & (((c+x+y) % 2) == 0)):
-                                    self.fmap[name][0][c][x][y] = 0
-                                else:
-                                    # Replace zeros with random -1 or 1
-                                    if (self.fmap[name][0][c][x][y] == 0):
-                                        self.fmap[name][0][c][x][y] = int(np.random.choice([-1, 1]))
-                elif "dense" in str(layer_param.layer_name):
-                    # Initialize 1D input feature map for Dense layers
-                    for c in range(layer_param.iact_size_x):
-                        # Generate random INT8 activation values (no sparsity for Dense)
-                        self.fmap[name][0][c] = np.random.randint(-128, 127)
-                        self.fmap[name][0][c] = np.random.randint(-32, 31)
-                        self.fmap[name][0][c] = np.random.randint(-16, 15)
-                        if (self.fmap[name][0][c] == 0):
-                            self.fmap[name][0][c] = int(np.random.choice([-1, 1]))
+                self.weights[name] = quant_w
+                # Hardware test pattern: constant bias = 1 per filter
+                self.bias[name].fill(1)
+
+            elif "dense" in lname or "gemm" in lname or "matmul" in lname:
+                quant_w = rng.integers(
+                    -64, 63, size=(layer_param.filters, layer_param.iact_size_x), dtype=DRAM_DTYPE
+                )
+                if sparse_wghts:
+                    f_idx = np.arange(quant_w.shape[0])[:, None]
+                    c_idx = np.arange(quant_w.shape[1])[None, :]
+                    sparse_mask = ((c_idx + f_idx) & 1) == 0
+
+                    _replace_zeros_with_unit_signs(quant_w, rng)
+                    quant_w[sparse_mask] = 0
+                else:
+                    _replace_zeros_with_unit_signs(quant_w, rng)
+
+                self.weights[name] = quant_w
+                self.bias[name] = np.arange(1, layer_param.filters + 1, dtype=DRAM_DTYPE)
+
+            # === INPUT FEATURE MAP INITIALIZATION (FIRST LAYER) ===
+            if prev_layers_map[name] == ["input_layer"]:
+                str_name = str(name)
+                if "conv" in str_name:
+                    shape = (
+                        layer_param.input_shape[3],
+                        layer_param.input_shape[1],
+                        layer_param.input_shape[2],
+                    )
+                    iacts = rng.integers(-32, 31, size=shape, dtype=DRAM_DTYPE)
+                    if sparse_iacts:
+                        c_idx = np.arange(shape[0])[:, None, None]
+                        x_idx = np.arange(shape[1])[None, :, None]
+                        y_idx = np.arange(shape[2])[None, None, :]
+                        sparse_mask = ((c_idx + x_idx + y_idx) & 1) == 0
+
+                        _replace_zeros_with_unit_signs(iacts, rng)
+                        iacts[sparse_mask] = 0
+                    else:
+                        _replace_zeros_with_unit_signs(iacts, rng)
+
+                    self.fmap[name][0] = iacts
+
+                elif "dense" in lname or "gemm" in lname or "matmul" in lname:
+                    iacts = rng.integers(-16, 15, size=(layer_param.iact_size_x,), dtype=DRAM_DTYPE)
+                    self.fmap[name][0] = _replace_zeros_with_unit_signs(iacts, rng)

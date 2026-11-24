@@ -20,9 +20,9 @@ Key Features:
 
 Architecture:
     The LayerMapper coordinates three specialized stream mappers:
-    - IactStreamCreator: Handles input activation data layout
-    - WghtStreamCreator: Handles weight data layout
-    - PsumStreamCreator: Handles bias/partial sum data layout
+- IactStreamCreator: Handles input activation data layout
+- WghtStreamCreator: Handles weight data layout
+- PsumStreamCreator: Handles bias/partial sum data layout
 
 Datastream construction overview:
     make_stream() assembles one list per channel (see stream_dicts.py for
@@ -45,8 +45,9 @@ Subclasses:
 - PoolingMapper: Pooling layers
 """
 
-import math
 import logging
+import math
+import numpy as np
 import open_eye.stream_dicts as strdic
 
 logger = logging.getLogger("cocotb")
@@ -87,7 +88,7 @@ class LayerMapper:
 
     Note:
         Subclasses must implement:
-        - write_working_parameters(): Generate layer-specific hardware configuration
+- write_working_parameters(): Generate layer-specific hardware configuration
     """
 
     def __init__(
@@ -105,12 +106,13 @@ class LayerMapper:
         self.layer_params = layer_params
         self.layer_repetition = layer_repetition
 
-        # Extract DRAM data for this layer (safe for partial mock inputs in tests)
-        if dram_layer_content:
-            fmap_slot = dram_layer_content[0] if len(dram_layer_content) > 0 else None
-            self.dram_fmap = fmap_slot[0] if fmap_slot else None
-            self.dram_weights = dram_layer_content[1] if len(dram_layer_content) > 1 else None
-            self.dram_bias = dram_layer_content[2] if len(dram_layer_content) > 2 else None
+        # Extract DRAM data for this layer (safe for NumPy arrays and partial mock inputs in tests)
+        if dram_layer_content is not None:
+            n_items = len(dram_layer_content)
+            fmap_slot = dram_layer_content[0] if n_items > 0 else None
+            self.dram_fmap = fmap_slot[0] if (fmap_slot is not None and len(fmap_slot) > 0) else None
+            self.dram_weights = dram_layer_content[1] if n_items > 1 else None
+            self.dram_bias = dram_layer_content[2] if n_items > 2 else None
         else:
             self.dram_fmap = None
             self.dram_weights = None
@@ -127,33 +129,27 @@ class LayerMapper:
 
     @staticmethod
     def _pack_router_values(flat_values, dma_bitwidth, router_bits):
-        """Pack a flat list of router configuration codes into DMA-width words."""
+        """Pack a flat sequence of router configuration codes into DMA-width words."""
+        if not flat_values:
+            return []
         entries_per_word = dma_bitwidth // router_bits
         packed = []
         for i in range(0, len(flat_values), entries_per_word):
             word = 0
             for slot, val in enumerate(flat_values[i : i + entries_per_word]):
-                word |= val << (router_bits * slot)
+                word |= int(val) << (router_bits * slot)
             packed.append(word)
         return packed
 
     @staticmethod
     def _compute_pe_bitmap(params, layer_params):
         """Build integer bitmap of active PEs across all clusters."""
+        comp_arr = np.asarray(layer_params.computing_mx)[
+            : params.Clusters_X, : params.Clusters_Y, : params.PEs_Y, : params.PEs_X
+        ]
         computing_pes = 0
-        bit_idx = 0
-        comp_mx = layer_params.computing_mx
-
-        for x in range(params.Clusters_X):
-            comp_x = comp_mx[x]
-            for y in range(params.Clusters_Y):
-                comp_xy = comp_x[y]
-                for pe_y in range(params.PEs_Y):
-                    comp_row = comp_xy[pe_y]
-                    for pe_x in range(params.PEs_X):
-                        if comp_row[pe_x] == 1:
-                            computing_pes |= 1 << bit_idx
-                        bit_idx += 1
+        for bit_idx in np.flatnonzero(comp_arr.ravel() == 1).tolist():
+            computing_pes |= 1 << bit_idx
         return computing_pes
 
     def make_stream(self):
@@ -203,9 +199,9 @@ class LayerMapper:
         """Generate unified quantization and offset parameters packed for shift-register streaming.
 
         Layout per Filter (LSB -> MSB):
-        - Offset   : OFFSET_WIDTH bits
-        - Exponent : EXPONENT_WIDTH bits
-        - Mantissa : MANTISSA_WIDTH bits
+- Offset   : OFFSET_WIDTH bits
+- Exponent : EXPONENT_WIDTH bits
+- Mantissa : MANTISSA_WIDTH bits
 
         Shift behavior:
         Filter 0 lands at the lowest bit-positions (quant_reg[0 +: ENTRY_WIDTH]).
@@ -218,6 +214,7 @@ class LayerMapper:
 
         entry_w = offset_w + exp_w + mant_w
         dma_w = params.DMA_BITWIDTH
+        n_quant = params.QUANT_AMOUNT
 
         offset_mask = (1 << offset_w) - 1
         exp_mask = (1 << exp_w) - 1
@@ -226,18 +223,28 @@ class LayerMapper:
 
         quantize = layer_params.quantize
         offsets = layer_params.offset
+
+        if isinstance(quantize, dict):
+            q_arr = np.asarray([quantize[f] for f in range(n_quant)], dtype=np.int64)
+        else:
+            q_arr = np.asarray(quantize, dtype=np.int64)[:n_quant]
+
+        if isinstance(offsets, dict):
+            o_arr = np.asarray([offsets[f] for f in range(n_quant)], dtype=np.int64)
+        else:
+            o_arr = np.asarray(offsets, dtype=np.int64)[:n_quant]
+
+        entries = (
+            (o_arr.astype(np.uint64) & np.uint64(offset_mask))
+            | ((q_arr[:, 1].astype(np.uint64) & np.uint64(exp_mask)) << np.uint64(offset_w))
+            | ((q_arr[:, 0].astype(np.uint64) & np.uint64(mant_mask)) << np.uint64(mant_shift))
+        )
+
         packed_bitstream = 0
+        for f, entry in enumerate(entries.tolist()):
+            packed_bitstream |= entry << (f * entry_w)
 
-        for f in range(params.QUANT_AMOUNT):
-            q_entry = quantize[f]
-            filter_entry = (
-                (int(offsets[f]) & offset_mask)
-                | ((int(q_entry[1]) & exp_mask) << offset_w)
-                | ((int(q_entry[0]) & mant_mask) << mant_shift)
-            )
-            packed_bitstream |= filter_entry << (f * entry_w)
-
-        total_bits = params.QUANT_AMOUNT * entry_w
+        total_bits = n_quant * entry_w
         num_dma_words = math.ceil(total_bits / dma_w)
         total_padded_bits = num_dma_words * dma_w
         dma_mask = (1 << dma_w) - 1
@@ -268,7 +275,7 @@ class LayerMapper:
             ]
 
         refresh_range = self.layer_params.needed_refreshes_mx[self.layer_repetition]
-        start_cycle, end_cycle = refresh_range[1], refresh_range[2]
+        start_cycle, end_cycle = int(refresh_range[1]), int(refresh_range[2])
 
         for cl_y in range(self.params.Clusters_Y):
             for router in range(self.params.Psum_Routers):

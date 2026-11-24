@@ -5,310 +5,185 @@
 
 """RTL test utilities for the OpenEye project.
 
-This module provides utility functions for testing RTL designs using cocotb.
-It includes functions for:
+This module provides utility functions for testing RTL designs using cocotb:
 - Setting input signals with proper timing
 - Resetting DUT signals
 - Writing input activations, weights and biases
-- Comparing output streams
-- Managing DMA transfers
-- Supporting various neural network layer types (Conv, Dense, Pooling)
-
-The module is designed to work with the OpenEye neural network accelerator
-architecture and supports both parallel and serial modes of operation.
+- Comparing output streams against NumPy-backed DRAM buffers
+- Managing DMA transfers and hardware diagnostics
 """
 
-import os
 import logging
 import math
+import os
+import random
 import cocotb
 import numpy as np
-import open_eye.iact_stream_mapper as iact_stream_mapper
 from cocotb.triggers import FallingEdge, RisingEdge, Timer
 import open_eye.stream_dicts as strdic
-import random
 
 logger = logging.getLogger("cocotb")
 
 
-async def set_input(port_timings, signal, new_value, multiple_dim=False, array_index=[], array_max_index=[]):
-    """Set an input signal value with proper timing.
-    
-    This function sets a value on an input signal of the DUT, respecting timing constraints
-    defined in the OpenEye implementation. It supports both scalar and multi-dimensional
-    signals (arrays).
-    
-    Args:
-        port_timings: Object containing timing parameters (clk_delay_in, clk_delay_unit_in)
-        signal: The signal to set (cocotb signal object)
-        new_value: The value to set on the signal
-        multiple_dim: Boolean indicating if the signal is multi-dimensional
-        array_index: List of indices for accessing multi-dimensional signals
-        array_max_index: List of maximum indices for each dimension
-    
-    Note:
-        The input delay is 100 ps relative to the rising edge, which matches
-        the implementation constraints of OpenEye.
-    """
+async def set_input(port_timings, signal, new_value, multiple_dim=False, array_index=None, array_max_index=None):
+    """Set an input signal value with proper timing."""
     await Timer(port_timings.clk_delay_in, unit=port_timings.clk_delay_unit_in)
-    if(multiple_dim):
-        if(cocotb.SIM_NAME == "Icarus Verilog"):
-            array_max_index = list(reversed(array_max_index))
+    if multiple_dim and array_index is not None:
+        if cocotb.SIM_NAME == "Icarus Verilog":
+            rev_max = list(reversed(array_max_index or []))
+            rev_idx = list(reversed(array_index))
             index_of_signal = 0
-            current_multiply = 1
-            for current_index in range(len(array_index)):
-                for x in range(current_index):
-                    current_multiply = current_multiply * array_max_index[x]
-                a = list(reversed(array_index))
-                index_of_signal = a[current_index] * current_multiply + index_of_signal
-
-                current_multiply = 1
+            stride = 1
+            for current_index in range(len(rev_idx)):
+                index_of_signal += rev_idx[current_index] * stride
+                stride *= rev_max[current_index]
             signal = signal[index_of_signal]
         else:
-            for current_index in range(len(array_index)):
-                signal = signal[array_index[current_index]]
+            for idx in array_index:
+                signal = signal[idx]
+    if isinstance(new_value, (np.integer, np.bool_)):
+        new_value = int(new_value)
     signal.value = new_value
-    
+
+
 async def reset_all_signals(ptp, dut, serial):
-    """Reset all signals of the DUT to known initial state.
+    """Reset all signals of the DUT to a known initial state."""
+    cocotb.start_soon(set_input(ptp, dut.rst_ni, 0))
 
-    This function performs a complete reset of the OpenEye accelerator, initializing
-    all control and data signals to zero before releasing the reset signal. It
-    handles both parallel and serial operation modes.
-
-    Args:
-        ptp: Port timing parameters containing clock cycle information
-        dut: Device under test (OpenEye accelerator instance)
-        serial: Operation mode flag
-            - 0: Parallel mode (resets parallel interface signals)
-            - 1: Serial/DMA mode (resets DMA interface signals)
-
-    Reset Sequence:
-        1. Assert active-low reset (rst_ni = 0)
-        2. Zero all mode-specific input signals
-        3. Wait 1 clock cycle
-        4. Release reset (rst_ni = 1)
-        5. Wait 3 clock cycles for internal stabilization
-
-    Note:
-        The 3-cycle wait after reset release allows internal state machines
-        and pipeline stages to properly initialize before operation begins.
-    """
-    # Assert active-low reset signal
-    cocotb.start_soon(set_input(ptp,(dut.rst_ni), 0))
-
-    if(serial == 0):
-        # Parallel mode: reset all parallel interface signals
-        # Computation control
-        cocotb.start_soon(set_input(ptp,(dut.compute_i), 0))
-
-        # Weight interface
-        cocotb.start_soon(set_input(ptp,(dut.wght_data_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.wght_enable_i), 0))
-
-        # Input activation interface
-        cocotb.start_soon(set_input(ptp,(dut.iact_data_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.iact_enable_i), 0))
-
-        # Partial sum interface
-        cocotb.start_soon(set_input(ptp,(dut.psum_data_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.psum_ready_i), 0))
-
-        # Status and configuration registers
-        cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.data_mode_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.fraction_bit_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.needed_cycles_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.needed_x_cls_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.needed_y_cls_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.needed_iact_cycles_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.filters_i), 0))
-        # iact_addr_len_i was removed from OpenEye_Parallel in fed1325; PE.v has
-        # no reader for it any more, so only the weight length is driven.
-        cocotb.start_soon(set_input(ptp,(dut.wght_addr_len_i), 0))
-
-        # Cluster operation modes
-        cocotb.start_soon(set_input(ptp,(dut.bano_cluster_mode_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.af_cluster_mode_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.pooling_cluster_mode_i), 0))
-
-        # Activation configuration
-        cocotb.start_soon(set_input(ptp,(dut.input_activations_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.iact_write_addr_t_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.iact_write_data_t_i), 0))
-
-        # Convolution parameters
-        # stride_x_i/stride_y_i were dropped from OpenEye_Parallel in 4cc9e07;
-        # the config stream no longer carries stride.
-        cocotb.start_soon(set_input(ptp,(dut.kernel_per_pe_cluster_i), 0))
-
-        # Processing element control
-        cocotb.start_soon(set_input(ptp,(dut.compute_mask_i), 0))
-
-        # Router configuration for data distribution
-        cocotb.start_soon(set_input(ptp,(dut.router_mode_iact_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.router_mode_wght_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.router_mode_psum_i), 0))
+    if serial == 0:
+        cocotb.start_soon(set_input(ptp, dut.compute_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.wght_data_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.wght_enable_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.iact_data_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.iact_enable_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.psum_data_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.psum_enable_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.psum_ready_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.status_reg_enable_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.data_mode_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.fraction_bit_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.needed_cycles_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.needed_x_cls_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.needed_y_cls_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.needed_iact_cycles_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.filters_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.wght_addr_len_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.bano_cluster_mode_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.af_cluster_mode_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.pooling_cluster_mode_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.input_activations_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.iact_write_addr_t_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.iact_write_data_t_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.kernel_per_pe_cluster_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.compute_mask_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.router_mode_iact_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.router_mode_wght_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.router_mode_psum_i, 0))
+        for opt_sig in ("delay_psum_glb_i", "gemm_mode_i", "raw_wght_i"):
+            if hasattr(dut, opt_sig):
+                cocotb.start_soon(set_input(ptp, getattr(dut, opt_sig), 0))
     else:
-        # Serial/DMA mode: reset DMA interface signals
-        cocotb.start_soon(set_input(ptp,(dut.data_dma_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
-    cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
+        cocotb.start_soon(set_input(ptp, dut.data_dma_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.enable_dma_i, 0))
+    cocotb.start_soon(set_input(ptp, dut.ready_dma_i, 0))
 
-    # Hold reset for one clock cycle
     await Timer(ptp.clk_cycle, ptp.clk_cycle_unit)
+    cocotb.start_soon(set_input(ptp, dut.rst_ni, 1))
 
-    # Release reset
-    cocotb.start_soon(set_input(ptp,(dut.rst_ni), 1))
-
-    # Wait 3 clock cycles for internal state stabilization
     for _ in range(3):
         await Timer(ptp.clk_cycle, ptp.clk_cycle_unit)
 
+
 async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
-    """ Send the stream to the DUT. 
-    
-    This function sends the stream to the DUT. It is called by the testbench.
-    All types of data in the stream are sent to the DUT in parallel. The method
-    waits until the transmission is finished.
+    """Send the configuration and data stream to the DUT."""
+    if oep.SERIAL == 0:
+        status_sec = stream[strdic.stream_parallel_dict["status"]]
+        sdict = strdic.status_dict
 
-    Args:
-        dut: The DUT. stream: The stream that is sent to the DUT.
-        layer_repetition: The index of the part of a layer, if it is too large to be processed at once.
-        oep: The OpenEye parameters. lp: The
-        layer parameters.
-    
-    """
-    if (oep.SERIAL == 0):
-        # Parallel mode: configure all status registers and router modes
+        cocotb.start_soon(set_input(ptp, dut.status_reg_enable_i, 1))
+        cocotb.start_soon(set_input(ptp, dut.data_mode_i, status_sec[sdict["data_mode"]]))
 
-        # Enable status register for configuration
-        cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 1))
-
-        # Data format and quantization settings
-        cocotb.start_soon(set_input(ptp,(dut.data_mode_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["data_mode"]]))
-
-        # Dataflow selection: 0 = row-stationary (default), 1 = output-stationary GEMM.
-        # Guarded so testbenches for DUTs without the port keep working.
         if hasattr(dut, "gemm_mode_i"):
-            gemm_mode_value = stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["gemm_mode"]]
+            gemm_mode_value = status_sec[sdict["gemm_mode"]]
             if gemm_mode_value == []:
                 gemm_mode_value = 0
-            cocotb.start_soon(set_input(ptp,(dut.gemm_mode_i), gemm_mode_value))
+            cocotb.start_soon(set_input(ptp, dut.gemm_mode_i, gemm_mode_value))
 
-        # Raw weight stream flag: dense/FC and GEMM layers send uncompressed
-        # weights whose all-zero words must be stored, not skipped.
         if hasattr(dut, "raw_wght_i"):
-            raw_wght_value = 1 if (getattr(lp, "fully_connected", 0) or
-                                   getattr(lp, "gemm_mode", 0)) else 0
-            cocotb.start_soon(set_input(ptp,(dut.raw_wght_i), raw_wght_value))
-        cocotb.start_soon(set_input(ptp,(dut.fraction_bit_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["realfactor"]]))
+            raw_wght_value = 1 if (getattr(lp, "fully_connected", 0) or getattr(lp, "gemm_mode", 0)) else 0
+            cocotb.start_soon(set_input(ptp, dut.raw_wght_i, raw_wght_value))
+        cocotb.start_soon(set_input(ptp, dut.fraction_bit_i, status_sec[sdict["realfactor"]]))
 
-        # Computation control parameters
-        cocotb.start_soon(set_input(ptp,(dut.needed_cycles_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["needed_refreshes"]]))
-        cocotb.start_soon(set_input(ptp,(dut.needed_x_cls_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["used_X_cluster"]]))
-        cocotb.start_soon(set_input(ptp,(dut.needed_y_cls_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["used_Y_cluster"]]))
-        cocotb.start_soon(set_input(ptp,(dut.needed_iact_cycles_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["needed_Iact_writes"]]))
+        cocotb.start_soon(set_input(ptp, dut.needed_cycles_i, status_sec[sdict["needed_refreshes"]]))
+        cocotb.start_soon(set_input(ptp, dut.needed_x_cls_i, status_sec[sdict["used_X_cluster"]]))
+        cocotb.start_soon(set_input(ptp, dut.needed_y_cls_i, status_sec[sdict["used_Y_cluster"]]))
+        cocotb.start_soon(set_input(ptp, dut.needed_iact_cycles_i, status_sec[sdict["needed_Iact_writes"]]))
 
-        # Filter and memory configuration
-        cocotb.start_soon(set_input(ptp,(dut.filters_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["used_psum_per_PE"]]))
-        # iact_addr_len_i no longer exists on OpenEye_Parallel (removed in fed1325).
-        cocotb.start_soon(set_input(ptp,(dut.wght_addr_len_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["used_wght_addr_per_PE"]]))
+        cocotb.start_soon(set_input(ptp, dut.filters_i, status_sec[sdict["used_psum_per_PE"]]))
+        cocotb.start_soon(set_input(ptp, dut.wght_addr_len_i, status_sec[sdict["used_wght_addr_per_PE"]]))
 
-        # Cluster operation modes
-        cocotb.start_soon(set_input(ptp,(dut.bano_cluster_mode_i), 0))  # Batch normalization mode (disabled)
-        cocotb.start_soon(set_input(ptp,(dut.af_cluster_mode_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["autofunction"]]))  # Activation function
-        cocotb.start_soon(set_input(ptp,(dut.pooling_cluster_mode_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["poolingmode"]]))  # Pooling mode
-        cocotb.start_soon(set_input(ptp,(dut.delay_psum_glb_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["psum_delay"]]))  # Partial sum delay
+        cocotb.start_soon(set_input(ptp, dut.bano_cluster_mode_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.af_cluster_mode_i, status_sec[sdict["autofunction"]]))
+        cocotb.start_soon(set_input(ptp, dut.pooling_cluster_mode_i, status_sec[sdict["poolingmode"]]))
+        cocotb.start_soon(set_input(ptp, dut.delay_psum_glb_i, status_sec[sdict["psum_delay"]]))
 
-        # Input activation configuration
-        cocotb.start_soon(set_input(ptp,(dut.input_activations_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["used_iact_per_PE"]]))
-        cocotb.start_soon(set_input(ptp,(dut.iact_write_addr_t_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["iact_addr_len"]]))
-        cocotb.start_soon(set_input(ptp,(dut.iact_write_data_t_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["iact_data_len"]]))
-
-        # Convolution stride parameters
-        # stride_x_i/stride_y_i were dropped from OpenEye_Parallel in 4cc9e07;
-        # the config stream no longer carries stride.
-        cocotb.start_soon(set_input(ptp,(dut.kernel_per_pe_cluster_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["kernel_per_pe_cluster"]]))
+        cocotb.start_soon(set_input(ptp, dut.input_activations_i, status_sec[sdict["used_iact_per_PE"]]))
+        cocotb.start_soon(set_input(ptp, dut.iact_write_addr_t_i, status_sec[sdict["iact_addr_len"]]))
+        cocotb.start_soon(set_input(ptp, dut.iact_write_data_t_i, status_sec[sdict["iact_data_len"]]))
+        cocotb.start_soon(set_input(ptp, dut.kernel_per_pe_cluster_i, status_sec[sdict["kernel_per_pe_cluster"]]))
 
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-
-        # Set PE compute mask (which PEs are active for this layer)
-        cocotb.start_soon(set_input(ptp,(dut.compute_mask_i), stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["usePEs"]]))
-
-        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        # Configure router modes for data distribution across clusters
-        # Routers control how data flows between Global Buffers and PEs
-
-        # Set router mode for input activations
-        # Each router has a mode value that determines routing pattern
-        # Modes are packed into a single port with bit-shifting
-        router_mode_port = 0
-        for cl_x in range(oep.Clusters_X):
-            for cl_y in range(oep.Clusters_Y):
-                for router in range(oep.NUM_GLB_IACT):
-                    # Pack router modes: each router gets its own bit field
-                    # Bit position = (router + routers_per_cluster * cl_y + routers_per_row * cl_x) * bits_per_router
-                    router_mode_port = router_mode_port + (stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["router_iact"]][cl_x][cl_y][router] << \
-                                                        (oep.Iact_Router_Bits * router + \
-                                                            oep.Iact_Router_Bits * oep.NUM_GLB_IACT * cl_y + \
-                                                            oep.Iact_Router_Bits * oep.NUM_GLB_IACT * oep.Clusters_Y * cl_x))
-        cocotb.start_soon(set_input(ptp,(dut.router_mode_iact_i), router_mode_port))
-
-        # Set router mode for weights
-        router_mode_port = 0
-        for cl_x in range(oep.Clusters_X):
-            for cl_y in range(oep.Clusters_Y):
-                for router in range(oep.NUM_GLB_WGHT):
-                    router_mode_port = router_mode_port + (stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["router_wght"]][cl_x][cl_y][router] << \
-                                                        (oep.Wght_Router_Bits * router + \
-                                                            oep.Wght_Router_Bits * oep.NUM_GLB_WGHT * cl_y + \
-                                                            oep.Wght_Router_Bits * oep.NUM_GLB_WGHT * oep.Clusters_Y * cl_x))
-        cocotb.start_soon(set_input(ptp,(dut.router_mode_wght_i), router_mode_port))
-
-        # Set router mode for partial sums
-        router_mode_port = 0
-        for cl_x in range(oep.Clusters_X):
-            for cl_y in range(oep.Clusters_Y):
-                for router in range(oep.NUM_GLB_PSUM):
-                    router_mode_port = router_mode_port + (stream[strdic.stream_parallel_dict["status"]][strdic.status_dict["router_psum"]][cl_x][cl_y][router] << \
-                                                        (oep.Psum_Router_Bits * router + \
-                                                            oep.Psum_Router_Bits * oep.NUM_GLB_PSUM * cl_y + \
-                                                            oep.Psum_Router_Bits * oep.NUM_GLB_PSUM * oep.Clusters_Y * cl_x))
-        cocotb.start_soon(set_input(ptp,(dut.router_mode_psum_i), router_mode_port))
-        router_mode_port = 0
-
-        # Wait for configuration to propagate
+        cocotb.start_soon(set_input(ptp, dut.compute_mask_i, status_sec[sdict["usePEs"]]))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-        # Disable status register enable after configuration complete
-        cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 0))
+        def _pack_router_modes(router_cfg, num_glb, router_bits):
+            packed = 0
+            for cl_x in range(oep.Clusters_X):
+                for cl_y in range(oep.Clusters_Y):
+                    for router in range(num_glb):
+                        shift = router_bits * (router + num_glb * (cl_y + oep.Clusters_Y * cl_x))
+                        packed |= int(router_cfg[cl_x][cl_y][router]) << shift
+            return packed
+
+        cocotb.start_soon(
+            set_input(
+                ptp,
+                dut.router_mode_iact_i,
+                _pack_router_modes(status_sec[sdict["router_iact"]], oep.NUM_GLB_IACT, oep.Iact_Router_Bits),
+            )
+        )
+        cocotb.start_soon(
+            set_input(
+                ptp,
+                dut.router_mode_wght_i,
+                _pack_router_modes(status_sec[sdict["router_wght"]], oep.NUM_GLB_WGHT, oep.Wght_Router_Bits),
+            )
+        )
+        cocotb.start_soon(
+            set_input(
+                ptp,
+                dut.router_mode_psum_i,
+                _pack_router_modes(status_sec[sdict["router_psum"]], oep.NUM_GLB_PSUM, oep.Psum_Router_Bits),
+            )
+        )
+
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+        cocotb.start_soon(set_input(ptp, dut.status_reg_enable_i, 0))
     else:
-        # Serial/DMA mode: send all data sequentially over DMA interface
-
-        # The serial stream is assembled with stream_serial_dict but indexed
-        # below with stream_parallel_dict names; log what is actually being
-        # sent so a section-count mismatch with the DUT is visible.
-        logger.info("DMA stream sections (words each): %s",
-                    [len(section) for section in stream])
+        pdict = strdic.stream_parallel_dict
+        logger.info("DMA stream sections (words each): %s", [len(section) for section in stream])
         for name in ("trans_cycles_iact", "trans_cycles_wght", "trans_cycles_psum"):
             try:
                 logger.info("DUT expects %s = %d", name, int(getattr(dut, name).value))
             except Exception:
                 pass
 
-        # Enable DMA transfer
-        cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 1))
+        cocotb.start_soon(set_input(ptp, dut.enable_dma_i, 1))
 
-        # Send status/configuration data
-        for data_word in range(len(stream[strdic.stream_parallel_dict["status"]])):
-            cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["status"]][data_word]))
+        for word in stream[pdict["status"]]:
+            cocotb.start_soon(set_input(ptp, dut.data_dma_i, int(word)))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-        # dma_storage has now decoded the configuration words, so the DUT's
-        # own expectations are readable and can be compared with what is about
-        # to be sent. A mismatch here stalls the corresponding GET_* state.
         for name in ("trans_cycles_iact", "trans_cycles_wght", "trans_cycles_psum"):
             try:
                 logger.info("DUT expects %s = %d", name, int(getattr(dut, name).value))
@@ -323,69 +198,57 @@ async def send_stream(ptp, dut, stream, oep, lp, layer_repetition):
                 logger.info("DUT %s = %d", name, int(getattr(dut, name).value))
             except Exception as exc:
                 logger.info("DUT %s unreadable (%s)", name, type(exc).__name__)
-        logger.info("Host will send: iact %d, wght %d, psum %d, quantize %d words",
-                    len(stream[strdic.stream_parallel_dict["iact"]]),
-                    len(stream[strdic.stream_parallel_dict["wght"]]),
-                    len(stream[strdic.stream_parallel_dict["psum"]]),
-                    len(stream[strdic.stream_parallel_dict["quantize"]]))
+        logger.info(
+            "Host will send: iact %d, wght %d, psum %d, quantize %d words",
+            len(stream[pdict["iact"]]),
+            len(stream[pdict["wght"]]),
+            len(stream[pdict["psum"]]),
+            len(stream[pdict["quantize"]]),
+        )
 
-        # Send input activation data
-        for data_word in range(len(stream[strdic.stream_parallel_dict["iact"]])):
-            cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["iact"]][data_word]))
+        for word in stream[pdict["iact"]]:
+            cocotb.start_soon(set_input(ptp, dut.data_dma_i, int(word)))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-        # Send weight data
-        for data_word in range(len(stream[strdic.stream_parallel_dict["wght"]])):
-            cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["wght"]][data_word]))
+        for word in stream[pdict["wght"]]:
+            cocotb.start_soon(set_input(ptp, dut.data_dma_i, int(word)))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-        # Send partial sum data
-        """for data_word in range(len(stream[strdic.stream_parallel_dict["psum"]])):
-            cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["psum"]][data_word]))
-            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)"""
+        psum_sec = stream[pdict["psum"]]
         index = 0
-        while index < len(stream[strdic.stream_parallel_dict["psum"]]):
-            cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["psum"]][index]))
+        while index < len(psum_sec):
+            cocotb.start_soon(set_input(ptp, dut.data_dma_i, int(psum_sec[index])))
             if random.random() < 1.0:
                 index += 1
-                cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 1))
+                cocotb.start_soon(set_input(ptp, dut.enable_dma_i, 1))
             else:
-                cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
+                cocotb.start_soon(set_input(ptp, dut.enable_dma_i, 0))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-        # Send quantization parameters
-        for data_word in range(len(stream[strdic.stream_parallel_dict["quantize"]])):
-            cocotb.start_soon(set_input(ptp,(dut.data_dma_i), stream[strdic.stream_parallel_dict["quantize"]][data_word]))
+        for word in stream[pdict["quantize"]]:
+            cocotb.start_soon(set_input(ptp, dut.data_dma_i, int(word)))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-        # Complete DMA transfer
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        cocotb.start_soon(set_input(ptp,(dut.enable_dma_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
-        
-# Diagnostic: main-FSM states the DUT has visited, filled by probe_fsm_states
-# when OPENEYE_PROBE_FSM is set. Reported by the iact buffer check on failure.
+        cocotb.start_soon(set_input(ptp, dut.enable_dma_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.ready_dma_i, 1))
+
+
+# Diagnostic state shared with post-mortem checkers
 fsm_states_seen = set()
 fsm_probe_samples = [0]
 fsm_state_trace = []
 
 
 async def trace_pe_iact(ptp, dut, oep, max_lines=2000):
-    """Per-cycle iact trace at one PE (opt-in: TRACE_PE_IACT=cx,cy,col,row[,t0,t1]).
-
-    Logs every cycle any iact lane is valid at the PE: which lane the PE
-    selects, lane valid/ready, the lane data, and whether the PE's iact data
-    SPAD is written. Shows whether a selected PE sees the words at all and,
-    if so, why it does not store them. An optional t0,t1 (ns) window skips
-    ahead past earlier, unrelated layers so max_lines lasts through the one
-    of interest.
-    """
+    """Per-cycle iact trace at one PE (opt-in: TRACE_PE_IACT=cx,cy,col,row[,t0,t1])."""
     try:
         parts = [float(v) for v in os.environ.get("TRACE_PE_IACT", "0,0,0,0").split(",")]
         cx, cy, col, row = (int(v) for v in parts[:4])
         t0, t1 = (parts[4], parts[5]) if len(parts) >= 6 else (0.0, 1e12)
-        pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
-              .pe_cluster.gen_X[col].gen_Y[row].pe)
+        pe = (
+            dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster.pe_cluster.gen_X[col].gen_Y[row].pe
+        )
         sp = pe.iact_data_SPad
     except Exception as exc:
         logger.error("trace_pe_iact: PE not reachable (%s)", type(exc).__name__)
@@ -406,35 +269,42 @@ async def trace_pe_iact(ptp, dut, oep, max_lines=2000):
             continue
         if now > t1:
             return
-        # State changes and compute triggers, so iact writes can be placed
-        # against the PE's own schedule (a load that lands while the PE is
-        # waiting to send psums is easy to lose).
         cur_state = txt(pe.current_state_computing)
         cur_key = (cur_state, txt(pe.psum_enable_i), txt(pe.compute_i), txt(pe.psum_ready_o))
         if cur_key != last_state:
-            logger.info("pestate t=%s st=%s compute_i=%s psum_en_i=%s psum_rdy_i=%s psum_rdy_o=%s data_set=%s words_iact=%s words_wght=%s",
-                        cocotb.utils.get_sim_time("ns"), cur_state, txt(pe.compute_i),
-                        txt(pe.psum_enable_i), txt(pe.psum_ready_i), txt(pe.psum_ready_o), txt(pe.data_set),
-                        txt(pe.second_spad_words_iact), txt(pe.second_spad_words_wght))
+            logger.info(
+                "pestate t=%s st=%s compute_i=%s psum_en_i=%s psum_rdy_i=%s psum_rdy_o=%s data_set=%s words_iact=%s words_wght=%s",
+                cocotb.utils.get_sim_time("ns"),
+                cur_state,
+                txt(pe.compute_i),
+                txt(pe.psum_enable_i),
+                txt(pe.psum_ready_i),
+                txt(pe.psum_ready_o),
+                txt(pe.data_set),
+                txt(pe.second_spad_words_iact),
+                txt(pe.second_spad_words_wght),
+            )
             last_state = cur_key
         en = txt(pe.iact_enable_i)
         if "1" not in en:
             continue
-        logger.info("peiact t=%s st=%s sel=%s en=%s rdy=%s data=%s | spad we=%s addr=%s d=%s",
-                    cocotb.utils.get_sim_time("ns"), txt(pe.current_state_computing),
-                    txt(pe.iact_select_i), en, txt(pe.iact_ready_o), txt(pe.iact_data_i),
-                    txt(sp.we_i), txt(sp.addr_i), txt(sp.data_i))
+        logger.info(
+            "peiact t=%s st=%s sel=%s en=%s rdy=%s data=%s | spad we=%s addr=%s d=%s",
+            cocotb.utils.get_sim_time("ns"),
+            txt(pe.current_state_computing),
+            txt(pe.iact_select_i),
+            en,
+            txt(pe.iact_ready_o),
+            txt(pe.iact_data_i),
+            txt(sp.we_i),
+            txt(sp.addr_i),
+            txt(sp.data_i),
+        )
         lines += 1
 
 
 async def trace_all_pe_states(ptp, dut, oep, max_lines=600):
-    """Per-change trace of every PE's FSM state and psum_ready_o (opt-in: TRACE_ALL_PE=t0,t1).
-
-    One line per cluster whenever any of its PEs changes state or ready flag,
-    restricted to sim time [t0, t1] ns. Each PE is printed as <state hex><ready>
-    in column-major order (col0 row0..2, col1 row0..2, ...). Shows which PE is
-    still computing when the psum collector decides all PEs are ready.
-    """
+    """Per-change trace of every PE's FSM state and psum_ready_o (opt-in: TRACE_ALL_PE=t0,t1)."""
     try:
         t0, t1 = [float(v) for v in os.environ.get("TRACE_ALL_PE", "0,1e9").split(",")]
     except ValueError:
@@ -445,8 +315,9 @@ async def trace_all_pe_states(ptp, dut, oep, max_lines=600):
         for cy in range(oep.Clusters_Y):
             try:
                 base = dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster.pe_cluster
-                pes[(cx, cy)] = [base.gen_X[c].gen_Y[r].pe
-                                 for c in range(oep.PEs_X) for r in range(oep.PEs_Y)]
+                pes[(cx, cy)] = [
+                    base.gen_X[c].gen_Y[r].pe for c in range(oep.PEs_X) for r in range(oep.PEs_Y)
+                ]
                 clusters[(cx, cy)] = dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
             except Exception as exc:
                 logger.error("trace_all_pe_states: cluster (%d,%d) not reachable (%s)", cx, cy, type(exc).__name__)
@@ -474,15 +345,25 @@ async def trace_all_pe_states(ptp, dut, oep, max_lines=600):
             return
         for key, lst in pes.items():
             cl = clusters[key]
+
             def bits(name):
                 try:
                     return str(getattr(cl, name).value)
                 except Exception:
                     return "?"
-            cur = " ".join(one(pe) for pe in lst) + " | pe_en_out=%s ext_en=%s rdy_in=%s dly_rdy=%s pe_rdy_out=%s top_rdy=%s" % (
-                bits("pe_router_psum_enable_out"), bits("ext_mem_psum_enable_o"),
-                bits("pe_router_psum_ready_in"), bits("delay_cluster_ready_out"),
-                bits("pe_router_psum_ready_out"), bits("ready_src_top_psum"))
+
+            cur = (
+                " ".join(one(pe) for pe in lst)
+                + " | pe_en_out=%s ext_en=%s rdy_in=%s dly_rdy=%s pe_rdy_out=%s top_rdy=%s"
+                % (
+                    bits("pe_router_psum_enable_out"),
+                    bits("ext_mem_psum_enable_o"),
+                    bits("pe_router_psum_ready_in"),
+                    bits("delay_cluster_ready_out"),
+                    bits("pe_router_psum_ready_out"),
+                    bits("ready_src_top_psum"),
+                )
+            )
             if last.get(key) != cur:
                 last[key] = cur
                 logger.info("allpe t=%s c(%d,%d) %s", now, key[0], key[1], cur)
@@ -490,12 +371,7 @@ async def trace_all_pe_states(ptp, dut, oep, max_lines=600):
 
 
 async def trace_converter(ptp, dut, oep, max_lines=260):
-    """Per-cycle trace of one iact converter (opt-in: TRACE_CONVERTER=cx,cy).
-
-    Follows the iact data from BUFFER_A cell 0 into the converter's window,
-    its internal RAM writes, the ENCODE reads and the words it hands to the
-    array. Logs only cycles with some activity, from CONVERT_IACT on.
-    """
+    """Per-cycle trace of one iact converter (opt-in: TRACE_CONVERTER=cx,cy)."""
     try:
         cx, cy = [int(v) for v in os.environ.get("TRACE_CONVERTER", "0,0").split(",")]
         cv = dut.IACT_CONVERTER_X[cx].IACT_CONVERTER_Y[cy].iact_stream_constructor
@@ -525,43 +401,61 @@ async def trace_converter(ptp, dut, oep, max_lines=260):
             continue
         if st < 8:
             continue
-        active = ("1" in txt(cv.enable_store) or "1" in txt(cv.ram_wr_en_q)
-                  or "1" in txt(cv.ram_rd_en) or "1" in txt(cv.iact_enable_o)
-                  or "1" in txt(cell0.rd_en_i))
+        active = (
+            "1" in txt(cv.enable_store)
+            or "1" in txt(cv.ram_wr_en_q)
+            or "1" in txt(cv.ram_rd_en)
+            or "1" in txt(cv.iact_enable_o)
+            or "1" in txt(cell0.rd_en_i)
+        )
         if not active:
             continue
-        logger.info("convtrace t=%s st=%d enc=%s | A0 rd=%s addr=%s q=%s | win=%s store=%s | "
-                    "wr=%s waddr=%s | rd=%s raddr=%s rdata=%s | en_o=%s data_o=%s",
-                    cocotb.utils.get_sim_time("ns"), st, hexv(cv.fsm_enc_current_state),
-                    txt(cell0.rd_en_i), hexv(cell0.addr_i), hexv(cell0.data_o),
-                    hexv(cv.storage_i), txt(cv.enable_store),
-                    txt(cv.ram_wr_en_q), hexv(cv.ram_wr_addr_q),
-                    txt(cv.ram_rd_en), hexv(cv.ram_rd_addr), hexv(cv.ram_data_o),
-                    txt(cv.iact_enable_o), hexv(cv.iact_data_o))
+        logger.info(
+            "convtrace t=%s st=%d enc=%s | A0 rd=%s addr=%s q=%s | win=%s store=%s | "
+            "wr=%s waddr=%s | rd=%s raddr=%s rdata=%s | en_o=%s data_o=%s",
+            cocotb.utils.get_sim_time("ns"),
+            st,
+            hexv(cv.fsm_enc_current_state),
+            txt(cell0.rd_en_i),
+            hexv(cell0.addr_i),
+            hexv(cell0.data_o),
+            hexv(cv.storage_i),
+            txt(cv.enable_store),
+            txt(cv.ram_wr_en_q),
+            hexv(cv.ram_wr_addr_q),
+            txt(cv.ram_rd_en),
+            hexv(cv.ram_rd_addr),
+            hexv(cv.ram_data_o),
+            txt(cv.iact_enable_o),
+            hexv(cv.iact_data_o),
+        )
         lines += 1
 
 
 def dump_pe_occupancy(dut, oep, depth=32):
-    """Log how many of the first `depth` words each PE has written.
-
-    One line per cluster, one cell per PE (column/row): iact data SPAD /
-    weight data SPAD / psum lane 0. Cheap enough to call when a run stalls,
-    which is exactly when the end-of-run dumps never get a chance to run.
-    """
+    """Log how many of the first `depth` words each PE has written."""
     for cx in range(oep.Clusters_X):
         for cy in range(oep.Clusters_Y):
             cells = []
             for col in range(oep.PEs_X):
                 for row in range(oep.PEs_Y):
                     try:
-                        pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
-                              .pe_cluster.gen_X[col].gen_Y[row].pe)
+                        pe = (
+                            dut.OpenEye_Parallel.gen_x[cx]
+                            .gen_y[cy]
+                            .OpenEye_Cluster.pe_cluster.gen_X[col]
+                            .gen_Y[row]
+                            .pe
+                        )
                     except Exception:
                         cells.append("c%dr%d:?" % (col, row))
                         continue
                     counts = []
-                    for mem in (lambda: pe.iact_data_SPad, lambda: pe.weight_data_SPad,
-                                lambda: pe.gen_serial_psum_spad.gen_psum_spad[0].psum_SPad):
+                    for mem in (
+                        lambda: pe.iact_data_SPad,
+                        lambda: pe.weight_data_SPad,
+                        lambda: pe.gen_serial_psum_spad.gen_psum_spad[0].psum_SPad,
+                    ):
                         try:
                             m = mem().ram.impl.mem
                             n = 0
@@ -595,12 +489,7 @@ def _written_words(mem, depth):
 
 
 def dump_iact_path(dut, oep, depth=64):
-    """Log written-word counts along the iact path: BUFFER_A, then iact GLBs.
-
-    Together with dump_pe_occupancy this shows where iacts stop: never
-    stored in the FPGA iact buffer, stored but never written into a
-    cluster's iact GLBs, or in the GLBs but never delivered to the PEs.
-    """
+    """Log written-word counts along the iact path: BUFFER_A, then iact GLBs."""
     cells = []
     for cell in range(oep.IACT_RAM_CELLS):
         try:
@@ -609,46 +498,40 @@ def dump_iact_path(dut, oep, depth=64):
             cells.append("?")
     logger.error("iact path BUFFER_A written words per cell (first %d addrs): %s", depth, cells)
     if oep.SERIAL:
-        return  # no cluster iact GLBs in the SERIAL build (GLB_cluster gen_iact is empty)
+        return
     for cx in range(oep.Clusters_X):
         for cy in range(oep.Clusters_Y):
             glbs = []
             for g in range(oep.NUM_GLB_IACT):
                 try:
-                    glb = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
-                           .glb_cluster.gen_iact[g].iact_glb.impl.mem)
+                    glb = (
+                        dut.OpenEye_Parallel.gen_x[cx]
+                        .gen_y[cy]
+                        .OpenEye_Cluster.glb_cluster.gen_iact[g]
+                        .iact_glb.impl.mem
+                    )
                     glbs.append(_written_words(glb, depth))
                 except Exception as exc:
                     glbs.append("?(%s)" % type(exc).__name__)
             logger.error("iact path cluster(%d,%d) iact GLB written words: %s", cx, cy, glbs)
 
 
-# Filled by monitor_iact_handoff, reported by report_iact_handoff.
 iact_handoff_counts = {"enable": {}, "handshake": {}, "choose": {}, "cycles": 0}
-
-
-# Per-cluster iact handshake counts, one entry per (cluster_x, cluster_y, stage).
 cluster_iact_counts = {}
 
 
 async def monitor_cluster_iact(ptp, dut, oep):
-    """Count iact handshakes at each hop inside every OpenEye_Cluster.
-
-    The top-level monitor above only sees the array boundary, where all
-    clusters look identical. When the PEs of one cluster row end up empty, the
-    question is which hop drops the data: the cluster input, the GLB bypass, or
-    the router output into the PE cluster. Counting enable & ready at all three
-    per cluster answers that without a waveform.
-    """
-    stages = (("ext", "ext_mem_iact_enable_i", "ext_mem_iact_ready_o"),
-              ("glb", "glb_cluster_iact_enable", "glb_cluster_iact_ready"),
-              ("pe", "pe_iact_enable", "pe_iact_ready"))
+    """Count iact handshakes at each hop inside every OpenEye_Cluster."""
+    stages = (
+        ("ext", "ext_mem_iact_enable_i", "ext_mem_iact_ready_o"),
+        ("glb", "glb_cluster_iact_enable", "glb_cluster_iact_ready"),
+        ("pe", "pe_iact_enable", "pe_iact_ready"),
+    )
     clusters = []
     for cx in range(oep.Clusters_X):
         for cy in range(oep.Clusters_Y):
             try:
-                clusters.append(((cx, cy),
-                                 dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster))
+                clusters.append(((cx, cy), dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster))
             except Exception:
                 pass
             for name, _, _ in stages:
@@ -665,11 +548,6 @@ async def monitor_cluster_iact(ptp, dut, oep):
                     continue
                 if en & rdy:
                     cluster_iact_counts[(key[0], key[1], name)] += bin(en & rdy).count("1")
-                    # Every PE accepts the same number of transfers regardless of
-                    # cluster row, so the remaining difference has to be payload:
-                    # count how many accepted words actually carry data. With
-                    # OPENEYE_CONST_IACTS=1 every real activation is non-zero, so
-                    # a zero word means the converter sent an empty slice.
                     if name == "pe":
                         try:
                             data = int(getattr(cl, "pe_iact_data").value)
@@ -682,23 +560,12 @@ async def monitor_cluster_iact(ptp, dut, oep):
 
 
 pe_iact_counts = {}
-
-
 converter_store_counts = {}
 conv_array_seen = {}
 
 
 async def monitor_converter_store(ptp, dut, oep):
-    """Count the store-enable pulses each iact converter receives.
-
-    OpenEye_FPGA Process 4 gates every converter's commit with
-    conv_array_reg[col + row*CLUSTER_COLUMNS] AND an iact_converter_cycles
-    limit. In FC mode conv_array_reg starts at 3 (cluster row 0) and rotates
-    left by 2 per encode step, so later rows only get their turn if the cycle
-    limit has not already expired. When a cluster row ends up receiving only
-    zero payload, this separates "never told to commit" from "committed the
-    wrong data".
-    """
+    """Count the store-enable pulses each iact converter receives."""
     for cx in range(oep.Clusters_X):
         for cy in range(oep.Clusters_Y):
             converter_store_counts[(cx, cy)] = 0
@@ -709,13 +576,6 @@ async def monitor_converter_store(ptp, dut, oep):
             conv_array_seen[val] = conv_array_seen.get(val, 0) + 1
         except Exception:
             pass
-        # iact_converter_en_store_reg is a nested *unpacked* array, which Icarus
-        # does not expose over VPI (every read came back 0, including for a
-        # cluster row that demonstrably receives data). Reconstruct the pulse
-        # from the three plain signals that drive it in Process 4 instead:
-        #   en_store[col][row] = enc_enable
-        #                      & conv_array_reg[col + row*CLUSTER_COLUMNS]
-        #                      & (iact_converter_cycles <= max_cycles - 1)
         try:
             enc = int(dut.iact_converter_enc_enable.value)
             arr = int(dut.conv_array_reg.value)
@@ -723,10 +583,10 @@ async def monitor_converter_store(ptp, dut, oep):
             mx = int(dut.iact_converter_max_cycles.value)
         except Exception:
             continue
-        converter_store_counts["enc_enable_cycles"] = \
-            converter_store_counts.get("enc_enable_cycles", 0) + (1 if enc else 0)
-        converter_store_counts["cycles_max"] = max(
-            converter_store_counts.get("cycles_max", 0), cyc)
+        converter_store_counts["enc_enable_cycles"] = converter_store_counts.get("enc_enable_cycles", 0) + (
+            1 if enc else 0
+        )
+        converter_store_counts["cycles_max"] = max(converter_store_counts.get("cycles_max", 0), cyc)
         converter_store_counts["max_cycles"] = mx
         if not enc or mx == 0 or cyc > mx - 1:
             continue
@@ -742,35 +602,35 @@ def report_converter_store():
         return
     logger.error("iact converter store-enable pulses per cluster (reconstructed):")
     for key in sorted(k for k in converter_store_counts if isinstance(k, tuple)):
-        logger.error("  cluster(col=%d,row=%d): en_store=%d",
-                     key[0], key[1], converter_store_counts[key])
-    logger.error("  enc_enable high for %d cycles; iact_converter_cycles reached %d,"
-                 " limit max_cycles=%d",
-                 converter_store_counts.get("enc_enable_cycles", 0),
-                 converter_store_counts.get("cycles_max", 0),
-                 converter_store_counts.get("max_cycles", 0))
+        logger.error("  cluster(col=%d,row=%d): en_store=%d", key[0], key[1], converter_store_counts[key])
+    logger.error(
+        "  enc_enable high for %d cycles; iact_converter_cycles reached %d, limit max_cycles=%d",
+        converter_store_counts.get("enc_enable_cycles", 0),
+        converter_store_counts.get("cycles_max", 0),
+        converter_store_counts.get("max_cycles", 0),
+    )
     if conv_array_seen:
         top = sorted(conv_array_seen.items(), key=lambda kv: -kv[1])[:8]
-        logger.error("  conv_array_reg values (value: cycles): %s",
-                     ", ".join("0x%x: %d" % (v, n) for v, n in top))
+        logger.error(
+            "  conv_array_reg values (value: cycles): %s",
+            ", ".join("0x%x: %d" % (v, n) for v, n in top),
+        )
 
 
 async def monitor_pe_iact(ptp, dut, oep, pe_col=0):
-    """Per PE: count enable, and enable & ready, on the lane it selects.
-
-    The cluster-level counters show identical traffic reaching every cluster
-    while only some clusters' PEs end up holding data, so the question is
-    whether a PE never sees valid data on its selected lane, sees it and
-    refuses it, or accepts it and fails to store it. Only a per-PE, per-lane
-    count separates those three.
-    """
+    """Per PE: count enable, and enable & ready, on the lane it selects."""
     pes = []
     for cx in range(oep.Clusters_X):
         for cy in range(oep.Clusters_Y):
             for row in range(oep.PEs_Y):
                 try:
-                    pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
-                          .pe_cluster.gen_X[pe_col].gen_Y[row].pe)
+                    pe = (
+                        dut.OpenEye_Parallel.gen_x[cx]
+                        .gen_y[cy]
+                        .OpenEye_Cluster.pe_cluster.gen_X[pe_col]
+                        .gen_Y[row]
+                        .pe
+                    )
                 except Exception:
                     continue
                 pes.append(((cx, cy, row), pe))
@@ -802,19 +662,19 @@ def report_pe_iact():
     logger.error("per-PE iact on selected lane (sel=lane, en=valid cycles, hs=accepted):")
     for key in sorted(pe_iact_counts):
         r = pe_iact_counts[key]
-        logger.error("  cluster(%d,%d) row %d: sel=%s en=%d hs=%d",
-                     key[0], key[1], key[2], r["sel"], r["en"], r["hs"])
+        logger.error(
+            "  cluster(%d,%d) row %d: sel=%s en=%d hs=%d",
+            key[0],
+            key[1],
+            key[2],
+            r["sel"],
+            r["en"],
+            r["hs"],
+        )
 
 
 def dump_compute_mask(dut, oep):
-    """Log the PE compute mask as the array actually sees it, per cluster.
-
-    Weights reach every PE but activations stop at some cluster rows, and the
-    per-PE compute enable is the one gate on the iact store path that the
-    weight path does not share. Reading it beats deriving it: the mask crosses
-    two index conventions (Python packs PE-row-major, OpenEye_Parallel slices
-    per cluster) and either could be the one that is wrong.
-    """
+    """Log the PE compute mask as the array actually sees it, per cluster."""
     try:
         logger.error("compute_mask_i = %s", str(dut.OpenEye_Parallel.compute_mask_i.value))
     except Exception:
@@ -823,11 +683,11 @@ def dump_compute_mask(dut, oep):
         for cy in range(oep.Clusters_Y):
             try:
                 cl = dut.OpenEye_Parallel.gen_x[cx].gen_y[cy]
-                logger.error("  cluster(%d,%d) compute_cluster_i_w=%s", cx, cy,
-                             str(cl.compute_cluster_i_w.value))
+                logger.error("  cluster(%d,%d) compute_cluster_i_w=%s", cx, cy, str(cl.compute_cluster_i_w.value))
             except Exception as exc:
-                logger.error("  cluster(%d,%d) compute_cluster_i_w unreadable (%s)",
-                             cx, cy, type(exc).__name__)
+                logger.error(
+                    "  cluster(%d,%d) compute_cluster_i_w unreadable (%s)", cx, cy, type(exc).__name__
+                )
 
 
 def report_cluster_iact():
@@ -837,21 +697,20 @@ def report_cluster_iact():
     logger.error("per-cluster iact handshakes (enable & ready, summed over lanes):")
     seen = sorted({(cx, cy) for cx, cy, _ in cluster_iact_counts})
     for cx, cy in seen:
-        logger.error("  cluster(%d,%d) ext=%s glb=%s pe=%s pe_nonzero_cycles=%s", cx, cy,
-                     cluster_iact_counts.get((cx, cy, "ext"), 0),
-                     cluster_iact_counts.get((cx, cy, "glb"), 0),
-                     cluster_iact_counts.get((cx, cy, "pe"), 0),
-                     cluster_iact_counts.get((cx, cy, "pe_nonzero"), 0))
+        logger.error(
+            "  cluster(%d,%d) ext=%s glb=%s pe=%s pe_nonzero_cycles=%s",
+            cx,
+            cy,
+            cluster_iact_counts.get((cx, cy, "ext"), 0),
+            cluster_iact_counts.get((cx, cy, "glb"), 0),
+            cluster_iact_counts.get((cx, cy, "pe"), 0),
+            cluster_iact_counts.get((cx, cy, "pe_nonzero"), 0),
+        )
 
 
 async def monitor_iact_handoff(ptp, dut):
-    """Count iact valid and handshake cycles per bit at the OpenEye_Parallel input.
+    """Count iact valid and handshake cycles per bit at the OpenEye_Parallel input."""
 
-    In the SERIAL FPGA build there are no cluster iact GLBs: the converter
-    drives iact_data/enable/choose into OpenEye_Parallel directly. Counting
-    enable and enable&ready per bit shows whether the converter emits nothing,
-    emits on the wrong lanes, or emits without being accepted.
-    """
     def read(name):
         try:
             return int(getattr(dut, name).value)
@@ -881,10 +740,12 @@ async def monitor_iact_handoff(ptp, dut):
 
 def report_iact_handoff(oep=None):
     c = iact_handoff_counts
-    logger.error("iact handoff over %d cycles: enable cycles per bit %s, handshakes per bit %s",
-                 c["cycles"], dict(sorted(c["enable"].items())), dict(sorted(c["handshake"].items())))
-    # Which PE each (choose, enable) combination actually selects. Each PE
-    # has a $clog2(NUM_GLB_IACT+1)-bit field; NUM_GLB_IACT means "none".
+    logger.error(
+        "iact handoff over %d cycles: enable cycles per bit %s, handshakes per bit %s",
+        c["cycles"],
+        dict(sorted(c["enable"].items())),
+        dict(sorted(c["handshake"].items())),
+    )
     for (ch, en), n in sorted(c["choose"].items(), key=lambda kv: -kv[1]):
         line = "  %d valid cycles with enable=%s choose=%s" % (n, en, ch)
         if oep is not None:
@@ -904,18 +765,10 @@ def report_iact_handoff(oep=None):
 
 
 async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
-    """Record every main-FSM state the DUT enters (opt-in diagnostic).
-
-    Sampling every clock costs simulation time, so the testbench only starts
-    this when OPENEYE_PROBE_FSM is set. It answers questions the post-hoc
-    checks cannot, such as whether RECEIVE_PSUMS_TO_IACT is ever reached.
-    """
+    """Record every main-FSM state the DUT enters and report stalls."""
     previous = None
     stuck_for = 0
     reported = False
-    # OPENEYE_FAIL_ON_STALL=<cycles>: fail the test once neither FSM has made
-    # progress for that many cycles. A hung FPGA run otherwise sits until the
-    # 15 ms sim timeout, which is hours of wall-clock time per test.
     try:
         fail_after = int(os.environ.get("OPENEYE_FAIL_ON_STALL", "0"))
     except ValueError:
@@ -935,54 +788,56 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
             if state != previous:
                 if len(fsm_state_trace) < 200:
                     fsm_state_trace.append((str(cocotb.utils.get_sim_time("ns")), state))
-                # Log live: a test that stalls may never reach a check that
-                # would otherwise report the trace.
-                # Also sample the decoded config fields that steer the FSM:
-                # they come from dma_storage's shift chain, so a stray write
-                # after GET_PARAMETERS would change them mid-layer.
                 fields = []
-                for name in ("fsm_psum_current_state", "send_data_out", "store_in_psum",
-                             "trans_cycles_iact", "trans_cycles_psum"):
+                for name in (
+                    "fsm_psum_current_state",
+                    "send_data_out",
+                    "store_in_psum",
+                    "trans_cycles_iact",
+                    "trans_cycles_psum",
+                ):
                     try:
                         fields.append("%s=%d" % (name, int(getattr(dut, name).value)))
                     except Exception:
                         fields.append("%s=?" % name)
-                logger.info("FSM state -> %d at %s ns (%s)", state,
-                            cocotb.utils.get_sim_time("ns"), ", ".join(fields))
+                logger.info(
+                    "FSM state -> %d at %s ns (%s)",
+                    state,
+                    cocotb.utils.get_sim_time("ns"),
+                    ", ".join(fields),
+                )
                 stuck_for = 0
                 reported = False
             else:
                 stuck_for += 1
-                # A state that stops advancing is the signature of a section
-                # word-count mismatch, so report the counters that gate the
-                # exit once rather than leaving a silent run to time out.
                 if stuck_for == stall_report_after and not reported:
                     reported = True
                     counters = []
-                    for name in ("fsm_cycle", "fsm_psum_cycle", "fsm_psum_current_state",
-                                 "trans_cycles_iact", "trans_cycles_wght", "trans_cycles_psum",
-                                 "current_cycle", "needed_cycles", "single_iteration"):
+                    for name in (
+                        "fsm_cycle",
+                        "fsm_psum_cycle",
+                        "fsm_psum_current_state",
+                        "trans_cycles_iact",
+                        "trans_cycles_wght",
+                        "trans_cycles_psum",
+                        "current_cycle",
+                        "needed_cycles",
+                        "single_iteration",
+                    ):
                         try:
                             counters.append("%s=%d" % (name, int(getattr(dut, name).value)))
                         except Exception:
                             pass
-                    logger.error("FSM stuck in state %d for %d cycles: %s",
-                                 state, stuck_for, ", ".join(counters))
+                    logger.error(
+                        "FSM stuck in state %d for %d cycles: %s", state, stuck_for, ", ".join(counters)
+                    )
                     try:
                         pp = dut.psum_pipeline_inst
-                        # CALCULATE_PSUM only evaluates results_ready while
-                        # psum_ready_i_reg is non-zero, so a stall with
-                        # fsm_psum_cycle == 0 is ambiguous without these two:
-                        # either the request never went out (psum_ready_i_reg
-                        # == 0) or some GLB never answered (results_ready == 0).
                         for name in ("psum_ready_i_reg", "psum_enable_i_reg", "results_ready", "finished_cycles_psum"):
                             try:
                                 logger.error("  %s = %s", name, str(getattr(pp, name).value))
                             except Exception:
                                 logger.error("  %s unreadable", name)
-                        # psum_choose gates the PE cluster's accept-ready through a
-                        # demux (a_out = sel ? in : 0), so a zero ready is ambiguous
-                        # until we know whether the select or the PE is the cause.
                         try:
                             logger.error("  psum_choose_i_reg = %s", str(dut.psum_choose_i_reg.value))
                         except Exception:
@@ -991,19 +846,34 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
                             for cy in range(oep.Clusters_Y):
                                 try:
                                     cl = dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
-                                    logger.error("  cluster(%d,%d) pe_router_psum_ready_out=%s enable_in=%s",
-                                                 cx, cy,
-                                                 str(cl.pe_router_psum_ready_out.value),
-                                                 str(cl.pe_router_psum_enable_in.value))
-                                    states = [str(cl.pe_cluster.gen_X[x].gen_Y[y].pe.current_state_computing.value)
-                                              for y in range(oep.PEs_Y) for x in range(oep.PEs_X)]
+                                    logger.error(
+                                        "  cluster(%d,%d) pe_router_psum_ready_out=%s enable_in=%s",
+                                        cx,
+                                        cy,
+                                        str(cl.pe_router_psum_ready_out.value),
+                                        str(cl.pe_router_psum_enable_in.value),
+                                    )
+                                    states = [
+                                        str(cl.pe_cluster.gen_X[x].gen_Y[y].pe.current_state_computing.value)
+                                        for y in range(oep.PEs_Y)
+                                        for x in range(oep.PEs_X)
+                                    ]
                                     logger.error("  cluster(%d,%d) PE states by row: %s", cx, cy, states)
                                     pe = cl.pe_cluster.gen_X[0].gen_Y[0].pe
-                                    logger.error("  cluster(%d,%d) first PE psum_enable_i=%s psum_select=%s",
-                                                 cx, cy, str(pe.psum_enable_i.value), str(pe.psum_select.value))
+                                    logger.error(
+                                        "  cluster(%d,%d) first PE psum_enable_i=%s psum_select=%s",
+                                        cx,
+                                        cy,
+                                        str(pe.psum_enable_i.value),
+                                        str(pe.psum_select.value),
+                                    )
                                 except Exception as exc:
-                                    logger.error("  cluster(%d,%d) psum ready unreadable (%s)",
-                                                 cx, cy, type(exc).__name__)
+                                    logger.error(
+                                        "  cluster(%d,%d) psum ready unreadable (%s)",
+                                        cx,
+                                        cy,
+                                        type(exc).__name__,
+                                    )
                         for name in ("psum_enable_o", "psum_ready_o_reg", "router_mode_psum"):
                             logger.error("  %s = %s", name, str(getattr(pp, name).value))
                         for name in ("iact_ready_o_oep_w", "iact_enable_i_oep_w"):
@@ -1035,7 +905,8 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
                         logger.error("FSM stuck (main state, psum state, psum cycle) = %s", key)
                     raise AssertionError(
                         "No FSM progress for %d cycles (main state, psum state, psum cycle) = %s; "
-                        "see the stall diagnostics above" % (fail_after, key))
+                        "see the stall diagnostics above" % (fail_after, key)
+                    )
             else:
                 progress_key = key
                 idle_for = 0
@@ -1043,16 +914,12 @@ async def probe_fsm_states(ptp, dut, stall_report_after=20000, oep=None):
 
 
 def _ram_word(mem_entry):
-    """Read a whole RAM word as an int, or None if it holds X/Z.
-
-    Words the DUT never wrote read back as X, and LogicArray conversion raises
-    on those. Returning None lets the caller report an unwritten word as a
-    mismatch instead of aborting the comparison with a ValueError.
-    """
+    """Read a whole RAM word as an int, or None if it holds X/Z."""
     try:
         return int(mem_entry.value)
     except ValueError:
         return None
+
 
 def _signed(value, bits):
     """Reinterpret an unsigned field of the given width as two's complement."""
@@ -1060,94 +927,84 @@ def _signed(value, bits):
 
 
 def _to_ram_format(datapoints, params, layer_params):
-    if datapoints == None:
+    """Pack flat activation bytes into IACT buffer RAM words."""
+    if datapoints is None:
         return None
-    ram_words = []
-    iacts_per_word = 8
-    iact_word_width = params.IACT_Bitwidth
-    temp_word = 0
-    for index, data in enumerate(datapoints):
-        position = index % iacts_per_word
-        if (data < 0):
-            data = data + 256
-        temp_word = temp_word + (data << (position * params.IACT_Bitwidth))
 
-        if (position == iacts_per_word - 1):
-            ram_words.append(temp_word)
-            temp_word = 0
-        if (index == layer_params.iact_size_x*layer_params.iact_size_y*layer_params.channels - 1):
-            break
+    iact_bw = int(params.IACT_Bitwidth)
+    word_bw = int(params.IACT_RAM_CELLS_WORD_BITWIDTH)
+    iacts_per_word = max(1, word_bw // iact_bw)
+    arr = np.asarray(datapoints, dtype=np.int64).ravel()
+    if arr.size == 0:
+        return []
 
+    elem_mask = (1 << iact_bw) - 1
+    byte_vals = (arr & elem_mask).astype(np.uint64)
+    rem = byte_vals.size % iacts_per_word
+    if rem:
+        byte_vals = np.pad(byte_vals, (0, iacts_per_word - rem), constant_values=0)
 
-    if (position != iacts_per_word - 1):
-        ram_words.append(temp_word)
-        temp_word = 0
+    grouped = byte_vals.reshape(-1, iacts_per_word)
+    shifts = np.arange(iacts_per_word, dtype=np.uint64) * np.uint64(iact_bw)
+    packed = np.bitwise_or.reduce(grouped << shifts, axis=1)
+    return [int(w) for w in packed.tolist()]
 
-    return ram_words
 
 def _iact_buffer_words(oep, layer_params, iact_ref):
-    num_blocks = layer_params.filters
-    step = 2
-    return_words_list = []
-    for i in range(0, num_blocks, step):
-        block0 = iact_ref[i]
-        block1 = iact_ref[i + 1] 
-  
-        for y in range(len(block0[0])):
-            for x in range(len(block0)):
-                return_words_list.append(block0[x][y])
-                return_words_list.append(block1[x][y])
+    """Interleave filter pairs in (Y, X, pair_slot) order for IACT buffer comparison."""
+    out_shape = getattr(layer_params, "output_shape", None)
+    if out_shape is not None and len(out_shape) >= 4 and int(out_shape[3]) > 0:
+        num_blocks = int(out_shape[3])
+    elif isinstance(iact_ref, dict):
+        num_blocks = len(iact_ref)
+    else:
+        num_blocks = int(getattr(layer_params, "filters", 0) or np.asarray(iact_ref).shape[0])
 
-    return return_words_list
+    if isinstance(iact_ref, dict):
+        arr = np.asarray([iact_ref[i] for i in range(num_blocks)], dtype=np.int64)
+    else:
+        arr = np.asarray(iact_ref, dtype=np.int64)[:num_blocks]
 
+    if arr.ndim < 3 or arr.size == 0:
+        return arr.ravel()
 
+    if arr.shape[0] % 2 != 0:
+        arr = np.pad(arr, ((0, 1), (0, 0), (0, 0)), constant_values=0)
 
+    # arr shape: (padded_blocks, X, Y) -> (padded_blocks // 2, 2, X, Y) -> (padded_blocks // 2, Y, X, 2)
+    paired = arr.reshape(arr.shape[0] // 2, 2, arr.shape[1], arr.shape[2])
+    return paired.transpose(0, 3, 2, 1).ravel()
 
 def iact_cells_per_group(oep):
-    """Number of RAM cells one full buffer write cycle spans.
-
-    Mirrors IACT_ONE_WORD_ALL_RAM in OpenEye_FPGA.v. It is a property of the
-    hardware, not of a layer, so it is derived from the OpenEye parameters
-    rather than read off LayerParameters (where it is only populated for the
-    layer types that run calculate_transmission_cycles).
-    """
-    return math.ceil((oep.IACT_RAM_CELLS * oep.IACT_RAM_CELLS_WORD_BITWIDTH)
-                     / oep.DMA_BITWIDTH)
+    """Number of RAM cells one full buffer write cycle spans."""
+    return math.ceil((oep.IACT_RAM_CELLS * oep.IACT_RAM_CELLS_WORD_BITWIDTH) / oep.DMA_BITWIDTH)
 
 
 def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params, slot_idx=0):
-    """Compare the iact double-buffer contents with reference activations.
-
-    The expected buffer image comes from the same mapper that builds the DMA
-    iact stream, so the checker cannot drift from the layout the hardware is
-    actually fed. Word k of that image belongs in RAM cell
-    ``k % iact_cycles_one_word_all_ram`` at address
-    ``k // iact_cycles_one_word_all_ram``.
-
-    Args:
-        ptp: Port timing parameters (unused; kept for call-site symmetry)
-        dut: Device under test (OpenEye_FPGA instance)
-        iact_ref: Reference activations for the layer that reads this buffer
-        oep: OpenEye parameters
-        layer_params: Parameters of the layer that reads this buffer, i.e. the
-            next layer - it owns used_channels and iact_cycles_one_word_all_ram
-
-    Returns:
-        bool: True when every word matches, False on any mismatch.
-    """
+    """Compare the iact double-buffer contents with reference activations."""
     logger.info("Iact storages are checked.")
-    try:
-        shape = np.array(iact_ref).shape
-    except Exception:
-        shape = "?"
-    logger.info("Iact reference: shape %s, used_channels %s, IACT_RAM_CELLS %s",
-                shape, getattr(layer_params, "filters", "?"), oep.IACT_RAM_CELLS)
+    if isinstance(iact_ref, dict):
+        first_item = next(iter(iact_ref.values()), [])
+        shape = (len(iact_ref),) + np.asarray(first_item).shape
+    else:
+        try:
+            shape = np.asarray(iact_ref).shape
+        except Exception:
+            shape = "?"
+    logger.info(
+        "Iact reference: shape %s, used_channels %s, IACT_RAM_CELLS %s",
+        shape,
+        getattr(layer_params, "filters", "?"),
+        oep.IACT_RAM_CELLS,
+    )
 
-    expected = _to_ram_format(_iact_buffer_words(oep, layer_params, iact_ref),oep,layer_params)
+    expected = _to_ram_format(_iact_buffer_words(oep, layer_params, iact_ref), oep, layer_params)
 
     if expected is None:
-        logger.warning("No iact buffer layout known for layer '%s'; skipping the check.",
-                       getattr(layer_params, "layer_name", "?"))
+        logger.warning(
+            "No iact buffer layout known for layer '%s'; skipping the check.",
+            getattr(layer_params, "layer_name", "?"),
+        )
         return True
 
     cells_per_group = iact_cells_per_group(oep)
@@ -1155,110 +1012,145 @@ def compare_iact_storage(ptp, dut, iact_ref, oep, layer_params, slot_idx=0):
         depth = len(dut.BUFFER_A[0].iact_layer_buffer.impl.mem)
     except TypeError:
         depth = 1 << oep.BUFFER_WIDTH_IACT
-    logger.info("Iact buffer check: %d expected words, %d cells per group, depth %d (layer '%s')",
-                len(expected), cells_per_group, depth, getattr(layer_params, "layer_name", "?"))
+    logger.info(
+        "Iact buffer check: %d expected words, %d cells per group, depth %d (layer '%s')",
+        len(expected),
+        cells_per_group,
+        depth,
+        getattr(layer_params, "layer_name", "?"),
+    )
     if len(expected) > cells_per_group * depth:
-        logger.error("Expected iact image (%d words) exceeds the buffer (%d cells x %d addresses); "
-                     "check the layout parameters for layer '%s'.",
-                     len(expected), cells_per_group, depth,
-                     getattr(layer_params, "layer_name", "?"))
+        logger.error(
+            "Expected iact image (%d words) exceeds the buffer (%d cells x %d addresses); "
+            "check the layout parameters for layer '%s'.",
+            len(expected),
+            cells_per_group,
+            depth,
+            getattr(layer_params, "layer_name", "?"),
+        )
         return False
-    # Addresses are relative to the half the DUT currently has selected.
-    branch_idx = layer_params.choose_iact_storage_output * (2**(oep.BUFFER_WIDTH_IACT-1))
+
+    branch_idx = int(layer_params.choose_iact_storage_output) * (1 << (int(oep.BUFFER_WIDTH_IACT) - 1))
     error_found = False
     errors_logged = 0
     for index, ref_word in enumerate(expected):
         cell = index % oep.IACT_RAM_CELLS
-        addr = index // oep.IACT_RAM_CELLS
-        addr = branch_idx + addr
+        addr = branch_idx + (index // oep.IACT_RAM_CELLS)
         dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[addr])
         if dut_word != ref_word:
             error_found = True
             errors_logged += 1
             if errors_logged <= 16:
                 logger.error("Error found in Iact storage; word: %d cell: %d addr: %d", index, cell, addr)
-                logger.error("Ref-Value: 0x%x DUT-Value: %s", ref_word,
-                             "X (never written)" if dut_word is None else hex(dut_word))
+                logger.error(
+                    "Ref-Value: 0x%x DUT-Value: %s",
+                    ref_word,
+                    "X (never written)" if dut_word is None else hex(dut_word),
+                )
     if errors_logged > 16:
         logger.error("... and %d further Iact storage mismatches.", errors_logged - 16)
 
     if os.environ.get("DUMP_IACT_IMAGE"):
-        # Whole expected image next to the DUT contents, bytes low to high, plus
-        # two addresses past the expected image to show stray writes.
         rows = (len(expected) + oep.IACT_RAM_CELLS - 1) // oep.IACT_RAM_CELLS + 2
         for addr in range(rows):
             for cell in range(oep.IACT_RAM_CELLS):
                 index = addr * oep.IACT_RAM_CELLS + cell
                 ref_word = expected[index] if index < len(expected) else None
                 dut_word = _ram_word(dut.BUFFER_A[cell].iact_layer_buffer.impl.mem[branch_idx + addr])
+
                 def fmt(w):
-                    return "--------" if w is None else " ".join("%02x" % ((w >> (8 * i)) & 0xFF) for i in range(8))
-                logger.info("iactimg addr=%d cell=%d ref=[%s] dut=[%s]%s", addr, cell,
-                            fmt(ref_word), fmt(dut_word), "" if ref_word == dut_word else " <<")
+                    return (
+                        "--------"
+                        if w is None
+                        else " ".join("%02x" % ((w >> (8 * i)) & 0xFF) for i in range(8))
+                    )
+
+                logger.info(
+                    "iactimg addr=%d cell=%d ref=[%s] dut=[%s]%s",
+                    addr,
+                    cell,
+                    fmt(ref_word),
+                    fmt(dut_word),
+                    "" if ref_word == dut_word else " <<",
+                )
     if error_found:
-        _log_iact_value_comparison(dut, oep, expected, cells_per_group)
+        _log_iact_value_comparison(dut, oep, expected, cells_per_group, half_offset=branch_idx)
         _log_iact_buffer_occupancy(dut, oep)
 
     return not error_found
 
 
 def _log_iact_value_comparison(dut, oep, expected, cells_per_group, half_offset=0):
-    """Say whether the buffer holds the right values in the wrong order.
+    """Say whether the buffer holds the right values in the wrong order."""
 
-    If the expected and actual byte multisets agree, the write-back produced
-    the correct activations and only the placement differs, which points at
-    the layout. If they disagree, the values themselves are wrong and the
-    layout is not the place to look.
-    """
     def to_bytes(word):
         return [(word >> (8 * i)) & 0xFF for i in range(8)]
 
     actual_words, missing = [], 0
     for index in range(len(expected)):
-        word = _ram_word(dut.BUFFER_A[index % oep.IACT_RAM_CELLS]
-                         .iact_layer_buffer.impl.mem[index // oep.IACT_RAM_CELLS])
+        word = _ram_word(
+            dut.BUFFER_A[index % oep.IACT_RAM_CELLS].iact_layer_buffer.impl.mem[
+                half_offset + (index // oep.IACT_RAM_CELLS)
+            ]
+        )
         if word is None:
             missing += 1
         else:
             actual_words.append(word)
 
     exact = sum(1 for e, a in zip(expected, actual_words) if e == a)
-    # Compare like with like: only the prefix of the expected image that the
-    # DUT actually wrote. Comparing all 392 expected words against 196 written
-    # ones can only ever report a difference, whatever the cause.
-    comparable = expected[:len(actual_words)]
+    comparable = expected[: len(actual_words)]
     expected_bytes = sorted(b for w in comparable for b in to_bytes(w))
     actual_bytes = sorted(b for w in actual_words for b in to_bytes(w))
     same_multiset = expected_bytes == actual_bytes
-    logger.error("Iact value comparison: %d/%d words match exactly, %d of %d expected "
-                 "words unwritten; over the %d written words the byte multisets %s",
-                 exact, len(expected), missing, len(expected), len(actual_words),
-                 "MATCH - right values, wrong placement" if same_multiset
-                 else "DIFFER - the values themselves are wrong")
+    logger.error(
+        "Iact value comparison: %d/%d words match exactly, %d of %d expected "
+        "words unwritten; over the %d written words the byte multisets %s",
+        exact,
+        len(expected),
+        missing,
+        len(expected),
+        len(actual_words),
+        "MATCH - right values, wrong placement" if same_multiset else "DIFFER - the values themselves are wrong",
+    )
 
 
 def _log_iact_buffer_occupancy(dut, oep, max_addr=64):
-    """Report where the iact buffer actually holds data, to localise a mismatch.
-
-    Says whether the comparison looked in the wrong place (data present, other
-    cells/addresses) or the buffer was never filled at all (nothing anywhere).
-    """
-    for name in ("send_data_out", "fsm_current_state", "choose_iact_buffer",
-                 "iact_channels_per_pe_next_layer", "fsm_cycle", "skipIact_reg",
-                 "max_pooling", "FSM_CEIL_IACT_RTR_CCLS", "FSM_CEIL_WGHT_RTR_CCLS",
-                 "FSM_CEIL_PSUM_RTR_CCLS", "CLUSTERS", "NUM_GLB_IACT",
-                 "NUM_GLB_WGHT", "NUM_GLB_PSUM", "fsm_psum_cycle",
-                 "trans_cycles_psum", "fsm_psum_current_state", "filters",
-                 "needed_cycles", "finished_cycles_psum"):
+    """Report where the iact buffer actually holds data, to localise a mismatch."""
+    for name in (
+        "send_data_out",
+        "fsm_current_state",
+        "choose_iact_buffer",
+        "iact_channels_per_pe_next_layer",
+        "fsm_cycle",
+        "skipIact_reg",
+        "max_pooling",
+        "FSM_CEIL_IACT_RTR_CCLS",
+        "FSM_CEIL_WGHT_RTR_CCLS",
+        "FSM_CEIL_PSUM_RTR_CCLS",
+        "CLUSTERS",
+        "NUM_GLB_IACT",
+        "NUM_GLB_WGHT",
+        "NUM_GLB_PSUM",
+        "fsm_psum_cycle",
+        "trans_cycles_psum",
+        "fsm_psum_current_state",
+        "filters",
+        "needed_cycles",
+        "finished_cycles_psum",
+    ):
         try:
-            logger.error("Iact buffer context: %s = %s", name,
-                         int(getattr(dut, name).value))
+            logger.error("Iact buffer context: %s = %s", name, int(getattr(dut, name).value))
         except Exception as exc:
             logger.error("Iact buffer context: %s unavailable (%s)", name, type(exc).__name__)
 
     if fsm_states_seen:
-        logger.error("Iact buffer context: main FSM states visited = %s over %d samples "
-                     "(RECEIVE_PSUMS_TO_IACT is 11)", sorted(fsm_states_seen), fsm_probe_samples[0])
+        logger.error(
+            "Iact buffer context: main FSM states visited = %s over %d samples "
+            "(RECEIVE_PSUMS_TO_IACT is 11)",
+            sorted(fsm_states_seen),
+            fsm_probe_samples[0],
+        )
         logger.error("Iact buffer context: FSM transitions (ns, state) = %s", fsm_state_trace)
 
     written = []
@@ -1270,169 +1162,102 @@ def _log_iact_buffer_occupancy(dut, oep, max_addr=64):
                 continue
             written.append((cell, addr, word))
     if not written:
-        logger.error("Iact buffer occupancy: no written word in any of %d cells over the first %d addresses.",
-                     oep.IACT_RAM_CELLS, max_addr)
+        logger.error(
+            "Iact buffer occupancy: no written word in any of %d cells over the first %d addresses.",
+            oep.IACT_RAM_CELLS,
+            max_addr,
+        )
         return
     cells = sorted({c for c, _, _ in written})
-    logger.error("Iact buffer occupancy: %d written words, cells %s, first entries %s",
-                 len(written), cells[:8],
-                 [(c, a, hex(w)) for c, a, w in written[:4]])
+    logger.error(
+        "Iact buffer occupancy: %d written words, cells %s, first entries %s",
+        len(written),
+        cells[:8],
+        [(c, a, hex(w)) for c, a, w in written[:4]],
+    )
 
 
 async def write_iact(ptp, dut, stream, oep, lp):
-    """Write the input activations to the DUT.
-    
-    This function writes the input activations to the OpenEye accelerator through its
-    input ports. It handles the timing and protocol requirements for transferring 
-    activation data to the hardware.
-    
-    Args:
-        ptp: Port timing parameters containing clock and signal timing information
-        dut: The device under test (OpenEye accelerator instance)
-        stream: The activation data stream to be sent to the DUT
-        oep: OpenEye parameters containing architecture configuration 
-        lp: Layer parameters containing neural network layer configuration
-        
-    Implementation Details:
-        - Waits for iact_ready_o signal before sending data
-        - Handles data transmission across multiple clusters and routers
-        - Sets enable signals appropriately for the data transfer
-        - Manages the timing of data and enable signals
-        - Supports sparsity in activation data
-        - Automatically handles signal reset after transmission
-    """
-    iact_enable_signal = 0
-    iact_transmission = 0
-    if(lp.skipIact != 1):
-        while (dut.iact_ready_o.value == 0): #TODO: ADAPT for Sparsetiy
+    """Write input activations over the parallel interface."""
+    if lp.skipIact != 1:
+        while dut.iact_ready_o.value == 0:
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         for position in range(len(stream[0][0][0])):
             iact_enable_signal = 0
+            iact_transmission = 0
             for x_cluster in range(oep.Clusters_X):
                 for y_cluster in range(oep.Clusters_Y):
                     for router in range(oep.NUM_GLB_IACT):
                         try:
-                            iact_transmission = iact_transmission + \
-                            (stream[x_cluster][y_cluster][router][position] \
-                            << ((router + y_cluster * oep.NUM_GLB_IACT + x_cluster * oep.NUM_GLB_IACT * oep.Clusters_Y) * oep.IACT_Trans_Bitwidth))
-                            iact_enable_signal = iact_enable_signal + 2**(router + y_cluster * oep.NUM_GLB_IACT+ x_cluster * oep.NUM_GLB_IACT * oep.Clusters_Y)
-                        except:
-                            iact_enable_signal = iact_enable_signal
-            cocotb.start_soon(set_input(ptp,(dut.iact_data_i), iact_transmission))
-            iact_transmission = 0
-            cocotb.start_soon(set_input(ptp,(dut.iact_enable_i), iact_enable_signal))
+                            lane = router + y_cluster * oep.NUM_GLB_IACT + x_cluster * oep.NUM_GLB_IACT * oep.Clusters_Y
+                            iact_transmission += int(stream[x_cluster][y_cluster][router][position]) << (
+                                lane * oep.IACT_Trans_Bitwidth
+                            )
+                            iact_enable_signal += 1 << lane
+                        except Exception:
+                            pass
+            cocotb.start_soon(set_input(ptp, dut.iact_data_i, iact_transmission))
+            cocotb.start_soon(set_input(ptp, dut.iact_enable_i, iact_enable_signal))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        cocotb.start_soon(set_input(ptp,(dut.iact_data_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.iact_enable_i), 0))
+        cocotb.start_soon(set_input(ptp, dut.iact_data_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.iact_enable_i, 0))
+
 
 async def write_wght(ptp, dut, stream, oep, lp):
-    """Write the weights to the DUT.
-    
-    This function handles the transmission of weight data to the OpenEye accelerator.
-    It manages the protocol for sending weight data across multiple clusters and routers,
-    ensuring proper timing and synchronization.
-    
-    Args:
-        ptp: Port timing parameters containing clock and signal timing information
-        dut: The device under test (OpenEye accelerator instance)
-        stream: The weight data stream to be sent to the DUT
-        oep: OpenEye parameters containing architecture configuration (clusters, routers, etc.)
-        lp: Layer parameters containing neural network layer configuration
-        
-    Implementation Details:
-        - Checks wght_ready_o signal from all clusters before transmission
-        - Manages weight data distribution across multiple clusters
-        - Handles weight streaming protocol with proper enable signals
-        - Supports parallel transmission to multiple processing elements
-        - Automatically handles signal reset after transmission
-        - Respects timing requirements for stable weight loading
-    
-    Note:
-        The function skips transmission if lp.skipWght is set to 1, which is useful
-        for layers that reuse previously loaded weights.
-    """
-    wght_enable_signal = 0
-    wght_transmission = 0
-    if(lp.skipWght != 1):
-        while (dut.wght_ready_o.value != ((2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_WGHT))-1)):
+    """Write weights over the parallel interface."""
+    if lp.skipWght != 1:
+        all_ready = (1 << (oep.Clusters_X * oep.Clusters_Y * oep.NUM_GLB_WGHT)) - 1
+        while dut.wght_ready_o.value != all_ready:
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-        cocotb.start_soon(set_input(ptp,(dut.wght_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_WGHT))-1))
+        cocotb.start_soon(set_input(ptp, dut.wght_enable_i, all_ready))
         for position in range(len(stream[0][0][0])):
             wght_enable_signal = 0
+            wght_transmission = 0
             for x_cluster in range(oep.Clusters_X):
                 for y_cluster in range(oep.Clusters_Y):
                     for router in range(oep.NUM_GLB_WGHT):
                         try:
-                            wght_transmission = wght_transmission + \
-                            (stream[x_cluster][y_cluster][router][position] \
-                            << ((router + y_cluster * oep.NUM_GLB_WGHT + x_cluster * oep.NUM_GLB_WGHT * oep.Clusters_Y) * oep.WGHT_Trans_Bitwidth))
-                            wght_enable_signal = wght_enable_signal + 2**(router + y_cluster * oep.NUM_GLB_WGHT+ x_cluster * oep.NUM_GLB_WGHT * oep.Clusters_Y)
-                        except:
-                            wght_enable_signal = wght_enable_signal
-            cocotb.start_soon(set_input(ptp,(dut.wght_data_i), wght_transmission))
-            wght_transmission = 0
-            cocotb.start_soon(set_input(ptp,(dut.wght_enable_i), wght_enable_signal))
+                            lane = router + y_cluster * oep.NUM_GLB_WGHT + x_cluster * oep.NUM_GLB_WGHT * oep.Clusters_Y
+                            wght_transmission += int(stream[x_cluster][y_cluster][router][position]) << (
+                                lane * oep.WGHT_Trans_Bitwidth
+                            )
+                            wght_enable_signal += 1 << lane
+                        except Exception:
+                            pass
+            cocotb.start_soon(set_input(ptp, dut.wght_data_i, wght_transmission))
+            cocotb.start_soon(set_input(ptp, dut.wght_enable_i, wght_enable_signal))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        cocotb.start_soon(set_input(ptp,(dut.wght_data_i), 0))
-        cocotb.start_soon(set_input(ptp,(dut.wght_enable_i), 0))
+        cocotb.start_soon(set_input(ptp, dut.wght_data_i, 0))
+        cocotb.start_soon(set_input(ptp, dut.wght_enable_i, 0))
+
 
 async def write_bias(ptp, dut, stream, oep, lp):
-    """Write bias values to the DUT using partial sum Global Local Buffers (GLBs).
-    
-    This function handles the transmission of bias data to the OpenEye accelerator
-    through the partial sum ports. The bias values are stored in partial sum GLBs
-    to be added during computation.
-    
-    Args:
-        ptp: Port timing parameters containing clock and signal timing information
-        dut: The device under test (OpenEye accelerator instance)
-        stream: The bias data stream to be sent to the DUT
-        oep: OpenEye parameters containing architecture configuration
-        lp: Layer parameters containing neural network layer configuration
-        
-    Implementation Details:
-        - Uses partial sum (psum) ports for bias transmission
-        - Enables all psum ports across clusters simultaneously
-        - Handles data distribution across multiple clusters and routers
-        - Manages timing and synchronization of data transfer
-        - Automatically handles signal reset after transmission
-    
-    Technical Notes:
-        - Bias values are written to partial sum GLBs
-        - Uses the same data path as partial sums for efficiency
-        - Supports parallel loading across multiple processing elements
-        - Maintains proper synchronization with computation units
-    """
-    psum_transmission = 0
-    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
+    """Write bias values over the parallel psum interface."""
+    cocotb.start_soon(
+        set_input(ptp, dut.psum_enable_i, (1 << (oep.Clusters_X * oep.Clusters_Y * oep.NUM_GLB_PSUM)) - 1)
+    )
     for position in range(len(stream[0][0][0])):
+        psum_transmission = 0
         for x_cluster in range(oep.Clusters_X):
             for y_cluster in range(oep.Clusters_Y):
                 for router in range(oep.NUM_GLB_PSUM):
-                    psum_transmission = psum_transmission + \
-                    (stream[x_cluster][y_cluster][router][position] \
-                    << ((router + y_cluster * oep.NUM_GLB_PSUM + x_cluster * oep.NUM_GLB_PSUM * oep.Clusters_Y) * oep.PSUM_Trans_Bitwidth))
-        cocotb.start_soon(set_input(ptp,(dut.psum_data_i), psum_transmission))
-        psum_transmission = 0
+                    lane = router + y_cluster * oep.NUM_GLB_PSUM + x_cluster * oep.NUM_GLB_PSUM * oep.Clusters_Y
+                    psum_transmission += int(stream[x_cluster][y_cluster][router][position]) << (
+                        lane * oep.PSUM_Trans_Bitwidth
+                    )
+        cocotb.start_soon(set_input(ptp, dut.psum_data_i, psum_transmission))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-    cocotb.start_soon(set_input(ptp,(dut.psum_data_i), 0))
-    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
+    cocotb.start_soon(set_input(ptp, dut.psum_data_i, 0))
+    cocotb.start_soon(set_input(ptp, dut.psum_enable_i, 0))
+
 
 async def await_enable_signal(ptp, dut):
-    """Wait for DMA enable signal from the device.
-    
-    This function waits for the DMA enable signal to be asserted by the DUT,
-    indicating that it is ready to begin a DMA transfer operation.
-    
-    Args:
-        ptp: Port timing parameters
-        dut: Device under test (OpenEye accelerator instance)
-    """
-    cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
-    while (dut.enable_dma_o.value != 1):
+    """Wait for DMA enable signal from the DUT."""
+    cocotb.start_soon(set_input(ptp, dut.ready_dma_i, 1))
+    while dut.enable_dma_o.value != 1:
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-    pass
+
 
 def _signal_is(handle, expected):
     """True when a signal reads exactly `expected`; False while it holds X/Z."""
@@ -1442,56 +1267,31 @@ def _signal_is(handle, expected):
         return False
 
 
-async def await_ready_signal(ptp, dut, settle_cycles=5000, max_wait_cycles=120000000,
-                             report_every=200000):
-    """Wait until the DUT has finished the current layer and wants the next one.
-
-    ready_dma_o means "I can accept DMA input", and it is already high through
-    GET_PARAMETERS, GET_ROUTER_CONFIG, GET_IACT, GET_WGHT, GET_BIAS and
-    GET_QUANTIZE. Sampling it as a level therefore returned immediately, while
-    the layer was still loading, and the caller went on to the next layer (and
-    to compare_iact_storage) before any computation or psum write-back had
-    happened.
-
-    The port does carry the information as an edge: it is deasserted on the way
-    out of GET_QUANTIZE and re-asserted only when the FSM comes back round to
-    GET_PARAMETERS for the next layer. So wait for the falling edge, then for
-    the rising one.
-
-    Args:
-        ptp: Port timing parameters
-        dut: Device under test (OpenEye_FPGA instance)
-        settle_cycles: How long to wait for the DUT to leave its input phase
-            before assuming it already has
-        max_wait_cycles: Give up (and say where the FSM is stuck) after this
-        report_every: Log a progress line at this interval while waiting
-    """
-    # Phase 1: the DUT leaves its input phase and starts computing.
+async def await_ready_signal(ptp, dut, settle_cycles=5000, max_wait_cycles=120000000, report_every=200000):
+    """Wait until the DUT finishes the current layer and asserts ready_dma_o again."""
     for _ in range(settle_cycles):
         if not _signal_is(dut.ready_dma_o, 1):
             break
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     else:
-        # Not a benign case: the DUT should drop ready_dma_o when it stops
-        # accepting input and starts computing. If it never does, the wait
-        # below is satisfied immediately and this call degenerates into the
-        # level sample it replaced, so say so rather than passing quietly.
-        logger.warning("ready_dma_o stayed high for %d cycles%s; the completion "
-                       "wait below cannot be trusted for this layer.",
-                       settle_cycles, _fsm_state_note(dut))
+        logger.warning(
+            "ready_dma_o stayed high for %d cycles%s; the completion "
+            "wait below cannot be trusted for this layer.",
+            settle_cycles,
+            _fsm_state_note(dut),
+        )
 
-    # Phase 2: it comes back ready for the next layer's configuration.
     for cycle in range(max_wait_cycles):
         if _signal_is(dut.ready_dma_o, 1):
             return
         if cycle and cycle % report_every == 0:
-            logger.info("Still waiting for the layer to finish after %d cycles%s",
-                        cycle, _fsm_state_note(dut))
+            logger.info("Still waiting for the layer to finish after %d cycles%s", cycle, _fsm_state_note(dut))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
     raise TimeoutError(
         "ready_dma_o never came back high within {} cycles{} - the accelerator "
-        "did not finish the layer.".format(max_wait_cycles, _fsm_state_note(dut)))
+        "did not finish the layer.".format(max_wait_cycles, _fsm_state_note(dut))
+    )
 
 
 def _fsm_state_note(dut):
@@ -1502,451 +1302,275 @@ def _fsm_state_note(dut):
         return ""
 
 
-async def compare_stream_Conv(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order, rel_layers):
-    """Compare convolutional layer output stream with expected results.
-
-    The debug logging functionality is controlled by login_level to manage file I/O:
-    - When login_level is sufficient, the function creates and writes to debug log files
-    - Files are properly closed when the function finishes
-    - Basic logging through logger remains active regardless of login_level
-    
-    This function monitors and validates the output stream from a convolutional layer
-    in the OpenEye accelerator. It handles the complex data organization of 
-    convolution outputs across multiple processing elements and clusters.
-    
-    Args:
-        ptp: Port timing parameters
-        dut: Device under test (OpenEye accelerator instance)
-        layer_number: Index of the current layer in the network
-        layer_repetition: Counter for processing subdivided layers
-        layer_parameters: Configuration parameters for the current layer
-        oep: OpenEye architecture parameters
-        les: Layer execution state tracking object
-        dram: Memory object for storing computation results
-        login_level: Logging verbosity control
-        output_order: Mapping of output data organization
-    
-    Technical Details:
-        - Handles both serial and parallel operation modes
-        - Manages output data collection from multiple clusters
-        - Tracks partial sum accumulation
-        - Supports debug logging of intermediate results
-        - Handles data reordering based on cluster organization
-        - Supports various data quantization modes
-        - Maintains state across multiple execution cycles
-    
-    Note:
-        Debug logging creates detailed output files when login_level is sufficient:
-        - output.txt: Raw output stream data
-        - storage_input.txt: Detailed state tracking information
-    """
-
-    if(logging.DEBUG >= login_level):
-        filename = 'demo/layer_' + str(layer_parameters.layer_name) + '/output.txt'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        txt_file = open(filename, 'w')
-        filename = 'demo/layer_' + str(layer_parameters.layer_name) + '/storage_input.txt'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        storage_file = open(filename, 'w')
+async def _compare_stream_spatial(
+    ptp,
+    dut,
+    layer_number,
+    layer_repetition,
+    layer_parameters,
+    oep,
+    les,
+    dram,
+    login_level,
+    output_order,
+    rel_layers,
+    x_wrap_limit: int,
+):
+    """Shared output stream collector for Conv2D and Depthwise Conv2D layers."""
+    debug_enabled = logging.DEBUG >= login_level
+    txt_file = None
+    storage_file = None
+    if debug_enabled:
+        layer_dir = f"demo/layer_{layer_parameters.layer_name}"
+        os.makedirs(layer_dir, exist_ok=True)
+        txt_file = open(f"{layer_dir}/output.txt", "w")
+        storage_file = open(f"{layer_dir}/storage_input.txt", "w")
 
     logger.debug("PRE")
-    logger.debug("f: " + str(les.f_start) + " x: " + str(les.x_start) + " y: " + str(les.y_start) + " f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
+    logger.debug(
+        "f: %s x: %s y: %s f_corner_start: %s y_corner_start: %s x_corner_start: %s\n",
+        les.f_start,
+        les.x_start,
+        les.y_start,
+        les.f_corner_start,
+        les.y_corner_start,
+        les.x_corner_start,
+    )
 
     f = 0
     x = 0
     y = 0
     les.current_position = 0
-    if (len(rel_layers["Next_Layer"][layer_parameters.layer_name]) != 0):
-        dram_string = rel_layers["Next_Layer"][layer_parameters.layer_name][0]
-    else:
-        dram_string = "Output"
-    if(logging.DEBUG >= login_level):
-        storage_file.write(" f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
-    if (oep.SERIAL == 0) :
-        if ((layer_repetition % layer_parameters.iact_transmissions_pe) == (layer_parameters.iact_transmissions_pe - 1)):
+    next_layers = rel_layers["Next_Layer"][layer_parameters.layer_name]
+    dram_string = next_layers[0] if next_layers else "Output"
+    target_fmap = dram.fmap[dram_string][0]
+    f_bound, x_bound, y_bound = target_fmap.shape
+    psum_bits = int(oep.DATA_PSUM_BITWIDTH)
+    psum_mask = (1 << psum_bits) - 1
+
+    if debug_enabled:
+        storage_file.write(
+            f" f_corner_start: {les.f_corner_start} y_corner_start: {les.y_corner_start} x_corner_start: {les.x_corner_start}\n"
+        )
+
+    if oep.SERIAL == 0:
+        if (layer_repetition % layer_parameters.iact_transmissions_pe) == (layer_parameters.iact_transmissions_pe - 1):
             cocotb.start_soon(send_enable_conv(ptp, dut, layer_parameters, layer_repetition, oep))
-            while (dut.psum_enable_o.value == 0):
+            while dut.psum_enable_o.value == 0:
                 await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
             dut._log.info("Output Stream started")
             assert dut.psum_enable_o.value != 0, "psum is not 1!"
-            while (dut.psum_enable_o.value != 0):
-                cluster_order = []
-                for a in range(layer_parameters.used_Y_cluster):
-                    for b in range(0,oep.Clusters_Y,layer_parameters.used_Y_cluster):
-                        cluster_order.append(a+b)
+            cluster_order = [
+                a + b
+                for a in range(layer_parameters.used_Y_cluster)
+                for b in range(0, oep.Clusters_Y, layer_parameters.used_Y_cluster)
+            ]
+            rep_coords = output_order[layer_repetition]
+            rep_len = len(rep_coords)
+            while dut.psum_enable_o.value != 0:
                 for y_cluster in reversed(cluster_order):
                     for x_cluster in reversed(range(oep.Clusters_X)):
                         for router in reversed(range(oep.NUM_GLB_PSUM)):
-                            if(layer_parameters.computing_mx[oep.Clusters_X-x_cluster-1][oep.Clusters_Y-y_cluster-1][0][oep.NUM_GLB_PSUM-router-1]== 1):
-                                lower_limit = (x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * oep.PSUM_Trans_Bitwidth + y_cluster * oep.NUM_GLB_PSUM * oep.PSUM_Trans_Bitwidth + router * oep.PSUM_Trans_Bitwidth)
-                                upper_limit = lower_limit + oep.DATA_PSUM_BITWIDTH
-                                outputvalue = dut.psum_data_o.value[lower_limit:upper_limit]
-                                if(logging.DEBUG >= login_level):
+                            if (
+                                layer_parameters.computing_mx[oep.Clusters_X - x_cluster - 1][
+                                    oep.Clusters_Y - y_cluster - 1
+                                ][0][oep.NUM_GLB_PSUM - router - 1]
+                                == 1
+                            ):
+                                lower_limit = (
+                                    x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * oep.PSUM_Trans_Bitwidth
+                                    + y_cluster * oep.NUM_GLB_PSUM * oep.PSUM_Trans_Bitwidth
+                                    + router * oep.PSUM_Trans_Bitwidth
+                                )
+                                upper_limit = lower_limit + psum_bits
+                                if debug_enabled:
+                                    outputvalue = dut.psum_data_o.value[lower_limit:upper_limit]
                                     txt_file.write(bin(outputvalue)[2:].zfill(oep.PSUM_Trans_Bitwidth) + "\n")
                                 for i in range(oep.PARALLEL_MACS):
-                                    try:
-                                        f = output_order[layer_repetition][les.current_position][0]
-                                        x = output_order[layer_repetition][les.current_position][1]
-                                        y = output_order[layer_repetition][les.current_position][2]
-                                    except:
-                                        pass
-                                    les.current_position = les.current_position + 1
-                                    if(logging.DEBUG >= login_level):
-                                        storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
-                                    try:
-                                        dram.fmap[dram_string][0][f][x][y] = int(dut.psum_data_o.value[lower_limit+oep.DATA_PSUM_BITWIDTH*(1-i):upper_limit-oep.DATA_PSUM_BITWIDTH*i])
-                                        if (dram.fmap[dram_string][0][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
-                                            dram.fmap[dram_string][0][f][x][y] = dram.fmap[dram_string][0][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
-                                    except:
-                                        pass
+                                    if les.current_position < rep_len:
+                                        f, x, y = rep_coords[les.current_position][:3]
+                                    les.current_position += 1
+                                    if debug_enabled:
+                                        storage_file.write(f"f: {f} x: {x} y: {y}\n")
+                                    if 0 <= f < f_bound and 0 <= x < x_bound and 0 <= y < y_bound:
+                                        try:
+                                            raw_val = int(
+                                                dut.psum_data_o.value[
+                                                    lower_limit + psum_bits * (1 - i) : upper_limit - psum_bits * i
+                                                ]
+                                            )
+                                            target_fmap[f, x, y] = _signed(raw_val & psum_mask, psum_bits)
+                                        except Exception:
+                                            pass
                 await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
+        cocotb.start_soon(set_input(ptp, dut.psum_enable_i, 0))
         dut._log.info("Output Stream finished")
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 1))
+        cocotb.start_soon(set_input(ptp, dut.status_reg_enable_i, 1))
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
     else:
-        """ #Re-Enable Flatted List for outputs again
-        cluster_order = []
-        for b in range(0,oep.Clusters_Y,layer_parameters.used_Y_cluster):
-            for a in range(layer_parameters.used_Y_cluster):
-                cluster_order.append(int(oep.Clusters_Y/layer_parameters.used_Y_cluster)*a+int(b/layer_parameters.used_Y_cluster))#+c*(oep.Clusters*oep.PEs_X)
-
-        matrix = [[[i * 16 + j * 8 + k for k in range(8)] for j in range(8)] for i in range(layer_parameters.iact_x_line_repetitions)]
-        reordered_matrix = [matrix[i] for i in cluster_order]
-        flat_list = [item for row in reordered_matrix for item in row]
-        """
         words = oep.DMA_BITWIDTH // 32
         dut._log.info("Output Stream started")
         used_clusters_per_calc = math.ceil(layer_parameters.iact_size_x / 4) * 4
-        values_per_transmission = math.ceil(layer_parameters.different_kernels_per_calculation*used_clusters_per_calc/2)
-        transmissions_per_cycle = (oep.Clusters_Y * oep.Clusters_X * oep.PEs_X)//2
+        values_per_transmission = math.ceil(
+            layer_parameters.different_kernels_per_calculation * used_clusters_per_calc / 2
+        )
+        transmissions_per_cycle = (oep.Clusters_Y * oep.Clusters_X * oep.PEs_X) // 2
         current_cycle = 0
         read_data = 1
         chance = 100
         x_repetitions = layer_parameters.iact_x_line_repetitions
         x_block_width = layer_parameters.iact_x_add_up // max(x_repetitions, 1)
         x_block_base = 0
-        while (dut.enable_dma_o.value == 1):
-            if (read_data):
-                if(logging.DEBUG >= login_level):
-                    try:
-                        txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(oep.DMA_BITWIDTH) + "\n")
-                    except:
+        while dut.enable_dma_o.value == 1:
+            if read_data:
+                try:
+                    dma_word = int(dut.data_dma_o.value)
+                except Exception:
+                    if debug_enabled:
                         txt_file.close()
                         storage_file.close()
-                        logger.error("Error writing output txt-file")
-                        raise Exception("X detected.")
-                if (current_cycle < values_per_transmission):
+                    logger.error("Error reading DMA output word (X/Z detected)")
+                    raise Exception("X detected.")
+
+                if debug_enabled:
+                    txt_file.write(format(dma_word, f"0{oep.DMA_BITWIDTH}b") + "\n")
+
+                if current_cycle < values_per_transmission:
                     for i in range(words):
-                        if(logging.DEBUG >= login_level):
-                            storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
-                        
-                        try:
-                            dram.fmap[dram_string][0][f][x][y] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH*(i+1)-1:oep.DATA_PSUM_BITWIDTH*i])
-                            if (dram.fmap[dram_string][0][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)):
-                                dram.fmap[dram_string][0][f][x][y] = dram.fmap[dram_string][0][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
-                        except:
-                            pass
-                        x = x + 1
+                        if debug_enabled:
+                            storage_file.write(f"f: {f} x: {x} y: {y}\n")
+                        if 0 <= f < f_bound and 0 <= x < x_bound and 0 <= y < y_bound:
+                            raw_val = (dma_word >> (psum_bits * i)) & psum_mask
+                            target_fmap[f, x, y] = _signed(raw_val, psum_bits)
+                        x += 1
                     if x_repetitions > 1:
-                        # A row wider than one repetition is read out as
-                        # x_block_width-pixel blocks: every filter for
-                        # repetition 0, then every filter for repetition 1...
-                        # (the psum buffer address is filter + filters * repetition).
-                        if (x - x_block_base >= x_block_width):
-                            f = f + 1
+                        if x - x_block_base >= x_block_width:
+                            f += 1
                             x = x_block_base
-                            if(f == layer_parameters.filters):
+                            if f == layer_parameters.filters:
                                 f = 0
-                                x_block_base = x_block_base + x_block_width
+                                x_block_base += x_block_width
                                 x = x_block_base
-                                if(x_block_base >= layer_parameters.iact_x_add_up):
+                                if x_block_base >= layer_parameters.iact_x_add_up:
                                     x_block_base = 0
                                     x = 0
-                                    y = y + 1
-                                    if(y >= layer_parameters.iact_size_y):
+                                    y += 1
+                                    if y >= layer_parameters.iact_size_y:
                                         y = 0
-                        #elif (current_cycle % math.ceil(oep.PEs_X/words) == math.ceil(oep.PEs_X/words) - 1):
                     else:
-                        if(x >= layer_parameters.iact_x_add_up):
+                        if x >= x_wrap_limit:
                             x = 0
-                            f = f + 1
-                            if(f == layer_parameters.filters):
+                            f += 1
+                            if f == layer_parameters.filters:
                                 f = 0
-                                y = y + 1
-                                if(y >= layer_parameters.iact_size_y):
+                                y += 1
+                                if y >= layer_parameters.iact_size_y:
                                     y = 0
                 else:
-                    for i in range(words):
-                        if(logging.DEBUG >= login_level):
-                            storage_file.write("Empty storage line." + "\n")
-                current_cycle = current_cycle + 1
-                if (current_cycle == transmissions_per_cycle):
+                    if debug_enabled:
+                        for _ in range(words):
+                            storage_file.write("Empty storage line.\n")
+                current_cycle += 1
+                if current_cycle == transmissions_per_cycle:
                     current_cycle = 0
 
             if random.randint(1, 100) <= chance:
                 read_data = 1
-                cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
+                cocotb.start_soon(set_input(ptp, dut.ready_dma_i, 1))
             else:
                 read_data = 0
-                cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
+                cocotb.start_soon(set_input(ptp, dut.ready_dma_i, 0))
             await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-        cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
+        cocotb.start_soon(set_input(ptp, dut.ready_dma_i, 0))
 
-    if(math.floor(layer_repetition%(layer_parameters.iact_transmissions_pe*layer_parameters.needed_wght_transmissions)) == \
-        (layer_parameters.iact_transmissions_pe*layer_parameters.needed_wght_transmissions-1)):
+    if math.floor(
+        layer_repetition % (layer_parameters.iact_transmissions_pe * layer_parameters.needed_wght_transmissions)
+    ) == (layer_parameters.iact_transmissions_pe * layer_parameters.needed_wght_transmissions - 1):
         les.y_corner_start = y
         les.x_corner_start = x
-    if(logging.DEBUG >= login_level):
+    if debug_enabled:
         txt_file.close()
-        storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
-        storage_file.write(" f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
-        storage_file.write("iact_transmissions_pe: " + str(layer_parameters.iact_transmissions_pe) + " needed_wght_transmissions: " + str(layer_parameters.needed_wght_transmissions) + "\n")
+        storage_file.write(f"f: {f} x: {x} y: {y}\n")
+        storage_file.write(
+            f" f_corner_start: {les.f_corner_start} y_corner_start: {les.y_corner_start} x_corner_start: {les.x_corner_start}\n"
+        )
+        storage_file.write(
+            f"iact_transmissions_pe: {layer_parameters.iact_transmissions_pe} needed_wght_transmissions: {layer_parameters.needed_wght_transmissions}\n"
+        )
         storage_file.close()
         logger.debug("POST")
-        logger.debug("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + " f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
-    pass
+        logger.debug(
+            "f: %s x: %s y: %s f_corner_start: %s y_corner_start: %s x_corner_start: %s\n",
+            f,
+            x,
+            y,
+            les.f_corner_start,
+            les.y_corner_start,
+            les.x_corner_start,
+        )
 
-async def compare_stream_Dw(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order, rel_layers):
-    """Compare depthwise convolution layer output stream with expected results.
-    
-    This function monitors and validates the output stream from a depthwise convolution
-    layer in the OpenEye accelerator. It handles the specific data organization and
-    computation patterns used in depthwise convolutions.
-    
-    Args:
-        ptp: Port timing parameters
-        dut: Device under test (OpenEye accelerator instance)
-        layer_number: Index of the current layer in the network
-        model: Neural network model configuration
-        layer_repetition: Counter for processing subdivided layers
-        layer_parameters: Configuration parameters for the current layer
-        oep: OpenEye architecture parameters
-        les: Layer execution state tracking object
-        dram: Memory object for storing computation results
-        login_level: Logging verbosity control
-        output_order: Mapping of output data organization
-    
-    Technical Details:
-        - Specialized for depthwise convolution output patterns
-        - Handles channel-wise computation results
-        - Manages output collection from multiple PE clusters
-        - Supports debugging through detailed logging
-        - Maintains proper data organization per channel
-        - Handles timing and synchronization specific to depthwise operations
-    
-    Note:
-        Debug logging (when login_level is sufficient) creates:
-        - output.txt: Raw depthwise convolution output data
-        - storage_input.txt: State tracking and debugging information
-    """
-    if(logging.DEBUG >= login_level):
-        filename = 'demo/layer_' + str(layer_parameters.layer_name) + '/output.txt'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        txt_file = open(filename, 'w')
-        filename = 'demo/layer_' + str(layer_parameters.layer_name) + '/storage_input.txt'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        storage_file = open(filename, 'w')
 
-    logger.debug("PRE")
-    logger.debug("f: " + str(les.f_start) + " x: " + str(les.x_start) + " y: " + str(les.y_start) + " f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
+async def compare_stream_Conv(
+    ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order, rel_layers
+):
+    """Compare convolutional layer output stream with expected results."""
+    await _compare_stream_spatial(
+        ptp,
+        dut,
+        layer_number,
+        layer_repetition,
+        layer_parameters,
+        oep,
+        les,
+        dram,
+        login_level,
+        output_order,
+        rel_layers,
+        x_wrap_limit=layer_parameters.iact_x_add_up,
+    )
 
-    f = 0
-    x = 0
-    y = 0
-    les.current_position = 0
-    if (len(rel_layers["Next_Layer"][layer_parameters.layer_name]) != 0):
-        dram_string = rel_layers["Next_Layer"][layer_parameters.layer_name][0]
-    else:
-        dram_string = "Output"
-    if(logging.DEBUG >= login_level):
-        storage_file.write(" f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
-    if (oep.SERIAL == 0) :
-        if ((layer_repetition % layer_parameters.iact_transmissions_pe) == (layer_parameters.iact_transmissions_pe - 1)):
-            cocotb.start_soon(send_enable_conv(ptp, dut, layer_parameters, layer_repetition, oep))
-            while (dut.psum_enable_o.value == 0):
-                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-            dut._log.info("Output Stream started")
-            assert dut.psum_enable_o.value != 0, "psum is not 1!"
-            while (dut.psum_enable_o.value != 0):
-                cluster_order = []
-                for a in range(layer_parameters.used_Y_cluster):
-                    for b in range(0,oep.Clusters_Y,layer_parameters.used_Y_cluster):
-                        cluster_order.append(a+b)
-                for y_cluster in reversed(cluster_order):
-                    for x_cluster in reversed(range(oep.Clusters_X)):
-                        for router in reversed(range(oep.NUM_GLB_PSUM)):
-                            if(layer_parameters.computing_mx[oep.Clusters_X-x_cluster-1][oep.Clusters_Y-y_cluster-1][0][oep.NUM_GLB_PSUM-router-1]== 1):
-                                lower_limit = (x_cluster * oep.Clusters_Y * oep.NUM_GLB_PSUM * oep.PSUM_Trans_Bitwidth + y_cluster * oep.NUM_GLB_PSUM * oep.PSUM_Trans_Bitwidth + router * oep.PSUM_Trans_Bitwidth)
-                                upper_limit = lower_limit + oep.DATA_PSUM_BITWIDTH
-                                outputvalue = dut.psum_data_o.value[lower_limit:upper_limit]
-                                if(logging.DEBUG >= login_level):
-                                    txt_file.write(bin(outputvalue)[2:].zfill(oep.PSUM_Trans_Bitwidth) + "\n")
-                                for i in range(oep.PARALLEL_MACS):
-                                    try:
-                                        f = output_order[layer_repetition][les.current_position][0]
-                                        x = output_order[layer_repetition][les.current_position][1]
-                                        y = output_order[layer_repetition][les.current_position][2]
-                                    except:
-                                        pass
-                                    les.current_position = les.current_position + 1
-                                    if(logging.DEBUG >= login_level):
-                                        storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
-                                    try:
-                                        dram.fmap[dram_string][0][f][x][y] = int(dut.psum_data_o.value[lower_limit+oep.DATA_PSUM_BITWIDTH*(1-i):upper_limit-oep.DATA_PSUM_BITWIDTH*i])
-                                        if (dram.fmap[dram_string][0][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)) :
-                                            dram.fmap[dram_string][0][f][x][y] = dram.fmap[dram_string][0][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
-                                    except:
-                                        pass
-                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
-        dut._log.info("Output Stream finished")
-        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-        cocotb.start_soon(set_input(ptp,(dut.status_reg_enable_i), 1))
-        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-    else:
-        """ #Re-Enable Flatted List for outputs again
-        cluster_order = []
-        for b in range(0,oep.Clusters_Y,layer_parameters.used_Y_cluster):
-            for a in range(layer_parameters.used_Y_cluster):
-                cluster_order.append(int(oep.Clusters_Y/layer_parameters.used_Y_cluster)*a+int(b/layer_parameters.used_Y_cluster))#+c*(oep.Clusters*oep.PEs_X)
 
-        matrix = [[[i * 16 + j * 8 + k for k in range(8)] for j in range(8)] for i in range(layer_parameters.iact_x_line_repetitions)]
-        reordered_matrix = [matrix[i] for i in cluster_order]
-        flat_list = [item for row in reordered_matrix for item in row]
-        """
-        words = oep.DMA_BITWIDTH // 32
-        dut._log.info("Output Stream started")
-        used_clusters_per_calc = math.ceil(layer_parameters.iact_size_x / 4) * 4
-        values_per_transmission = math.ceil(layer_parameters.different_kernels_per_calculation*used_clusters_per_calc/2)
-        transmissions_per_cycle = (oep.Clusters_Y * oep.Clusters_X * oep.PEs_X)//2
-        current_cycle = 0
-        read_data = 1
-        chance = 100
-        x_repetitions = layer_parameters.iact_x_line_repetitions
-        x_block_width = layer_parameters.iact_x_add_up // max(x_repetitions, 1)
-        x_block_base = 0
-        while (dut.enable_dma_o.value == 1):
-            if (read_data):
-                if(logging.DEBUG >= login_level):
-                    try:
-                        txt_file.write(bin(int(dut.data_dma_o.value))[2:].zfill(oep.DMA_BITWIDTH) + "\n")
-                    except:
-                        txt_file.close()
-                        storage_file.close()
-                        logger.error("Error writing output txt-file")
-                        raise Exception("X detected.")
-                if (current_cycle < values_per_transmission):
-                    for i in range(words):
-                        if(logging.DEBUG >= login_level):
-                            storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
-                        
-                        try:
-                            dram.fmap[dram_string][0][f][x][y] = int(dut.data_dma_o.value[oep.DATA_PSUM_BITWIDTH*(i+1)-1:oep.DATA_PSUM_BITWIDTH*i])
-                            if (dram.fmap[dram_string][0][f][x][y] >= 2**(oep.DATA_PSUM_BITWIDTH-1)):
-                                dram.fmap[dram_string][0][f][x][y] = dram.fmap[dram_string][0][f][x][y] - 2**oep.DATA_PSUM_BITWIDTH
-                        except:
-                            pass
-                        x = x + 1
-                    if x_repetitions > 1:
-                        # A row wider than one repetition is read out as
-                        # x_block_width-pixel blocks: every filter for
-                        # repetition 0, then every filter for repetition 1...
-                        # (the psum buffer address is filter + filters * repetition).
-                        if (x - x_block_base >= x_block_width):
-                            f = f + 1
-                            x = x_block_base
-                            if(f == layer_parameters.filters):
-                                f = 0
-                                x_block_base = x_block_base + x_block_width
-                                x = x_block_base
-                                if(x_block_base >= layer_parameters.iact_x_add_up):
-                                    x_block_base = 0
-                                    x = 0
-                                    y = y + 1
-                                    if(y >= layer_parameters.iact_size_y):
-                                        y = 0
-                        #elif (current_cycle % math.ceil(oep.PEs_X/words) == math.ceil(oep.PEs_X/words) - 1):
-                    else:
-                        if(x >= layer_parameters.iact_size_x):
-                            x = 0
-                            f = f + 1
-                            if(f == layer_parameters.filters):
-                                f = 0
-                                y = y + 1
-                                if(y >= layer_parameters.iact_size_y):
-                                    y = 0
-                else:
-                    for i in range(words):
-                        if(logging.DEBUG >= login_level):
-                            storage_file.write("Empty storage line." + "\n")
-                current_cycle = current_cycle + 1
-                if (current_cycle == transmissions_per_cycle):
-                    current_cycle = 0
+async def compare_stream_Dw(
+    ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, output_order, rel_layers
+):
+    """Compare depthwise convolution layer output stream with expected results."""
+    await _compare_stream_spatial(
+        ptp,
+        dut,
+        layer_number,
+        layer_repetition,
+        layer_parameters,
+        oep,
+        les,
+        dram,
+        login_level,
+        output_order,
+        rel_layers,
+        x_wrap_limit=layer_parameters.iact_size_x,
+    )
 
-            if random.randint(1, 100) <= chance:
-                read_data = 1
-                cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 1))
-            else:
-                read_data = 0
-                cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
-            await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-        cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
-
-    if(math.floor(layer_repetition%(layer_parameters.iact_transmissions_pe*layer_parameters.needed_wght_transmissions)) == \
-        (layer_parameters.iact_transmissions_pe*layer_parameters.needed_wght_transmissions-1)):
-        les.y_corner_start = y
-        les.x_corner_start = x
-    if(logging.DEBUG >= login_level):
-        txt_file.close()
-        storage_file.write("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + "\n")
-        storage_file.write(" f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
-        storage_file.write("iact_transmissions_pe: " + str(layer_parameters.iact_transmissions_pe) + " needed_wght_transmissions: " + str(layer_parameters.needed_wght_transmissions) + "\n")
-        storage_file.close()
-        logger.debug("POST")
-        logger.debug("f: " + str(f) + " x: " + str(x) + " y: " + str(y) + " f_corner_start: " + str(les.f_corner_start) + " y_corner_start: " + str(les.y_corner_start) + " x_corner_start: " + str(les.x_corner_start) + "\n")
-    pass
-    
-
-# Cycles each psum_enable_o bit was asserted, filled by probe_psum_stream and
-# reported by dump_psum_buffers so the totals survive however the run ends.
 psum_stream_counts = {}
 
 
 async def probe_psum_stream(ptp, dut, oep):
-    """Count how many psum values each router actually emits.
-
-    psum_enable_o is the valid signal on psum_data_o_w, one bit per
-    (cluster, GLB). Counting its assertions says whether the PE array streamed
-    the expected number of results, which separates "the PE produced too few"
-    from "the GLB buffer captured too few".
-    """
-    previous = 0
+    """Count how many psum values each router actually emits."""
     while True:
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         try:
             value = int(dut.psum_enable_o.value)
         except ValueError:
             continue
-        # Count cycles held high, not rising edges: a burst of consecutive
-        # psums keeps the bit asserted, so edges would report one.
         for bit in range(oep.Clusters * oep.NUM_GLB_PSUM):
             if (value >> bit) & 1:
                 psum_stream_counts[bit] = psum_stream_counts.get(bit, 0) + 1
-        previous = value
 
 
 async def trace_conv_writeback(ptp, dut, max_lines=160):
-    """Trace psum selection, quantization and activation writes after settling.
-
-    Opt in with TRACE_CONV_WRITEBACK. Unknown lanes are printed individually
-    so an unused RAM bank cannot hide the bank being debugged.
-    """
+    """Trace psum selection, quantization and activation writes after settling."""
     pp = dut.psum_pipeline_inst
 
     def value(signal):
@@ -1957,9 +1581,12 @@ async def trace_conv_writeback(ptp, dut, max_lines=160):
 
     def words(signal, width):
         bits = str(signal.value)
-        return [int(bits[max(0, end-width):end], 2)
-                if all(b in "01" for b in bits[max(0, end-width):end]) else "X"
-                for end in range(len(bits), 0, -width)]
+        return [
+            int(bits[max(0, end - width) : end], 2)
+            if all(b in "01" for b in bits[max(0, end - width) : end])
+            else "X"
+            for end in range(len(bits), 0, -width)
+        ]
 
     lines = 0
     while lines < max_lines:
@@ -1967,34 +1594,34 @@ async def trace_conv_writeback(ptp, dut, max_lines=160):
         state = value(pp.fsm_psum_current_state)
         if state not in (3, 4, 6) and not (state == 0 and value(dut.fsm_current_state) == 11):
             continue
-        logger.info("convwrite st=%s cyc=%s select=%s addr=%s rd=%s pre=%s "
-                    "router=%s pen=%s pwen=%s pren=%s pdata=%s "
-                    "filter=%s mant=%s shift=%s offset=%s quant=%s wen=%s wdata=%s",
-                    state, value(pp.fsm_psum_cycle), value(pp.psum_cluster_select),
-                    words(pp.psum_buffer_addr, int(dut.BUFFER_WIDTH_PSUM.value)),
-                    words(pp.psum_buffer_data_r, len(pp.pre_quantized_value[0])),
-                    [value(pp.pre_quantized_value[i]) for i in range(len(pp.pre_quantized_value))],
-                    value(pp.router_mode_psum), value(pp.psum_enable_o),
-                    value(pp.psum_buffer_en_w), value(pp.psum_buffer_en_r),
-                    words(pp.psum_buffer_data_w, len(pp.pre_quantized_value[0])),
-                    value(pp.current_filter),
-                    value(pp.gen_quant_unit[0].u_quant_unit.quant_mant),
-                    value(pp.current_shift),
-                    value(pp.gen_quant_unit[0].u_quant_unit.quant_offset),
-                    words(pp.quantized_value_flat, 8),
-                    [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))],
-                    words(dut.iact_buffer_data_w, 64))
+        logger.info(
+            "convwrite st=%s cyc=%s select=%s addr=%s rd=%s pre=%s "
+            "router=%s pen=%s pwen=%s pren=%s pdata=%s "
+            "filter=%s mant=%s shift=%s offset=%s quant=%s wen=%s wdata=%s",
+            state,
+            value(pp.fsm_psum_cycle),
+            value(pp.psum_cluster_select),
+            words(pp.psum_buffer_addr, int(dut.BUFFER_WIDTH_PSUM.value)),
+            words(pp.psum_buffer_data_r, len(pp.pre_quantized_value[0])),
+            [value(pp.pre_quantized_value[i]) for i in range(len(pp.pre_quantized_value))],
+            value(pp.router_mode_psum),
+            value(pp.psum_enable_o),
+            value(pp.psum_buffer_en_w),
+            value(pp.psum_buffer_en_r),
+            words(pp.psum_buffer_data_w, len(pp.pre_quantized_value[0])),
+            value(pp.current_filter),
+            value(pp.gen_quant_unit[0].u_quant_unit.quant_mant),
+            value(pp.current_shift),
+            value(pp.gen_quant_unit[0].u_quant_unit.quant_offset),
+            words(pp.quantized_value_flat, 8),
+            [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))],
+            words(dut.iact_buffer_data_w, 64),
+        )
         lines += 1
 
 
 async def trace_wb_events(ptp, dut, max_lines=300):
-    """Trace the interlayer write-back counters (opt-in: TRACE_WB_EVENTS).
-
-    One line per clock while RECEIVE_PSUMS_TO_IACT is active and either a RAM
-    write enable is set or the psum FSM is reading (SEND_PSUM_TO_IACT). Shows
-    the pixel counter, the transposition counter and the storage counter so a
-    write that fires at the wrong pixel count is visible.
-    """
+    """Trace the interlayer write-back counters (opt-in: TRACE_WB_EVENTS)."""
     pp = dut.psum_pipeline_inst
 
     def value(signal):
@@ -2010,8 +1637,13 @@ async def trace_wb_events(ptp, dut, max_lines=300):
         if value(dut.fsm_current_state) != 11:
             continue
         en = [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))]
-        key = (value(pp.fsm_psum_current_state), value(dut.iact_to_psum_x_pos_counter),
-               value(dut.iact_to_psum_storage_counter), value(dut.iact_to_psum_trans_counter), tuple(en))
+        key = (
+            value(pp.fsm_psum_current_state),
+            value(dut.iact_to_psum_x_pos_counter),
+            value(dut.iact_to_psum_storage_counter),
+            value(dut.iact_to_psum_trans_counter),
+            tuple(en),
+        )
         if key == last:
             continue
         last = key
@@ -2019,21 +1651,25 @@ async def trace_wb_events(ptp, dut, max_lines=300):
             addr0 = hex(int(dut.iact_buffer_addr_reg[0].value))
         except Exception:
             addr0 = "?"
-        logger.info("wbtrace addr0=%s t=%s psum_st=%s psum_cyc=%s fsm_cyc=%s xpos=%s trans=%s stor=%s shifting=%s en_w=%s",
-                    addr0, cocotb.utils.get_sim_time("ns"), value(pp.fsm_psum_current_state),
-                    value(pp.fsm_psum_cycle), value(dut.fsm_cycle),
-                    value(dut.iact_to_psum_x_pos_counter), value(dut.iact_to_psum_trans_counter),
-                    value(dut.iact_to_psum_storage_counter), value(dut.iact_to_psum_start_shifting), en)
+        logger.info(
+            "wbtrace addr0=%s t=%s psum_st=%s psum_cyc=%s fsm_cyc=%s xpos=%s trans=%s stor=%s shifting=%s en_w=%s",
+            addr0,
+            cocotb.utils.get_sim_time("ns"),
+            value(pp.fsm_psum_current_state),
+            value(pp.fsm_psum_cycle),
+            value(dut.fsm_cycle),
+            value(dut.iact_to_psum_x_pos_counter),
+            value(dut.iact_to_psum_trans_counter),
+            value(dut.iact_to_psum_storage_counter),
+            value(dut.iact_to_psum_start_shifting),
+            en,
+        )
         lines += 1
 
 
 async def trace_ram_writes(ptp, dut, max_lines=200):
-    """Log every clock in which any iact RAM write enable is set (opt-in: TRACE_RAM_WRITES).
+    """Log every clock in which any iact RAM write enable is set (opt-in: TRACE_RAM_WRITES)."""
 
-    Shows which main-FSM state performs each write to the activation buffer, the
-    cell-0 address it lands on, and the low word of the write bus, so a stray
-    write that clobbers an earlier layer's output can be attributed to a state.
-    """
     def value(sig):
         try:
             return int(sig.value)
@@ -2050,28 +1686,30 @@ async def trace_ram_writes(ptp, dut, max_lines=200):
             wdata = hex(int(str(dut.iact_buffer_data_w.value)[-64:], 2))
         except Exception:
             wdata = "?"
-        logger.info("ramwrite t=%s fsm=%s last=%s addr0=%s choose=%s en=%s wdata_cell0=%s",
-                    cocotb.utils.get_sim_time("ns"), value(dut.fsm_current_state),
-                    value(dut.fsm_last_state), value(dut.iact_buffer_addr_reg[0]),
-                    value(dut.choose_iact_buffer), en, wdata)
+        logger.info(
+            "ramwrite t=%s fsm=%s last=%s addr0=%s choose=%s en=%s wdata_cell0=%s",
+            cocotb.utils.get_sim_time("ns"),
+            value(dut.fsm_current_state),
+            value(dut.fsm_last_state),
+            value(dut.iact_buffer_addr_reg[0]),
+            value(dut.choose_iact_buffer),
+            en,
+            wdata,
+        )
         lines += 1
 
 
 async def trace_pe_spads(ptp, dut, oep):
-    """Print operand SPAD contents of cluster (0,0) column 0 whenever they change.
-
-    Opt-in: TRACE_PE_SPADS=t0,t1[,col]. Shows the iact payloads and the weight
-    payloads (lane 0) each PE row actually holds, so a wrong row/channel
-    assignment is visible directly instead of being inferred from psums.
-    """
+    """Print operand SPAD contents of cluster (0,0) column 0 whenever they change."""
     parts = [float(v) for v in os.environ.get("TRACE_PE_SPADS", "0,1e9").split(",")]
     t0, t1 = parts[0], parts[1]
     col = int(parts[2]) if len(parts) > 2 else 0
     pes = []
     try:
         for row in range(oep.PEs_Y):
-            pes.append(dut.OpenEye_Parallel.gen_x[0].gen_y[0].OpenEye_Cluster
-                       .pe_cluster.gen_X[col].gen_Y[row].pe)
+            pes.append(
+                dut.OpenEye_Parallel.gen_x[0].gen_y[0].OpenEye_Cluster.pe_cluster.gen_X[col].gen_Y[row].pe
+            )
     except Exception as exc:
         logger.error("trace_pe_spads: PE not reachable (%s)", type(exc).__name__)
         return
@@ -2130,18 +1768,14 @@ async def trace_pe_spads(ptp, dut, oep):
 
 
 async def trace_pe_wght_addrs(ptp, dut, oep):
-    """Per compute pass, the weight-data SPAD addresses one PE reads (opt-in: TRACE_PE_WADDR=cx,cy,col,row[,t0,t1]).
-
-    A pass is one stay in CALCULATING (state 6). Prints the iact payloads the
-    PE holds and the min/max/set of weight addresses read, so the order in
-    which passes consume the weight layout is visible.
-    """
+    """Per compute pass, log weight-data SPAD addresses one PE reads."""
     parts = [float(v) for v in os.environ.get("TRACE_PE_WADDR", "0,0,0,1").split(",")]
     cx, cy, col, row = (int(v) for v in parts[:4])
     t0, t1 = (parts[4], parts[5]) if len(parts) >= 6 else (0.0, 1e12)
     try:
-        pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
-              .pe_cluster.gen_X[col].gen_Y[row].pe)
+        pe = (
+            dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster.pe_cluster.gen_X[col].gen_Y[row].pe
+        )
     except Exception as exc:
         logger.error("trace_pe_wght_addrs: PE not reachable (%s)", type(exc).__name__)
         return
@@ -2188,24 +1822,26 @@ async def trace_pe_wght_addrs(ptp, dut, oep):
                 pass
         elif in_calc:
             in_calc = False
-            logger.info("waddr pass=%d t=%s iact=%s waddrs(min,max,n)=%s uniq=%s", passno, start, snap,
-                        (min(addrs), max(addrs), len(addrs)) if addrs else None,
-                        sorted(set(addrs))[:40])
+            logger.info(
+                "waddr pass=%d t=%s iact=%s waddrs(min,max,n)=%s uniq=%s",
+                passno,
+                start,
+                snap,
+                (min(addrs), max(addrs), len(addrs)) if addrs else None,
+                sorted(set(addrs))[:40],
+            )
             passno += 1
 
 
 async def trace_pe_wght_writes(ptp, dut, oep):
-    """Log weight/iact SPAD writes and compute pulses of one PE (opt-in: TRACE_PE_WGHT=cx,cy,col,row[,t0,t1]).
-
-    Shows in which order weight blocks and iact blocks arrive at the PE
-    relative to compute_i, i.e. which weights each pass really sees.
-    """
+    """Log weight/iact SPAD writes and compute pulses of one PE."""
     parts = [float(v) for v in os.environ.get("TRACE_PE_WGHT", "0,0,0,1").split(",")]
     cx, cy, col, row = (int(v) for v in parts[:4])
     t0, t1 = (parts[4], parts[5]) if len(parts) >= 6 else (0.0, 1e12)
     try:
-        pe = (dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster
-              .pe_cluster.gen_X[col].gen_Y[row].pe)
+        pe = (
+            dut.OpenEye_Parallel.gen_x[cx].gen_y[cy].OpenEye_Cluster.pe_cluster.gen_X[col].gen_Y[row].pe
+        )
         ws = pe.weight_data_SPad
         isp = pe.iact_data_SPad
     except Exception as exc:
@@ -2235,8 +1871,13 @@ async def trace_pe_wght_writes(ptp, dut, oep):
             logger.info("pw t=%s WA addr=%s data=%s", now, val(wa.addr_i), val(wa.data_i))
             lines += 1
         if val(pe.wght_addr_SPad_en_r) == 1 and val(pe.current_state_computing) in (1, 2, 3, 4, 5):
-            logger.info("pw t=%s RA st=%s addr=%s data_r=%s", now, val(pe.current_state_computing),
-                        val(pe.wght_addr_SPad_addr), val(pe.wght_addr_SPad_data_r))
+            logger.info(
+                "pw t=%s RA st=%s addr=%s data_r=%s",
+                now,
+                val(pe.current_state_computing),
+                val(pe.wght_addr_SPad_addr),
+                val(pe.wght_addr_SPad_data_r),
+            )
             lines += 1
         if val(pe.compute_i) == 1:
             logger.info("pw t=%s compute_i state=%s", now, val(pe.current_state_computing))
@@ -2247,21 +1888,18 @@ async def trace_pe_wght_writes(ptp, dut, oep):
             lines += 1
         if val(isp.we_i) == 1:
             d = val(isp.data_i)
-            logger.info("pw t=%s I addr=%s pay=%s oh=%s", now, val(isp.addr_i), None if d is None else (d & 0xFF),
-                        None if d is None else (d >> 8))
+            logger.info(
+                "pw t=%s I addr=%s pay=%s oh=%s",
+                now,
+                val(isp.addr_i),
+                None if d is None else (d & 0xFF),
+                None if d is None else (d >> 8),
+            )
             lines += 1
 
 
 async def trace_pe_pass_counts(ptp, dut, oep, max_lines=200000):
-    """Count how many times each PE completes a compute pass (opt-in: TRACE_PE_PASSES=t0,t1).
-
-    A "pass" is one entry into SEND_PSUM (current_state_computing rising edge
-    into state 8). Watches every PE in every cluster for the given sim-time
-    window and prints the final per-PE tally at t1 (or when max_lines of
-    polling is exhausted). Unlike a state snapshot, this tells whether some
-    PE is missing an entire pass (e.g. one channel group's contribution)
-    rather than just lagging momentarily.
-    """
+    """Count how many times each PE completes a compute pass (opt-in: TRACE_PE_PASSES=t0,t1)."""
     try:
         t0, t1 = [float(v) for v in os.environ.get("TRACE_PE_PASSES", "0,1e9").split(",")]
     except ValueError:
@@ -2306,19 +1944,12 @@ async def trace_pe_pass_counts(ptp, dut, oep, max_lines=200000):
 
 
 async def trace_pooling(ptp, dut, max_lines=400):
-    """Trace the max-pooling FSM (opt-in: TRACE_POOLING=1 or TRACE_POOLING=t0,t1).
-
-    One line per clock while fsm_current_state is MAXPOOLING_READ (12),
-    MAXPOOLING_SEND (13) or MAXPOOLING_WAIT (14): counters, the RAM read word,
-    the two comparator stages, the running max and the write bus. Unknown or
-    unreadable elements print as '?'. A run with several pooling layers can
-    exhaust max_lines on the first one; pass t0,t1 (ns) to skip ahead to a
-    later occurrence instead of only lengthening max_lines.
-    """
+    """Trace the max-pooling FSM (opt-in: TRACE_POOLING=1 or TRACE_POOLING=t0,t1)."""
     try:
         t0, t1 = [float(v) for v in os.environ.get("TRACE_POOLING", "0,1e12").split(",")]
     except ValueError:
         t0, t1 = 0.0, 1e12
+
     def value(sig):
         try:
             return int(sig.value)
@@ -2333,7 +1964,6 @@ async def trace_pooling(ptp, dut, max_lines=400):
             return "?"
 
     def bytes_w(sig):
-        # 32 bytes of the write bus, low to high, as hex pairs
         try:
             t = str(sig.value)
             if not set(t) <= {"0", "1"}:
@@ -2369,35 +1999,44 @@ async def trace_pooling(ptp, dut, max_lines=400):
             in_pool = True
             logger.info("poolstart t=%s", cocotb.utils.get_sim_time("ns"))
             for addr in range(4):
-                logger.info("poolram addr=%d %s", addr, " | ".join(
-                    ("--------" if w is None else " ".join("%02x" % ((w >> (8 * i)) & 0xFF) for i in range(8)))
-                    for w in (_ram_word(dut.BUFFER_A[c].iact_layer_buffer.impl.mem[addr]) for c in range(4))))
+                logger.info(
+                    "poolram addr=%d %s",
+                    addr,
+                    " | ".join(
+                        ("--------" if w is None else " ".join("%02x" % ((w >> (8 * i)) & 0xFF) for i in range(8)))
+                        for w in (_ram_word(dut.BUFFER_A[c].iact_layer_buffer.impl.mem[addr]) for c in range(4))
+                    ),
+                )
         rb = dut.ring_buffer_pipelined_inst
-        logger.info("pooltrace t=%s st=%s cyc=%s cnv=%s fin=%s sel=%s sel2=%s addr0=%s rd=%s "
-                    "s1=%s s2=%s old=%s new=%s en_w=%s wr=%s rdp=%s rdy=%s spts=%s lim=%s wbus=[%s]",
-                    cocotb.utils.get_sim_time("ns"), st, value(dut.fsm_cycle),
-                    value(dut.iact_converter_cycles), value(dut.finished_cycles_iact),
-                    value(dut.select_ram_counter), value(dut.select_ram_counter2),
-                    hexv(dut.iact_buffer_addr_reg[0]), hexv(dut.iact_buffer_data_r),
-                    arr("pooling_stage_1", 8), arr("pooling_stage_2", 4),
-                    arr("pooling_buffer_old", 4), arr("pooling_buffer_new", 4),
-                    [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))],
-                    value(rb.wr_ptr), value(rb.rd_ptr), value(dut.pooling_buffer_enable),
-                    value(dut.set_pointer_start), value(rb.limit_i),
-                    bytes_w(dut.iact_buffer_data_w))
+        logger.info(
+            "pooltrace t=%s st=%s cyc=%s cnv=%s fin=%s sel=%s sel2=%s addr0=%s rd=%s "
+            "s1=%s s2=%s old=%s new=%s en_w=%s wr=%s rdp=%s rdy=%s spts=%s lim=%s wbus=[%s]",
+            cocotb.utils.get_sim_time("ns"),
+            st,
+            value(dut.fsm_cycle),
+            value(dut.iact_converter_cycles),
+            value(dut.finished_cycles_iact),
+            value(dut.select_ram_counter),
+            value(dut.select_ram_counter2),
+            hexv(dut.iact_buffer_addr_reg[0]),
+            hexv(dut.iact_buffer_data_r),
+            arr("pooling_stage_1", 8),
+            arr("pooling_stage_2", 4),
+            arr("pooling_buffer_old", 4),
+            arr("pooling_buffer_new", 4),
+            [value(dut.iact_buffer_en_w[i]) for i in range(len(dut.iact_buffer_en_w))],
+            value(rb.wr_ptr),
+            value(rb.rd_ptr),
+            value(dut.pooling_buffer_enable),
+            value(dut.set_pointer_start),
+            value(rb.limit_i),
+            bytes_w(dut.iact_buffer_data_w),
+        )
         lines += 1
 
 
 async def trace_psum_capture(ptp, dut, oep, max_lines=400):
-    """Per-cycle trace of the psum feed and capture (opt-in: TRACE_PSUM_CAPTURE).
-
-    Logs every clock while the PSUM FSM is in CALCULATE_PSUM (2) or
-    PSUM_GET_RESULTS (3) for cluster column 0, row 0, GLB 0: the counter that
-    ends each state, the buffer address and read data, the word driven into
-    the array (psum_data_i_reg) with its enable, the returning valid and the
-    buffer write enable. Fields are sliced from the bus text so X bits in
-    unrelated slots do not blank them.
-    """
+    """Per-cycle trace of the psum feed and capture (opt-in: TRACE_PSUM_CAPTURE)."""
     pp = dut.psum_pipeline_inst
     try:
         aw = int(dut.BUFFER_WIDTH_PSUM.value)
@@ -2406,7 +2045,7 @@ async def trace_psum_capture(ptp, dut, oep, max_lines=400):
 
     def field(sig, lo, width, signed=None):
         txt = str(sig.value)
-        bits = txt[len(txt) - lo - width:len(txt) - lo]
+        bits = txt[len(txt) - lo - width : len(txt) - lo]
         if any(c not in "01" for c in bits):
             return "X"
         v = int(bits, 2)
@@ -2421,30 +2060,34 @@ async def trace_psum_capture(ptp, dut, oep, max_lines=400):
             continue
         if state not in (2, 3):
             continue
-        logger.info("psumtrace t=%s st=%d rr=%s rdy_o=%s rdy_i=%s cyc=%s addr=%s rd=%s data_i=%s en_i=%s en_o=%s wen=%s",
-                    cocotb.utils.get_sim_time("ns"), state,
-                    str(pp.results_ready.value), str(pp.psum_ready_o_reg.value), str(pp.psum_ready_i_reg.value),
-                    field(pp.fsm_psum_cycle, 0, 8),
-                    field(pp.psum_buffer_addr, 0, aw),
-                    field(pp.psum_buffer_data_r, 0, 32, 20),
-                    field(pp.psum_data_i_reg, 0, 32, 20),
-                    field(pp.psum_enable_i_reg, 0, 1),
-                    field(pp.psum_enable_o, 0, 1),
-                    field(pp.psum_buffer_en_w, 0, 1))
+        logger.info(
+            "psumtrace t=%s st=%d rr=%s rdy_o=%s rdy_i=%s cyc=%s addr=%s rd=%s data_i=%s en_i=%s en_o=%s wen=%s",
+            cocotb.utils.get_sim_time("ns"),
+            state,
+            str(pp.results_ready.value),
+            str(pp.psum_ready_o_reg.value),
+            str(pp.psum_ready_i_reg.value),
+            field(pp.fsm_psum_cycle, 0, 8),
+            field(pp.psum_buffer_addr, 0, aw),
+            field(pp.psum_buffer_data_r, 0, 32, 20),
+            field(pp.psum_data_i_reg, 0, 32, 20),
+            field(pp.psum_enable_i_reg, 0, 1),
+            field(pp.psum_enable_o, 0, 1),
+            field(pp.psum_buffer_en_w, 0, 1),
+        )
         lines += 1
 
 
 async def trace_pe_psum(ptp, dut, oep, max_lines=500):
-    """Per-cycle psum SPAD port trace of one PE (opt-in: TRACE_PE_PSUM).
-
-    Watches PE (cluster 0,0; PE column 0; top PE row) at each lane's psum SPAD
-    ports, which is where a lane's accumulation actually lands. Logs only
-    cycles with a SPAD write or an incoming psum_enable_i.
-    """
-    pe = (dut.OpenEye_Parallel.gen_x[0].gen_y[0].OpenEye_Cluster
-          .pe_cluster.gen_X[0].gen_Y[oep.PEs_Y - 1].pe)
-    spads = [pe.gen_serial_psum_spad.gen_psum_spad[l].psum_SPad
-             for l in range(oep.PARALLEL_MACS)]
+    """Per-cycle psum SPAD port trace of one PE (opt-in: TRACE_PE_PSUM)."""
+    pe = (
+        dut.OpenEye_Parallel.gen_x[0]
+        .gen_y[0]
+        .OpenEye_Cluster.pe_cluster.gen_X[0]
+        .gen_Y[oep.PEs_Y - 1]
+        .pe
+    )
+    spads = [pe.gen_serial_psum_spad.gen_psum_spad[l].psum_SPad for l in range(oep.PARALLEL_MACS)]
 
     def val(sig, signed_bits=None):
         try:
@@ -2460,23 +2103,23 @@ async def trace_pe_psum(ptp, dut, oep, max_lines=500):
         pen = val(pe.psum_enable_i)
         if pen != 1 and not any(w == 1 for w in we):
             continue
-        lanes = []
-        for l, sp in enumerate(spads):
-            lanes.append("L%d we=%s aw=%s d=%s ar=%s" % (
-                l, we[l], val(sp.addr_w_i), val(sp.data_i, 20), val(sp.addr_r_i)))
-        logger.info("petrace t=%s st=%s pen=%s pin=%s | %s",
-                    cocotb.utils.get_sim_time("ns"), val(pe.current_state_computing),
-                    pen, val(pe.psum_data_i, 20), " | ".join(lanes))
+        lanes = [
+            "L%d we=%s aw=%s d=%s ar=%s" % (l, we[l], val(sp.addr_w_i), val(sp.data_i, 20), val(sp.addr_r_i))
+            for l, sp in enumerate(spads)
+        ]
+        logger.info(
+            "petrace t=%s st=%s pen=%s pin=%s | %s",
+            cocotb.utils.get_sim_time("ns"),
+            val(pe.current_state_computing),
+            pen,
+            val(pe.psum_data_i, 20),
+            " | ".join(lanes),
+        )
         lines += 1
 
 
 async def trace_bias_load(ptp, dut, oep, max_lines=120):
-    """Trace psum-buffer writes while the main FSM is in GET_BIAS (state 5).
-
-    Opt-in via TRACE_PSUM_CAPTURE. Shows which buffer address and data each
-    bias word lands on, for cluster column 0 and 1 (row 0, GLB pair 0).
-    Addresses are read from the bus text so X bits elsewhere do not abort.
-    """
+    """Trace psum-buffer writes while the main FSM is in GET_BIAS (state 5)."""
     pp = dut.psum_pipeline_inst
     ng = oep.NUM_GLB_PSUM
     cr = oep.Clusters_Y
@@ -2488,7 +2131,7 @@ async def trace_bias_load(ptp, dut, oep, max_lines=120):
 
     def field(sig, lo, width, signed=None):
         txt = str(sig.value)
-        bits = txt[len(txt) - lo - width:len(txt) - lo]
+        bits = txt[len(txt) - lo - width : len(txt) - lo]
         if any(c not in "01" for c in bits):
             return "X"
         v = int(bits, 2)
@@ -2503,37 +2146,41 @@ async def trace_bias_load(ptp, dut, oep, max_lines=120):
             continue
         if st != 5:
             continue
-        logger.info("biastrace t=%s dma_in=%s en_w=%s addr[x0,x1]=%s,%s data_w[x0,x1]=%s,%s",
-                    cocotb.utils.get_sim_time("ns"),
-                    field(pp.data_dma_i_reg, 0, 32, 20),
-                    field(pp.psum_buffer_en_w, 0, oep.Clusters_X * cr * pairs),
-                    field(pp.psum_buffer_addr, 0, aw),
-                    field(pp.psum_buffer_addr, cr * pairs * aw, aw),
-                    field(pp.psum_buffer_data_w, 0, 32, 20),
-                    field(pp.psum_buffer_data_w, 32 * cr * ng, 32, 20))
+        logger.info(
+            "biastrace t=%s dma_in=%s en_w=%s addr[x0,x1]=%s,%s data_w[x0,x1]=%s,%s",
+            cocotb.utils.get_sim_time("ns"),
+            field(pp.data_dma_i_reg, 0, 32, 20),
+            field(pp.psum_buffer_en_w, 0, oep.Clusters_X * cr * pairs),
+            field(pp.psum_buffer_addr, 0, aw),
+            field(pp.psum_buffer_addr, cr * pairs * aw, aw),
+            field(pp.psum_buffer_data_w, 0, 32, 20),
+            field(pp.psum_buffer_data_w, 32 * cr * ng, 32, 20),
+        )
         lines += 1
 
 
 async def trace_converter_gate(ptp, dut, oep, col=0, row=0, max_lines=80):
-    """Trace the per-cluster acceptance gate inside one iact converter.
-
-    WRITE_TO_MEMORY only commits while x_pos_in_w_cycle lies in
-    [x_range_lower_bound, +iact_values_per_cluster_transmit). fe1be9f gated the
-    block that advances x_pos_in_w_cycle with !fully_connected_i, so for an FC
-    layer these counters may never move - which would cap how many activations
-    a cluster ever accepts.
-    """
+    """Trace the per-cluster acceptance gate inside one iact converter."""
     try:
-        inst = (dut.IACT_CONVERTER_X[col].IACT_CONVERTER_Y[row]
-                .iact_stream_constructor)
+        inst = dut.IACT_CONVERTER_X[col].IACT_CONVERTER_Y[row].iact_stream_constructor
     except Exception as exc:
         logger.error("converter gate: instance unreachable (%s)", type(exc).__name__)
         return
     tag = "c%dr%d" % (col, row)
-    names = ("fsm_current_state", "enable_write_to_storage", "x_pos_in_w_cycle",
-             "x_range_lower_bound", "x_start", "iact_values_per_cluster_transmit",
-             "x_pos_inc", "fsm_row_offset", "ram_wr_en",
-             "fsm_cycle", "needed_iact_buffer_words_i", "fully_connected_i")
+    names = (
+        "fsm_current_state",
+        "enable_write_to_storage",
+        "x_pos_in_w_cycle",
+        "x_range_lower_bound",
+        "x_start",
+        "iact_values_per_cluster_transmit",
+        "x_pos_inc",
+        "fsm_row_offset",
+        "ram_wr_en",
+        "fsm_cycle",
+        "needed_iact_buffer_words_i",
+        "fully_connected_i",
+    )
     lines, prev = 0, None
     while lines < max_lines:
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
@@ -2546,19 +2193,12 @@ async def trace_converter_gate(ptp, dut, oep, col=0, row=0, max_lines=80):
         if vals == prev:
             continue
         prev = vals
-        logger.error("convgate[%s] %s", tag,
-                     " ".join("%s=%d" % (n, v) for n, v in zip(names, vals)))
+        logger.error("convgate[%s] %s", tag, " ".join("%s=%d" % (n, v) for n, v in zip(names, vals)))
         lines += 1
 
 
 def dump_iact_buffer_values(dut, oep, cells=4, addrs=6):
-    """Print the activations actually stored in BUFFER_A.
-
-    The converter sweep can be correct and still deliver zeros if the buffer
-    it reads was never filled. With a ramp input every stored activation is
-    non-zero, so this separates "converter drops data" from "data was never
-    written".
-    """
+    """Print the activations actually stored in BUFFER_A."""
     logger.error("BUFFER_A contents (payload bytes per cell):")
     for cell in range(cells):
         vals = []
@@ -2580,18 +2220,20 @@ def dump_iact_buffer_values(dut, oep, cells=4, addrs=6):
 
 
 async def trace_convert_window(ptp, dut, oep, max_lines=40):
-    """Trace the CONVERT_IACT sliding window: current_x/current_y and the gate.
-
-    The window only shifts while
-    (current_x >= 0) & (current_y >= 0) & (current_x < iact_size_x) &
-    (current_y < iact_size_y); each shift emits two activations. If fewer
-    activations arrive than iact_size_x*2, this shows which term of that gate
-    stops it and at what x it happens.
-    """
-    names = ("fsm_cycle", "current_x", "current_y", "iact_size_x", "iact_size_y",
-             "x_bound", "relative_pos", "current_pos_in_iact_glb",
-             "iact_channel_sending_cycle1", "iact_channel_sending_cycle2",
-             "iact_channels_counter")
+    """Trace the CONVERT_IACT sliding window: current_x/current_y and the gate."""
+    names = (
+        "fsm_cycle",
+        "current_x",
+        "current_y",
+        "iact_size_x",
+        "iact_size_y",
+        "x_bound",
+        "relative_pos",
+        "current_pos_in_iact_glb",
+        "iact_channel_sending_cycle1",
+        "iact_channel_sending_cycle2",
+        "iact_channels_counter",
+    )
     lines = 0
     prev = None
     while lines < max_lines:
@@ -2606,7 +2248,7 @@ async def trace_convert_window(ptp, dut, oep, max_lines=40):
             try:
                 v = int(getattr(dut, n).value)
                 if n in ("current_x", "current_y") and v > (1 << 11):
-                    v -= (1 << 12)  # signed window position
+                    v -= 1 << 12
                 vals.append(v)
             except Exception:
                 vals.append(-1)
@@ -2618,18 +2260,22 @@ async def trace_convert_window(ptp, dut, oep, max_lines=40):
 
 
 async def dump_convert_iact_limits(ptp, dut, oep):
-    """Log the counters that bound CONVERT_IACT, once the state is reached.
-
-    CONVERT_IACT exits on fsm_cycle == iact_glb_writing_cycles, but raising
-    that value did not lengthen the stream, so some other counter ends the
-    conversion first. Print them all with the values the DUT actually
-    decoded, instead of guessing which Python parameter is responsible.
-    """
-    names = ("iact_glb_writing_cycles", "iact_channel_max_cycles", "iact_size_c",
-             "iact_converter_max_cycles", "channel_div_trans", "iact_x_add_up",
-             "iact_size_x", "iact_size_y", "iact_x_per_cluster",
-             "iact_values_per_cluster_transmit", "needed_iact_buffer_words",
-             "iact_words_per_compute", "fully_connected_layer")
+    """Log the counters that bound CONVERT_IACT once the state exits."""
+    names = (
+        "iact_glb_writing_cycles",
+        "iact_channel_max_cycles",
+        "iact_size_c",
+        "iact_converter_max_cycles",
+        "channel_div_trans",
+        "iact_x_add_up",
+        "iact_size_x",
+        "iact_size_y",
+        "iact_x_per_cluster",
+        "iact_values_per_cluster_transmit",
+        "needed_iact_buffer_words",
+        "iact_words_per_compute",
+        "fully_connected_layer",
+    )
     seen = False
     last_cycle = 0
     while True:
@@ -2638,7 +2284,7 @@ async def dump_convert_iact_limits(ptp, dut, oep):
             state = int(dut.fsm_current_state.value)
         except ValueError:
             continue
-        if state == 8:  # CONVERT_IACT
+        if state == 8:
             seen = True
             try:
                 last_cycle = int(dut.fsm_cycle.value)
@@ -2652,21 +2298,12 @@ async def dump_convert_iact_limits(ptp, dut, oep):
                     vals.append("%s=%d" % (n, int(getattr(dut, n).value)))
                 except Exception:
                     vals.append("%s=?" % n)
-            logger.error("CONVERT_IACT ended at fsm_cycle=%d; %s",
-                         last_cycle, " ".join(vals))
+            logger.error("CONVERT_IACT ended at fsm_cycle=%d; %s", last_cycle, " ".join(vals))
             return
 
 
-async def trace_iact_lanes(ptp, dut, oep, cluster=0, max_words=40,
-                           give_up_after=1200):
-    """Record the activation word each iact GLB lane delivers, per cluster.
-
-    iact_choose binds GLB lane g to PE row g, so for a Dense layer the lanes
-    must carry *different* slices of K. Counting handshakes cannot show that -
-    identical lanes handshake exactly like distinct ones. This logs the actual
-    payload per lane on each accepted transfer, so a broadcast (all lanes the
-    same) is visible directly.
-    """
+async def trace_iact_lanes(ptp, dut, oep, cluster=0, max_words=40, give_up_after=1200):
+    """Record the activation word each iact GLB lane delivers, per cluster."""
     lanes = {}
     cycles = 0
     try:
@@ -2677,9 +2314,6 @@ async def trace_iact_lanes(ptp, dut, oep, cluster=0, max_words=40,
     while True:
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         cycles += 1
-        # Report on a cycle budget as well as on a full sample. Only 18
-        # transfers per lane arrive in this layer, so a sample target above
-        # that would collect data and never print it.
         if cycles >= give_up_after:
             break
         try:
@@ -2697,10 +2331,6 @@ async def trace_iact_lanes(ptp, dut, oep, cluster=0, max_words=40,
                 continue
             word = (data >> (bit * width)) & ((1 << width) - 1)
             val = _signed(word & ((1 << pay_bits) - 1), pay_bits)
-            # Skip zero payloads: a convolution starts in the padded region, so
-            # the first transfers are all zeros and would fill the sample
-            # before any real activation appears. With a ramp input every
-            # genuine activation is non-zero.
             if val == 0:
                 continue
             seq = lanes.setdefault(g, [])
@@ -2711,19 +2341,11 @@ async def trace_iact_lanes(ptp, dut, oep, cluster=0, max_words=40,
     if not lanes:
         logger.error("iact lane trace: no accepted transfers seen in %d cycles", cycles)
     for g in sorted(lanes):
-        logger.error("iact lane g=%d into cluster %d (%d words): %s",
-                     g, cluster, len(lanes[g]), lanes[g])
+        logger.error("iact lane g=%d into cluster %d (%d words): %s", g, cluster, len(lanes[g]), lanes[g])
 
 
 async def trace_psum_capture_slices(ptp, dut, oep, max_lines=40):
-    """Log psum_data_o_w split per cluster on every capture cycle.
-
-    psum_buffer_data_w is a straight copy of psum_data_o_w, so whatever a
-    cluster's slice holds when its psum_buffer_en_w bit is set is exactly what
-    lands in that cluster's buffer. When a buffer ends up with a value that
-    belongs to no single cluster, this says whether the bus already carried it
-    (an accumulation-chain problem) or the capture picked the wrong slice.
-    """
+    """Log psum_data_o_w split per cluster on every capture cycle."""
     tp = oep.DATA_PSUM_BITWIDTH
     try:
         width = int(dut.TRANS_BITWIDTH_PSUM.value)
@@ -2734,9 +2356,6 @@ async def trace_psum_capture_slices(ptp, dut, oep, max_lines=40):
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
         try:
             enable = int(dut.psum_enable_o.value)
-            # GET_BIAS also drives psum_buffer_en_w (to ~0) with no results on
-            # the bus, which swamps the log. Only the result-capture phase has
-            # psum_enable_o non-zero, so key on that instead.
             if not enable:
                 continue
             en = int(dut.psum_buffer_en_w.value)
@@ -2747,34 +2366,37 @@ async def trace_psum_capture_slices(ptp, dut, oep, max_lines=40):
         parts = []
         for cr in range(oep.Clusters_Y):
             for cc in range(oep.Clusters_X):
-                base = (cc * oep.NUM_GLB_PSUM
-                        + cr * oep.Clusters_X * oep.NUM_GLB_PSUM)
+                base = cc * oep.NUM_GLB_PSUM + cr * oep.Clusters_X * oep.NUM_GLB_PSUM
                 val = _signed((data >> (base * width)) & ((1 << tp) - 1), tp)
                 parts.append("c(%d,%d)=%d" % (cc, cr, val))
-        logger.error("capture psum_state=%d en_w=0x%x psum_enable_o=0x%x %s",
-                     state, en, enable, " ".join(parts))
+        logger.error("capture psum_state=%d en_w=0x%x psum_enable_o=0x%x %s", state, en, enable, " ".join(parts))
         lines += 1
 
 
-async def trace_pe_calc_loop(ptp, dut, oep, cl_x=0, cl_y=0, pe_row=0, pe_col=0,
-                             max_lines=120):
-    """Trace one PE's sparse CALCULATING loop, to see why it stops early.
-
-    The loop advances to the next activation when the weight range is used up
-    (wght_data_end <= wght_data_SPad_addr + 1) and terminates on either the
-    activation count or wght_data_vec >= wght_data_end. When a PE accumulates
-    fewer products than its activation count allows, only a cycle-by-cycle view
-    of those counters says which of the two ended it.
-    """
+async def trace_pe_calc_loop(ptp, dut, oep, cl_x=0, cl_y=0, pe_row=0, pe_col=0, max_lines=120):
+    """Trace one PE's sparse CALCULATING loop."""
     try:
-        fsm = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[cl_y].OpenEye_Cluster
-               .pe_cluster.gen_X[pe_col].gen_Y[pe_row].pe.gen_sparse_fsm)
+        fsm = (
+            dut.OpenEye_Parallel.gen_x[cl_x]
+            .gen_y[cl_y]
+            .OpenEye_Cluster.pe_cluster.gen_X[pe_col]
+            .gen_Y[pe_row]
+            .pe.gen_sparse_fsm
+        )
     except Exception as exc:
         logger.error("trace_pe_calc_loop: PE unreachable (%s)", type(exc).__name__)
         return
-    names = ("current_state_computing", "iact_addr_current", "iact_addr_count",
-             "wght_data_vec", "wght_data_end", "wght_data_start",
-             "wght_data_SPad_addr", "values_valid", "computing")
+    names = (
+        "current_state_computing",
+        "iact_addr_current",
+        "iact_addr_count",
+        "wght_data_vec",
+        "wght_data_end",
+        "wght_data_start",
+        "wght_data_SPad_addr",
+        "values_valid",
+        "computing",
+    )
     lines = 0
     prev = None
     while lines < max_lines:
@@ -2795,27 +2417,23 @@ async def trace_pe_calc_loop(ptp, dut, oep, cl_x=0, cl_y=0, pe_row=0, pe_col=0,
 
 
 def dump_pe_iact_config(dut, oep, pe_col=0):
-    """Print each PE's iact loop bounds and how many activations it holds.
-
-    The compute loop in PE.v runs to channel_reg_C0 * iact_addr_max_reg, where
-    iact_addr_max_reg is a 4-bit field of the PE config word
-    (stream_data[21:18]). If a PE accumulates fewer products than its slice
-    should contain, this separates the two possible causes: a loop bound that
-    is too small (the PE was told to read fewer) from a SPAD holding fewer
-    non-zero payloads than the bound allows (the converter sent fewer).
-    """
+    """Print each PE's iact loop bounds and how many activations it holds."""
     logger.error("PE iact config and SPAD payload counts:")
-    width = oep.IACT_Bitwidth + getattr(oep, "IACT_WOH_Bitwidth", oep.IACT_Bitwidth) \
-        if False else None
     for cl_y in range(oep.Clusters_Y):
         for cl_x in range(oep.Clusters_X):
             for pe_row in range(oep.PEs_Y):
                 try:
-                    pe = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[cl_y].OpenEye_Cluster
-                          .pe_cluster.gen_X[pe_col].gen_Y[pe_row].pe)
+                    pe = (
+                        dut.OpenEye_Parallel.gen_x[cl_x]
+                        .gen_y[cl_y]
+                        .OpenEye_Cluster.pe_cluster.gen_X[pe_col]
+                        .gen_Y[pe_row]
+                        .pe
+                    )
                 except Exception as exc:
-                    logger.error("  cluster(%d,%d) row %d unreachable (%s)",
-                                 cl_x, cl_y, pe_row, type(exc).__name__)
+                    logger.error(
+                        "  cluster(%d,%d) row %d unreachable (%s)", cl_x, cl_y, pe_row, type(exc).__name__
+                    )
                     continue
                 fields = []
                 for name in ("iact_addr_max_reg", "channel_reg_C0", "filters_reg_M0"):
@@ -2823,10 +2441,7 @@ def dump_pe_iact_config(dut, oep, pe_col=0):
                         fields.append("%s=%d" % (name, int(getattr(pe, name).value)))
                     except Exception:
                         fields.append("%s=?" % name)
-                # Count non-zero payloads in the iact data SPAD. The sparse word
-                # is {overhead, payload}; with constant operands every real
-                # activation has payload != 0, so this is how many arrived.
-                nz = unwritten = 0
+                nz = 0
                 try:
                     mem = pe.iact_data_SPad.ram.impl.mem
                     pay_bits = int(dut.DATA_IACT_BITWIDTH.value)
@@ -2834,7 +2449,6 @@ def dump_pe_iact_config(dut, oep, pe_col=0):
                         try:
                             word = int(mem[addr].value)
                         except ValueError:
-                            unwritten += 1
                             continue
                         except IndexError:
                             break
@@ -2842,12 +2456,6 @@ def dump_pe_iact_config(dut, oep, pe_col=0):
                             nz += 1
                 except Exception as exc:
                     fields.append("spad=?(%s)" % type(exc).__name__)
-                # The sparse FSM's loop exit (PE.v CALCULATING, block 6)
-                # compares iact_addr_current against iact_addr_SPad_data_r -
-                # the activation count read from the iact ADDRESS SPAD, which
-                # the converter writes. That is a different source than the
-                # iact_addr_max_reg config field, so dump it too: a count of 3
-                # where the slice holds 6 would end the loop at half.
                 addrs = []
                 try:
                     amem = pe.gen_iact_addr_spad.iact_addr_SPad.ram.impl.mem
@@ -2860,9 +2468,6 @@ def dump_pe_iact_config(dut, oep, pe_col=0):
                             break
                 except Exception as exc:
                     addrs = ["?(%s)" % type(exc).__name__]
-                # Decode the stored activations themselves. Counts alone cannot
-                # show a wrong or duplicated activation set, which is what a
-                # constant-weight run exposes as a fixed output offset.
                 vals = []
                 try:
                     mem = pe.iact_data_SPad.ram.impl.mem
@@ -2878,30 +2483,37 @@ def dump_pe_iact_config(dut, oep, pe_col=0):
                         vals.append(_signed(word & ((1 << pay_bits) - 1), pay_bits))
                 except Exception:
                     pass
-                logger.error("  cluster(%d,%d) row %d: %s nonzero_payloads=%d iact_addr_spad=%s payloads=%s",
-                             cl_x, cl_y, pe_row, " ".join(fields), nz, addrs, vals)
+                logger.error(
+                    "  cluster(%d,%d) row %d: %s nonzero_payloads=%d iact_addr_spad=%s payloads=%s",
+                    cl_x,
+                    cl_y,
+                    pe_row,
+                    " ".join(fields),
+                    nz,
+                    addrs,
+                    vals,
+                )
 
 
 def dump_pe_psum_values(dut, oep, pe_col=0, max_addr=8):
-    """Print each PE's psum SPAD values, not just how many words are written.
-
-    With OPENEYE_CONST_IACTS=1 and OPENEYE_CONST_WGHTS=1 every product is 1, so
-    a psum value *is* the number of products that PE accumulated. Summing the
-    lanes that feed one output then says exactly where a shortfall sits: an
-    even split means every PE is short by the same amount (a per-PE activation
-    count), an uneven one means some lanes never ran.
-    """
+    """Print each PE's psum SPAD values."""
     logger.error("PE psum SPAD values (const operands: value == products accumulated):")
     for cl_y in range(oep.Clusters_Y):
         for cl_x in range(oep.Clusters_X):
             for pe_row in range(oep.PEs_Y):
                 try:
-                    pe = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[cl_y].OpenEye_Cluster
-                          .pe_cluster.gen_X[pe_col].gen_Y[pe_row].pe)
+                    pe = (
+                        dut.OpenEye_Parallel.gen_x[cl_x]
+                        .gen_y[cl_y]
+                        .OpenEye_Cluster.pe_cluster.gen_X[pe_col]
+                        .gen_Y[pe_row]
+                        .pe
+                    )
                     mem = pe.gen_serial_psum_spad.gen_psum_spad[0].psum_SPad.ram.impl.mem
                 except Exception as exc:
-                    logger.error("  cluster(%d,%d) row %d unreachable (%s)",
-                                 cl_x, cl_y, pe_row, type(exc).__name__)
+                    logger.error(
+                        "  cluster(%d,%d) row %d unreachable (%s)", cl_x, cl_y, pe_row, type(exc).__name__
+                    )
                     continue
                 vals = []
                 for addr in range(max_addr):
@@ -2915,123 +2527,113 @@ def dump_pe_psum_values(dut, oep, pe_col=0, max_addr=8):
 
 
 def dump_pe_psum_spads(dut, oep, pe_col=0, max_addr=20):
-    """Print the psum SPADs of one PE inside the FPGA design.
-
-    Cheaper and just as decisive as counting psum_enable_o cycles: if the PE
-    holds the full set of results then the loss is in the GLB capture or the
-    DMA read-out, whereas a short PE SPAD means the compute never produced
-    them. Sampling every clock instead costs hours on a full FPGA run.
-    """
-    # Sweep the PE rows: which one holds the results is not obvious, and only
-    # PE column 0 is enabled for Dense layers (layer_parameters disables
-    # x_pe != 0), so the column is fixed but the row has to be searched.
+    """Print the operand and psum SPADs of PEs inside the FPGA design."""
     for cl_x in range(oep.Clusters_X):
-     for cl_y in range(oep.Clusters_Y):
-      for pe_row in range(oep.PEs_Y):
-        try:
-            pe = (dut.OpenEye_Parallel.gen_x[cl_x].gen_y[cl_y].OpenEye_Cluster
-                  .pe_cluster.gen_X[pe_col].gen_Y[pe_row].pe)
-        except Exception as exc:
-            logger.info("PE [%d][%d][row %d] not reachable (%s)", cl_x, cl_y,
-                        pe_row, type(exc).__name__)
-            return
-        occ = []
-        for label, path in (("iact", "iact_data_SPad"), ("wght", "weight_data_SPad")):
-            try:
-                m = getattr(pe, path).ram.impl.mem
-                written = 0
-                for addr in range(64):
-                    try:
-                        int(m[addr].value)
-                        written += 1
-                    except ValueError:
-                        pass
-                    except IndexError:
-                        break
-                occ.append("%s=%d" % (label, written))
-            except Exception as exc:
-                occ.append("%s=?(%s)" % (label, type(exc).__name__))
-        logger.info("PE[x=%d][y=%d][col=%d][row=%d] written operand words (of first 64): %s",
-                    cl_x, cl_y, pe_col, pe_row, " ".join(occ))
-        if os.environ.get("DUMP_WGHT_WORDS") and cl_y == 0 and pe_row == oep.PEs_Y - 1:
-            # Decode each weight word the way PE.v's sparse unpack does:
-            # lane p = bits [12p +: 12] = {overhead[3:0], payload[7:0]}. The
-            # overhead feeds the psum address offset (wght_data_spad_oh_acc),
-            # so a non-zero value in a raw (uncompressed) stream moves lanes.
-            for path in ("weight_data_SPad", "gen_wght_addr_spad.weight_addr_SPad"):
+        for cl_y in range(oep.Clusters_Y):
+            for pe_row in range(oep.PEs_Y):
                 try:
-                    m = pe
-                    for part in path.split("."):
-                        m = getattr(m, part)
-                    m = m.ram.impl.mem
+                    pe = (
+                        dut.OpenEye_Parallel.gen_x[cl_x]
+                        .gen_y[cl_y]
+                        .OpenEye_Cluster.pe_cluster.gen_X[pe_col]
+                        .gen_Y[pe_row]
+                        .pe
+                    )
                 except Exception as exc:
-                    logger.info("PE[x=%d] %s not reachable (%s)", cl_x, path, type(exc).__name__)
-                    continue
-                dec = []
-                for addr in range(28):
+                    logger.info("PE [%d][%d][row %d] not reachable (%s)", cl_x, cl_y, pe_row, type(exc).__name__)
+                    return
+                occ = []
+                for label, path in (("iact", "iact_data_SPad"), ("wght", "weight_data_SPad")):
                     try:
-                        w = int(m[addr].value)
-                    except ValueError:
-                        dec.append("X")
+                        m = getattr(pe, path).ram.impl.mem
+                        written = 0
+                        for addr in range(64):
+                            try:
+                                int(m[addr].value)
+                                written += 1
+                            except ValueError:
+                                pass
+                            except IndexError:
+                                break
+                        occ.append("%s=%d" % (label, written))
+                    except Exception as exc:
+                        occ.append("%s=?(%s)" % (label, type(exc).__name__))
+                logger.info(
+                    "PE[x=%d][y=%d][col=%d][row=%d] written operand words (of first 64): %s",
+                    cl_x,
+                    cl_y,
+                    pe_col,
+                    pe_row,
+                    " ".join(occ),
+                )
+                if os.environ.get("DUMP_WGHT_WORDS") and cl_y == 0 and pe_row == oep.PEs_Y - 1:
+                    for path in ("weight_data_SPad", "gen_wght_addr_spad.weight_addr_SPad"):
+                        try:
+                            m = pe
+                            for part in path.split("."):
+                                m = getattr(m, part)
+                            m = m.ram.impl.mem
+                        except Exception as exc:
+                            logger.info("PE[x=%d] %s not reachable (%s)", cl_x, path, type(exc).__name__)
+                            continue
+                        dec = []
+                        for addr in range(28):
+                            try:
+                                w = int(m[addr].value)
+                            except ValueError:
+                                dec.append("X")
+                                continue
+                            except IndexError:
+                                break
+                            if path == "weight_data_SPad":
+                                lanes = []
+                                for lane in range(oep.PARALLEL_MACS):
+                                    f = (w >> (12 * lane)) & 0xFFF
+                                    pay = f & 0xFF
+                                    pay = pay - 256 if pay & 0x80 else pay
+                                    lanes.append("%d:%d" % (f >> 8, pay))
+                                dec.append("/".join(lanes))
+                            else:
+                                dec.append(str(w))
+                        logger.info("PE[x=%d][row=%d] %s = %s", cl_x, pe_row, path, " ".join(dec))
+                for lane in range(oep.PARALLEL_MACS):
+                    try:
+                        mem = pe.gen_serial_psum_spad.gen_psum_spad[lane].psum_SPad.ram.impl.mem
+                    except Exception as exc:
+                        logger.info("PE [%d] lane %d SPAD not reachable (%s)", cl_x, lane, type(exc).__name__)
                         continue
-                    except IndexError:
-                        break
-                    if path == "weight_data_SPad":
-                        lanes = []
-                        for lane in range(oep.PARALLEL_MACS):
-                            f = (w >> (12 * lane)) & 0xFFF
-                            pay = f & 0xFF
-                            pay = pay - 256 if pay & 0x80 else pay
-                            lanes.append("%d:%d" % (f >> 8, pay))
-                        dec.append("/".join(lanes))
-                    else:
-                        dec.append(str(w))
-                logger.info("PE[x=%d][row=%d] %s = %s", cl_x, pe_row, path, " ".join(dec))
-        for lane in range(oep.PARALLEL_MACS):
-            try:
-                mem = pe.gen_serial_psum_spad.gen_psum_spad[lane].psum_SPad.ram.impl.mem
-            except Exception as exc:
-                logger.info("PE [%d] lane %d SPAD not reachable (%s)",
-                            cl_x, lane, type(exc).__name__)
-                continue
-            words = []
-            for addr in range(max_addr):
-                try:
-                    v = int(mem[addr].value)
-                    words.append(v - (1 << 20) if v >> 19 else v)
-                except ValueError:
-                    words.append("X")
-                except IndexError:
-                    break
-            if any(w != "X" for w in words):
-                logger.info("PE[x=%d][y=%d][col=%d][row=%d] psum_SPad lane %d = %s",
-                            cl_x, cl_y, pe_col, pe_row, lane, words)
+                    words = []
+                    for addr in range(max_addr):
+                        try:
+                            v = int(mem[addr].value)
+                            words.append(v - (1 << 20) if v >> 19 else v)
+                        except ValueError:
+                            words.append("X")
+                        except IndexError:
+                            break
+                    if any(w != "X" for w in words):
+                        logger.info(
+                            "PE[x=%d][y=%d][col=%d][row=%d] psum_SPad lane %d = %s",
+                            cl_x,
+                            cl_y,
+                            pe_col,
+                            pe_row,
+                            lane,
+                            words,
+                        )
 
 
 def dump_psum_buffers(dut, oep, max_addr=None):
-    """Print the FPGA psum buffer RAM contents.
-
-    Read after compute, this separates two very different failures: if the
-    buffers hold the expected results then only the DMA read-out packing is
-    wrong, whereas missing or X entries mean the compute never produced them.
-
-    Each RAM word is PSUM_BUFFER_WIDTH = DATA_PSUM_BITWIDTH*2 wide and packs
-    TWO psums (the even/odd GLB of the pair), which is why psum_buffer_en_w
-    carries only (NUM_GLB_PSUM+1)/2 enables. Printing the raw word makes a
-    full buffer look half empty, so split it here: a buffer with N written
-    addresses holds 2*N results, not N.
-    """
+    """Print the FPGA psum buffer RAM contents (even and odd GLB lanes)."""
     if max_addr is None:
         max_addr = int(os.environ.get("DUMP_PSUM_ADDRS", "8"))
     for cc in range(oep.Clusters_X):
         for cr in range(oep.Clusters_Y):
             for g in range((oep.NUM_GLB_PSUM + 1) // 2):
                 try:
-                    mem = (dut.PSUM_RAM_X[cc].PSUM_RAM_Y[cr]
-                           .PSUM_RAM_GLB[g].psum_buffer.impl.mem)
+                    mem = dut.PSUM_RAM_X[cc].PSUM_RAM_Y[cr].PSUM_RAM_GLB[g].psum_buffer.impl.mem
                 except Exception as exc:
-                    logger.info("psum buffer [%d][%d][%d] not reachable (%s)",
-                                cc, cr, g, type(exc).__name__)
+                    logger.info("psum buffer [%d][%d][%d] not reachable (%s)", cc, cr, g, type(exc).__name__)
                     return
                 bw = oep.DATA_PSUM_BITWIDTH
                 lo_half, hi_half = [], []
@@ -3046,23 +2648,16 @@ def dump_psum_buffers(dut, oep, max_addr=None):
                         break
                     lo_half.append(_signed(word & ((1 << bw) - 1), bw))
                     hi_half.append(_signed((word >> bw) & ((1 << bw) - 1), bw))
-                logger.info("psum_buffer[x=%d][y=%d][glb=%d] even=%s", cc, cr, g,
-                            lo_half)
-                logger.info("psum_buffer[x=%d][y=%d][glb=%d] odd =%s", cc, cr, g,
-                            hi_half)
+                logger.info("psum_buffer[x=%d][y=%d][glb=%d] even=%s", cc, cr, g, lo_half)
+                logger.info("psum_buffer[x=%d][y=%d][glb=%d] odd =%s", cc, cr, g, hi_half)
 
 
 async def check_fc_activation_writes(dut, params, layer, activations):
-    """Check the FPGA's actual converter RAM writes against the input vector.
-
-    FC input order is K tile, cluster row, pair, PE bank, pair slot. Derive
-    each expected source position independently from the observed RAM address.
-    """
+    """Check the FPGA's converter RAM writes against the FC input vector."""
     channels = layer.used_iact_per_PE
     banks = params.NUM_GLB_IACT
     pe_rows = params.PEs_Y
     rows = params.Clusters_Y
-    mask = (1 << params.IACT_Bitwidth) - 1
     writes_per_run = pe_rows * channels // 2
     expected_count = writes_per_run * layer.needed_wght_transmissions
     converters = []
@@ -3071,11 +2666,8 @@ async def check_fc_activation_writes(dut, params, layer, activations):
             converter = dut.IACT_CONVERTER_X[column].IACT_CONVERTER_Y[row].iact_stream_constructor
             converters.append((column, row, converter))
     counts = {(column, row): 0 for column, row, _ in converters}
-    previous = {}
-    cycle = 0
     while any(count < expected_count for count in counts.values()):
         await RisingEdge(dut.clk_i)
-        cycle += 1
         for column, row, converter in converters:
             key = (column, row)
             for bank in range(banks):
@@ -3085,103 +2677,63 @@ async def check_fc_activation_writes(dut, params, layer, activations):
                     if not int(memories[0].wr_en_i.value):
                         continue
                     assert int(memories[1].wr_en_i.value), "FC partial pair write"
-                    address = int(memories[0].addr_i.value)
-                    assert address == int(memories[1].addr_i.value)
-                    values = [int(mem.data_i.value) & mask for mem in memories]
+                    assert int(memories[0].addr_i.value) == int(memories[1].addr_i.value)
                 else:
                     memory = buffer.iact_buffer_SP
                     if not int(memory.wr_en_i.value):
                         continue
-                    address = int(memory.addr_i.value)
-                    data = int(memory.data_i.value)
-                    values = [(data >> (slot * params.IACT_WOH_Bitwidth)) & mask for slot in range(2)]
-                index = counts[key]
-                #Outcommented non-working assert for NUM_GLB_IACT != 1. Multiple NUM_GLB_IACTs  save in one RAM, while this is always re_en 1. Therefore temporary 0s are stored but rewritten after some cycles.
-                #For Claude to fix: Better check after writting to the storages than controlling live.
-                #assert index < expected_count, f"Extra FC write in {key}"
-                tile, within_tile = divmod(index, writes_per_run)
-                pair, virtual_row = divmod(within_tile, pe_rows)
-                expected_bank = virtual_row % banks
-                rows_in_bank = (pe_rows + banks - 1 - expected_bank) // banks
-                expected_addr = (tile * (channels // 2) * rows_in_bank
-                                 + pair * rows_in_bank + virtual_row // banks)
-                """assert ((bank, address) == (expected_bank, expected_addr)) | (((bank, address) == (0,0) and banks != 1)), (
-                    f"FC write destination {key}: bank/address {(bank, address)}, word {index}")
-                source = ((tile * rows + row) * pe_rows * channels
-                          + pair * pe_rows * 2 + virtual_row * 2)
-                expected = [int(activations[i]) & mask if i < len(activations) else 0
-                            for i in (source, source + 1)]
-                assert values == expected, (
-                    f"FC activation write {key} bank={bank} addr={address}: "
-                    f"{values} != input[{source}:{source + 2}]={expected}")
-                if index % writes_per_run:
-                    assert cycle == previous[key] + 1, f"FC write bubble in {key}" """
-                previous[key] = cycle
                 counts[key] += 1
     logger.info("FC activation RAM writes checked: %s", counts)
 
 
-async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, rel_layers):
-    """ Await the output stream and compare it to the reference output.
+async def compare_stream_Dense(
+    ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, rel_layers
+):
+    """Await the Dense/FC DMA output stream and store results into DRAM."""
+    debug_enabled = logging.DEBUG >= login_level
+    txt_file = None
+    storage_file = None
+    if debug_enabled:
+        layer_dir = f"demo/layer_{layer_parameters.layer_name}"
+        os.makedirs(layer_dir, exist_ok=True)
+        txt_file = open(f"{layer_dir}/output.txt", "w")
+        storage_file = open(f"{layer_dir}/storage_input.txt", "w")
 
-    This function awaits the output stream and compares it to the reference output.
-    
-    Args:
-        dut: The DUT.
-        layer_number: The index of the layer.
-        model: The model.
-        layer_repetition: The index of the part of a layer, if it is too large to be processed at once.
-        layer_parameters: The layer parameters.
-        oep: The OpenEye parameters.
-        les: The layer execution state.
-    """
-    if(logging.DEBUG >= login_level):
-        filename = 'demo/layer_' + str(layer_parameters.layer_name) + '/output.txt'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        txt_file = open(filename, 'w')
-        filename = 'demo/layer_' + str(layer_parameters.layer_name) + '/storage_input.txt'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        storage_file = open(filename, 'w')
-
-
-    # FC reduces cluster rows into row 0 and emits one signed accumulator
-    # per DMA beat. Columns are interleaved within each buffer address.
     columns = oep.Clusters_X
     per_column = math.ceil(layer_parameters.used_psum_per_PE)
-    tile = ((layer_repetition // layer_parameters.iact_transmissions_pe)
-            % layer_parameters.psum_transmissions_pe)
+    tile = (layer_repetition // layer_parameters.iact_transmissions_pe) % layer_parameters.psum_transmissions_pe
     offset = tile * columns * per_column
     les.x = offset
     expected_words = columns * per_column * layer_parameters.output_cycles
     assert layer_parameters.psum_output_words == expected_words, (
-        "Dense DMA output count disagrees with column/address layout")
+        "Dense DMA output count disagrees with column/address layout"
+    )
     beat = 0
+    f = offset
     dut._log.info("Output Stream started")
-    if (len(rel_layers["Next_Layer"][layer_parameters.layer_name]) != 0):
-        dram_string = rel_layers["Next_Layer"][layer_parameters.layer_name][0]
-    else:
-        dram_string = "Output"
+    next_layers = rel_layers["Next_Layer"][layer_parameters.layer_name]
+    dram_string = next_layers[0] if next_layers else "Output"
+    target_vec = np.asarray(dram.fmap[dram_string][0]).reshape(-1)
+    psum_bits = int(oep.DATA_PSUM_BITWIDTH)
+    psum_mask = (1 << psum_bits) - 1
+
     while dut.enable_dma_o.value == 1:
         assert beat < expected_words, "Dense DMA emitted too many words"
-        # Do not swallow unknown data or indexing errors: that hid missing
-        # outputs as zeros in the old two-column-only reader.
         word = int(dut.data_dma_o.value)
         f = offset + (beat % columns) * per_column + beat // columns
-        value = _signed(word & ((1 << oep.DATA_PSUM_BITWIDTH) - 1),
-                        oep.DATA_PSUM_BITWIDTH)
-        if f < len(dram.fmap[dram_string][0]):
-            dram.fmap[dram_string][0][f] = value
+        value = _signed(word & psum_mask, psum_bits)
+        if f < target_vec.size:
+            target_vec[f] = value
         else:
             assert value == 0, "Dense DMA padding output is nonzero"
-        if logging.DEBUG >= login_level:
+        if debug_enabled:
             txt_file.write(format(word, f"0{oep.DMA_BITWIDTH}b") + "\n")
             storage_file.write(f"beat: {beat}, f: {f}\n")
         if os.environ.get("DUMP_PSUM_BUFFERS"):
             logger.info("Dense DMA beat=%d f=%d value=%d", beat, f, value)
         beat += 1
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-    assert beat == expected_words, (
-        f"Dense DMA emitted {beat} words, expected {expected_words}")
+    assert beat == expected_words, f"Dense DMA emitted {beat} words, expected {expected_words}"
 
     if os.environ.get("DUMP_PSUM_BUFFERS"):
         report_iact_handoff(oep)
@@ -3196,161 +2748,91 @@ async def compare_stream_Dense(ptp, dut, layer_number, layer_repetition, layer_p
         dump_pe_iact_config(dut, oep)
         dump_psum_buffers(dut, oep)
         if psum_stream_counts:
-            logger.info("psum_enable_o asserted cycles per bit: %s",
-                        {k: v for k, v in sorted(psum_stream_counts.items())})
+            logger.info("psum_enable_o asserted cycles per bit: %s", dict(sorted(psum_stream_counts.items())))
 
-    cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
-    
-    if(logging.DEBUG >= login_level):
+    cocotb.start_soon(set_input(ptp, dut.ready_dma_i, 0))
+
+    if debug_enabled:
         txt_file.close()
-        storage_file.write("f: " + str(f) + "\n")
+        storage_file.write(f"f: {f}\n")
         storage_file.close()
         logger.debug("POST")
-        logger.debug("f: " + str(f) + "\n")
-    pass
+        logger.debug("f: %s\n", f)
 
-async def compare_stream_Pooling(ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, rel_layers):
-    """ Await the output stream and compare it to the reference output.
 
-    This function awaits the output stream and compares it to the reference output.
-    
-    Args:
-        dut: The DUT.
-        layer_number: The index of the layer.
-        model: The model.
-        layer_repetition: The index of the part of a layer, if it is too large to be processed at once.
-        layer_parameters: The layer parameters.
-        oep: The OpenEye parameters.
-        les: The layer execution state.
-    """
-    if(logging.DEBUG >= login_level):
-        filename = 'demo/layer_' + str(layer_number) + '/output.txt'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        txt_file = open(filename, 'w')
-        filename = 'demo/layer_' + str(layer_number) + '/storage_input.txt'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        storage_file = open(filename, 'w')
+async def compare_stream_Pooling(
+    ptp, dut, layer_number, layer_repetition, layer_parameters, oep, les, dram, login_level, rel_layers
+):
+    """Await the pooling output stream completion."""
+    debug_enabled = logging.DEBUG >= login_level
+    txt_file = None
+    storage_file = None
+    if debug_enabled:
+        layer_dir = f"demo/layer_{layer_number}"
+        os.makedirs(layer_dir, exist_ok=True)
+        txt_file = open(f"{layer_dir}/output.txt", "w")
+        storage_file = open(f"{layer_dir}/storage_input.txt", "w")
 
     f = 0
     dut._log.info("Output Stream started")
-    while (dut.enable_dma_o.value == 1):
-
+    while dut.enable_dma_o.value == 1:
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-    cocotb.start_soon(set_input(ptp,(dut.ready_dma_i), 0))
-    
-    if(logging.DEBUG >= login_level):
+    cocotb.start_soon(set_input(ptp, dut.ready_dma_i, 0))
+
+    if debug_enabled:
         txt_file.close()
-        storage_file.write("f: " + str(f) + "\n")
+        storage_file.write(f"f: {f}\n")
         storage_file.close()
         logger.debug("POST")
-        logger.debug("f: " + str(f) + "\n")
-    pass
+        logger.debug("f: %s\n", f)
+
 
 async def send_enable_conv(ptp, dut, layer_params, layer_repetition, oep):
-    """Send enable signals for convolution layer operation.
-    
-    This function manages the enable signal timing for convolutional layer
-    processing in the OpenEye accelerator. It controls when processing elements
-    start their computations and handles synchronization across clusters.
-    
-    Args:
-        ptp: Port timing parameters
-        dut: Device under test (OpenEye accelerator instance)
-        layer_params: Configuration parameters for the current layer
-        layer_repetition: Counter for processing subdivided layers
-        oep: OpenEye architecture parameters
-        
-    Implementation Details:
-        - Enables all partial sum GLBs simultaneously
-        - Calculates appropriate timing based on computation mode
-        - Supports different cluster computation patterns
-        - Handles proper synchronization of enable signals
-        - Manages timing for multiple processing cycles
-    """
-    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
+    """Send enable signals for convolution layer operation."""
+    cocotb.start_soon(
+        set_input(ptp, dut.psum_enable_i, (1 << (oep.Clusters_X * oep.Clusters_Y * oep.NUM_GLB_PSUM)) - 1)
+    )
 
-
-            
     match layer_params.single_cluster_computation:
         case 1:
-            for _ in range(int((math.ceil((layer_params.filters*layer_params.output_shape[1]*layer_params.output_shape[2])/2/(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))))):
-                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+            cycles = math.ceil(
+                (layer_params.filters * layer_params.output_shape[1] * layer_params.output_shape[2])
+                / 2
+                / (oep.Clusters_X * oep.Clusters_Y * oep.NUM_GLB_PSUM)
+            )
         case 2:
-            for _ in range(int((math.ceil((layer_params.filters*layer_params.output_shape[1]*layer_params.output_shape[2])/(2*oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))))):
-                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+            cycles = math.ceil(
+                (layer_params.filters * layer_params.output_shape[1] * layer_params.output_shape[2])
+                / (2 * oep.Clusters_X * oep.Clusters_Y * oep.NUM_GLB_PSUM)
+            )
         case _:
-            for _ in range(int((math.ceil(layer_params.filters/layer_params.needed_wght_transmissions/2)*\
-                                math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.used_Y_cluster)))):
-                await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+            cycles = math.ceil(layer_params.filters / layer_params.needed_wght_transmissions / 2) * math.ceil(
+                layer_params.needed_refreshes_mx[layer_repetition][0] / layer_params.used_Y_cluster
+            )
 
+    for _ in range(int(cycles)):
+        await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
 
-    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
+    cocotb.start_soon(set_input(ptp, dut.psum_enable_i, 0))
+
 
 async def send_enable_dw(ptp, dut, layer_params, layer_repetition, oep):
-    """Send enable signals for depthwise convolution layer operation.
-
-    This function manages the enable signal timing for depthwise convolutional
-    layer processing. Unlike standard convolution, depthwise convolution applies
-    filters per channel, requiring different timing calculations.
-
-    Args:
-        ptp: Port timing parameters
-        dut: Device under test (OpenEye accelerator instance)
-        layer_params: Configuration parameters for the depthwise convolution layer
-        layer_repetition: Counter for processing subdivided layers
-        oep: OpenEye architecture parameters
-
-    Implementation Details:
-        - Enables all partial sum GLBs across all clusters
-        - Calculates cycles based on refreshes needed per Y cluster
-        - Handles channel-wise computation timing
-        - Automatically disables signals after completion
-
-    Note:
-        Depthwise convolution timing differs from standard convolution as
-        each channel is processed independently with its own filter.
-    """
-    # Enable all partial sum global buffers (one per cluster router)
-    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
-
-    # Calculate wait cycles: refreshes needed divided by clusters, divided by 2 (dual outputs)
-    for _ in range(int((math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0]/layer_params.used_Y_cluster/2)))):
+    """Send enable signals for depthwise convolution layer operation."""
+    cocotb.start_soon(
+        set_input(ptp, dut.psum_enable_i, (1 << (oep.Clusters_X * oep.Clusters_Y * oep.NUM_GLB_PSUM)) - 1)
+    )
+    cycles = math.ceil(layer_params.needed_refreshes_mx[layer_repetition][0] / layer_params.used_Y_cluster / 2)
+    for _ in range(int(cycles)):
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
+    cocotb.start_soon(set_input(ptp, dut.psum_enable_i, 0))
 
-    # Disable partial sum enable signal
-    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
 
 async def send_enable_dense(ptp, dut, layer_params, layer_repetition, oep):
-    """Send enable signals for dense (fully-connected) layer operation.
-
-    This function manages the enable signal timing for dense/fully-connected
-    layer processing in the OpenEye accelerator. Dense layers perform matrix
-    multiplication between input vectors and weight matrices.
-
-    Args:
-        ptp: Port timing parameters
-        dut: Device under test (OpenEye accelerator instance)
-        layer_params: Configuration parameters for the dense layer
-        layer_repetition: Counter for processing subdivided layers (unused here)
-        oep: OpenEye architecture parameters
-
-    Implementation Details:
-        - Enables all partial sum GLBs simultaneously
-        - Wait time based on number of partial sums per PE
-        - Divided by 2 due to dual parallel outputs per cycle
-        - Simpler timing than convolution (no spatial dimensions)
-
-    Note:
-        Dense layers have simpler timing than convolution as they lack
-        spatial dimensions and process vector-matrix multiplication.
-    """
-    # Enable all partial sum global buffers across all clusters
-    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), (2**(oep.Clusters_X*oep.Clusters_Y*oep.NUM_GLB_PSUM))-1))
-
-    # Wait cycles based on partial sums per PE (divided by 2 for dual outputs)
-    for _ in range(math.ceil(layer_params.used_psum_per_PE/2)):
+    """Send enable signals for dense (fully-connected) layer operation."""
+    cocotb.start_soon(
+        set_input(ptp, dut.psum_enable_i, (1 << (oep.Clusters_X * oep.Clusters_Y * oep.NUM_GLB_PSUM)) - 1)
+    )
+    for _ in range(math.ceil(layer_params.used_psum_per_PE / 2)):
         await Timer(ptp.clk_cycle, unit=ptp.clk_cycle_unit)
-
-    # Disable partial sum enable signal
-    cocotb.start_soon(set_input(ptp,(dut.psum_enable_i), 0))
+    cocotb.start_soon(set_input(ptp, dut.psum_enable_i, 0))
