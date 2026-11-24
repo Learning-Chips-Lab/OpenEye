@@ -6,10 +6,10 @@ lint:
   timeout: 15m
   parallel:
     matrix:
-      - PROFILE: [pe_dense, parallel]
+        - PROFILE: [pe_dense, parallel, pe_cluster_dense, openeye_cluster, openeye_fpga]
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends git coreutils findutils verilator
+    - apt-get install -y --no-install-recommends git coreutils findutils verilator python3-yaml
   script:
     - timeout 5m bash test/lint/run_recorded.sh "$PROFILE"
     - |

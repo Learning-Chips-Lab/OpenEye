@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if (( $# != 1 )); then
-    echo "Usage: $0 {pe_dense|parallel}" >&2
+    echo "Usage: $0 {pe_dense|parallel|pe_cluster_dense|openeye_cluster|openeye_fpga}" >&2
     exit 2
 fi
 profile=$1
@@ -19,6 +19,18 @@ case "$profile" in
         lint_cmd+=(--top-module OpenEye_Parallel +define+USE_INTERNAL_PARAMS_PE_cluster)
         hdl_file=hdl/OpenEye_Parallel.v
         ;;
+    pe_cluster_dense)
+        lint_cmd+=(--top-module PE_cluster -GSPARSITY_EN=0 -GPARALLEL_MACS=1 -GSERIAL=1 -GPE_ROWS=3 -GPE_COLUMNS=4 +define+USE_INTERNAL_PARAMS_PE_cluster)
+        hdl_file=hdl/PE_cluster.v
+        ;;
+    openeye_cluster)
+        lint_cmd+=(--top-module OpenEye_Cluster +define+USE_INTERNAL_PARAMS_PE_cluster)
+        hdl_file=hdl/OpenEye_Cluster.v
+        ;;
+    openeye_fpga)
+        lint_cmd+=(--top-module OpenEye_FPGA +define+USE_INTERNAL_PARAMS +define+USE_INTERNAL_PARAMS_PE_cluster)
+        hdl_file=hdl/OpenEye_FPGA.v
+        ;;
     *) echo "Unknown lint profile: $profile" >&2; exit 2 ;;
 esac
 
@@ -26,6 +38,10 @@ repo_commit=$(git rev-parse HEAD)
 mkdir -p test/lint/results
 run_dir=$(mktemp -d "$repo_root/test/lint/results/${profile}.XXXXXX")
 printf 'Results: %s\n' "$run_dir"
+
+if [[ "$profile" == "openeye_fpga" ]]; then
+    lint_cmd+=(-I"$run_dir/generated" "$run_dir/generated/dma_storage.v")
+fi
 
 # Exclude SERIAL=0 adder-tree waivers from the SERIAL=1 profile.
 waiver_file=hdl/lint_waivers.vlt
@@ -55,6 +71,26 @@ lint_cmd+=(+define+USE_INTERNAL_PARAMS_PE "$waiver_file" "$hdl_file")
     git status --short
 } > "$run_dir/metadata.txt"
 git diff --binary HEAD > "$run_dir/source.patch"
+
+if [[ "$profile" == "openeye_fpga" ]]; then
+    # Match the FPGA's internal defaults and keep all generator output local.
+    if (
+        cd -- "$run_dir" || exit
+        PYTHONPATH="$repo_root/src" \
+        CLUSTER_ROWS=2 CLUSTER_COLUMNS=2 BRANCHES=1 DMA_BITWIDTH=64 \
+        BUFFER_WIDTH_IACT=10 BUFFER_WIDTH_WGHT=12 CHANNEL_CYCLE_WIDTH=12 \
+        LIMIT_SIZE_IACT=18 LIMIT_SIZE_WGHT=12 LIMIT_SIZE_PSUM=12 \
+        python3 -B -m open_eye.generator "$repo_root/test/cocotb_fpga" \
+            "$run_dir/generated" "$run_dir/generated" "$run_dir/generated"
+    ) > "$run_dir/generate.log" 2>&1; then
+        printf 'generation_exit_status=0\n' >> "$run_dir/metadata.txt"
+    else
+        status=$?
+        printf 'generation_exit_status=%s\nexit_status=%s\n' "$status" "$status" >> "$run_dir/metadata.txt"
+        cat "$run_dir/generate.log" >&2
+        exit "$status"
+    fi
+fi
 
 set +e
 "${lint_cmd[@]}" 2>&1 | tee "$run_dir/output.log"
