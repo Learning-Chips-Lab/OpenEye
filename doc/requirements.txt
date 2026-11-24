@@ -12,3 +12,4 @@ symbolator @ git+https://github.com/hdl/symbolator@3f02d907d6beb0f4d034d396d4628
 hdlparse @ git+https://github.com/hdl/pyHDLParser@e1153ace8ca1e25f9fb53350c41058ef8eb8dacf
 pytest==9.1.1
 Pillow==13.0.0
+plotly==7.1.0

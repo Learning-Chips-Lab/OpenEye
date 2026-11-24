@@ -1,0 +1,51 @@
+{
+   "creator": "Yosys 0.33 (git sha1 2584903a060)",
+   "invocation": "stat -json -top PE ",
+   "modules": {
+      "\\PE": {
+         "num_wires":         728,
+         "num_wire_bits":     2412,
+         "num_pub_wires":     108,
+         "num_pub_wire_bits": 708,
+         "num_memories":      0,
+         "num_memory_bits":   0,
+         "num_processes":     0,
+         "num_cells":         1438,
+         "num_cells_by_type": {
+            "CC_ADDF": 230,
+            "CC_BRAM_20K": 2,
+            "CC_DFF": 445,
+            "CC_L2T4": 207,
+            "CC_L2T5": 102,
+            "CC_LUT1": 31,
+            "CC_LUT2": 207,
+            "CC_MULT": 3,
+            "CC_MX2": 129,
+            "CC_MX4": 82
+         }
+      }
+   },
+      "design": {
+         "num_wires":         728,
+         "num_wire_bits":     2412,
+         "num_pub_wires":     108,
+         "num_pub_wire_bits": 708,
+         "num_memories":      0,
+         "num_memory_bits":   0,
+         "num_processes":     0,
+         "num_cells":         1438,
+         "num_cells_by_type": {
+            "CC_ADDF": 230,
+            "CC_BRAM_20K": 2,
+            "CC_DFF": 445,
+            "CC_L2T4": 207,
+            "CC_L2T5": 102,
+            "CC_LUT1": 31,
+            "CC_LUT2": 207,
+            "CC_MULT": 3,
+            "CC_MX2": 129,
+            "CC_MX4": 82
+         }
+      }
+}
+

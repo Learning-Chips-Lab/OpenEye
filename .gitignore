@@ -238,6 +238,7 @@ env/*
 !requirements.txt
 netlist.v
 test/simulation
+!/doc/source/test/pe_dense_resources.json
 
 **/.temp
 **/.work/

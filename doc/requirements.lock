@@ -26,9 +26,11 @@ mdit-py-plugins==0.6.1
 mdurl==0.1.2
 myst-parser==5.1.0
 nmigen==0.2
+narwhals==2.29.0
 packaging==26.3
 Pillow==13.0.0
 platformdirs==4.13.0
+plotly==7.1.0
 pluggy==1.6.0
 pycairo==1.27.0
 Pygments==2.21.0
