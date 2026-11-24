@@ -35,6 +35,18 @@ extensions = ['myst_parser',
 
 autoapi_dirs = ['../../test']
 
+
+def autoapi_prepare_jinja_env(env):
+    def format_schedule(value):
+        if isinstance(value, str):
+            value = value.replace(
+                "host-orchestrated schedule from open_eye.attention_scheduler:\n",
+                "host-orchestrated schedule from open_eye.attention_scheduler::\n",
+            )
+        return value
+
+    env.finalize = format_schedule
+
 templates_path = ['_templates']
 exclude_patterns = []
 
