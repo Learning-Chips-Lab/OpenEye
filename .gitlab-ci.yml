@@ -46,6 +46,7 @@ documentation:
         build-essential pkg-config libcairo2-dev libgirepository1.0-dev \
         gir1.2-pango-1.0 graphviz fonts-dejavu-core
 
+      mkdir -p "$(git rev-parse --git-path info)"
       printf '\n/documentation-results/\n' >> "$(git rev-parse --git-path info/exclude)"
       git status --short > documentation-results/native-working-tree.log
 
