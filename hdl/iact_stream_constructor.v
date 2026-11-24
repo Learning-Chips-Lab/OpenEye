@@ -698,7 +698,7 @@ reg enable_write_to_storage;
                 end
               end
             end
-            if (fsm_cycle == needed_iact_buffer_words_i) begin
+            if (fsm_cycle == needed_iact_buffer_words_i - 1) begin
               fsm_cycle           <= 0;
               fsm_current_state   <= GET_PARAMETER;
               ram_wr_en           <= 0;
