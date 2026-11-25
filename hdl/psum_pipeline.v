@@ -454,9 +454,9 @@ module psum_pipeline #(
             results_ready = 1;
             for (cc_psum = 0; cc_psum < CLUSTER_COLUMNS; cc_psum = cc_psum + 1) begin
               for (cr_psum = 0; cr_psum < CLUSTER_ROWS; cr_psum = cr_psum + 1) begin
-                for (g_psum = 0; g_psum < (NUM_GLB_PSUM+1)/2; g_psum = g_psum + 1) begin
-                  results_ready = results_ready & (psum_ready_o_reg[cc_psum*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_psum*2] |
-                   ((router_mode_psum[cc_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM * 2 + 2] == 0) & (CLUSTER_ROWS != 1)));
+                for (g_psum = 0; g_psum < NUM_GLB_PSUM; g_psum = g_psum + 1) begin
+                  results_ready = results_ready & (psum_ready_o_reg[cc_psum*NUM_GLB_PSUM+cr_psum*CLUSTER_COLUMNS*NUM_GLB_PSUM+g_psum] |
+                   ((router_mode_psum[cc_psum * NUM_GLB_PSUM * ROUTER_MODES_PSUM + cr_psum * CLUSTER_COLUMNS * NUM_GLB_PSUM * ROUTER_MODES_PSUM + g_psum * ROUTER_MODES_PSUM + 2] == 0) & (CLUSTER_ROWS != 1)));
                 end
               end
             end
@@ -783,8 +783,8 @@ module psum_pipeline #(
                   pre_quantized_value[cc_psum] <= 0;
               end
               psum_cluster_select_0 <= psum_cluster_select_0_next;
-              psum_cluster_select <= psum_cluster_select_0_next;
-              psum_select_cnt_0 <= psum_select_cnt_0 + 1;
+              psum_cluster_select   <= psum_cluster_select_0_next;
+              psum_select_cnt_0     <= psum_select_cnt_0 + 1;
               if (psum_select_cnt_0 == psum_cluster_limit_0) begin
                 psum_select_cnt_0   <= 0;
                 psum_cluster_select_0 <= psum_cluster_select_1_next;
