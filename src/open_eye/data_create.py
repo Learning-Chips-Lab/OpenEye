@@ -265,11 +265,11 @@ def create_net(layer_mode, filters, kernelsize_x, kernelsize_y, inputsize_x, inp
             alpha = 0.25
             inputsize_x = 224
             inputsize_y = 224
-            channels = 4
+            channels = 16
             outputsize = 1000
             # Block 1
             model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same', input_shape=(inputsize_x, inputsize_y, channels)))
-            model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same'))
+            #model.add(tf.keras.layers.Conv2D(int(64 * alpha), (3, 3), activation='relu', padding='same'))
             model.add(tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2)))
 
             # Block 2
