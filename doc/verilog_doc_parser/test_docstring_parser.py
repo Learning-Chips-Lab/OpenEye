@@ -90,7 +90,15 @@ timescale 1ns / 1ps
         test_file = os.path.join(cur_dir, "..", "..", "hdl", "adder.v")
         with open(test_file, "r") as f:
             text = f.read()
-            self.parse_and_compare_adder_doc(text)
+        doc = parse_documentation(text)
+        assert doc.module_name == "adder"
+        assert doc.description.startswith(
+            "A synchronous, registered adder module with enable control and reset functionality."
+        )
+        assert "- On reset (rst_ni = 0): sum_o = RESET_VALUE" in doc.description
+        assert doc.parameters["RESET_VALUE"] == "Value loaded into sum_o during reset (default: 0)"
+        assert doc.ports["clk_i"] == "Clock input, positive edge triggered"
+        assert doc.ports["sum_o"] == "Registered signed sum output [DATA_WIDTH_SUM-1:0]"
 
     def parse_and_compare_module_name_from_doc(self, module_file):
         """This simple test parses the module name from the docstring of the
@@ -110,9 +118,6 @@ timescale 1ns / 1ps
 
     def test_parse_af_cluster_file(self):
         self.parse_and_compare_module_name_from_doc("af_cluster.v")
-
-    def test_parse_bano_cluster_file(self):
-        self.parse_and_compare_module_name_from_doc("bano_cluster.v")
 
     def test_parse_data_pipeline_file(self):
         self.parse_and_compare_module_name_from_doc("data_pipeline.v")

@@ -1,9 +1,15 @@
-myst-parser
-pygobject
-pyparsing
-sphinx-autoapi
-sphinx-rtd-theme
-sphinx-verilog-domain
-sphinxcontrib-hdl-diagrams
-git+https://github.com/hdl/symbolator
-git+https://github.com/hdl/pyHDLParser
+-c requirements.lock
+Sphinx==9.1.0
+myst-parser==5.1.0
+PyGObject==3.48.2
+pycairo==1.27.0
+pyparsing==3.3.2
+sphinx-autoapi==3.8.1
+sphinx-rtd-theme==3.1.0
+sphinx-verilog-domain==0.2.post21
+sphinxcontrib-hdl-diagrams==0.0.post160
+symbolator @ git+https://github.com/hdl/symbolator@3f02d907d6beb0f4d034d396d462892388d4b511
+hdlparse @ git+https://github.com/hdl/pyHDLParser@e1153ace8ca1e25f9fb53350c41058ef8eb8dacf
+pytest==9.1.1
+Pillow==13.0.0
+plotly==7.1.0

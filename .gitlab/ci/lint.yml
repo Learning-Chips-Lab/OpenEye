@@ -1,0 +1,28 @@
+lint:
+  image: ubuntu:24.04
+  tags: [shared, docker, linux]
+  stage: test
+  needs: []
+  timeout: 15m
+  parallel:
+    matrix:
+        - PROFILE: [pe_dense, parallel, pe_cluster_dense, openeye_cluster, openeye_fpga]
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends git coreutils findutils verilator python3-yaml
+  script:
+    - timeout 5m bash test/lint/run_recorded.sh "$PROFILE"
+    - |
+      if ! find test/lint/results -type f ! -path '*/.*' -print -quit | grep -q .; then
+        echo "No lint result files found." >&2
+        exit 1
+      fi
+  artifacts:
+    name: "lint-${PROFILE}"
+    when: always
+    paths:
+      - test/lint/results/
+    exclude:
+      - '**/.*'
+      - '**/.*/**'
+    expire_in: 14 days

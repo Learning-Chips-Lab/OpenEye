@@ -21,7 +21,7 @@ module tester
   input signed                      a_i,
   output signed [15:0]              sum_o,
   output reg                        carry_o,
-  output reg signed                 overflow_o
+  output reg signed                 overflow_o,
   input wire                        wire_i,
   output reg unsigned               wire_o,
   input signed [7:0]                b_i,
@@ -573,7 +573,7 @@ endmodule
         with open(test_file, "r") as f:
             text = f.read()
 
-        module_def = parse_module_def(text)
+        module_def = parse_module_def(text, defines=set())
         assert module_def.module_name == module_file.split(".")[0]
 
     def test_parse_af_cluster_file(self):

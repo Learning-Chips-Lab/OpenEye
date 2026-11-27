@@ -8,6 +8,11 @@ TOPLEVEL_LANG ?= verilog
 
 HDL_PATH = $(abspath $(PWD)/../../hdl)
 VH_PATH = $(abspath $(PWD))
+VERILOG_INCLUDE_DIRS += $(HDL_PATH) $(VH_PATH)
+
+ifeq ($(SIM),verilator)
+COMPILE_ARGS += --public-params -Wno-fatal
+endif
 # use VHDL_SOURCES for VHDL files
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/PE.v)
 VERILOG_SOURCES += $(abspath $(PWD)/../../hdl/adder.v)

@@ -22,6 +22,7 @@ release = '0.1'
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../../test'))
+sys.path.insert(0, os.path.abspath('_ext'))
 
 extensions = ['myst_parser', 
               'sphinx.ext.mathjax',
@@ -29,9 +30,22 @@ extensions = ['myst_parser',
               'sphinx.ext.doctest',
               'autoapi.extension',
               'sphinxcontrib_hdl_diagrams',
-              'sphinx_verilog_domain']
+              'sphinx_verilog_domain',
+              'yosys_resources']
 
 autoapi_dirs = ['../../test']
+
+
+def autoapi_prepare_jinja_env(env):
+    def format_schedule(value):
+        if isinstance(value, str):
+            value = value.replace(
+                "host-orchestrated schedule from open_eye.attention_scheduler:\n",
+                "host-orchestrated schedule from open_eye.attention_scheduler::\n",
+            )
+        return value
+
+    env.finalize = format_schedule
 
 templates_path = ['_templates']
 exclude_patterns = []
@@ -42,4 +56,4 @@ exclude_patterns = []
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_rtd_theme'
-html_logo = 'figures/open_eye_logo.png'
+html_logo = '../figures/open_eye_logo.png'

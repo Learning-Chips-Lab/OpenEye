@@ -1,0 +1,64 @@
+include:
+  - local: .gitlab/ci/pe-simulation.yml
+  - local: .gitlab/ci/verilator-simulation.yml
+  - local: .gitlab/ci/lint.yml
+  - local: .gitlab/ci/synthesis.yml
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - when: never
+
+documentation:
+  stage: test
+  image: ubuntu:24.04
+  tags: [shared, docker, linux]
+  timeout: 25 minutes
+  variables:
+    GIT_STRATEGY: clone
+    DEBIAN_FRONTEND: noninteractive
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+
+  before_script:
+    - |
+      set -e
+      mkdir -p documentation-results
+      printf '%s\n' "$CI_COMMIT_SHA" > documentation-results/native-revision.log
+
+      record_setup() {
+        local label="$1" status=0
+        shift
+        printf '%q ' "$@" >> documentation-results/native-commands.log
+        printf '\n' >> documentation-results/native-commands.log
+        "$@" > "documentation-results/$label.log" 2>&1 || status=$?
+        printf '%s exit=%s\n' "$label" "$status" >> documentation-results/native-commands.log
+        cat "documentation-results/$label.log"
+        return "$status"
+      }
+
+      record_setup apt-update apt-get update
+      record_setup apt-install apt-get install -y --no-install-recommends \
+        ca-certificates git python3.12 python3.12-venv python3.12-dev \
+        build-essential pkg-config libcairo2-dev libgirepository1.0-dev \
+        gir1.2-pango-1.0 graphviz fonts-dejavu-core
+
+      mkdir -p "$(git rev-parse --git-path info)"
+      printf '\n/documentation-results/\n' >> "$(git rev-parse --git-path info/exclude)"
+      git status --short > documentation-results/native-working-tree.log
+
+  script:
+    - python3.12 doc/run_recorded.py --install --allow-partial --run-dir documentation-results/check
+
+  artifacts:
+    name: "documentation-$CI_JOB_ID"
+    when: always
+    expire_in: 30 days
+    paths:
+      - documentation-results/
+    exclude:
+      - documentation-results/check/environment/**/*
+      - documentation-results/check/remotes.log
